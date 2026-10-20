@@ -1,0 +1,201 @@
+// The desktop bridge: the only module that talks to Tauri (the shim's commands and events, the
+// system's dialogs, drag and drop from the file manager). Everything else of the app works with the
+// plain types below, so that the screens stay the web app's and the tests need no Tauri.
+//
+// Commands (src-tauri/src/lib.rs): tool_info, start_search, cancel_search, read_search_file,
+// inspect_files, example_files, save_text, save_search_file. Events: search://progress, search://done,
+// search://failed.
+
+import { invoke } from '@tauri-apps/api/core'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { open } from '@tauri-apps/plugin-dialog'
+import type { SearchFiles } from './results/read'
+
+/** The ProSE tool the app runs: its version, where it is, and whether it has ONNX Runtime (PeptDeep). */
+export type ToolInfo = { version: string; path: string; onnx: boolean }
+
+/** A file the user chose, by path (never read by the page; the shim reads it where it is). */
+export type InputFile = { path: string; name: string; size: number }
+
+/** What New search shows of a file (`inspect_files`): sizes and counts, never contents. */
+export type FileFacts = InputFile & {
+  /** The spectra of an mzML's header (null: `.mzML.gz`, or not said). */
+  spectra: number | null
+  /** The entries of a FASTA and the residues of their sequences. */
+  proteins: number | null
+  residues: number | null
+  /** Why the file cannot be used. */
+  error: string | null
+}
+
+/** The search request of the shim (src-tauri/src/args.rs `SearchRequest`, camelCase). */
+export type SearchRequest = {
+  files: { id: string; path: string }[]
+  database: string
+  contaminants: boolean
+  settings: {
+    /** ProSE's `Search:` parameters by name without the prefix (args.rs `PARAMETERS`). */
+    parameters: Record<string, unknown>
+    rescore: boolean
+    peptdeep: boolean
+    /** `-threads`; 0: all cores. */
+    threads: number
+  }
+}
+
+/** A step of a running search (`search://progress`). */
+export type SearchProgress = { label: string; file: number; fraction: number }
+
+/** How a search ended badly (`search://failed`): ProSE's message, the step and the file. */
+export class SearchFailed extends Error {
+  constructor(
+    message: string,
+    readonly stage: string,
+    readonly file: number,
+  ) {
+    super(message)
+    this.name = 'SearchFailed'
+  }
+}
+
+/**
+ * A search that has started: its id, how it ends (the folder of its outputs), and `stop` to stop
+ * listening to it (after a cancel, which sends neither done nor failed).
+ */
+export type RunningSearch = { searchId: string; done: Promise<{ folder: string }>; stop: () => void }
+
+/** The app runs in Tauri (not in a plain browser, e.g. `vite dev` without the shell). */
+export function isDesktop(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+}
+
+export function toolInfo(): Promise<ToolInfo> {
+  return invoke<ToolInfo>('tool_info')
+}
+
+type ProgressPayload = SearchProgress & { searchId: string }
+type DonePayload = { searchId: string; folder: string }
+type FailedPayload = { searchId: string; message: string; stage: string; file?: number }
+
+/**
+ * Starts a search. The events of the search go to `onProgress` until it ends; `done` resolves with
+ * its folder or rejects with `SearchFailed`. Events are listened to before the search starts, so none
+ * is missed; those of other searches are ignored. A cancelled search (`cancelSearch`) sends neither
+ * done nor failed, unless it finished just before the cancel reached it (then done comes).
+ */
+export async function startSearch(request: SearchRequest, onProgress: (p: SearchProgress) => void): Promise<RunningSearch> {
+  let id: string | null = null
+  // events that come before start_search has answered (the first ones, with the id still unknown)
+  const early: { kind: 'progress' | 'done' | 'failed'; payload: ProgressPayload | DonePayload | FailedPayload }[] = []
+  let settle: { resolve: (d: { folder: string }) => void; reject: (e: Error) => void } | null = null
+  const done = new Promise<{ folder: string }>((resolve, reject) => (settle = { resolve, reject }))
+  const unlisten: UnlistenFn[] = []
+  const stop = () => unlisten.splice(0).forEach((u) => u())
+
+  const handle = (kind: 'progress' | 'done' | 'failed', payload: ProgressPayload | DonePayload | FailedPayload) => {
+    if (id === null) {
+      early.push({ kind, payload })
+      return
+    }
+    if (payload.searchId !== id) return
+    if (kind === 'progress') {
+      const p = payload as ProgressPayload
+      onProgress({ label: p.label, file: p.file, fraction: p.fraction })
+    } else if (kind === 'done') {
+      stop()
+      settle!.resolve({ folder: (payload as DonePayload).folder })
+    } else {
+      const f = payload as FailedPayload
+      stop()
+      settle!.reject(new SearchFailed(f.message, f.stage, f.file ?? -1))
+    }
+  }
+
+  unlisten.push(
+    await listen<ProgressPayload>('search://progress', (e) => handle('progress', e.payload)),
+    await listen<DonePayload>('search://done', (e) => handle('done', e.payload)),
+    await listen<FailedPayload>('search://failed', (e) => handle('failed', e.payload)),
+  )
+  try {
+    const started = await invoke<{ searchId: string }>('start_search', { request })
+    id = started.searchId
+  } catch (e) {
+    stop()
+    throw new Error(errorText(e))
+  }
+  for (const { kind, payload } of early.splice(0)) handle(kind, payload)
+  return { searchId: id, done, stop }
+}
+
+/** Ends a running search; resolves when its process is gone (a finished or unknown id is fine). */
+export function cancelSearch(searchId: string): Promise<void> {
+  return invoke('cancel_search', { searchId })
+}
+
+/**
+ * The files of a search for the results reader (`readSearch`): its folder's files by relative name,
+ * and the database its summary records by absolute path. A missing file rejects with
+ * `{ notFound: true, message }`.
+ */
+export function searchFiles(searchId: string): SearchFiles {
+  return async (name) => new Uint8Array(await invoke<ArrayBuffer>('read_search_file', { searchId, name }))
+}
+
+/** Sizes and counts of files given by path (the open dialog, drag and drop, the example). */
+export function inspectFiles(paths: string[]): Promise<FileFacts[]> {
+  return invoke<FileFacts[]>('inspect_files', { paths })
+}
+
+/** The bundled example: the run as two named files, and its FASTA. */
+export function exampleFiles(): Promise<{ spectra: string[]; database: string }> {
+  return invoke('example_files')
+}
+
+/** The system's open dialog for spectra (several) or a database; the chosen paths ([] if cancelled). */
+export async function chooseFiles(kind: 'spectra' | 'database'): Promise<string[]> {
+  const chosen = await open(
+    kind === 'spectra'
+      ? { multiple: true, title: 'Add mzML files', filters: [{ name: 'mzML', extensions: ['mzML', 'mzml', 'gz'] }] }
+      : { multiple: false, title: 'Choose a FASTA database', filters: [{ name: 'FASTA', extensions: ['fasta', 'fa', 'faa'] }] },
+  )
+  if (chosen === null) return []
+  return Array.isArray(chosen) ? chosen : [chosen]
+}
+
+/**
+ * Files dragged from the file manager onto the window: `over` while they are above it (true) or have
+ * left (false), `drop` with their paths. Returns the way to stop listening.
+ */
+export async function onFileDrop(handlers: { over: (on: boolean) => void; drop: (paths: string[]) => void }): Promise<() => void> {
+  if (!isDesktop()) return () => {}
+  return getCurrentWebview().onDragDropEvent((event) => {
+    const p = event.payload
+    if (p.type === 'enter' || p.type === 'over') handlers.over(true)
+    else if (p.type === 'leave') handlers.over(false)
+    else if (p.type === 'drop') {
+      handlers.over(false)
+      handlers.drop(p.paths)
+    }
+  })
+}
+
+/**
+ * Saves text (CSV, design.tsv, SVG) where the user chooses in the system's save dialog, suggesting
+ * `name`. Resolves with the path, or null if the user cancelled.
+ */
+export function saveText(name: string, contents: string): Promise<string | null> {
+  return invoke('save_text', { name, contents })
+}
+
+/** Copies a file of a search (e.g. `merged.idXML`) to where the user chooses, suggesting `suggested`. */
+export function saveSearchFile(searchId: string, name: string, suggested: string): Promise<string | null> {
+  return invoke('save_search_file', { searchId, name, suggested })
+}
+
+/** The text of a rejection of a command (a string, or an object with a message). */
+export function errorText(e: unknown): string {
+  if (typeof e === 'string') return e
+  if (e && typeof e === 'object' && 'message' in e) return String((e as { message: unknown }).message)
+  return String(e)
+}

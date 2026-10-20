@@ -13,20 +13,35 @@
     "windows": [
       {
         "title": "ProSE",
-        "width": 1280,
-        "height": 800,
+        "width": 1440,
+        "height": 900,
         "minWidth": 720,
         "minHeight": 520
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost data:"
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["appimage", "deb"],
-    "resources": ["resources/fasta/crap.fasta"],
-    "icon": ["icons/32x32.png", "icons/64x64.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico", "icons/icon.png"]
+    "targets": [
+      "appimage",
+      "deb"
+    ],
+    "resources": [
+      "resources/fasta/crap.fasta",
+      "resources/example/DatabaseSuitability_in_spec.mzML",
+      "resources/example/DatabaseSuitability_database.fasta"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ]
   }
 }
