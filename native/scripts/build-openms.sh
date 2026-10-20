@@ -48,8 +48,10 @@ cmake -G Ninja -S "$SRC" -B "$BUILD" \
   -DENABLE_TOPP_TESTING=ON
 
 # FileInfo, ParquetDiff and FuzzyDiff are what the TOPP_ProSE tests run to inspect and compare outputs;
-# without them those tests report "Not Run". PeptDeepLibraryPredictor_test is part of the PeptDeep set.
+# without them those tests report "Not Run". PeptDeepLibraryPredictor_test is part of the PeptDeep set, the
+# QPX tests check the QPX Parquet output the app reads.
 cmake --build "$BUILD" -j "$JOBS" --target \
   OpenMS ProSE FileInfo ParquetDiff FuzzyDiff \
   ProSEAlgorithm_test PeptDeepInference_test PeptDeepRescoring_test PeptDeepLibraryPredictor_test \
-  OpenSearchModificationAnalysis_test Percolator_test
+  OpenSearchModificationAnalysis_test Percolator_test \
+  QPXFile_test QPXCollectionExport_test QPXValueValidation_test QPXIdentity_test
