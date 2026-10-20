@@ -54,4 +54,4 @@ cmake --build "$BUILD" -j "$JOBS" --target \
   OpenMS ProSE FileInfo ParquetDiff FuzzyDiff \
   ProSEAlgorithm_test PeptDeepInference_test PeptDeepRescoring_test PeptDeepLibraryPredictor_test \
   OpenSearchModificationAnalysis_test Percolator_test \
-  QPXFile_test QPXCollectionExport_test QPXValueValidation_test QPXIdentity_test
+  QPXFile_test QPXCollectionExport_test QPXValueValidation_test QPXIdentity_test ArrowIOHelpers_test
