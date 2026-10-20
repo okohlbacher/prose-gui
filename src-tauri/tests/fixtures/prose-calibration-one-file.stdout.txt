@@ -1,0 +1,44 @@
+[ProSE] [1/1] Searching /scratch/sachsenb/shimrun/r/1__DatabaseSuitability_1.mzML
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 1495 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] open_search=false (precursor tolerance [-10, +10] ppm)
+[ProSE] Calibration: scoring 278 / 2789 spectra (top TIC)...
+[ProSE] Calibration: 70 PSMs used (top 50% by score)
+[ProSE]   Precursor signed: shift=-0.00 ppm
+[ProSE]   Precursor spread: -> 0.00 ppm (extreme bias, discarded)
+[ProSE]   Fragment tolerance:  20.00 -> 0.00 ppm
+[ProSE] Protein mapping from the fragment index: 912 sequences, 50 proteins.
+[ProSE] Ion priors (rich model, all peaks): trained on 444 + 451 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.01 s; 896 hits annotated in 0.00 s; peak lists 40033 peaks of 2789 spectra, 0.32 MiB.
+[ProSE] Closed search mode - per-file modification analysis skipped
+No protein groups inferred for /scratch/sachsenb/shimrun/r/1__DatabaseSuitability_1.mzML — not writing o7/qpx/1__DatabaseSuitability_1.pg.parquet. Protein inference requires 'FDR:protein' > 0 with decoys, or '-out_merged' with several inputs.
+
+[ProSE] ===================== Search Report =====================
+[ProSE] Input        : 1__DatabaseSuitability_1.mzML  (2789 MS2 spectra)
+[ProSE] Config       : Trypsin, 1 MC | prec [-10, +10] ppm | frag 20 ppm | z 2-5
+[ProSE]                fixed: Carbamidomethyl (C) | variable: Oxidation (M)
+[ProSE]                ions: b,y,+c/z+1 for ETD/ECD/EThcD/ETciD | calibration: on | mode: closed
+[ProSE] Database     : /scratch/sachsenb/shimrun/r/db.fasta  (165 target + 165 decoy proteins, decoys: generated)
+[ProSE] Fragment idx : 21569 peptides / 496430 fragments  (build 0.1 s)
+[ProSE] --------------------------- Results ---------------------------
+[ProSE] Matched      : 896 / 2789 spectra   (ID rate 32.1%)
+[ProSE] Peptides/prot: 896 unique peptides | 50 unique proteins
+[ProSE] Target/decoy : 895 target / 1 decoy PSMs  | PSM FDR <= 1.0%, achieved 0.11%
+[ProSE] Charges      : 2:896
+[ProSE] Missed clv   : 0:896
+[ProSE] HyperScore   : min 12.2  median 30.9  max 214.0
+[ProSE] --------------------- Tolerance estimate ---------------------
+[ProSE] Precursor    : median 0.00 ppm, MAD 0.00  -> recommend 1 ppm
+[ProSE] Fragment     : median 0.00 ppm, MAD 0.00  -> recommend 0 ppm
+[ProSE] ------------------------- Timing -----------------------------
+[ProSE] calib 0.0s | search 0.0s | fdr 0.0s | index(shared) 0.1s
+[ProSE] ------------------------- Outputs ----------------------------
+[ProSE]   QPX parquet     -> o7/qpx
+[ProSE] ==============================================================
+
+ProSE took 0.33 s (wall), 0.33 s (CPU), 0.02 s (system), 0.31 s (user); Peak Memory Usage: 87 MB.

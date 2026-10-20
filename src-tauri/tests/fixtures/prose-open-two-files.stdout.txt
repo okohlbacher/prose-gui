@@ -1,0 +1,68 @@
+[ProSE] [1/2] Searching /scratch/sachsenb/shimrun/r/1__DatabaseSuitability_1.mzML
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 1268 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] open_search=true (precursor tolerance [-500, +500] Da)
+[ProSE] Protein mapping from the fragment index: 1736 sequences, 53 proteins.
+[ProSE] Ion priors (rich model, all peaks): trained on 556 + 553 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.010796 s; 1110 hits annotated in 0.005501 s; peak lists 40033 peaks of 2789 spectra, 0.318563 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 1110 PSMs in-process with 27 features.
+[ProSE] Running detailed modification analysis for /scratch/sachsenb/shimrun/r/1__DatabaseSuitability_1.mzML
+Delta mass statistics written to: o8/mods/1__DatabaseSuitability_1_ModificationAnalysis_DeltaMassStats.tsv
+PTM statistics written to: o8/mods/1__DatabaseSuitability_1_ModificationAnalysis_PTMStats.tsv
+[ProSE] [2/2] Searching /scratch/sachsenb/shimrun/r/2__DatabaseSuitability_2.mzML
+[ProSE] open_search=true (precursor tolerance [-500, +500] Da)
+[ProSE] Protein mapping from the fragment index: 1736 sequences, 53 proteins.
+[ProSE] Ion priors (rich model, all peaks): trained on 556 + 553 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.010393 s; 1110 hits annotated in 0.00548 s; peak lists 40033 peaks of 2789 spectra, 0.318563 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 1110 PSMs in-process with 27 features.
+[ProSE] Running detailed modification analysis for /scratch/sachsenb/shimrun/r/2__DatabaseSuitability_2.mzML
+Delta mass statistics written to: o8/mods/2__DatabaseSuitability_2_ModificationAnalysis_DeltaMassStats.tsv
+PTM statistics written to: o8/mods/2__DatabaseSuitability_2_ModificationAnalysis_PTMStats.tsv
+[ProSE] Running aggregate modification analysis on 2220 pooled PSM(s) from 2 input file(s).
+Delta mass statistics written to: o8/mods/_aggregate_across_files_ModificationAnalysis_DeltaMassStats.tsv
+PTM statistics written to: o8/mods/_aggregate_across_files_ModificationAnalysis_PTMStats.tsv
+No protein groups inferred for /scratch/sachsenb/shimrun/r/1__DatabaseSuitability_1.mzML — not writing o8/qpx/1__DatabaseSuitability_1.pg.parquet. Protein inference requires 'FDR:protein' > 0 with decoys, or '-out_merged' with several inputs.
+No protein groups inferred for /scratch/sachsenb/shimrun/r/2__DatabaseSuitability_2.mzML — not writing o8/qpx/2__DatabaseSuitability_2.pg.parquet. Protein inference requires 'FDR:protein' > 0 with decoys, or '-out_merged' with several inputs.
+Found score type q-value to be of type 5
+Building graph on 2220 spectra and 53 proteins.
+Progress of 'Building graph...':
+-- done [took 0.01 s (CPU), 0.00 s (Wall)] -- 
+Progress of 'Annotating indistinguishable proteins...':
+-- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+<Found score type q-value to be of type 5> occurred 2 times
+Found 51 connected components.
+[ProSE] Merged protein inference + FDR: 51 proteins at 5% FDR
+
+[ProSE] ===================== Search Report =====================
+[ProSE] Database     : db.fasta  (165 target + 165 decoy proteins, decoys: generated)
+[ProSE] Config       : Trypsin, 1 MC | prec [-500, +500] Da | frag 20 ppm | z 2-5 | mode: open
+[ProSE] Fragment idx : 15885 peptides / 349063 fragments (build 0.0 s)
+[ProSE] -------------------------------------------------------------
+[ProSE] File                         MS2  Matched     ID%  Peptide    Prot   Decoy
+[ProSE] ...seSuitability_1.mzML     2789     1110   39.8%     1109      53       1
+[ProSE] ...seSuitability_2.mzML     2789     1110   39.8%     1109      53       1
+[ProSE] TOTAL                       5578     2220   39.8%        -       -       2
+[ProSE] ---------------- Modification discovery ---------------
+[ProSE] Delta mass : 428 modified / 2220 PSMs (19.3%), median Δ=-57.0215 Da, 8 bins
+[ProSE] PTMs      : 0 PSMs with known PTMs, 428 unknown, 0 unique PTMs
+[ProSE]   Top unknown delta masses (potential novel PTMs):
+[ProSE]    1 | Δ=   -57.0215 Da |    322 PSMs | 1109 peptides
+[ProSE]    2 | Δ=  -114.0430 Da |     74 PSMs | 1109 peptides
+[ProSE]    3 | Δ=  -171.0645 Da |     18 PSMs | 1109 peptides
+[ProSE] Total time   : 3.4 s
+[ProSE] Percolator   : rescored 2 / 2 file(s)
+[ProSE] ------------------------- Outputs ----------------------------
+[ProSE]   merged idXML    -> o8/m.idXML
+[ProSE]   QPX parquet     -> o8/qpx
+[ProSE]   mod-analysis tables-> o8/mods
+[ProSE] ==============================================================
+
+ProSE took 3.40 s (wall), 3.40 s (CPU), 0.04 s (system), 3.36 s (user); Peak Memory Usage: 123 MB.

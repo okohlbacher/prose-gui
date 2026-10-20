@@ -1,0 +1,158 @@
+[ProSE] [1/2] Searching 1__DatabaseSuitability_1.mzML
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 2334 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] open_search=false (precursor tolerance [-10, +10] ppm)
+[PeptDeepRescoring] run 'ProSE_2026-10-20 23:28:26': NCE 36 selected from a grid centred on 30 (median cosine 0.555675)
+[PeptDeepRescoring] run 'ProSE_2026-10-20 23:28:26': retention-time calibration (b_spline) on 448 PSMs, median residual 0 s
+[PeptDeepRescoring] Predicted features added: 896 / 896 PSMs (ms2_cosine, ms2_spectral_angle, ms2_pearson, ms2_frac_pred_found, rt_abs_error), NCE=36
+[ProSE] Protein mapping with PeptideIndexing (the fragment index does not list every protein occurrence of its peptides (low_memory, protein-terminal modifications, or not built from this database)).
+Merge took: 0.00 s (wall), 0.00 s (CPU), 0.00 s (system), 0.00 s (user)
+Memory usage (Aho-Corasick): 0 MB (working set delta), 0 MB (peak working set delta)
+
+Peptide identification engine: PROSE
+Enzyme: Trypsin/P
+Building trie ... done (0s)
+Compressing trie to BFS format ...
+ACTrie::compressTrie(): created BFS trie with 10511 nodes (path compression skipped 276 suffix nodes)
+ done (0s)
+Mapping 896 peptides to 330 proteins.
+Searching with up to 3 ambiguous amino acid(s) and 0 mismatch(es)!
+
+Aho-Corasick done:
+  found 914 hits for 896 of 896 peptides.
+Peptide hits passing enzyme filter: 914
+     ... rejected by enzyme filter: 0
+-----------------------------------
+Peptide statistics
+
+  unmatched                : 0 (0 %)
+  target/decoy:
+    match to target DB only: 894 (99 %)
+    match to decoy DB only : 1 (0 %)
+    match to both          : 1 (0 %)
+
+  mapping to proteins:
+    no match (to 0 protein)         : 0
+    unique match (to 1 protein)     : 878
+    non-unique match (to >1 protein): 18
+-----------------------------------
+Protein statistics
+
+  total proteins searched: 330
+  matched proteins       : 50 (50 new)
+  matched target proteins: 48 (96 %)
+  matched decoy proteins : 2 (4 %)
+  orphaned proteins      : 0 (all removed)
+-----------------------------------
+[ProSE] Ion priors (rich model, all peaks): trained on 444 + 451 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.004346 s; 896 hits annotated in 0.001544 s; peak lists 40033 peaks of 2789 spectra, 0.318563 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 896 PSMs in-process with 32 features.
+[ProSE] Closed search mode - per-file modification analysis skipped
+[ProSE] [2/2] Searching 2__DatabaseSuitability_2.mzML
+[ProSE] open_search=false (precursor tolerance [-10, +10] ppm)
+[PeptDeepRescoring] run 'ProSE_2026-10-20 23:28:31': NCE 36 selected from a grid centred on 30 (median cosine 0.555675)
+[PeptDeepRescoring] run 'ProSE_2026-10-20 23:28:31': retention-time calibration (b_spline) on 448 PSMs, median residual 0 s
+[PeptDeepRescoring] Predicted features added: 896 / 896 PSMs (ms2_cosine, ms2_spectral_angle, ms2_pearson, ms2_frac_pred_found, rt_abs_error), NCE=36
+[ProSE] Protein mapping with PeptideIndexing (the fragment index does not list every protein occurrence of its peptides (low_memory, protein-terminal modifications, or not built from this database)).
+Merge took: 0.00 s (wall), 0.00 s (CPU), 0.00 s (system), 0.00 s (user)
+Memory usage (Aho-Corasick): 0 MB (working set delta), 0 MB (peak working set delta)
+
+Peptide identification engine: PROSE
+Enzyme: Trypsin/P
+Building trie ... done (0s)
+Compressing trie to BFS format ...
+ACTrie::compressTrie(): created BFS trie with 10511 nodes (path compression skipped 276 suffix nodes)
+ done (0s)
+Mapping 896 peptides to 330 proteins.
+Searching with up to 3 ambiguous amino acid(s) and 0 mismatch(es)!
+
+Aho-Corasick done:
+  found 914 hits for 896 of 896 peptides.
+Peptide hits passing enzyme filter: 914
+     ... rejected by enzyme filter: 0
+-----------------------------------
+Peptide statistics
+
+  unmatched                : 0 (0 %)
+  target/decoy:
+    match to target DB only: 894 (99 %)
+    match to decoy DB only : 1 (0 %)
+    match to both          : 1 (0 %)
+
+  mapping to proteins:
+    no match (to 0 protein)         : 0
+    unique match (to 1 protein)     : 878
+    non-unique match (to >1 protein): 18
+-----------------------------------
+Protein statistics
+
+  total proteins searched: 330
+  matched proteins       : 50 (50 new)
+  matched target proteins: 48 (96 %)
+  matched decoy proteins : 2 (4 %)
+  orphaned proteins      : 0 (all removed)
+-----------------------------------
+[ProSE] Ion priors (rich model, all peaks): trained on 444 + 451 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.004024 s; 896 hits annotated in 0.001448 s; peak lists 40033 peaks of 2789 spectra, 0.318563 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 896 PSMs in-process with 32 features.
+[ProSE] Closed search mode - per-file modification analysis skipped
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+  -- done [took 0.06 s (CPU), 0.05 s (Wall)] -- 
+-- done [took 0.06 s (CPU), 0.05 s (Wall) @ 113.8 MiB/s] -- 
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+  -- done [took 0.40 s (CPU), 0.10 s (Wall)] -- 
+-- done [took 0.40 s (CPU), 0.10 s (Wall) @ 63.03 MiB/s] -- 
+-out_psm_spectra: 1__DatabaseSuitability_1.mzML: PeptDeep predictions of 896 peptide(s) at NCE 36 (from PeptDeep rescoring)
+-out_psm_spectra: 1__DatabaseSuitability_1.mzML: peaks of 896 PSM(s)
+No protein groups inferred for 1__DatabaseSuitability_1.mzML — not writing out/qpx/1__DatabaseSuitability_1.pg.parquet. Protein inference requires 'FDR:protein' > 0 with decoys, or '-out_merged' with several inputs.
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+  -- done [took 0.06 s (CPU), 0.05 s (Wall)] -- 
+-- done [took 0.06 s (CPU), 0.05 s (Wall) @ 113.8 MiB/s] -- 
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+  -- done [took 0.39 s (CPU), 0.10 s (Wall)] -- 
+-- done [took 0.39 s (CPU), 0.10 s (Wall) @ 64.37 MiB/s] -- 
+-out_psm_spectra: 2__DatabaseSuitability_2.mzML: PeptDeep predictions of 896 peptide(s) at NCE 36 (from PeptDeep rescoring)
+-out_psm_spectra: 2__DatabaseSuitability_2.mzML: peaks of 896 PSM(s)
+No protein groups inferred for 2__DatabaseSuitability_2.mzML — not writing out/qpx/2__DatabaseSuitability_2.pg.parquet. Protein inference requires 'FDR:protein' > 0 with decoys, or '-out_merged' with several inputs.
+Found score type q-value to be of type 5
+Building graph on 1792 spectra and 50 proteins.
+Progress of 'Building graph...':
+-- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+Progress of 'Annotating indistinguishable proteins...':
+-- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+<Found score type q-value to be of type 5> occurred 2 times
+Found 48 connected components.
+[ProSE] Merged protein inference + FDR: 50 proteins at 5% FDR
+
+[ProSE] ===================== Search Report =====================
+[ProSE] Database     : db.fasta  (165 target + 165 decoy proteins, decoys: generated)
+[ProSE] Config       : Trypsin/P, 2 MC | prec [-10, +10] ppm | frag 20 ppm | z 2-5 | mode: closed
+[ProSE] Fragment idx : 39862 peptides / 976163 fragments (build 0.0 s)
+[ProSE] -------------------------------------------------------------
+[ProSE] File                         MS2  Matched     ID%  Peptide    Prot   Decoy
+[ProSE] ...seSuitability_1.mzML     2789      896   32.1%      896      50       1
+[ProSE] ...seSuitability_2.mzML     2789      896   32.1%      896      50       1
+[ProSE] TOTAL                       5578     1792   32.1%        -       -       2
+[ProSE] Total time   : 11.9 s
+[ProSE] Percolator   : rescored 2 / 2 file(s)
+[ProSE] ------------------------- Outputs ----------------------------
+[ProSE]   merged idXML    -> out/merged.idXML
+[ProSE]   QPX parquet     -> out/qpx
+[ProSE]   PSM spectra     -> out/spectra/1__DatabaseSuitability_1.psm_spectra.parquet, out/spectra/2__DatabaseSuitability_2.psm_spectra.parquet
+[ProSE]   OpenMS parquet  -> out/oms
+[ProSE] ==============================================================
+
+[ProSE] Wrote summary YAML -> out/summary.yaml
+ProSE took 11.91 s (wall), 37.09 s (CPU), 0.14 s (system), 36.95 s (user); Peak Memory Usage: 187 MB.

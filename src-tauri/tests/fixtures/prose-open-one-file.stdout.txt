@@ -1,0 +1,54 @@
+[ProSE] [1/1] Searching /scratch/sachsenb/shimrun/r/1__DatabaseSuitability_1.mzML
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 1268 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] open_search=true (precursor tolerance [-500, +500] Da)
+[ProSE] Protein mapping from the fragment index: 1736 sequences, 53 proteins.
+[ProSE] Ion priors (rich model, all peaks): trained on 556 + 553 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.010918 s; 1110 hits annotated in 0.005507 s; peak lists 40033 peaks of 2789 spectra, 0.318563 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 1110 PSMs in-process with 27 features.
+[ProSE] Running detailed modification analysis for /scratch/sachsenb/shimrun/r/1__DatabaseSuitability_1.mzML
+Delta mass statistics written to: o3/mods/1__DatabaseSuitability_1_ModificationAnalysis_DeltaMassStats.tsv
+PTM statistics written to: o3/mods/1__DatabaseSuitability_1_ModificationAnalysis_PTMStats.tsv
+No protein groups inferred for /scratch/sachsenb/shimrun/r/1__DatabaseSuitability_1.mzML — not writing o3/qpx/1__DatabaseSuitability_1.pg.parquet. Protein inference requires 'FDR:protein' > 0 with decoys, or '-out_merged' with several inputs.
+
+[ProSE] ===================== Search Report =====================
+[ProSE] Input        : 1__DatabaseSuitability_1.mzML  (2789 MS2 spectra)
+[ProSE] Config       : Trypsin, 1 MC | prec [-500, +500] Da | frag 20 ppm | z 2-5
+[ProSE]                fixed: Carbamidomethyl (C) | variable: (none)
+[ProSE]                ions: b,y,+c/z+1 for ETD/ECD/EThcD/ETciD | calibration: off | mode: open
+[ProSE] Database     : db.fasta  (165 target + 165 decoy proteins, decoys: generated)
+[ProSE] Fragment idx : 15885 peptides / 349063 fragments  (build 0.0 s)
+[ProSE] --------------------------- Results ---------------------------
+[ProSE] Matched      : 1110 / 2789 spectra   (ID rate 39.8%)
+[ProSE] Peptides/prot: 1109 unique peptides | 53 unique proteins
+[ProSE] Target/decoy : 1109 target / 1 decoy PSMs  | PSM FDR <= 1.0%, achieved 0.15%
+[ProSE] Charges      : 2:1110
+[ProSE] Missed clv   : 0:1109 1:1
+[ProSE] HyperScore   : min 7.6  median 30.9  max 214.0
+[ProSE] --------------------- Tolerance estimate ---------------------
+[ProSE] Precursor    : median 0.00 ppm, MAD 0.00  -> recommend 1 ppm
+[ProSE] Fragment     : median 0.00 ppm, MAD 0.00  -> recommend 0 ppm
+[ProSE] ------------------------- Timing -----------------------------
+[ProSE] search 0.3s | fdr 0.0s | index(shared) 0.0s
+[ProSE] ---------------- Modification discovery ---------------
+[ProSE] Delta mass : 214 modified / 1110 PSMs (19.3%), median Δ=-57.0215 Da, 8 bins
+[ProSE] PTMs      : 0 PSMs with known PTMs, 214 unknown, 0 unique PTMs
+[ProSE]   Top unknown delta masses (potential novel PTMs):
+[ProSE]    1 | Δ=   -57.0215 Da |    161 PSMs | 1109 peptides
+[ProSE]    2 | Δ=  -114.0430 Da |     37 PSMs | 1109 peptides
+[ProSE]    3 | Δ=  -171.0645 Da |      9 PSMs | 1109 peptides
+[ProSE] Percolator   : rescored 1 / 1 file(s)
+[ProSE] ------------------------- Outputs ----------------------------
+[ProSE]   QPX parquet     -> o3/qpx
+[ProSE]   mod-analysis tables-> o3/mods
+[ProSE] ==============================================================
+
+[ProSE] Wrote summary YAML -> o3/s.yaml
+ProSE took 1.63 s (wall), 1.63 s (CPU), 0.04 s (system), 1.59 s (user); Peak Memory Usage: 114 MB.
