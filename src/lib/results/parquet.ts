@@ -34,8 +34,9 @@ export function startZstd(): Promise<void> {
       const decoder = new ZSTDDecoder()
       await decoder.init()
       wasm = decoder
-    } catch {
+    } catch (e) {
       wasm = null
+      console.warn(`Zstandard: the WebAssembly decoder (zstddec) did not start, the reader uses fzstd, about ten times slower (${e instanceof Error ? e.message : String(e)}).`)
     }
   })()
   return starting

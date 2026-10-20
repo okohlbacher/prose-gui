@@ -41,6 +41,16 @@ All Parquet files are Zstandard-compressed (Arrow C++): the reader needs a Zstan
 only). The FASTA is the folder's `database.fasta` with contaminants; without them ProSE searched the user's file, whose
 path is summary.yaml's `shared.database_file` (absolute, outside the search folder).
 
+**Protein sequences and descriptions** come, in this order, from `proteins.fasta` in the search folder (the identified
+proteins, decoys as searched; Task 7 writes it), from the database (`database.fasta`, else `shared.database_file`), or
+not at all: then the sequences are '' (no coverage), the descriptions the OMS ones, and the reader returns a warning
+(`SearchResult.warnings`); it does not fail.
+
+**Missing files**: the reader's `files` callback rejects with `FileNotFound` (anything with `notFound: true`) for a file
+that does not exist; only that counts as missing (a failed input's PSM files, the sidecar, search params, proteins,
+groups, mod TSVs, a FASTA source). Any other error fails the read, naming the file; so does one of an input's QPX/OMS
+psm pair without the other, and a file that cannot be parsed.
+
 Rows: the PSM rows of `ResultTables.psms` are the QPX psm rows of the files in input order (QPX psm, OMS psm and the
 PSM spectra sidecar have the same rows in the same order, one per peptide identification with hits; the sidecar and
 QPX psm also share the key `psm_id`). The QPX `scan` is the native ID's scan number only, so rows are joined to OMS psm
@@ -81,12 +91,12 @@ sidecar by `psm_id` (`src/lib/results/read.ts`).
 | `peptides.proteinOffsets`, `peptides.protein` | OMS psm `protein_accessions[].accession` of the peptide's first PSM, kept where the protein is in the proteins table (see `proteins`); none left → "below protein FDR" | derived in the UI |
 | `peptides.start`, `peptides.end` | OMS `protein_accessions[].start` / `end` (0-based, `end` inclusive → `end` + 1); the web app's check against the sequence (FASTA) | available (+1) |
 | `proteins.count`, `proteins.accession` | one input: OMS `<stem>.proteins.parquet`; several inputs: `merged.proteins.parquet` (pooled inference); without protein inference (no protein FDR, one input) the per-file protein hits | available; for several inputs **added in #10676** |
-| `proteins.description` | OMS proteins `description` if set, else the FASTA header; a generated decoy has the description of its target (as the web app: it looks the decoy up by its target's accession) | derived in the UI (the FASTA is read anyway) |
+| `proteins.description` | OMS proteins `description` if set, else the FASTA header (see "Protein sequences" below); a generated decoy has the description of its target (as the web app: it looks the decoy up by its target's accession) | derived in the UI (the FASTA is read anyway) |
 | `proteins.sequence` | FASTA; a decoy ProSE generated: the reversal ProSE uses (`DecoyGenerator::reversePeptides` for the search's enzyme, `reverseProtein` for `enzyme_specificity none`, initial M kept with `peptide:clip_nterm_methionine`), as the web app's engine regenerated it | derived in the UI (port of the decoy rule; until then '' for generated decoys, which the web app's type allows) |
 | `proteins.score` | best `psms.score` of the protein's PSMs | derived in the UI (as the web app) |
 | `proteins.qValue` | OMS proteins `score` when the protein FDR was applied (YAML `protein_fdr_applied`; protein score type `q-value`); else NaN | available; for several inputs **added in #10676** |
 | `proteins.decoy` | OMS proteins `is_decoy` | available |
-| `proteins.group` | index of the `indistinguishable` group in OMS `<stem>.pg.parquet` / `merged.pg.parquet` (`accessions`, `group_index`); −1 if none. **One input without protein FDR: the tool infers no proteins and its `<stem>.pg.parquet` is empty, so every protein is −1, where the web app has a group per protein** (its pooled run of one file); the web app's screens count a protein without a group as a group of its own | available; for several inputs **added in #10676**; one input without protein FDR: none |
+| `proteins.group` | index of the `indistinguishable` group in OMS `<stem>.pg.parquet` / `merged.pg.parquet` (`accessions`, `group_index`); −1 if a protein is in none. **One input without protein FDR: the tool infers no proteins and its `<stem>.pg.parquet` has no `indistinguishable` rows; then each protein is a group of its own (`group[p] = p`), as in the web app** (its pooled run of one file) | available; for several inputs **added in #10676**; one input without protein FDR: derived in the UI (one group per protein) |
 
 ## StoredSpectra
 

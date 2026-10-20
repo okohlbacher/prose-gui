@@ -12,20 +12,39 @@ import { zstdCompressSync } from 'node:zlib'
 import { parquetMetadata, parquetReadObjects } from 'hyparquet'
 import { parquetWriteBuffer } from 'hyparquet-writer'
 import { describe, expect, test } from 'vitest'
-import { readSearch, ZSTD } from './read'
+import { FileNotFound, readSearch, ZSTD } from './read'
 import type { ProSEMultiSummary, ResultTables, StoredSpectra } from './types'
 
 const fixtures = new URL('./fixtures/', import.meta.url).pathname
 
-/** The files of a search folder; an absolute path (the user's FASTA of a search without contaminants) is in user/. */
+/**
+ * The files of a search folder, as the `files` contract has it (a missing file: FileNotFound); an
+ * absolute path (the user's FASTA of a search without contaminants) is in user/.
+ */
 function folder(dir: string) {
   const asked: string[] = []
   const files = async (name: string): Promise<Uint8Array> => {
     asked.push(name)
     const path = name.startsWith('/') ? join(dir, 'user', basename(name)) : join(dir, name)
-    return new Uint8Array(readFileSync(path))
+    try {
+      return new Uint8Array(readFileSync(path))
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') throw new FileNotFound(name)
+      throw e
+    }
   }
   return { files, asked }
+}
+
+/** A copy of fixture `name` to change, removed after `use`. */
+async function withCopy<T>(name: string, use: (dir: string) => Promise<T>): Promise<T> {
+  const dir = mkdtempSync(join(tmpdir(), `prose-reader-${name}-`))
+  try {
+    cpSync(join(fixtures, name), dir, { recursive: true })
+    return await use(dir)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 type Json = Record<string, any>
@@ -67,13 +86,8 @@ const PEPTDEEP_SCORE_TOLERANCE = 2e-4
 
 interface Tolerances {
   score: number
-  /**
-   * The protein groups. One input without protein FDR: the tool infers no proteins and writes no groups
-   * (oms/<stem>.pg.parquet is empty), the web app has one per protein (its pooled run of one file).
-   * A difference of the outputs (task 4 report); the reader has -1, no group, which the web app's
-   * screens count as a group of its own.
-   */
-  groups?: 'none'
+  /** 'differs': the PEPs are known to differ (the example: test below) */
+  pep?: 'differs'
 }
 
 /** ResultTables equal the web app's: strings exactly, numbers within the tolerances. */
@@ -92,6 +106,7 @@ function expectTables(t: ResultTables, w: Json, names: string[], tol: Tolerances
   expectClose('psms.mz', p.mz, wp.mz, 1e-9)
   expectClose('psms.score', p.score, wp.score, tol.score)
   expectClose('psms.qValue', p.qValue, wp.qValue, 1e-6)
+  if (tol.pep !== 'differs') expectClose('psms.pep', p.pep, wp.pep, 1e-6)
   expectClose('psms.precursorErrorPpm', p.precursorErrorPpm, wp.precursorErrorPpm, 1e-6)
   expectClose('psms.deltaMass', p.deltaMass, wp.deltaMass, 1e-6)
 
@@ -142,8 +157,7 @@ function expectTables(t: ResultTables, w: Json, names: string[], tol: Tolerances
     expect(r.decoy[i], `decoy ${accession}`).toBe(wr.decoy[k])
     expectClose(`proteins.score ${accession}`, [r.score[i]], [wr.score[k]], tol.score)
     expectClose(`proteins.qValue ${accession}`, [r.qValue[i]], [wr.qValue[k]], 1e-6)
-    if (tol.groups === 'none') expect(r.group[i], `group of ${accession}`).toBe(-1)
-    else expect(groups.get(accession), `group of ${accession}`).toBe(webGroups.get(accession))
+    expect(groups.get(accession), `group of ${accession}`).toBe(webGroups.get(accession))
   })
 }
 
@@ -189,7 +203,7 @@ describe('readSearch', () => {
     expect(targets.length).toBe(1790)
     expect(tables.files).toEqual(['/data/DatabaseSuitability_1.mzML', '/data/DatabaseSuitability_2.mzML'])
 
-    expectTables(tables, w.tables, w.names, { score: PEPTDEEP_SCORE_TOLERANCE })
+    expectTables(tables, w.tables, w.names, { score: PEPTDEEP_SCORE_TOLERANCE, pep: 'differs' })
     expectSummary(summary, w.summary)
     expect(summary.files.map((f) => f.path)).toEqual(tables.files)
     // only relative names: the folder's files, and its database with the contaminants
@@ -213,7 +227,7 @@ describe('readSearch', () => {
     const { files, asked } = folder(join(fixtures, 'mods'))
     const { summary, tables } = await readSearch(files)
     expect(tables.peptides.openms).toContain('IALSRPNVEVVALNDPFITNDYAAYM(Oxidation)FK')
-    expectTables(tables, w.tables, w.names, { score: 1e-9, groups: 'none' })
+    expectTables(tables, w.tables, w.names, { score: 1e-6 })
     expectSummary(summary, w.summary)
     // without contaminants the search read the user's FASTA, named in summary.yaml
     expect(asked.filter((n) => n.startsWith('/')).map((n) => basename(n))).toEqual(['SimpleSearchEngine_1.fasta'])
@@ -222,7 +236,7 @@ describe('readSearch', () => {
   test('an open search reads as the web app\'s', async () => {
     const w = web('open')
     const { summary, tables } = await readSearch(folder(join(fixtures, 'open')).files)
-    expectTables(tables, w.tables, w.names, { score: 1e-9, groups: 'none' })
+    expectTables(tables, w.tables, w.names, { score: 1e-6 })
     expectSummary(summary, w.summary)
     expect(Array.from(tables.psms.deltaMass).some((d) => d > 15)).toBe(true)
 
@@ -360,6 +374,140 @@ async function rowsOf(bytes: Uint8Array): Promise<Record<string, unknown>[]> {
 async function reversed(bytes: Uint8Array): Promise<Uint8Array> {
   return rewrite(bytes, (await rowsOf(bytes)).reverse())
 }
+
+describe('missing and broken files', () => {
+  const example = ['1__DatabaseSuitability_1', '2__DatabaseSuitability_2']
+
+  test('a corrupt Parquet file fails the read, naming the file', async () => {
+    await withCopy('example', async (dir) => {
+      const path = join(dir, 'oms', `${example[0]}.psm.parquet`)
+      const bytes = readFileSync(path)
+      writeFileSync(path, bytes.subarray(0, bytes.length >> 1))
+      await expect(readSearch(folder(dir).files)).rejects.toThrow(`oms/${example[0]}.psm.parquet:`)
+    })
+  })
+
+  test('an error of the files callback other than not found fails the read, naming the file', async () => {
+    const { files } = folder(join(fixtures, 'example'))
+    const failing = (name: string) => (name.startsWith('spectra/') ? Promise.reject(new Error('permission denied')) : files(name))
+    await expect(readSearch(failing)).rejects.toThrow(`spectra/${example[0]}.psm_spectra.parquet: permission denied`)
+  })
+
+  test('one of the two PSM files of an input alone fails the read', async () => {
+    await withCopy('example', async (dir) => {
+      rmSync(join(dir, 'qpx', `${example[1]}.psm.parquet`))
+      await expect(readSearch(folder(dir).files)).rejects.toThrow(
+        `qpx/${example[1]}.psm.parquet does not exist, but oms/${example[1]}.psm.parquet does.`,
+      )
+    })
+  })
+
+  test('an input without PSM files (a failed search) has no PSMs', async () => {
+    await withCopy('example', async (dir) => {
+      for (const f of [`qpx/${example[1]}.psm.parquet`, `oms/${example[1]}.psm.parquet`, `spectra/${example[1]}.psm_spectra.parquet`]) rmSync(join(dir, f))
+      const { tables } = await readSearch(folder(dir).files)
+      expect(tables.psms.count).toBe(896)
+      expect(Array.from(tables.psms.file).every((f) => f === 0)).toBe(true)
+    })
+  })
+
+  test('an empty result (no PSMs, no proteins) reads', async () => {
+    await withCopy('mods', async (dir) => {
+      const stem = '1__SimpleSearchEngine_1'
+      for (const f of [`qpx/${stem}.psm.parquet`, `oms/${stem}.psm.parquet`, `spectra/${stem}.psm_spectra.parquet`, `oms/${stem}.proteins.parquet`, `oms/${stem}.pg.parquet`]) {
+        const path = join(dir, f)
+        writeFileSync(path, rewrite(new Uint8Array(readFileSync(path)), []))
+      }
+      const { tables, spectra, predicted, summary, warnings } = await readSearch(folder(dir).files)
+      expect(tables.psms.count).toBe(0)
+      expect(tables.peptides.count).toBe(0)
+      expect(tables.proteins.count).toBe(0)
+      expect(tables.psms.featureNames).toEqual(['ln(hyperscore)'])
+      expect(Array.from(tables.peptides.modOffsets)).toEqual([0])
+      expect(spectra.psmSpectrum.length).toBe(0)
+      expect(Array.from(spectra.offsets)).toEqual([0])
+      expect(Array.from(predicted.psmOffsets)).toEqual([0])
+      expect(summary.files.length).toBe(1)
+      expect(warnings).toEqual([])
+    })
+  })
+
+  test('an open search without its mod-analysis folder reads, without the analysis', async () => {
+    await withCopy('open', async (dir) => {
+      rmSync(join(dir, 'mods'), { recursive: true })
+      const { summary, tables } = await readSearch(folder(dir).files)
+      expect(summary.openSearch).toBe(true)
+      expect(summary.modificationAnalysis).toBeNull()
+      expect(tables.psms.count).toBe(3)
+    })
+  })
+
+  test('one input reads its own proteins and groups, without merged files', async () => {
+    await withCopy('example', async (dir) => {
+      // the example as a search of its first replicate only
+      const inputs = JSON.parse(readFileSync(join(dir, 'inputs.json'), 'utf8')).slice(0, 1)
+      writeFileSync(join(dir, 'inputs.json'), JSON.stringify(inputs))
+      const yaml = readFileSync(join(dir, 'summary.yaml'), 'utf8')
+      const [head, rest] = yaml.split('per_file:\n')
+      const second = rest.indexOf('  - input_file: "2__')
+      writeFileSync(join(dir, 'summary.yaml'), `${head}per_file:\n${rest.slice(0, second)}${rest.slice(rest.indexOf('outputs:'))}`)
+      for (const f of ['oms/merged.proteins.parquet', 'oms/merged.pg.parquet']) rmSync(join(dir, f))
+      const { files, asked } = folder(dir)
+      const { tables, summary } = await readSearch(files)
+      expect(tables.psms.count).toBe(896)
+      expect(summary.files.length).toBe(1)
+      expect(asked.some((n) => n.includes('merged'))).toBe(false)
+      expect(asked).toContain(`oms/${example[0]}.proteins.parquet`)
+      expect(tables.proteins.count).toBe(50)
+      // the file's run has no protein groups: each protein is its own
+      expect(Array.from(tables.proteins.group)).toEqual(Array.from({ length: 50 }, (_, p) => p))
+    })
+  })
+})
+
+describe('protein sequences', () => {
+  test('come from proteins.fasta first', async () => {
+    const w = web('mods')
+    await withCopy('mods', async (dir) => {
+      // the identified proteins only, in place of the database
+      cpSync(join(dir, 'user', 'SimpleSearchEngine_1.fasta'), join(dir, 'proteins.fasta'))
+      rmSync(join(dir, 'user'), { recursive: true })
+      const { files, asked } = folder(dir)
+      const { tables, warnings } = await readSearch(files)
+      expect(asked.filter((n) => n.endsWith('.fasta'))).toEqual(['proteins.fasta'])
+      expectTables(tables, w.tables, w.names, { score: 1e-6 })
+      expect(warnings).toEqual([])
+    })
+  })
+
+  test('then from the database: the folder\'s database.fasta, else the user\'s FASTA', async () => {
+    const example = folder(join(fixtures, 'example'))
+    await readSearch(example.files)
+    expect(example.asked.filter((n) => n.endsWith('.fasta'))).toEqual(['proteins.fasta', 'database.fasta'])
+    const mods = folder(join(fixtures, 'mods'))
+    await readSearch(mods.files)
+    expect(mods.asked.filter((n) => n.endsWith('.fasta')).map((n) => basename(n))).toEqual([
+      'proteins.fasta',
+      'database.fasta',
+      'SimpleSearchEngine_1.fasta',
+    ])
+  })
+
+  test('are left out with a warning when there is no FASTA', async () => {
+    await withCopy('mods', async (dir) => {
+      rmSync(join(dir, 'user'), { recursive: true })
+      const { tables, warnings } = await readSearch(folder(dir).files)
+      expect(tables.proteins.count).toBe(3)
+      expect(tables.proteins.sequence).toEqual(['', '', ''])
+      // the OMS descriptions (none in this search)
+      expect(tables.proteins.description).toEqual(['', '', ''])
+      // the peptides keep the positions the search recorded
+      expect(Array.from(tables.peptides.end)).toEqual(web('mods').tables.peptides.end)
+      expect(warnings.length).toBe(1)
+      expect(warnings[0]).toMatch(/protein sequences are not available.*proteins\.fasta \(not found\).*database\.fasta \(not found\).*SimpleSearchEngine_1\.fasta \(not found\)/)
+    })
+  })
+})
 
 describe('performance', () => {
   test('reads a 150k-PSM fixture in under 3 s', async () => {
