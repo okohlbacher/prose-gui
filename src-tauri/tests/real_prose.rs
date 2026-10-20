@@ -43,6 +43,16 @@ fn real() -> Option<Real> {
 /// The web app's example: the same mzML twice (here from two folders, under one name), the orbitrap
 /// preset, 5 % protein FDR, contaminants, Percolator and PeptDeep.
 fn example_request(real: &Real, work: &TempDir, peptdeep: bool) -> SearchRequest {
+    example_request_with(real, work, peptdeep, json!({}))
+}
+
+/// As `example_request`, with `extra` parameters on top of the preset.
+fn example_request_with(
+    real: &Real,
+    work: &TempDir,
+    peptdeep: bool,
+    extra: serde_json::Value,
+) -> SearchRequest {
     let mzml = real.example.join("DatabaseSuitability_in_spec.mzML");
     let mut files = Vec::new();
     for folder in ["replicate-a", "replicate-b"] {
@@ -55,7 +65,7 @@ fn example_request(real: &Real, work: &TempDir, peptdeep: bool) -> SearchRequest
         fs::copy(&mzml, &path).unwrap();
         files.push(json!({ "id": folder, "path": path }));
     }
-    serde_json::from_value(json!({
+    let mut request = json!({
         "files": files,
         "database": real.example.join("DatabaseSuitability_database.fasta"),
         "contaminants": true,
@@ -79,8 +89,11 @@ fn example_request(real: &Real, work: &TempDir, peptdeep: bool) -> SearchRequest
             "peptdeep": peptdeep,
             "threads": 4,
         },
-    }))
-    .unwrap()
+    });
+    for (name, value) in extra.as_object().unwrap() {
+        request["settings"]["parameters"][name] = value.clone();
+    }
+    serde_json::from_value(request).unwrap()
 }
 
 fn parquet(path: &Path) -> bool {
@@ -199,6 +212,67 @@ fn the_example_is_searched_through_start_search() {
         names.sort();
         assert_eq!(names, ["DatabaseSuitability_in_spec.mzML"]);
     }
+}
+
+#[test]
+fn a_chunked_search_of_two_files_reports_progress() {
+    let Some(real) = real() else { return };
+    let work = TempDir::new("real-chunked");
+    let onnx = tool::probe(&real.bin).unwrap().onnx;
+    // `database:chunk_size` makes ProSE search chunk-major: it prints no "Searching <file>" line
+    let request = example_request_with(&real, &work, onnx, json!({ "database:chunk_size": 20 }));
+    let searches = Arc::new(Searches::default());
+    let (sink, rx) = channel_sink();
+    let crap = tool::bundled_crap(None).unwrap();
+    let searches_dir = work.path().join("searches");
+    searches
+        .start(&real.bin, &searches_dir, Some(&crap), request, sink)
+        .unwrap();
+    let events = until_terminal(&rx, Duration::from_secs(300));
+    assert!(
+        matches!(events.last(), Some(SearchEvent::Done(_))),
+        "{:?}",
+        events.last()
+    );
+
+    let progress: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            SearchEvent::Progress(p) => Some(p),
+            _ => None,
+        })
+        .collect();
+    for p in &progress {
+        eprintln!(
+            "progress {:>6.3} file {:>2}  {}",
+            p.fraction, p.file, p.label
+        );
+    }
+    // 98 target proteins and the same of decoys, plus the 116 cRAP entries: several chunks, each reported
+    let chunks = progress
+        .iter()
+        .filter(|p| p.label.starts_with("Searching database chunk"))
+        .count();
+    assert!(chunks >= 5, "{chunks} chunks reported");
+    assert!(progress
+        .iter()
+        .any(|p| p.label.starts_with("Searching database chunk 1 of")));
+    assert!(progress
+        .iter()
+        .any(|p| p.label == "Rescoring with Percolator..." && p.file == 0));
+    assert!(progress
+        .iter()
+        .any(|p| p.label == "Rescoring with Percolator..." && p.file == 1));
+    assert!(progress
+        .iter()
+        .any(|p| p.label == "Pooling the files..." && p.file == -1));
+    assert!(progress.windows(2).all(|w| w[1].fraction >= w[0].fraction));
+    let before_report = progress.iter().filter(|p| p.fraction < 0.9).count();
+    assert!(
+        before_report >= chunks,
+        "progress moves before the end: {before_report} steps below 90 %"
+    );
+    assert!(progress.last().unwrap().fraction < 1.0);
 }
 
 #[test]

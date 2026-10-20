@@ -1,0 +1,168 @@
+[ProSE] open_search=true (precursor tolerance [-500, +500] Da)
+[ProSE] Loading /scratch/sachsenb/shimrun/c/1__DatabaseSuitability_1.mzML
+[ProSE] Loading /scratch/sachsenb/shimrun/c/2__DatabaseSuitability_2.mzML
+[ProSE] Chunk-major multi-file: 330 proteins, 4 chunks, 2 files.
+[ProSE] Chunk 1/4 (100 proteins)
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 119 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] Chunk 2/4 (100 proteins)
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 324 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] Chunk 3/4 (100 proteins)
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 140 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] Chunk 4/4 (30 proteins)
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 63 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+Merge took: 0.00 s (wall), 0.00 s (CPU), 0.00 s (system), 0.00 s (user)
+Memory usage (Aho-Corasick): 1 MB (working set delta), 1 MB (peak working set delta)
+
+Peptide identification engine: PROSE
+Enzyme: Trypsin
+Building trie ... done (0s)
+Compressing trie to BFS format ...
+ACTrie::compressTrie(): created BFS trie with 14315 nodes (path compression skipped 364 suffix nodes)
+ done (0s)
+Mapping 1110 peptides to 330 proteins.
+Searching with up to 3 ambiguous amino acid(s) and 0 mismatch(es)!
+
+Aho-Corasick done:
+  found 1130 hits for 1110 of 1110 peptides.
+Peptide hits passing enzyme filter: 1130
+     ... rejected by enzyme filter: 0
+-----------------------------------
+Peptide statistics
+
+  unmatched                : 0 (0 %)
+  target/decoy:
+    match to target DB only: 1108 (99 %)
+    match to decoy DB only : 1 (0 %)
+    match to both          : 1 (0 %)
+
+  mapping to proteins:
+    no match (to 0 protein)         : 0
+    unique match (to 1 protein)     : 1090
+    non-unique match (to >1 protein): 20
+-----------------------------------
+Protein statistics
+
+  total proteins searched: 330
+  matched proteins       : 53 (53 new)
+  matched target proteins: 51 (96 %)
+  matched decoy proteins : 2 (3 %)
+  orphaned proteins      : 0 (all removed)
+-----------------------------------
+[ProSE] Ion priors (rich model, all peaks): trained on 556 + 553 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.010833 s; 1110 hits annotated in 0.005528 s; peak lists 40033 peaks of 2789 spectra, 0.318563 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 1110 PSMs in-process with 27 features.
+Delta mass statistics written to: oc/mods/1__DatabaseSuitability_1_ModificationAnalysis_DeltaMassStats.tsv
+PTM statistics written to: oc/mods/1__DatabaseSuitability_1_ModificationAnalysis_PTMStats.tsv
+Merge took: 0.00 s (wall), 0.00 s (CPU), 0.00 s (system), 0.00 s (user)
+Memory usage (Aho-Corasick): 0 MB (working set delta), 0 MB (peak working set delta)
+
+Peptide identification engine: PROSE
+Enzyme: Trypsin
+Building trie ... done (0s)
+Compressing trie to BFS format ...
+ACTrie::compressTrie(): created BFS trie with 14315 nodes (path compression skipped 364 suffix nodes)
+ done (0s)
+Mapping 1110 peptides to 330 proteins.
+Searching with up to 3 ambiguous amino acid(s) and 0 mismatch(es)!
+
+Aho-Corasick done:
+  found 1130 hits for 1110 of 1110 peptides.
+Peptide hits passing enzyme filter: 1130
+     ... rejected by enzyme filter: 0
+-----------------------------------
+Peptide statistics
+
+  unmatched                : 0 (0 %)
+  target/decoy:
+    match to target DB only: 1108 (99 %)
+    match to decoy DB only : 1 (0 %)
+    match to both          : 1 (0 %)
+
+  mapping to proteins:
+    no match (to 0 protein)         : 0
+    unique match (to 1 protein)     : 1090
+    non-unique match (to >1 protein): 20
+-----------------------------------
+Protein statistics
+
+  total proteins searched: 330
+  matched proteins       : 53 (53 new)
+  matched target proteins: 51 (96 %)
+  matched decoy proteins : 2 (3 %)
+  orphaned proteins      : 0 (all removed)
+-----------------------------------
+[ProSE] Ion priors (rich model, all peaks): trained on 556 + 553 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.010353 s; 1110 hits annotated in 0.005481 s; peak lists 40033 peaks of 2789 spectra, 0.318563 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 1110 PSMs in-process with 27 features.
+Delta mass statistics written to: oc/mods/2__DatabaseSuitability_2_ModificationAnalysis_DeltaMassStats.tsv
+PTM statistics written to: oc/mods/2__DatabaseSuitability_2_ModificationAnalysis_PTMStats.tsv
+[ProSE] Running aggregate modification analysis on 2220 pooled PSM(s) from 2 input file(s).
+Delta mass statistics written to: oc/mods/_aggregate_across_files_ModificationAnalysis_DeltaMassStats.tsv
+PTM statistics written to: oc/mods/_aggregate_across_files_ModificationAnalysis_PTMStats.tsv
+No protein groups inferred for /scratch/sachsenb/shimrun/c/1__DatabaseSuitability_1.mzML — not writing oc/qpx/1__DatabaseSuitability_1.pg.parquet. Protein inference requires 'FDR:protein' > 0 with decoys, or '-out_merged' with several inputs.
+No protein groups inferred for /scratch/sachsenb/shimrun/c/2__DatabaseSuitability_2.mzML — not writing oc/qpx/2__DatabaseSuitability_2.pg.parquet. Protein inference requires 'FDR:protein' > 0 with decoys, or '-out_merged' with several inputs.
+Found score type q-value to be of type 5
+Building graph on 2220 spectra and 53 proteins.
+Progress of 'Building graph...':
+-- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+Progress of 'Annotating indistinguishable proteins...':
+-- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+<Found score type q-value to be of type 5> occurred 2 times
+Found 51 connected components.
+[ProSE] Merged protein inference + FDR: 51 proteins at 5% FDR
+
+[ProSE] ===================== Search Report =====================
+[ProSE] Database     : /scratch/sachsenb/shimrun/c/db.fasta  (165 target + 165 decoy proteins, decoys: generated)
+[ProSE] Config       : Trypsin, 1 MC | prec [-500, +500] Da | frag 20 ppm | z 2-5 | mode: open | chunked
+[ProSE] Fragment idx : 16507 peptides / 360075 fragments (build 0.0 s)
+[ProSE] -------------------------------------------------------------
+[ProSE] File                         MS2  Matched     ID%  Peptide    Prot   Decoy
+[ProSE] ...seSuitability_1.mzML     2789     1110   39.8%     1109      53       1
+[ProSE] ...seSuitability_2.mzML     2789     1110   39.8%     1109      53       1
+[ProSE] TOTAL                       5578     2220   39.8%        -       -       2
+[ProSE] ---------------- Modification discovery ---------------
+[ProSE] Delta mass : 428 modified / 2220 PSMs (19.3%), median Δ=-57.0215 Da, 8 bins
+[ProSE] PTMs      : 0 PSMs with known PTMs, 428 unknown, 0 unique PTMs
+[ProSE]   Top unknown delta masses (potential novel PTMs):
+[ProSE]    1 | Δ=   -57.0215 Da |    322 PSMs | 1109 peptides
+[ProSE]    2 | Δ=  -114.0430 Da |     74 PSMs | 1109 peptides
+[ProSE]    3 | Δ=  -171.0645 Da |     18 PSMs | 1109 peptides
+[ProSE] Total time   : 4.7 s
+[ProSE] Percolator   : rescored 2 / 2 file(s)
+[ProSE] ------------------------- Outputs ----------------------------
+[ProSE]   merged idXML    -> oc/m.idXML
+[ProSE]   QPX parquet     -> oc/qpx
+[ProSE]   mod-analysis tables-> oc/mods
+[ProSE] ==============================================================
+
+ProSE took 4.70 s (wall), 4.70 s (CPU), 0.05 s (system), 4.65 s (user); Peak Memory Usage: 123 MB.

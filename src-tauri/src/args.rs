@@ -203,6 +203,11 @@ fn check_file(
     if path.is_empty() {
         return Err(format!("No {kind} was given."));
     }
+    // an absolute path cannot be taken for an option (a relative "-in" would be), and does not depend
+    // on the folder the app was started in
+    if !Path::new(path).is_absolute() {
+        return Err(format!("The {kind} {path} is not an absolute path."));
+    }
     let meta =
         fs::metadata(path).map_err(|e| format!("The {kind} {path} cannot be read ({e})."))?;
     if !meta.is_file() {

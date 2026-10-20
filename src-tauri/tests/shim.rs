@@ -385,6 +385,47 @@ fn input_paths_are_validated() {
 }
 
 #[test]
+fn relative_paths_are_refused_so_none_can_pass_for_an_option() {
+    let i = inputs();
+    let out = i.dir.path().join("o");
+    let json = |files: Value, database: Value| -> SearchRequest {
+        serde_json::from_value(json!({
+            "files": files, "database": database, "contaminants": false,
+            "settings": { "parameters": {}, "rescore": true, "peptdeep": false, "threads": 1 },
+        }))
+        .unwrap()
+    };
+    let good_file = json!([{ "id": "f", "path": i.mzml }]);
+    let good_db = json!(i.fasta);
+    for path in [
+        "-in.mzML",
+        "-out_qpx",
+        "data/a.mzML",
+        "a.mzML",
+        "./a.mzML",
+        "../a.mzML",
+    ] {
+        let err = build_args(
+            &json(json!([{ "id": "f", "path": path }]), good_db.clone()),
+            &out,
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("absolute") && err.contains(path),
+            "{path}: {err}"
+        );
+    }
+    for path in ["-database.fasta", "-ini", "db.fasta", "sub/db.fasta"] {
+        let err = build_args(&json(good_file.clone(), json!(path)), &out).unwrap_err();
+        assert!(
+            err.contains("absolute") && err.contains(path),
+            "{path}: {err}"
+        );
+    }
+    assert!(build_args(&json(good_file, good_db), &out).is_ok());
+}
+
+#[test]
 fn contaminants_swap_the_database_for_the_search_folders_copy() {
     let i = inputs();
     let out = i.dir.path().join("o");
@@ -583,6 +624,158 @@ fn progress_of_several_open_files_pools_after_the_last_modification_analysis() {
         -1
     );
     assert_monotone(&steps);
+}
+
+const CHUNK_NAMES: [&str; 2] = ["a.mzML", "b.mzML"];
+
+fn chunk_labels(n: usize) -> Vec<String> {
+    (1..=n)
+        .map(|k| format!("Searching database chunk {k} of {n}..."))
+        .collect()
+}
+
+#[test]
+fn a_chunked_search_of_two_files_reports_its_chunks_and_each_files_rescoring() {
+    // real output: `database:chunk_size 20` on two inputs prints no "Searching" line (chunk-major mode)
+    let steps = steps_of("prose-chunked-two-files-peptdeep.stdout.txt", &CHUNK_NAMES);
+    let mut expected = vec!["Reading the spectra...".to_string()];
+    expected.extend(chunk_labels(17));
+    expected.extend(
+        [
+            "Adding PeptDeep rescoring features...",
+            "Mapping peptides to proteins...",
+            "Rescoring with Percolator...",
+            "Adding PeptDeep rescoring features...",
+            "Mapping peptides to proteins...",
+            "Rescoring with Percolator...",
+            "Pooling the files...",
+            "Writing the results...",
+        ]
+        .map(String::from),
+    );
+    assert_eq!(
+        labels(&steps),
+        expected.iter().map(String::as_str).collect::<Vec<_>>()
+    );
+    let files: Vec<i32> = steps.iter().map(|s| s.1).collect();
+    assert!(
+        files[..18].iter().all(|f| *f == -1),
+        "reading and chunks are outside the files"
+    );
+    assert_eq!(files[18..], [0, 0, 0, 1, 1, 1, -1, -1]);
+    // the chunks take the first half of the bar, in 17 equal steps
+    assert_eq!(steps[1].2, 0.0);
+    assert!(
+        (steps[17].2 - 16.0 / 17.0 * 0.5).abs() < 1e-9,
+        "{:?}",
+        steps[17]
+    );
+    // the files' rescoring follows, file 1 after file 0
+    assert!(
+        steps[18].2 >= 0.5 && steps[23].2 > steps[20].2 && steps[23].2 < 0.95,
+        "{steps:?}"
+    );
+    assert!((steps[24].2 - 0.95).abs() < 1e-9 && (steps[25].2 - 0.97).abs() < 1e-9);
+    assert_monotone(&steps);
+}
+
+#[test]
+fn a_chunked_search_of_one_file_reports_its_chunks() {
+    let steps = steps_of(
+        "prose-chunked-one-file-peptdeep.stdout.txt",
+        &CHUNK_NAMES[..1],
+    );
+    let mut expected = vec!["Reading the spectra...".to_string()];
+    expected.extend(chunk_labels(17));
+    expected.extend(
+        [
+            "Adding PeptDeep rescoring features...",
+            "Mapping peptides to proteins...",
+            "Rescoring with Percolator...",
+            "Writing the results...",
+        ]
+        .map(String::from),
+    );
+    assert_eq!(
+        labels(&steps),
+        expected.iter().map(String::as_str).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        steps[18..21].iter().map(|s| s.1).collect::<Vec<_>>(),
+        [0, 0, 0]
+    );
+    assert_eq!(steps.last().unwrap().1, -1);
+    assert_monotone(&steps);
+}
+
+#[test]
+fn a_chunked_open_search_pools_after_the_aggregate_modification_analysis() {
+    // no PeptDeep: the mapping line starts each file's rescoring
+    let steps = steps_of("prose-chunked-open-two-files.stdout.txt", &CHUNK_NAMES);
+    let l = labels(&steps);
+    assert_eq!(l[0], "Reading the spectra...");
+    assert_eq!(l[1], "Searching database chunk 1 of 4...");
+    assert_eq!(
+        l[5..],
+        [
+            "Mapping peptides to proteins...",
+            "Rescoring with Percolator...",
+            "Mapping peptides to proteins...",
+            "Rescoring with Percolator...",
+            "Pooling the files...",
+            "Writing the results...",
+        ]
+    );
+    assert_eq!(
+        steps[5..11].iter().map(|s| s.1).collect::<Vec<_>>(),
+        [0, 0, 1, 1, -1, -1]
+    );
+    assert_monotone(&steps);
+}
+
+#[test]
+fn progress_never_stalls_on_lines_it_does_not_know() {
+    // unknown lines between the known ones change nothing, in every mode
+    for (fixture, names) in [
+        (
+            "prose-closed-two-files-peptdeep.stdout.txt",
+            &CHUNK_NAMES[..],
+        ),
+        (
+            "prose-chunked-two-files-peptdeep.stdout.txt",
+            &CHUNK_NAMES[..],
+        ),
+        (
+            "prose-chunked-one-file-peptdeep.stdout.txt",
+            &CHUNK_NAMES[..1],
+        ),
+        ("prose-open-one-file.stdout.txt", &CHUNK_NAMES[..1]),
+    ] {
+        let plain = steps_of(fixture, names);
+        let mut tracker = ProgressTracker::new(names.iter().map(|n| n.to_string()).collect());
+        let mut noisy = Vec::new();
+        for line in fixture_lines(fixture) {
+            for junk in [
+                "",
+                "[ProSE] something new",
+                "Chunk",
+                "Chunk x/y",
+                "[ProSE] Chunk-major",
+                "Mapping",
+                "[PeptDeepRescoring",
+            ] {
+                assert!(tracker.feed(junk).is_none(), "{junk:?} in {fixture}");
+            }
+            if let Some(p) = tracker.feed(&line) {
+                noisy.push((p.label, p.file, p.fraction));
+            }
+        }
+        assert_eq!(noisy, plain, "{fixture}");
+    }
+}
+
+fn fixture_lines(name: &str) -> Vec<String> {
+    fixture(name).lines().map(String::from).collect()
 }
 
 #[test]
