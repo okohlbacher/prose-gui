@@ -98,9 +98,13 @@ export function modificationMass(name: string, unimodId: number): number {
   return mass ? Number(mass[1]) : NaN
 }
 
-/** A mass delta as OpenMS writes it in brackets ('+15.9949'). */
+/**
+ * A mass delta as OpenMS writes it in brackets, with 4 decimals ('+15.9949', '-0.9840'): OpenMS takes
+ * the tolerance of a bracketed mass from its last digit, so that 4 decimals resolve to the named
+ * modification (Oxidation) where the full double would match none.
+ */
 function massDelta(mass: number): string {
-  return `${mass < 0 ? '-' : '+'}${Math.abs(mass)}`
+  return `${mass < 0 ? '-' : '+'}${Math.abs(mass).toFixed(4)}`
 }
 
 /** How a modification is named in brackets: its name, or the mass delta of a mass-only one. */

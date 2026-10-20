@@ -13,6 +13,8 @@ export default defineConfig({
     alias: { $lib: fileURLToPath(new URL('./src/lib', import.meta.url)) },
   },
   server: { port: 1420, strictPort: true },
+  // one bundle, loaded from disk by the app (the modification and chemistry tables are in it)
+  build: { chunkSizeWarningLimit: 2000 },
   // the unit tests (e2e/ has the WebdriverIO specs of the app)
   test: { include: ['src/**/*.test.ts'] },
 })

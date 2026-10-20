@@ -26,3 +26,9 @@ export type PredictedIon = { /** the ion as annotatePeaks names it: 'b3'; 'y5++'
  * the intensity relative to the PSM's most intense b/y ion.
  */
 export type PredictedSpectra = { psmOffsets: Uint32Array; ion: string[]; mz: Float32Array; intensity: Float32Array }
+
+/** The aggregate modification analysis of a search (open searches; `null` otherwise). */
+export type ModificationAnalysis = ProSEMultiSummary['modificationAnalysis']
+
+/** The exit code of the search of one file (`'EXECUTION_OK'`, ...). */
+export type ProSEFileStatus = ProSEFileSummary['status']

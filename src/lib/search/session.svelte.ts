@@ -1,0 +1,283 @@
+// The search of this session: its progress while it runs, its error, and the result it opened. Kept
+// outside the views, so that a search goes on (with its progress in the footer, or in the top bar on
+// other views) while the user looks elsewhere. The search runs in the ProSE tool through the shim
+// (desktop.ts); when it is done, its folder is read into the web app's result types (results/read.ts).
+
+import type { DesignResolution } from '../design/model'
+import { cancelSearch as cancelInShim, errorText, SearchFailed, searchFiles, startSearch, type SearchProgress, type SearchRequest } from '../desktop'
+import { readSearch, type SearchResult } from '../results/read'
+import { releaseResultsView } from '../results/view.svelte'
+import { describeFailure, type Failure } from './failure'
+
+/** What a search gave: the reader's result and how long the search took. */
+export type SearchOutcome = SearchResult & {
+  /** The time from the start of ProSE to its end (s). */
+  seconds: number
+}
+
+/** A finished search, open in this session (History keeps it: Task 7). */
+export type OpenResult = {
+  /** The search's id (its folder in the app's searches). */
+  id: string
+  createdAt: string
+  outcome: SearchOutcome
+  design: DesignResolution
+  /** The search's cutoffs (q-values). */
+  psmFdr: number
+  proteinFdr: number
+  /** Set for a result opened from History or a project file: its name there and who made it. */
+  stored?: { name: string; appVersion: string; moduleVersion: string }
+  settings: {
+    /** The parameters that differ from ProSE's defaults. */
+    parameters: Record<string, unknown>
+    /** The fixed modifications of the search (OpenMS names), which the tables do not mark. */
+    fixedMods: string[]
+    /** The FASTA's file name. */
+    database: string
+    rescore: boolean
+    peptdeep: boolean
+    contaminants: boolean
+    presetId?: string
+  }
+}
+
+export type RunStatus = 'idle' | 'running' | 'done' | 'failed' | 'cancelled'
+
+export const searchRun = $state<{
+  status: RunStatus
+  label: string
+  /** The input file of the step (-1 outside the files). */
+  file: number
+  /** The names of the files of the running (or last) search. */
+  files: string[]
+  /** 0–1 overall, as the shim reports it. */
+  fraction: number
+  /** The threads the search runs with ("all cores" or a number). */
+  threads: number
+  /** When the fraction last moved, when the search started, and now (performance.now(); ticks while running). */
+  movedAt: number
+  startedAt: number
+  now: number
+  /** What went wrong: the stage and file, the message, ProSE's raw text. */
+  failure: Failure | null
+}>({
+  status: 'idle',
+  label: '',
+  file: -1,
+  files: [],
+  fraction: 0,
+  threads: 0,
+  movedAt: 0,
+  startedAt: 0,
+  now: 0,
+  failure: null,
+})
+
+/** No move of the fraction for this long: the progress turns indeterminate (Percolator sends no progress). */
+export const STALL_MS = 2000
+
+/** "16 threads", "all threads" (0: all cores, as ProSE's -threads 0). */
+export function threadsLabel(threads: number): string {
+  return threads > 0 ? `${threads} ${threads === 1 ? 'thread' : 'threads'}` : 'all threads'
+}
+
+class ProgressView {
+  running = $derived(searchRun.status === 'running')
+  /** Indeterminate while the fraction does not move: starting ProSE, Percolator, reading the results. */
+  indeterminate = $derived(
+    this.running && (searchRun.fraction === 0 || searchRun.now - searchRun.movedAt > STALL_MS),
+  )
+  percent = $derived(Math.round(searchRun.fraction * 100))
+  elapsed = $derived.by(() => {
+    const s = Math.max(0, Math.floor((searchRun.now - searchRun.startedAt) / 1000))
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  })
+  /** The step, with its file when the search has several ("File 2 of 6 · Post-processing PSMs…"). */
+  label = $derived.by(() => {
+    const label = searchRun.label.replace(/\.\.\.$/, '…')
+    const { file } = searchRun
+    const n = searchRun.files.length
+    if (n > 1 && file >= 0 && file < n && !label.includes(`of ${n})`)) return `File ${file + 1} of ${n} · ${label}`
+    return label
+  })
+  /** "16 threads", "all threads". */
+  threads = $derived(threadsLabel(searchRun.threads))
+  /** (The web app's "64-bit" engine mark: never, the tool has no such limit.) */
+  engine = $derived<string | null>(null)
+}
+
+export const searchProgress = new ProgressView()
+
+// raw: the result's columns are large and never change, so they are not made deeply reactive
+let open = $state.raw<OpenResult | null>(null)
+
+export const openResult = {
+  get current(): OpenResult | null {
+    return open
+  },
+}
+
+/**
+ * Opens a result that did not come from this session's search (History, a project file: Task 7) in
+ * place of the open one, whose view and caches are released. A stored search keeps its `id` and
+ * `createdAt` (`origin`), so that its address stays the same. Returns the id.
+ */
+export function openStoredResult(result: Omit<OpenResult, 'id' | 'createdAt'>, origin: { id: string; createdAt: string }): string {
+  releaseResultsView()
+  open = { ...result, id: origin.id, createdAt: origin.createdAt }
+  return origin.id
+}
+
+/** Called with every search that finished in this session (not with failed or cancelled ones). */
+type FinishedListener = (result: OpenResult) => void
+const finishedListeners = new Set<FinishedListener>()
+
+/** Registers `listener` for the searches that finish from now on; returns the way to remove it. */
+export function onSearchFinished(listener: FinishedListener): () => void {
+  finishedListeners.add(listener)
+  return () => finishedListeners.delete(listener)
+}
+
+/** The run in flight: a cancelled or replaced run ignores what its promises bring later. */
+let runId = 0
+/** The search id of the run, once the shim has started it (cancelling then goes through the shim). */
+let searchId: string | null = null
+/** Ends the wait for the running search's end (a cancelled search sends neither done nor failed). */
+let abandon: (() => void) | null = null
+let clock: ReturnType<typeof setInterval> | undefined
+
+function startClock() {
+  clearInterval(clock)
+  searchRun.now = performance.now()
+  clock = setInterval(() => (searchRun.now = performance.now()), 250)
+}
+
+function stopClock() {
+  clearInterval(clock)
+  clock = undefined
+}
+
+/** The label of the step after ProSE: its outputs are read into the result. */
+export const READING_RESULTS = 'Reading the results...'
+
+/**
+ * Runs a search in the ProSE tool. Resolves with the id of the opened result, or null if the search
+ * failed or was cancelled (`searchRun` says which).
+ */
+export async function runSearch(
+  request: SearchRequest,
+  meta: Omit<OpenResult, 'id' | 'createdAt' | 'outcome'>,
+): Promise<string | null> {
+  if (searchRun.status === 'running') return null
+  const id = ++runId
+  searchId = null
+  const now = performance.now()
+  Object.assign(searchRun, {
+    status: 'running',
+    label: 'Starting ProSE...',
+    file: -1,
+    files: request.files.map((f) => f.path.split(/[\\/]/).pop() ?? f.path),
+    fraction: 0,
+    threads: request.settings.threads,
+    movedAt: now,
+    startedAt: now,
+    failure: null,
+  })
+  startClock()
+  // when the tool last reported (a step without reports, like Percolator, leaves a long silence)
+  let reportedAt = now
+  const onProgress = (p: SearchProgress) => {
+    if (id !== runId || searchRun.status !== 'running') return
+    reportedAt = performance.now()
+    searchRun.label = p.label
+    searchRun.file = p.file
+    if (p.fraction > searchRun.fraction) {
+      searchRun.fraction = p.fraction
+      searchRun.movedAt = performance.now()
+    }
+  }
+  const fail = (failure: Failure) => Object.assign(searchRun, { status: 'failed', failure })
+  try {
+    const started = await startSearch(request, onProgress)
+    searchId = started.searchId
+    if (id !== runId) {
+      // cancelled while the shim was starting it
+      started.stop()
+      void cancelInShim(started.searchId).catch(() => {})
+      return null
+    }
+    const abandoned = new Promise<null>((resolve) => {
+      abandon = () => {
+        started.stop()
+        resolve(null)
+      }
+    })
+    if ((await Promise.race([started.done, abandoned])) === null) return null
+    const seconds = (performance.now() - now) / 1000
+    // a cancel that came too late (the search had finished): the user asked to stop, so it stays cancelled
+    if (id !== runId) return null
+    Object.assign(searchRun, { label: READING_RESULTS, file: -1 })
+    let result: SearchResult
+    try {
+      result = await readSearch(searchFiles(started.searchId))
+    } catch (e) {
+      if (id !== runId) return null
+      fail({ context: 'While reading the results', summary: errorText(e), detail: null })
+      return null
+    }
+    if (id !== runId) return null
+    releaseResultsView() // the previous result's view, model and caches
+    const finished: OpenResult = { ...meta, id: started.searchId, createdAt: new Date().toISOString(), outcome: { ...result, seconds } }
+    open = finished
+    searchRun.status = 'done'
+    for (const listener of finishedListeners) {
+      try {
+        listener(finished)
+      } catch {
+        // a listener must not turn a finished search into a failed one
+      }
+    }
+    return finished.id
+  } catch (e) {
+    if (id !== runId) return null
+    if (e instanceof SearchFailed) {
+      const file = e.file >= 0 ? e.file : searchRun.file
+      fail(
+        describeFailure(
+          { label: e.stage || searchRun.label, file, files: searchRun.files, silentMs: performance.now() - reportedAt },
+          e.message,
+        ),
+      )
+    } else {
+      // the shim refused the request (a file that cannot be read, ProSE not found)
+      fail({ context: 'Before the search', summary: errorText(e), detail: null })
+    }
+    return null
+  } finally {
+    if (id === runId) {
+      stopClock()
+      abandon = null
+    }
+  }
+}
+
+/**
+ * Cancels the running search: the run ends at once (a search finishing meanwhile is not opened), and
+ * the shim ends ProSE and removes its folder.
+ */
+export function cancelSearch(): void {
+  if (searchRun.status !== 'running') return
+  runId++
+  stopClock()
+  searchRun.status = 'cancelled'
+  abandon?.()
+  abandon = null
+  if (searchId !== null) void cancelInShim(searchId).catch(() => {})
+}
+
+/** Forgets a finished search's error or cancellation (e.g. when the form changes). */
+export function clearRunMessage(): void {
+  if (searchRun.status === 'failed' || searchRun.status === 'cancelled') {
+    Object.assign(searchRun, { status: 'idle', failure: null })
+  }
+}

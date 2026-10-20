@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { annotatePeaks } from '../psm/annotate'
 import {
   countEnzymatic,
   generatedDecoy,
@@ -56,6 +57,21 @@ describe('peptide strings', () => {
     expect(proformaString('AVMD', [amidated])).toBe('AVMD-[Amidated]')
     // a modification without a Unimod accession: its mass delta
     expect(proformaString('AVMDK', [{ position: 2, name: '+15.9949', unimod: -1, mass: 15.9949 }])).toBe('AVM[+15.9949]DK')
+  })
+
+  test('a mass-only modification is written with 4 decimals, so that it resolves to a named one', () => {
+    // QPX gives the full double (15.994915…); OpenMS takes the tolerance from the digits written
+    const unnamed: Modification = { position: 2, name: '', unimod: -1, mass: 15.99491461956 }
+    const acetylMass: Modification = { position: -1, name: '', unimod: -1, mass: 42.0105646837 }
+    const negative: Modification = { position: 5, name: '-0.98401558291', unimod: -1, mass: -0.98401558291 }
+    expect(openmsString('AVMDK', [unnamed])).toBe('AVM[+15.9949]DK')
+    expect(openmsString('AVMDK', [acetylMass])).toBe('.[+42.0106]AVMDK')
+    expect(openmsString('AVMDA', [negative])).toBe('AVMDA.[-0.9840]')
+    expect(proformaString('AVMDK', [unnamed])).toBe('AVM[+15.9949]DK')
+    // the annotation reads it as the named modification (Oxidation, with its CH4OS loss)
+    const named = annotatePeaks(new Float32Array(), new Float32Array(), 'AVM(Oxidation)DK', 2, { losses: true })
+    const byMass = annotatePeaks(new Float32Array(), new Float32Array(), openmsString('AVMDK', [unnamed]), 2, { losses: true })
+    expect(byMass.theoretical).toEqual(named.theoretical)
   })
 
   test('the mass of a modification: the pin\'s Unimod table, or the mass of a mass-only name', () => {
