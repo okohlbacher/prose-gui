@@ -87,8 +87,9 @@ const OPTION_SETS = [
 const precursorOptions = (tolerance, unit, charge) => ({ tolerance, unit, maxCharge: Math.max(1, charge), ions: [], losses: true, precursor: true })
 
 const cases = []
+let target = cases
 const add = (name, spectrum, peaks, peptide, charge, options) =>
-  cases.push({ name, spectrum, peptide, charge, options, result: annotate(peaks.mz, peaks.intensity, peptide, charge, options, peaks.float64) })
+  target.push({ name, spectrum, peptide, charge, options, result: annotate(peaks.mz, peaks.intensity, peptide, charge, options, peaks.float64) })
 
 // A: 50 PSMs of the example, evenly over its rows, each with two option sets (in turn) and, every
 // fifth, the PSM view's precursor annotation
@@ -310,3 +311,45 @@ const json = {
 writeFileSync(out, JSON.stringify(json) + '\n')
 const errors = cases.filter((c) => c.result.error !== undefined).length
 console.log(`${cases.length} cases (${variants} modified variants, ${errors} errors), ${embedded.length} spectra written: ${out}`)
+
+// M: modifications given by mass (src/lib/psm/fixtures/annotations-mass.json), as the reader writes those
+// without a name ('M[+15.9949]', '.[+42.0106]PEPTIDE'; derive.ts openmsString) and other spellings
+// AASequence reads: the module resolves them to the Unimod modification of that mass, else to a mass
+// delta. No precursor peaks where the delta stays unresolved: their water and ammonia losses leave such
+// a delta out in OpenMS (it is in no formula), and annotate.ts deliberately does not (see there).
+const massCases = []
+target = massCases
+{
+  const m = psm('mods', 1) // IALSRPNVEVVALNDPFITNDYAAYM(Oxidation)FK, charge 3
+  const mRef = { fixture: 'mods', row: 1, peaks: m.mz.length }
+  const mass = (peptide) => peptide.replace('M(Oxidation)', 'M[+15.9949]')
+  for (const k of [1, 3, 4, 6]) add(`mods 1 mass-spelled Oxidation options ${k}`, mRef, m, mass(m.peptide), m.charge, OPTION_SETS[k])
+  add('mods 1 Oxidation as residue mass', mRef, m, m.peptide.replace('M(Oxidation)', 'M[147.0354]'), m.charge, OPTION_SETS[4])
+  add('mods 1 Oxidation as integer mass', mRef, m, m.peptide.replace('M(Oxidation)', 'M[+16]'), m.charge, OPTION_SETS[4])
+  const p = psm('example', rows[2])
+  const ref = { fixture: 'example', row: rows[2], peaks: p.mz.length }
+  const seq = p.peptide
+  const spelled = [
+    ['N-terminal Acetyl by mass, dot notation', `.[+42.0106]${seq}`, true],
+    ['N-terminal Acetyl by mass', `[+42.0106]${seq}`, true],
+    ['N-terminal mass on the first residue', `${seq[0]}[+42.0106]${seq.slice(1)}`, true],
+    ['C-terminal Amidated by mass', `${seq}.[-0.9840]`, true],
+    ['Phospho by mass', withResidueMod(seq, 'ST', 'Phospho')?.replace('(Phospho)', '[+79.9663]'), true],
+    ['Carbamidomethyl by mass', `${seq[0]}C[+57.0215]${seq.slice(2)}`, true],
+    ['TMT6plex by mass', `.[+229.1629]${seq.replaceAll('K', 'K[+229.1629]')}`, true],
+    // two Unimod entries of this mass for K, Trimethyl (with the loss C3H9N) before Propyl (without): the first
+    ['isobaric Trimethyl and Propyl by mass', `${seq.slice(0, 3)}K[+42.0470]${seq.slice(3)}`, true],
+    ['unknown mass on a residue', `${seq.slice(0, 3)}[+123.4567]${seq.slice(3)}`, false],
+    ['unknown mass on the last residue', `${seq}[+123.4567]`, false],
+    ['unknown N-terminal mass', `.[+100.1234]${seq}`, false],
+    ['unknown C-terminal mass', `${seq}.[+100.1234]`, false],
+    ['negative unknown mass', `${seq.slice(0, 2)}[-3.21]${seq.slice(2)}`, false],
+  ]
+  for (const [name, peptide, resolved] of spelled) {
+    if (!peptide) continue
+    for (const k of resolved ? [1, 4, 6] : [1, 3, 8]) add(`${name} options ${k}`, ref, p, peptide, p.charge, OPTION_SETS[k])
+  }
+}
+const massOut = process.env.OUT_MASS ?? new URL('../src/lib/psm/fixtures/annotations-mass.json', import.meta.url).pathname
+writeFileSync(massOut, JSON.stringify({ generator: json.generator, module: json.module, spectra: [], cases: massCases }) + '\n')
+console.log(`${massCases.length} cases of modifications given by mass written: ${massOut}`)

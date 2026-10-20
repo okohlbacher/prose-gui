@@ -56,7 +56,10 @@ type GoldenCase = {
 }
 type Golden = { module: string; spectra: { mz: number[]; intensity: number[]; float64?: boolean }[]; cases: GoldenCase[] }
 
-const golden: Golden = JSON.parse(readFileSync(new URL('./fixtures/annotations.json', import.meta.url), 'utf8'))
+const read = (name: string): Golden => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'))
+const golden = read('annotations.json')
+/** modifications given by mass, as the reader writes those without a name ('M[+15.9949]') */
+const goldenMass = read('annotations-mass.json')
 
 /** The annotation as the golden file's tuples. */
 const tuples = (r: PeakAnnotationResult) => ({
@@ -74,12 +77,9 @@ function firstDifference<T extends unknown[]>(label: string, actual: T[], expect
   return null
 }
 
-describe('annotatePeaks', () => {
-  test("equals the web module's annotatePeaks", { timeout: 60_000 }, async () => {
-    expect(golden.cases.length).toBeGreaterThan(200)
-    const psms = new Set(golden.cases.flatMap((c) => ('fixture' in c.spectrum && c.spectrum.fixture === 'example' ? [c.spectrum.row] : [])))
-    expect(psms.size).toBeGreaterThanOrEqual(50)
-
+/** Every case of `golden` equals annotatePeaks' result (or both throw). */
+async function expectGolden(golden: Golden) {
+  {
     const failures: string[] = []
     let compared = 0
     for (const c of golden.cases) {
@@ -121,6 +121,72 @@ describe('annotatePeaks', () => {
     }
     expect(failures, `${failures.length} of ${golden.cases.length} cases differ:\n${failures.slice(0, 20).join('\n')}`).toEqual([])
     expect(compared).toBe(golden.cases.length)
+  }
+}
+
+describe('annotatePeaks', () => {
+  test("equals the web module's annotatePeaks", { timeout: 60_000 }, async () => {
+    expect(golden.cases.length).toBe(236)
+    const psms = new Set(golden.cases.flatMap((c) => ('fixture' in c.spectrum && c.spectrum.fixture === 'example' ? [c.spectrum.row] : [])))
+    expect(psms.size).toBeGreaterThanOrEqual(50)
+    await expectGolden(golden)
+  })
+
+  test("equals the web module's annotatePeaks of modifications given by mass", { timeout: 60_000 }, async () => {
+    expect(goldenMass.cases.length).toBeGreaterThanOrEqual(40)
+    await expectGolden(goldenMass)
+  })
+
+  describe('modifications given by mass or by an unknown name', () => {
+    const p = { mz: new Float32Array(golden.spectra[0].mz), intensity: new Float32Array(golden.spectra[0].intensity) }
+    const all: AnnotationOptions = { tolerance: 0.05, unit: 'Da', maxCharge: 2, ions: ['a', 'b', 'c', 'x', 'y', 'z'], losses: true, precursor: true }
+    const annotate = (peptide: string, mass?: (name: string) => number | undefined) => annotatePeaks(p.mz, p.intensity, peptide, 3, all, mass)
+
+    test('M[+15.9949] annotates as M(Oxidation): the same ions and losses', () => {
+      const spelled = annotate('PEPM[+15.9949]TIDEK')
+      expect(spelled).toEqual(annotate('PEPM(Oxidation)TIDEK'))
+      expect(spelled.theoretical.some((t) => t.ion.includes('-CH4OS'))).toBe(true)
+      expect(annotate('PEPM[147.0354]TIDEK')).toEqual(annotate('PEPM(Oxidation)TIDEK')) // the residue's mass
+    })
+
+    test('an unmatched mass, K[+123.4567], shifts the ions that have the residue and has no losses', () => {
+      const plain = annotate('PEPTIDEK')
+      const shifted = annotate('PEPTIDEK[+123.4567]')
+      const by = (r: PeakAnnotationResult, type: string) =>
+        new Map(r.theoretical.filter((t) => t.type === type && !t.ion.includes('-')).map((t) => [t.ion, t.mz]))
+      // b ions (without the C-terminal K) as they were; y ions (all with it) shifted by the delta per charge
+      expect(by(shifted, 'b')).toEqual(by(plain, 'b'))
+      for (const [ion, mz] of by(plain, 'y')) {
+        const charge = ion.match(/\+*$/)![0].length || 1
+        expect(by(shifted, 'y').get(ion)! - mz).toBeCloseTo(123.4567 / charge, 9)
+      }
+      // K's ammonia loss goes with the modification: no ion loses NH3 (PEPTIDE has none)
+      expect(plain.theoretical.some((t) => /^[a-z]\d+-NH3/.test(t.ion))).toBe(true)
+      expect(shifted.theoretical.some((t) => /^[a-z]\d+-NH3/.test(t.ion))).toBe(false)
+      // the precursor's water and ammonia losses from its mass, the delta included
+      const precursor = (r: PeakAnnotationResult, ion: string) => r.theoretical.find((t) => t.ion === ion)!.mz
+      expect(precursor(shifted, '[M+2H]++') - precursor(plain, '[M+2H]++')).toBeCloseTo(123.4567 / 2, 9)
+      expect(precursor(shifted, '[M+2H-H2O]++') - precursor(plain, '[M+2H-H2O]++')).toBeCloseTo(123.4567 / 2, 9)
+      expect(precursor(shifted, '[M+2H-NH3]++') - precursor(plain, '[M+2H-NH3]++')).toBeCloseTo(123.4567 / 2, 9)
+    })
+
+    test('a terminal [+42.0106] is Acetyl', () => {
+      expect(annotate('.[+42.0106]PEPTIDEK')).toEqual(annotate('.(Acetyl)PEPTIDEK'))
+      expect(annotate('[+42.0106]PEPTIDEK')).toEqual(annotate('.(Acetyl)PEPTIDEK'))
+      expect(annotate('PEPTIDEK.[-0.9840]')).toEqual(annotate('PEPTIDEK.(Amidated)'))
+    })
+
+    test('an unknown name annotates with the mass the results give it, and throws without', () => {
+      const masses: Record<string, number> = { MyTag: 123.4567, MyTerm: 100.1234 }
+      const mass = (name: string) => masses[name]
+      expect(annotate('PEPTIDEK(MyTag)', mass)).toEqual(annotate('PEPTIDEK[+123.4567]'))
+      expect(annotate('.(MyTerm)PEPTIDEK', mass)).toEqual(annotate('.[+100.1234]PEPTIDEK'))
+      expect(annotate('PEPTIDEK.(MyTerm)', mass)).toEqual(annotate('PEPTIDEK.[+100.1234]'))
+      expect(() => annotate('PEPTIDEK(MyTag)')).toThrow(/MyTag/)
+      expect(() => annotate('PEPTIDEK(Other)', mass)).toThrow(/Other/)
+      // a Unimod name stays the Unimod modification, whatever mass the resolver has
+      expect(annotate('PEPM(Oxidation)TIDEK', () => 99)).toEqual(annotate('PEPM(Oxidation)TIDEK'))
+    })
   })
 
   test("agrees with ProSE's own annotations for b/y", { timeout: 60_000 }, async () => {

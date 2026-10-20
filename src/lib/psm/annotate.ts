@@ -137,19 +137,34 @@ const INTERNAL_TO_FULL_MONO = monoWeight(INTERNAL_TO_FULL)
 
 type Residue = {
   code: string
-  /** the free amino acid's formula, with the modification's */
+  /** the free amino acid's formula, with the modification's (not with a mass-only one's) */
   formula: Formula
+  /** Residue::getMonoWeight(Residue::Full) */
+  mono: number
   /** Residue::getMonoWeight(Residue::Internal) */
   internalMono: number
   /** the neutral losses: the residue's, or its modification's */
   losses: Loss[]
+  /** a modification known by its mass only: not in the formula */
+  massOnly: boolean
 }
-type TerminalMod = { diffMono: number; diffFormula: Formula }
+type TerminalMod = { diffMono: number; diffFormula: Formula; massOnly: boolean }
 type Peptide = { residues: Residue[]; nTerm: TerminalMod | null; cTerm: TerminalMod | null }
 
 /** A residue as ResidueDB has it (formula, mass, losses). */
 function residue(code: string, formula: Formula, losses: Formula[]): Residue {
-  return { code, formula, internalMono: monoWeight(formula) - INTERNAL_TO_FULL_MONO, losses: losses.map(loss) }
+  const mono = monoWeight(formula)
+  return { code, formula, mono, internalMono: mono - INTERNAL_TO_FULL_MONO, losses: losses.map(loss), massOnly: false }
+}
+
+/**
+ * A residue with a modification of mass delta `mass` that no database entry explains
+ * (ResidueModification::createUnknownFromMassString: the residue's mass plus the delta, the formula and
+ * no neutral losses).
+ */
+function massOnlyResidue(r: Residue, mass: number): Residue {
+  const mono = mass + r.mono
+  return { code: r.code, formula: r.formula, mono, internalMono: mono - INTERNAL_TO_FULL_MONO, losses: [], massOnly: true }
 }
 const RESIDUES = new Map(Object.entries(CHEMISTRY.residues).map(([code, [formula, losses]]) => [code, residue(code, formula, losses)]))
 
@@ -175,6 +190,37 @@ class AnnotationError extends Error {
   }
 }
 
+/** Unimod's specificities in the order ModificationsDB has them (the file's): for the search by mass. */
+const SPECIFICITIES = Object.entries(CHEMISTRY.modifications).flatMap(([name, [, specificities]]) => {
+  const diffMono = MOD_MASS.get(name)
+  return diffMono === undefined ? [] : specificities.map(([site, position]) => ({ name, diffMono, site, position }))
+})
+
+/** ModificationsDB::residuesMatch_ (Unimod has no user-defined modifications) */
+const residuesMatch = (residue: string, site: string) => site === 'X' || site === residue || residue === 'X' || residue === '.' || residue === '?' || residue === ''
+
+/**
+ * The Unimod modification of mass delta `mass` for `residue` at `position` ('A' anywhere, 'N'/'C' any
+ * terminus), as AASequence's parsing of a mass in brackets looks it up: of a mass with decimals the
+ * closest within `tolerance` (getBestModificationByDiffMonoMass: the first of equally close ones), of
+ * an integer mass the first within it (searchModificationsByDiffMonoMass); none for a delta of 0 unless
+ * the mass is 0. Null if none.
+ */
+function modificationByMass(mass: number, tolerance: number, integer: boolean, residue: string, position: 'A' | 'N' | 'C') {
+  let best: (typeof SPECIFICITIES)[number] | null = null
+  let minError = tolerance
+  for (const spec of SPECIFICITIES) {
+    if (spec.position !== position || !residuesMatch(residue, spec.site) || !(spec.diffMono !== 0 || mass === 0)) continue
+    const error = Math.abs(spec.diffMono - mass)
+    if (integer ? error <= tolerance : error < minError) {
+      if (integer) return modification(spec.name)
+      minError = error
+      best = spec
+    }
+  }
+  return best && modification(best.name)
+}
+
 /**
  * The specificity of `mod` for `residue` at `position` ('A' anywhere, 'N'/'C' terminal, 'PN'/'PC'
  * protein terminal): of the residue, else of any residue ('X'); null if none.
@@ -195,6 +241,9 @@ function modifiedResidue(r: Residue, name: string): Residue | null {
   return residue(r.code, formula, [...spec[2]])
 }
 
+/** The mass of a modification by its name, for those that the Unimod file does not have (peptides.modMass). */
+export type ModificationMass = (name: string) => number | undefined
+
 /** A terminal modification (terminalResidueHelper: terminal, else protein-terminal specificity). */
 function terminalMod(name: string, residue: string, term: 'N' | 'C', peptide: string): TerminalMod {
   const mod = modification(name)
@@ -202,11 +251,77 @@ function terminalMod(name: string, residue: string, term: 'N' | 'C', peptide: st
   if (!mod || !spec) {
     throw new AnnotationError(`Cannot convert '${peptide}' to a peptide: no ${term}-terminal modification '${name}' of ${residue}.`)
   }
-  return { diffMono: mod.diffMono, diffFormula: mod.diffFormula }
+  return { diffMono: mod.diffMono, diffFormula: mod.diffFormula, massOnly: false }
 }
 
-/** The peptide of an OpenMS string (AASequence::fromString, round-bracket modifications by name). */
-function parsePeptide(text: string): Peptide {
+/**
+ * A modification given by its mass (AASequence::parseModSquareBrackets_): the Unimod modification of
+ * that mass for the residue or terminus, within the precision the mass is written with (one unit of its
+ * last digit; 0.5 for an integer); else, for a residue, a terminal one if the residue is the first or
+ * last; else a modification of that mass only.
+ */
+function squareBracket(peptide: Peptide, mod: string, term: 'N' | 'C' | null, s: string, end: number, text: string): void {
+  let mass = Number(mod)
+  if (mod.trim() === '' || !Number.isFinite(mass)) throw new AnnotationError(`Cannot convert '${text}' to a peptide: '${mod}' is no mass.`)
+  const decimal = mod.indexOf('.')
+  const integer = decimal < 0
+  const tolerance = integer ? 0.5 : Math.pow(10, -(mod.length - decimal - 1))
+  let delta = mod[0] === '+' || mod[0] === '-'
+  const residues = peptide.residues
+  const terminal = (found: ReturnType<typeof modification>, diffMono: number): TerminalMod =>
+    found ? { diffMono: found.diffMono, diffFormula: found.diffFormula, massOnly: false } : { diffMono, diffFormula: {}, massOnly: true }
+
+  if (term === 'N') {
+    let next = end + 1
+    if (s[next] === '.') next++
+    const diff = delta ? mass : mass - monoWeight(INTERNAL_TO_NTERM)
+    peptide.nTerm = terminal(modificationByMass(diff, tolerance, integer, s[next] ?? '', 'N'), diff)
+    return
+  }
+  const last = residues[residues.length - 1]
+  if (term === 'C') {
+    const diff = delta ? mass : mass - monoWeight(INTERNAL_TO_CTERM)
+    peptide.cTerm = terminal(modificationByMass(diff, tolerance, integer, last.code, 'C'), diff)
+    return
+  }
+  if (delta && last.mono <= 0) {
+    throw new AnnotationError(`Cannot convert '${text}' to a peptide: a mass difference on a residue of unknown mass ('${last.code}[${mod}]').`)
+  }
+  if (!delta) {
+    // a residue's mass: relative to the residue as in a peptide (internal)
+    mass -= last.internalMono
+    delta = true
+  }
+  const found = modificationByMass(mass, tolerance, integer, last.code, 'A')
+  const modified = found && modifiedResidue(last, found.name)
+  if (modified) {
+    residues[residues.length - 1] = modified
+    return
+  }
+  if (residues.length === 1) {
+    const nTerm = modificationByMass(mass, tolerance, integer, last.code, 'N')
+    if (nTerm) {
+      peptide.nTerm = terminal(nTerm, mass)
+      return
+    }
+  } else if (end === s.length - 1) {
+    const cTerm = modificationByMass(mass, tolerance, integer, last.code, 'C')
+    if (cTerm) {
+      peptide.cTerm = terminal(cTerm, mass)
+      return
+    }
+  }
+  residues[residues.length - 1] = massOnlyResidue(last, mass)
+}
+
+/**
+ * The peptide of an OpenMS string (AASequence::fromString): modifications by name in round brackets, or
+ * by mass in square brackets ('M[+15.9949]', '.[+42.0106]PEPTIDE'; a mass without sign is the residue's
+ * or terminus' mass), which the Unimod modification of that mass becomes if there is one. A name that
+ * the Unimod file does not have (or not for that residue or terminus) is taken as the mass delta that
+ * `massOf` gives it, if it gives one.
+ */
+function parsePeptide(text: string, massOf?: ModificationMass): Peptide {
   let s = text.trim()
   if (s.startsWith('n')) s = s.slice(1)
   if (s.endsWith('c')) s = s.slice(0, -1)
@@ -243,24 +358,38 @@ function parsePeptide(text: string): Peptide {
       }
       if (end >= s.length) throw new AnnotationError(`Cannot convert '${text}' to a peptide: missing ')'.`)
       const name = s.slice(i + 1, end)
+      // a name the Unimod file does not have for this place: its mass delta, if the caller knows it
+      const known = massOf?.(name)
+      const byMass = <T>(lookup: () => T): T => {
+        try {
+          return lookup()
+        } catch (e) {
+          if (known === undefined || !Number.isFinite(known)) throw e
+          return null as T
+        }
+      }
       if (residues.length === 0 || term === 'N') {
         let next = end + 1
         if (s[next] === '.') next++
-        peptide.nTerm = terminalMod(name, s[next] ?? '', 'N', text)
+        peptide.nTerm = byMass(() => terminalMod(name, s[next] ?? '', 'N', text)) ?? { diffMono: known!, diffFormula: {}, massOnly: true }
       } else if (term === 'C') {
-        peptide.cTerm = terminalMod(name, residues[residues.length - 1].code, 'C', text)
+        peptide.cTerm = byMass(() => terminalMod(name, residues[residues.length - 1].code, 'C', text)) ?? { diffMono: known!, diffFormula: {}, massOnly: true }
       } else {
         const last = residues[residues.length - 1]
         const modified = modifiedResidue(last, name)
         if (modified) residues[residues.length - 1] = modified
         // the old notation of a terminal modification on the first or last residue
-        else if (i === 1) peptide.nTerm = terminalMod(name, last.code, 'N', text)
-        else if (end === s.length - 1) peptide.cTerm = terminalMod(name, last.code, 'C', text)
+        else if (i === 1 && modification(name)) peptide.nTerm = byMass(() => terminalMod(name, last.code, 'N', text)) ?? { diffMono: known!, diffFormula: {}, massOnly: true }
+        else if (end === s.length - 1 && modification(name)) peptide.cTerm = byMass(() => terminalMod(name, last.code, 'C', text)) ?? { diffMono: known!, diffFormula: {}, massOnly: true }
+        else if (known !== undefined && Number.isFinite(known)) residues[residues.length - 1] = massOnlyResidue(last, known)
         else throw new AnnotationError(`Cannot convert '${text}' to a peptide: no modification '${name}' of ${last.code}.`)
       }
       i = end
     } else if (s[i] === '[') {
-      throw new AnnotationError(`Cannot annotate '${text}': modifications given by mass ('[+15.9949]') are not supported.`)
+      const end = s.indexOf(']', i + 1)
+      if (end < 0) throw new AnnotationError(`Cannot convert '${text}' to a peptide: missing ']'.`)
+      squareBracket(peptide, s.slice(i + 1, end), term, s, end, text)
+      i = end
     } else {
       throw new AnnotationError(`Cannot convert '${text}' to a peptide: unexpected character '${s[i]}'.`)
     }
@@ -339,8 +468,15 @@ function theoreticalFragments(peptide: Peptide, ions: IonType[], maxCharge: numb
     if (peptide.cTerm) formula = plus(formula, peptide.cTerm.diffFormula)
     for (const r of residues) formula = plus(formula, minus(r.formula, INTERNAL_TO_FULL))
     formula = plus(formula, INTERNAL_TO_FULL)
-    add(monoWeight(minus(formula, { H: 2, O: 1 }), z) / z, `[${adduct}-H2O]${plusses}`, z)
-    add(monoWeight(minus(formula, { N: 1, H: 3 }), z) / z, `[${adduct}-NH3]${plusses}`, z)
+    if (residues.some((r) => r.massOnly) || peptide.nTerm?.massOnly || peptide.cTerm?.massOnly) {
+      // a modification known by its mass only is not in the formula (OpenMS leaves it out of these two
+      // peaks): from the precursor's mass instead
+      add((mono + INTERNAL_TO_FULL_MONO - monoWeight({ H: 2, O: 1 })) / z, `[${adduct}-H2O]${plusses}`, z)
+      add((mono + INTERNAL_TO_FULL_MONO - monoWeight({ N: 1, H: 3 })) / z, `[${adduct}-NH3]${plusses}`, z)
+    } else {
+      add(monoWeight(minus(formula, { H: 2, O: 1 }), z) / z, `[${adduct}-H2O]${plusses}`, z)
+      add(monoWeight(minus(formula, { N: 1, H: 3 }), z) / z, `[${adduct}-NH3]${plusses}`, z)
+    }
   }
 
   // sortByPositionPresorted: the chunks merged stably, i.e. a stable sort by m/z
@@ -517,6 +653,11 @@ const isNullish = (v: unknown) => v === undefined || v === null
  * (['b', 'y']), losses (false), precursor (false; the precursor at maxCharge). In ppm each ion takes its
  * closest peak, so several ions can share one; in Da the matching is one to one. A match refers to its
  * peak by its index in the arrays as passed; its error is in ppm.
+ *
+ * Modifications given by mass ('M[+15.9949]') become the Unimod modification of that mass (Oxidation,
+ * with its losses), as in OpenMS, else a mass delta without losses. A modification whose name the Unimod
+ * file does not have is taken as the mass delta `modificationMass` gives it (the results' peptides.modMass);
+ * without one it throws, as the web app's annotatePeaks.
  */
 export function annotatePeaks(
   mz: ArrayLike<number>,
@@ -524,10 +665,11 @@ export function annotatePeaks(
   peptide: string,
   charge: number,
   options: AnnotationOptions,
+  modificationMass?: ModificationMass,
 ): PeakAnnotationResult {
   if (!Number.isInteger(charge)) throw new AnnotationError(`The precursor charge has to be an integer: ${charge}`)
   if (charge < 1) throw new AnnotationError(`The precursor charge has to be at least 1: ${charge}`)
-  const parsed = parsePeptide(peptide)
+  const parsed = parsePeptide(peptide, modificationMass)
   if (parsed.residues.length === 0) throw new AnnotationError(`The peptide is empty: '${peptide}'`)
   if (mz.length !== intensity.length) {
     throw new AnnotationError(`m/z and intensity arrays differ in length (${mz.length} vs. ${intensity.length})`)
