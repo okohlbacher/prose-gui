@@ -1,0 +1,85 @@
+shared:
+  database_file: "/scratch/sachsenb/openms-desktop/src/tests/topp/SimpleSearchEngine_1.fasta"
+  enzyme: "Trypsin"
+  precursor_tol_lower: 5
+  precursor_tol_upper: 5
+  precursor_tol_unit: "ppm"
+  fragment_tol: 0.1
+  fragment_tol_unit: "Da"
+  min_charge: 2
+  max_charge: 5
+  missed_cleavages: 1
+  fixed_mods:
+    - "Carbamidomethyl (C)"
+  variable_mods:
+    - "Oxidation (M)"
+    - "Acetyl (Protein N-term)"
+  ion_series:
+    - "b"
+    - "y"
+    - "+c/z+1 for ETD/ECD/EThcD/ETciD"
+  open_search: false
+  calibration_enabled: false
+  peptide_mass_mode: false
+  chunked: false
+  decoy_mode: "generated"
+  psm_fdr_threshold: 1
+  protein_fdr_threshold: 0
+  db_target_proteins: 11
+  db_decoy_proteins: 11
+  indexed_peptides: 136
+  indexed_fragments: 3511
+  seconds_index_build: 0.003969
+  seconds_total: 0.106953
+per_file:
+  - input_file: "1__SimpleSearchEngine_1.mzML"
+    exit_code: 0
+    ms2_spectra: 3
+    matched_spectra: 3
+    target_psms: 3
+    decoy_psms: 0
+    fdr_applied: true
+    achieved_psm_fdr: 0
+    unique_peptides: 3
+    unique_proteins: 3
+    hyperscore:
+      valid: true
+      min: 22.9679
+      median: 42.3323
+      max: 45.37
+    charge_histogram:
+      "3": 3
+    missed_cleavage_histogram:
+      "0": 3
+    precursor_error:
+      valid: false
+      median_ppm: 0
+      mad_ppm: 0
+      recommended_ppm: 0
+    fragment_error:
+      valid: false
+      median_ppm: 0
+      mad_ppm: 0
+      recommended_ppm: 0
+    timing_seconds:
+      calibration: 0
+      search: 0.000986
+      fdr: 7.7e-05
+    percolator:
+      applied: false
+      skipped_reason: ""
+      warning: ""
+    peptdeep_nce: null
+outputs:
+  - type: "QPX parquet"
+    paths:
+      - "/tmp/prose-fixture-6YnBAk/search/qpx"
+  - type: "PSM spectra"
+    paths:
+      - "/tmp/prose-fixture-6YnBAk/search/spectra/1__SimpleSearchEngine_1.psm_spectra.parquet"
+  - type: "OpenMS parquet"
+    paths:
+      - "/tmp/prose-fixture-6YnBAk/search/oms"
+files_failed: 0
+files_total: 1
+protein_fdr_applied: false

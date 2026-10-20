@@ -1,0 +1,7 @@
+# PTM Statistics Table
+# Total Modified PSMs: 1
+# Unknown Modification PSMs: 0
+# Unique Modifications: 1
+#
+Name	TheoreticalMass	ObservedMass	MassDeviation	Count	UniquePeptides	Percentage	TargetResidues	ResidueFrequency
+Oxidation or Hydroxylation	15.9949	15.9966	0.00169936	1	1	100	D	A:4,D:2,E:1,F:2,I:2,K:1,L:2,M:1,N:3,P:2,R:1,S:1,T:1,V:3,Y:2

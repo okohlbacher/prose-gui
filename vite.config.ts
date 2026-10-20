@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { fileURLToPath } from 'node:url'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
@@ -12,4 +13,6 @@ export default defineConfig({
     alias: { $lib: fileURLToPath(new URL('./src/lib', import.meta.url)) },
   },
   server: { port: 1420, strictPort: true },
+  // the unit tests (e2e/ has the WebdriverIO specs of the app)
+  test: { include: ['src/**/*.test.ts'] },
 })

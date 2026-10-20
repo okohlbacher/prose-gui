@@ -37,10 +37,15 @@ ProSE -in <files…> -database <fasta (+ cRAP)> -threads <n> -Search:… (form)
 | mod TSV | `mods/<stem>_ModificationAnalysis_{DeltaMassStats,PTMStats}.tsv`, `mods/_aggregate_across_files_…` | open-search modification analysis (header lines `# Total PSMs: …` and a table) |
 | FASTA | the database the app passed | protein descriptions and sequences |
 
+All Parquet files are Zstandard-compressed (Arrow C++): the reader needs a Zstandard decoder (hyparquet has Snappy
+only). The FASTA is the folder's `database.fasta` with contaminants; without them ProSE searched the user's file, whose
+path is summary.yaml's `shared.database_file` (absolute, outside the search folder).
+
 Rows: the PSM rows of `ResultTables.psms` are the QPX psm rows of the files in input order (QPX psm, OMS psm and the
 PSM spectra sidecar have the same rows in the same order, one per peptide identification with hits; the sidecar and
 QPX psm also share the key `psm_id`). The QPX `scan` is the native ID's scan number only, so rows are joined to OMS psm
-by position (or by `run_file_name` + `scan` + `peptidoform` + `charge`).
+by position (or by `run_file_name` + `scan` + `peptidoform` + `charge`). The reader joins OMS psm by position and the
+sidecar by `psm_id` (`src/lib/results/read.ts`).
 
 ## ResultTables
 
@@ -54,7 +59,7 @@ by position (or by `run_file_name` + `scan` + `peptidoform` + `charge`).
 | `psms.mz` | OMS `observed_mz` (double; QPX has float32) | available |
 | `psms.charge` | QPX `charge` | available |
 | `psms.peptide` | index into `peptides`, unique by peptidoform | derived in the UI (dedupe QPX `peptidoform` in row order) |
-| `psms.score` | Percolator's SVM score: OMS `psm_metavalues` `percolator_score` (QPX `additional_scores` `MS:1001492`); without rescoring ProSE's ln(hyperscore): the `additional_scores` entry `ln(hyperscore)` (named `ln(hyperscore)_score` once the FDR made the q-value the main score), or OMS `score` while `score_type` is `ln(hyperscore)`. A hit Percolator could not rescore: −100 (as in the output) | available (pick by name) |
+| `psms.score` | Percolator's SVM score: OMS `psm_metavalues` `percolator_score` (QPX `additional_scores` `MS:1001492`); without rescoring ProSE's ln(hyperscore): the `additional_scores` entry `ln(hyperscore)` (named `ln(hyperscore)_score` once the FDR made the q-value the main score), or OMS `score` while `score_type` is `ln(hyperscore)`. A hit Percolator could not rescore: −100 (as in the output). The QPX `additional_scores` are doubles; the OMS `psm_metavalues` are text rounded to 15–17 digits, so the reader takes a score from QPX first | available (pick by name) |
 | `psms.qValue` | rescored: `percolator_q_value` (= OMS `score` with `score_type` `q-value`); not rescored: OMS `score` when `score_type` is `q-value` (FDR:PSM > 0 computes the target-decoy q-values per file). No decoys → NaN | available; with FDR:PSM 0 and no rescoring there is none: **the app always sends FDR:PSM > 0** (the form's FDR) |
 | `psms.pep` | QPX `posterior_error_probability` (= `percolator_pep`); null → NaN | available |
 | `psms.precursorErrorPpm` | OMS `psm_metavalues` `precursor_mz_error_ppm` (isotope-corrected, as the web app; QPX `mass_error_ppm` is not) | available |
@@ -72,16 +77,16 @@ by position (or by `run_file_name` + `scan` + `peptidoform` + `charge`).
 | `peptides.modPosition` | QPX `modifications[].positions[].position`: 0 → −1 (N-term), *n*+1 → length (C-term), else position − 1 | available (index change) |
 | `peptides.modName` | QPX `modifications[].name` (Unimod name; mass-only modifications as their mass) | available |
 | `peptides.modUnimod` | QPX `modifications[].accession` `UNIMOD:35` → 35; null → −1 | available |
-| `peptides.modMass` | the modification's monoisotopic mass delta: from the app's modification table (Unimod accession → mass), or the mass of a mass-only name. The app **generates that table at build time from the pin's ModificationsDB (`share/OpenMS/CHEMISTRY/unimod.xml` of `native/OPENMS_COMMIT`)**, with names, accessions, sites and masses; the settings form lists its modifications from the same table (the web app took them from the WASM module's `validStrings` of `modifications:fixed`/`variable`) | derived in the UI (no output carries it; the TypeScript fragment annotation needs the same table) |
+| `peptides.modMass` | the modification's monoisotopic mass delta: from the app's modification table (Unimod accession → mass, else name → mass), or the mass of a mass-only name. The table is **generated from the pin's Unimod file (`share/OpenMS/CHEMISTRY/unimod.xml` of `native/OPENMS_COMMIT`, which ModificationsDB reads) by `scripts/unimod-table.mjs` into `src/lib/chemistry/unimod.json` (committed; regenerate with the pin)**: record id → name, `delta mono_mass`. Task 4 generates names and masses only; the sites the settings form needs are to be added to it; the settings form lists its modifications from the same table (the web app took them from the WASM module's `validStrings` of `modifications:fixed`/`variable`) | derived in the UI (no output carries it; the TypeScript fragment annotation needs the same table) |
 | `peptides.proteinOffsets`, `peptides.protein` | OMS psm `protein_accessions[].accession` of the peptide's first PSM, kept where the protein is in the proteins table (see `proteins`); none left → "below protein FDR" | derived in the UI |
 | `peptides.start`, `peptides.end` | OMS `protein_accessions[].start` / `end` (0-based, `end` inclusive → `end` + 1); the web app's check against the sequence (FASTA) | available (+1) |
 | `proteins.count`, `proteins.accession` | one input: OMS `<stem>.proteins.parquet`; several inputs: `merged.proteins.parquet` (pooled inference); without protein inference (no protein FDR, one input) the per-file protein hits | available; for several inputs **added in #10676** |
-| `proteins.description` | FASTA header (generated decoys: none, as in the web app) | derived in the UI (the FASTA is read anyway) |
+| `proteins.description` | OMS proteins `description` if set, else the FASTA header; a generated decoy has the description of its target (as the web app: it looks the decoy up by its target's accession) | derived in the UI (the FASTA is read anyway) |
 | `proteins.sequence` | FASTA; a decoy ProSE generated: the reversal ProSE uses (`DecoyGenerator::reversePeptides` for the search's enzyme, `reverseProtein` for `enzyme_specificity none`, initial M kept with `peptide:clip_nterm_methionine`), as the web app's engine regenerated it | derived in the UI (port of the decoy rule; until then '' for generated decoys, which the web app's type allows) |
 | `proteins.score` | best `psms.score` of the protein's PSMs | derived in the UI (as the web app) |
 | `proteins.qValue` | OMS proteins `score` when the protein FDR was applied (YAML `protein_fdr_applied`; protein score type `q-value`); else NaN | available; for several inputs **added in #10676** |
 | `proteins.decoy` | OMS proteins `is_decoy` | available |
-| `proteins.group` | index of the `indistinguishable` group in OMS `<stem>.pg.parquet` / `merged.pg.parquet` (`accessions`, `group_index`); −1 if none | available; for several inputs **added in #10676** |
+| `proteins.group` | index of the `indistinguishable` group in OMS `<stem>.pg.parquet` / `merged.pg.parquet` (`accessions`, `group_index`); −1 if none. **One input without protein FDR: the tool infers no proteins and its `<stem>.pg.parquet` is empty, so every protein is −1, where the web app has a group per protein** (its pooled run of one file); the web app's screens count a protein without a group as a group of its own | available; for several inputs **added in #10676**; one input without protein FDR: none |
 
 ## StoredSpectra
 
@@ -90,7 +95,7 @@ by position (or by `run_file_name` + `scan` + `peptidoform` + `charge`).
 | `psmSpectrum` | one spectrum per PSM row: the row's own peaks (index = row; PSMs of one spectrum are separate rows with the same peaks) | **added in #10676** (`-out_psm_spectra`) |
 | `offsets`, `mz`, `intensity` | PSM spectra sidecar `peak_mz_array`, `peak_intensity_array` (float32, every peak of the MS2 spectrum as read from the file, by m/z; null when the spectrum was not found or the file could not be read again) | **added in #10676** |
 | `precursorMz` | OMS `observed_mz` of the row | available |
-| `collisionEnergy` | — | not needed: the web app used it only as a fallback NCE for predicting in the browser; the desktop app shows ProSE's prediction (QPX `predicted_*`), made at the file's `peptdeep_nce` |
+| `collisionEnergy` | — (the reader fills NaN) | not needed: the web app used it only as a fallback NCE for predicting in the browser; the desktop app shows ProSE's prediction (QPX `predicted_*`), made at the file's `peptdeep_nce` |
 
 The PeptDeep prediction for the PSM view (the web app's `predictMS2()` result) is in the sidecar's
 `predicted_ion_type_array` (`b3+`, `y5++`, named as the QPX `ion_type_array`; the web app writes `b3`, `y5++`),
@@ -98,7 +103,9 @@ The PeptDeep prediction for the PSM view (the web app's `predictMS2()` result) i
 intense, > 0.01, by m/z, precursor charges 1–6 — the same rule as the web app's `predictMS2()`. **Added in #10676**, for
 every written PSM, also without PeptDeep rescoring (with it, recomputed at the NCE the rescoring used); null where the
 prediction failed or without ONNX Runtime. The fragment annotation of ProSE's own scoring stays in QPX `mz_array`,
-`intensity_array`, `charge_array`, `ion_type_array`.
+`intensity_array`, `charge_array`, `ion_type_array`. The reader gives them as `PredictedSpectra` (`src/lib/results/types.ts`:
+one range per PSM row, the ions named as the web app names them, `b3+` → `b3`); on the web app's example they equal its
+`predictMS2()` of each PSM's peptide at the file's NCE within 1e-5 (intensity) and float32 (m/z), ion for ion.
 
 ## ProSEMultiSummary
 
@@ -108,24 +115,24 @@ prediction failed or without ONNX Runtime. The fragment annotation of ProSE's ow
 | `files[].status` | YAML `per_file[].exit_code` (0 `EXECUTION_OK`, 1 `INPUT_FILE_EMPTY`, 2 `UNEXPECTED_RESULT`, 3 `UNKNOWN_ERROR`, 4 `ILLEGAL_PARAMETERS`) | available (enum map) |
 | `files[].ms2Spectra` | YAML `per_file[].ms2_spectra` | available |
 | `files[].targetPSMs`, `decoyPSMs` | YAML `per_file[].target_psms`, `decoy_psms` (after the FDR filters; with `-keep_decoys` the decoys that pass) | available |
-| `files[].percolator` | YAML `per_file[].percolator.applied`, `skipped_reason`, `warning` ('' → null); `null` when the search ran with `Search:rescore false` | **added in #10676** |
+| `files[].percolator` | YAML `per_file[].percolator.applied`, `skipped_reason`, `warning` ('' → null); `null` when the search ran with `Search:rescore false`, which the YAML shows as `applied: false` with an empty `skipped_reason` | **added in #10676** |
 | `files[].peptdeepNce` | YAML `per_file[].peptdeep_nce` (the NCE of the file's predictions; also the run meta value `peptdeep_nce` in OMS search params) | **added in #10676** (before: only with `peptdeep:enable`, and only in the search params) |
-| `files[].precursorError`, `fragmentError` | YAML `per_file[].precursor_error` / `fragment_error` (`median_ppm`, `mad_ppm`, `recommended_ppm`; `valid: false` → null) | available |
+| `files[].precursorError`, `fragmentError` | YAML `per_file[].precursor_error` / `fragment_error` (`median_ppm`, `mad_ppm`, `recommended_ppm`; `valid: false` → null), with six significant digits (the web app has the doubles) | available |
 | `files[].secondsSearch` | YAML `per_file[].timing_seconds.search` | available |
 | `search.databaseFile`, `enzyme`, `openSearch`, `chunked`, `decoyMode`, `indexedPeptides`, `indexedFragments`, `secondsIndexBuild`, `secondsTotal` | YAML `shared.database_file`, `enzyme`, `open_search`, `chunked`, `decoy_mode`, `indexed_peptides`, `indexed_fragments`, `seconds_index_build`, `seconds_total` | available |
 | `search.calibration` | YAML `shared.calibration_enabled` | available |
 | `search.targetProteins`, `decoyProteins` | YAML `shared.db_target_proteins`, `db_decoy_proteins` | available |
 | `proteinFdrApplied` | YAML `protein_fdr_applied` | **added in #10676** |
 | `psmFdr`, `proteinFdr` | YAML `shared.psm_fdr_threshold`, `protein_fdr_threshold` | available |
-| `decoyString` | — (the web app's screens do not use it; decoys are flagged per row: `is_decoy`) | not needed |
+| `decoyString` | OMS search params `sp_metavalues` `PeptideIndexer:decoy_string` (`DECOY_`; position `PeptideIndexer:decoy_string_position`); the web app's screens do not use it (decoys are flagged per row: `is_decoy`), but the type has it | available |
 | `openSearch` | YAML `shared.open_search` | available |
 | `modificationAnalysis` | null in closed search; one input: the file's mod TSVs; several: the `_aggregate_across_files` TSVs | available |
 | ↳ `deltaMasses.totalPSMs`, `modifiedPSMs`, `unmodifiedPSMs`, `meanDeltaMass`, `medianDeltaMass` | DeltaMassStats header lines `# Total PSMs:`, `# Modified PSMs:`, `# Unmodified PSMs:`, `# Mean Delta Mass:`, `# Median Delta Mass:` | available |
 | ↳ `deltaMasses.entries[]` | DeltaMassStats rows: `DeltaMass`, `Count`, `UniquePeptides`, `ChargeStates`, `Percentage`, `MappedModification`, `IsKnown` | available |
 | ↳ `ptms.totalModifiedPSMs`, `unknownModificationPSMs`, `uniqueModifications` | PTMStats header lines | available |
-| ↳ `ptms.entries[]` `name`, `theoreticalMass`, `observedMass`, `massDeviation`, `count`, `uniquePeptides`, `percentage`, `targetResidues` | PTMStats columns | available |
-| ↳ `ptms.entries[].chargeStates` | — (PTMStats has no charge column) | not needed: the web app's screens do not show it |
-| ↳ `ptms.entries[].residueCounts` | PTMStats `ResidueFrequency` | not needed: the web app does not show it (`delta-mass.ts`: it counts every residue of the peptides) |
+| ↳ `ptms.entries[]` `name`, `theoreticalMass`, `observedMass`, `massDeviation`, `count`, `uniquePeptides`, `percentage`, `targetResidues` | PTMStats columns (the TSVs have six significant digits, the web app the doubles) | available |
+| ↳ `ptms.entries[].chargeStates` | — (PTMStats has no charge column; the reader fills 0) | not needed: the web app's screens do not show it |
+| ↳ `ptms.entries[].residueCounts` | PTMStats `ResidueFrequency` (`A:4,D:2,…`; equals the web app's) | available (the web app does not show it: `delta-mass.ts` counts every residue of the peptides) |
 
 ## The explicit checks
 
