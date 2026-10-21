@@ -61,11 +61,15 @@ case "$(uname -s)" in
   MINGW* | MSYS* | CYGWIN*)
     platform=windows
     install=$wide_root/install
-    # (no MSYS path conversion: /S and /D= are the installer's switches; /D= comes last, unquoted)
-    MSYS_NO_PATHCONV=1 "$PACKAGE" /S "/D=$(cygpath -w "$install")"
+    # NSIS takes /D= last and unquoted, also with spaces in the path; bash would quote an argument with a
+    # space (NSIS then ignores it and installs into its default folder), so the command line goes whole
+    # through PowerShell's Start-Process
+    setup_win=$(cygpath -w "$(cd "$(dirname "$PACKAGE")" && pwd)/$(basename "$PACKAGE")")
+    MSYS_NO_PATHCONV=1 pwsh -NoProfile -NonInteractive -Command \
+      "Start-Process -FilePath '$setup_win' -ArgumentList '/S /D=$(cygpath -w "$install")' -Wait"
     for _ in $(seq 60); do [ -d "$install/resources/prose/bin" ] && break; sleep 1; done
     APP_BIN=$(find "$install" -maxdepth 1 -iname '*.exe' ! -iname 'uninstall*' | head -n 1)
-    [ -n "$APP_BIN" ] || die "the installer put no app into $install: $(ls "$install" 2>&1)"
+    [ -n "$APP_BIN" ] || die "the installer put no app into $install: $(ls "$install" 2>&1); its default folder: $(ls "$(cygpath -u "$LOCALAPPDATA")/ProSE" 2>&1 | head -n 5)"
     BUNDLE=$install/resources/prose
     TOOL=$BUNDLE/bin/ProSE.exe
     "$PY" -I "$HERE/bundle_closure.py" pe-verify "$(cygpath -m "$BUNDLE")"
