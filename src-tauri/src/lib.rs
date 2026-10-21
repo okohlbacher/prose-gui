@@ -26,7 +26,8 @@
 //! - closing the window while a search runs: the window stays and `app://close-requested` asks the page,
 //!   which answers with `answer_close(close)` ([`close_requested`])
 //!
-//! `--smoke-test` on the command line is the packaged app's start test ([`SMOKE_TEST`]).
+//! `--smoke-test` on the command line is the packaged app's start test ([`SMOKE_TEST`]); `--watch-search`
+//! makes the executable the watchdog of a search (macOS: [`watchdog`]).
 
 pub mod args;
 pub mod files;
@@ -34,6 +35,8 @@ pub mod history;
 pub mod progress;
 pub mod run;
 pub mod tool;
+#[cfg(unix)]
+pub mod watchdog;
 
 use args::SearchRequest;
 use run::{SearchEvent, Searches, Sink};
@@ -45,10 +48,26 @@ use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use tauri_plugin_dialog::DialogExt;
 
-#[derive(Default)]
 struct AppState {
     searches: Arc<Searches>,
     closing: std::sync::Mutex<Closing>,
+}
+
+impl Default for AppState {
+    /// On macOS each search's tool is watched by the app's own executable (`watchdog`): nothing else ends
+    /// it when the app dies.
+    fn default() -> AppState {
+        let searches = Searches::default();
+        #[cfg(target_os = "macos")]
+        let searches = match std::env::current_exe() {
+            Ok(exe) => searches.with_watchdog(exe),
+            Err(_) => searches,
+        };
+        AppState {
+            searches: Arc::new(searches),
+            closing: Default::default(),
+        }
+    }
 }
 
 /// The window's close while a search runs ([`close_requested`]).
@@ -466,6 +485,11 @@ fn smoke_report(app: &AppHandle, page: &str) -> (i32, String) {
 }
 
 pub fn run() {
+    // the watchdog of a search (macOS: the app starts its own executable for it), before anything of Tauri
+    #[cfg(unix)]
+    if let Some(code) = watchdog::from_args(&std::env::args_os().collect::<Vec<_>>()) {
+        std::process::exit(code);
+    }
     let smoke = std::env::args_os().any(|a| a == SMOKE_TEST);
     let reported = std::sync::atomic::AtomicBool::new(false);
     let app = tauri::Builder::default()

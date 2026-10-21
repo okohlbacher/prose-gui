@@ -24,10 +24,11 @@
 //! - Linux: the tool gets SIGKILL (`PR_SET_PDEATHSIG`; the thread that starts it lives as long as it runs);
 //! - Windows: the group is a job object, closed with the app, which ends whatever is still in it (cancel
 //!   terminates the job: Windows has no SIGTERM for a console tool);
-//! - macOS has no death signal: the tool ends at its next write to stdout or stderr, whose reading ends
-//!   died with the app (SIGPIPE: the app ignores it, as every Rust program, but `Command` resets it to
-//!   the default in the child, and OpenMS sets no handler). ProSE writes a line per step, so it runs on
-//!   until its current step ends, at most that step's time; a later start of the app sweeps the folder.
+//! - macOS has no death signal: a watchdog process per search (the app's own executable, started with
+//!   `--watch-search`: [`crate::watchdog`]) ends the tool's group within a second of the app's end. Without
+//!   it (it could not be started) the tool would end at its next write to stdout or stderr, whose reading
+//!   ends died with the app (SIGPIPE, at its default in the child: `Command` resets it, and OpenMS sets no
+//!   handler), at the end of its current step; a later start of the app sweeps the folder.
 
 use crate::args::{
     build_args_with, humanize, input_placements, input_records_with, with_contaminants, InputLinks,
@@ -145,6 +146,9 @@ pub struct Searches {
     counter: AtomicU64,
     /// How the inputs reach the tool: this platform's way, unless a test chooses.
     links: InputLinks,
+    /// The executable that watches each search's tool ([`crate::watchdog`]; macOS: the app's own), or
+    /// none.
+    watchdog: Option<PathBuf>,
 }
 
 impl Default for Searches {
@@ -566,7 +570,15 @@ impl Searches {
             running: Mutex::new(HashMap::new()),
             counter: AtomicU64::new(0),
             links,
+            watchdog: None,
         }
+    }
+
+    /// The same, each search's tool watched by `exe --watch-search` ([`crate::watchdog`]; Unix): the app's
+    /// own executable on macOS, where nothing else ends the tool with the app.
+    pub fn with_watchdog(mut self, exe: PathBuf) -> Searches {
+        self.watchdog = Some(exe);
+        self
     }
 
     fn new_id(&self, dir: &Path) -> String {
@@ -809,6 +821,12 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
     };
     let group = Arc::new(sys::Group::new(&child));
     *handle.group.lock().unwrap() = Some(group.clone());
+    // (macOS) the tool ends with the app, through a watchdog of its own
+    #[cfg(unix)]
+    let mut watchdog = searches
+        .watchdog
+        .as_deref()
+        .and_then(|exe| crate::watchdog::start(exe, group.pid()));
     let _ = started.send(Ok(()));
     let emit = |event: SearchEvent| (sink)(event);
     emit(SearchEvent::Progress(ProgressEvent {
@@ -885,6 +903,11 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
     let status = child.wait();
     // whatever the tool left running goes with it (and holds no pipe open for the readers)
     group.kill();
+    #[cfg(unix)]
+    if let Some(watchdog) = watchdog.as_mut() {
+        let _ = watchdog.kill();
+        let _ = watchdog.wait();
+    }
     let tracker = out_reader
         .join()
         .unwrap_or_else(|_| ProgressTracker::new(Vec::new()));

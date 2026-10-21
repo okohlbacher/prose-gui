@@ -293,10 +293,15 @@ macOS, and on Windows it needs msedgedriver of the runner's WebView2 version.
   takes every process the tool starts, and it is closed with the app (`KILL_ON_JOB_CLOSE`), so ProSE ends with
   the app however the app ends. The tool runs without a console window.
 - **If the app dies** while ProSE runs: on Linux ProSE gets SIGKILL (`PR_SET_PDEATHSIG`), on Windows the job
-  ends it. macOS has no death signal: ProSE ends at its next write to stdout or stderr, whose reading ends died
-  with the app. SIGPIPE is at its default in ProSE: Rust's `Command` resets the app's ignored SIGPIPE in the
-  child (checked: `SigIgn` 0x1000 in the app, 0 in the child), and OpenMS sets no handler. ProSE prints a line
-  per step, so an orphan runs at most until its current step ends; the next start of the app sweeps its folder.
+  ends it. macOS has no death signal, so the app starts, for each search, its own executable once more as a
+  watchdog (`--watch-search <app pid> <ProSE's process group>`, `src-tauri/src/watchdog.rs`, std and two libc
+  calls): it looks once a second whether the app is still its parent (an orphan's parent becomes launchd) and
+  ends ProSE's group with SIGKILL when it is not; the app ends the watchdog with the search. Should the
+  watchdog not start, ProSE still ends at its next write to stdout or stderr, whose reading ends died with the
+  app (SIGPIPE is at its default in ProSE: Rust's `Command` resets the app's ignored SIGPIPE in the child, and
+  OpenMS sets no handler), at the end of its current step. The next start of the app sweeps the folder. The
+  watchdog's code is the same on every Unix and is tested on Linux and in the macOS shim job
+  (`tests/watchdog.rs`, and a watched search in `tests/shim.rs`).
 - **Folders**: `finish_partial` retries the rename with back-off (another instance's sweep may hold the
   deleted `.lock` open), and partial folders are removed lock file first, also with back-off (`history.rs`).
 - **File names** the app suggests never are device names (`CON`, `NUL.txt`, ...: a `_` in front) and have at

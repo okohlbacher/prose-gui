@@ -1721,6 +1721,57 @@ fn cancel_ends_the_process_and_its_children() {
     run.searches.cancel("nonexistent").unwrap();
 }
 
+/// The watchdogs (`--watch-search <this process> <group>`) of the tool's process `group`, by `ps`.
+#[cfg(unix)]
+fn watchdogs_of(group: u32) -> Vec<String> {
+    let out = std::process::Command::new("ps")
+        .args(["-A", "-ww", "-o", "pid=,command="])
+        .output()
+        .unwrap();
+    let needle = format!(
+        "{} {} {group}",
+        prose_desktop_lib::watchdog::FLAG,
+        std::process::id()
+    );
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter(|l| l.ends_with(&needle))
+        .map(str::to_string)
+        .collect()
+}
+
+/// (macOS's way; the code is the same on every Unix) a watched search starts the watchdog of its tool's
+/// group with the tool, and ends it with the search.
+#[cfg(unix)]
+#[test]
+fn a_watched_search_starts_its_watchdog_and_ends_it_with_the_search() {
+    let run = Run {
+        work: TempDir::new("run"),
+        searches: Arc::new(
+            Searches::default().with_watchdog(PathBuf::from(env!("CARGO_BIN_EXE_prose-desktop"))),
+        ),
+    };
+    let i = inputs();
+    let (id, _rx, partial) = start_hanging(&run, &i, "hang");
+    let tool_pid = read_pids(&partial.join("prose.pid"))[0];
+    assert!(
+        wait_for(WAIT, || watchdogs_of(tool_pid).len() == 1),
+        "one watchdog of the tool's group: {:?}",
+        watchdogs_of(tool_pid)
+    );
+    run.searches.cancel(&id).unwrap();
+    assert!(
+        watchdogs_of(tool_pid).is_empty(),
+        "the watchdog ended with the search"
+    );
+    // a search that finishes ends its watchdog too
+    let (id, rx) = run.start(request(&[&i.mzml], &i.fasta, false, json!({})), None);
+    let id = id.unwrap();
+    let folder = done_folder(&until_terminal(&rx, WAIT));
+    let pid = read_pids(&folder.join("prose.pid"))[0];
+    assert!(watchdogs_of(pid).is_empty(), "{id}");
+}
+
 #[test]
 fn cancel_kills_a_process_that_ignores_sigterm() {
     let run = Run::new();
