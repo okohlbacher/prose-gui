@@ -194,6 +194,103 @@ the bundle (`src-tauri/src/tool.rs`, `has_onnx`). A tool without a manifest (a b
 counts as without ONNX, so `PROSE_BIN=src-tauri/resources/prose/bin/ProSE` is the tool for the e2e specs and
 `real_prose` tests with PeptDeep.
 
+## macOS and Windows
+
+CI builds both (`.github/workflows/desktop.yml`, jobs `macos` and `windows`); there is no local machine for
+them. The same scripts run there:
+
+| Step | macOS (macos-15, arm64) | Windows (windows-2025, x64) |
+| --- | --- | --- |
+| OpenMS | `build-openms.sh` with `VCPKG_TRIPLET=arm64-osx-dynamic-sysroot-vcrel` (OpenMS's own macOS triplet, release builds only), `OPENMS_CMAKE_ARGS="-DOpenMP_ROOT=$(brew --prefix libomp) -DMT_REQUIRE_OPENMP=ON"`, `MACOSX_DEPLOYMENT_TARGET=15.0` | `build-openms.sh` in Git Bash inside Visual Studio's developer environment, `CC=CXX=cl`, `VCPKG_TRIPLET=x64-windows-static-md-release` (OpenMS's own Windows triplet: the dependencies static, the C runtime dynamic), `-DMT_REQUIRE_OPENMP=ON` |
+| bundle | `bundle-prose.sh`: `bin/ProSE`, `lib/*.dylib` | `bundle-prose.sh`: `bin/ProSE.exe`, `bin/*.dll` |
+| package | `package-macos.sh`: `ProSE.app`, `.dmg` | `package-windows.sh`: the NSIS installer `*-setup.exe` |
+| test | `start-test.sh <dmg>`; `cargo test --test real_prose` with the bundled tool | `start-test.sh <setup.exe>`; the same |
+
+**Apple silicon only.** The macOS build is arm64, not universal: OpenMS's vcpkg setup and its own CI cover
+arm64-osx only, and the OpenMP runtime is Homebrew's libomp, which is arm64 on the arm64 runners. A universal
+build would need a second OpenMS build on an Intel runner (`macos-15-intel`, x64-osx), merged dylib by dylib
+with `lipo`, and an x86_64 libomp; that doubles the build and was left out. Intel Macs are not served.
+
+**macOS 15 or later.** `MACOSX_DEPLOYMENT_TARGET` is the runner's macOS, as in OpenMS's CI: Homebrew's
+libomp is built for it. `bundle-prose.sh` writes the newest minimum macOS of the bundled files into
+`build.json` (`minimumMacos`), and `package-macos.sh` refuses an app whose `minimumSystemVersion`
+(`src-tauri/tauri.macos.conf.json`) is older, so an older Mac says so at once instead of failing to load a
+library.
+
+### The closures (`bundle_closure.py`)
+
+**macOS.** The script follows the tool's load commands as dyld does: `@rpath` through the LC_RPATHs of the
+loading image and of those that loaded it, `@loader_path`, `@executable_path`, absolute paths; the build's
+`lib` and vcpkg's `lib` by name last. `/usr/lib` and `/System` stay out. Everything else is copied to
+`lib/<name>` and rewritten with `install_name_tool`:
+- every reference to a bundled dylib becomes `@rpath/<name>`, and each dylib's id `@rpath/<name>`;
+- the old LC_RPATHs (the build tree's) are deleted one by one (a duplicate LC_RPATH stops dyld on arm64);
+- one LC_RPATH is added: `@loader_path/../lib` for the tool, `@loader_path` for the dylibs;
+- then `strip -x` and an ad-hoc signature (`codesign -s -`): arm64 runs no unsigned code, and
+  `install_name_tool` invalidates the linker's signature.
+
+Exactly one OpenMP runtime, `libomp.dylib`, has to be in the closure. FASTag's approach is the same (one
+libomp, rewritten install names, ad-hoc re-signing; okohlbacher/FASTag `doc/SIGNING-macos-gui.md`), without
+dylibbundler. `macho-verify` checks a bundle again, also the copy inside `ProSE.app`. The app passes no
+`DYLD_*` search variable to the tool (`tool.rs`): they are searched before `@rpath`.
+
+**Windows.** OpenMS links its vcpkg dependencies statically, so ProSE's closure is OpenMS's own DLLs
+(`OpenMS.dll`, `OpenMS_CLI.dll`, `OpenSwathAlgo.dll`) and the Visual C++ runtime: `msvcp140*.dll`,
+`vcruntime140*.dll` and `vcomp140.dll`, MSVC's OpenMP runtime, the one OpenMP runtime. The script reads the
+import and delay-import tables of each PE file itself, takes the DLLs from the build's `bin`, vcpkg's `bin` and,
+for the runtime, from the redistributable folders of the Visual Studio that built it (`VCToolsRedistDir`:
+Microsoft's app-local deployment), and leaves out API sets and the DLLs of Windows. Everything goes beside
+`ProSE.exe`: Windows has no RPATH, and the folder of the exe is searched first. `pe-verify` checks that every
+import is bundled or Windows' own.
+
+**The install prefix** is overwritten in the bundled `libOpenMS.dylib` / `OpenMS.dll` as on Linux: with
+`/dev/null///...` on macOS, and with `<no-install-path>///...` on Windows (`<` cannot be part of a Windows path).
+
+### Packages
+
+- **macOS**: `ProSE.app` and the `.dmg`. Tauri copies `resources/prose` into
+  `ProSE.app/Contents/Resources/resources/prose` unchanged. The app is signed ad hoc
+  (`signingIdentity: "-"`, no hardened runtime): no Developer ID and no notarization. An ad-hoc signed app can
+  be opened after the user's consent (System Settings > Privacy & Security > Open Anyway, or
+  `xattr -dr com.apple.quarantine`); an unsigned arm64 app counts as damaged.
+- **Windows**: the NSIS installer, per user (`installMode: currentUser`, no administrator rights), unsigned
+  (SmartScreen asks once). ProSE goes to `<install folder>/resources/prose/bin`.
+
+### Start test (`start-test.sh <package> <example-dir>`)
+
+1. The package is opened as a user would: the `.dmg` is mounted and `ProSE.app` copied out; the installer is
+   run silently (`/S /D=<folder>`). The bundle inside is verified (`macho-verify`, `pe-verify`).
+2. The bundled ProSE prints its version from an empty environment (Windows: only Windows' folders on `PATH`).
+3. It searches the example from the command line, in a folder with a space in its name, with Percolator and
+   PeptDeep: exit 0, the outputs the app reads, the `[PeptDeepRescoring] Predicted features added` line, and
+   more than 500 target PSMs at 1 % FDR (895 with these settings). The same in a folder named `Größe ü` is
+   tried and only reported.
+4. The app starts with `--smoke-test` (`src-tauri/src/lib.rs`): when its page has loaded it prints
+   `{"page", "tool"}` (`tool_info`) and exits. The tool has to be the package's own, with ONNX, and of the
+   version of step 2.
+
+CI removes the OpenMS build before these steps, so ProSE can only use the package's `share/OpenMS`.
+A WebDriver run of the screens (as the AppImage's smoke test) is not part of it: tauri-driver does not support
+macOS, and on Windows it needs msedgedriver of the runner's WebView2 version.
+
+### What differs on Windows in the app
+
+- **Inputs** (ruling: no symbolic links without developer mode). ProSE gets the user's paths themselves when
+  the inputs' stems differ (ignoring case, as NTFS does; `.mzML` and `.mzML.gz` of one name clash). Inputs that
+  share a stem go in as hard links `<n>__<name>` in the search folder, which works on the volume of the app's
+  data only and is removed when the search ends; on another volume the search is refused with a message asking
+  to rename one of the files. Nothing is ever copied (`args.rs`, `InputLinks`, `input_placements`). The app's
+  own example is a hard link, or a copy where the app is on another drive than its data.
+- **Cancel** ends a job object the tool runs in (`run.rs`): Windows has no SIGTERM for a console tool; the job
+  takes every process the tool starts, and it is closed with the app (`KILL_ON_JOB_CLOSE`), so ProSE ends with
+  the app however the app ends. The tool runs without a console window.
+- **Folders**: `finish_partial` retries the rename with back-off (another instance's sweep may hold the
+  deleted `.lock` open), and partial folders are removed lock file first, also with back-off (`history.rs`).
+- **File names** the app suggests never are device names (`CON`, `NUL.txt`, ...: a `_` in front) and have at
+  most 100 characters (`fileSafe`).
+- The shim's tests run on Windows with `examples/fake_prose.rs`, the shell fake as a program
+  (`PROSE_FAKE_EXE=1` uses it on Linux and macOS too).
+
 ## Packages
 
 ```bash
@@ -237,7 +334,14 @@ the script supplies the sysroot's `libGLESv2.so.2`, alone in a folder of its own
 
 ## CI
 
-`.github/workflows/desktop.yml` (branch `prose-desktop` of timosachsenberg/prose-web) runs on `ubuntu-22.04`:
+Jobs: `linux` (below), `macos` and `windows` (see "macOS and Windows": each builds OpenMS when its bundle is not
+cached, with vcpkg's binary cache and ccache; the vcpkg dependencies are built by a configure step of their own
+and saved before OpenMS is built, so a first run that runs out of time keeps them), `shim` (`cargo test` on
+macOS and Windows, minutes after a push) and `release`. Concurrency is per job and platform: a push waits for
+the running build of its platform instead of cancelling it.
+
+The `linux` job of `.github/workflows/desktop.yml` (branch `prose-desktop` of timosachsenberg/prose-web) runs on
+`ubuntu-22.04`:
 it checks out OpenMS at `OPENMS_COMMIT`, builds libOpenMS and ProSE with GCC 13 (toolchain PPA) through
 `build-openms.sh`, with GNU as 2.42 built from source for it (ONNX Runtime's AVX-NE-CONVERT code needs as >= 2.40,
 Ubuntu 22.04 has 2.38; GCC gets it through `COMPILER_PATH`), bundles ProSE, runs svelte-check, vitest and
@@ -252,6 +356,7 @@ pin's when the pin moves). Pull requests read the branch's caches; their own sav
 
 A tag `desktop-native-v*` builds nothing (a tag run cannot read the branch's caches and would build OpenMS and its
 dependencies from scratch): its release job looks up the successful `prose-desktop` run of the tagged commit,
-downloads that run's packages, the ones its tests and smoke test passed on, and makes a draft release of them. It
+downloads that run's packages, the ones its tests, smoke test and start tests passed on, and makes a draft release
+of them: the Linux packages always, the macOS and Windows ones when that run has them (otherwise a warning). It
 fails with a message when there is no such run (tag a commit of `prose-desktop` whose run passed) or its artifact
 has expired (`gh run rerun <run>`, then re-run the release job).

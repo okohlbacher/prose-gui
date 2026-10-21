@@ -272,7 +272,7 @@ jobs:
 
       - name: cargo test (examples/fake_prose.rs stands in for ProSE)
         working-directory: src-tauri
-        run: cargo test --locked
+        run: cargo test --locked --no-fail-fast
 
   # macOS, Apple silicon only (arm64): OpenMS's vcpkg build and its own CI cover arm64-osx only, and the
   # OpenMP runtime is Homebrew's libomp, which is arm64 on these runners; a universal build would need a

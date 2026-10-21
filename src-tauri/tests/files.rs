@@ -169,7 +169,13 @@ fn the_input_links_and_other_symlinks_cannot_lead_out_of_the_folder() {
 #[test]
 fn the_database_that_summary_yaml_records_is_served_and_no_other_absolute_path() {
     let tmp0 = TempDir::new("db");
-    let db = tmp0.write("my folder/\"quoted\" db.fasta", ">P1\nPEPTIDE\n");
+    // (a name with quotes for ProSE's quoted YAML; Windows allows no '"' in names, its paths have '\')
+    let name = if cfg!(windows) {
+        "my folder/it's db.fasta"
+    } else {
+        "my folder/\"quoted\" db.fasta"
+    };
+    let db = tmp0.write(name, ">P1\nPEPTIDE\n");
     let other = tmp0.write("other.fasta", ">P2\nPEPTIDE\n");
     let (_tmp, searches) = search_with(db.to_str().unwrap());
     assert_eq!(
