@@ -243,8 +243,10 @@ Microsoft's app-local deployment), and leaves out API sets and the DLLs of Windo
 `ProSE.exe`: Windows has no RPATH, and the folder of the exe is searched first. `pe-verify` checks that every
 import is bundled or Windows' own.
 
-**The install prefix** is overwritten in the bundled `libOpenMS.dylib` / `OpenMS.dll` as on Linux: with
-`/dev/null///...` on macOS, and with `<no-install-path>///...` on Windows (`<` cannot be part of a Windows path).
+**The install prefix** is overwritten in the bundled `libOpenMS.dylib` as on Linux, with `/dev/null///...`. On
+Windows OpenMS does not probe its install prefix at all (`File.cpp`: CMake's default prefix is the wrong
+`(x86)` tree), and the string is not in `OpenMS.dll`; should it ever be, it is overwritten with
+`<no-install-path>///...` (`<` cannot be part of a Windows path).
 
 ### Packages
 

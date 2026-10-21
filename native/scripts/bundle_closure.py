@@ -337,8 +337,13 @@ def pe_bundle(args):
         openms = out / "OpenMS.dll"
         if not openms.is_file():
             die("OpenMS.dll is not in the closure")
-        # '<' cannot be part of a Windows path: no folder of that name exists
-        patch_install_path(openms, args.install_path, "<no-install-path>")
+        # OpenMS does not probe its install prefix on Windows (File.cpp, OPENMS_WINDOWSPLATFORM: CMake's
+        # default prefix is the wrong "(x86)" tree), so the string is normally not compiled in; if it is,
+        # it is overwritten ('<' cannot be part of a Windows path: no folder of that name exists)
+        if args.install_path.encode() in openms.read_bytes():
+            patch_install_path(openms, args.install_path, "<no-install-path>")
+        else:
+            print(f"  the install path {args.install_path} is not in OpenMS.dll (not probed on Windows)")
     print(f"  {len(bundled) - 1} DLLs: {', '.join(sorted(f.name for k, f in bundled.items() if k != exe.name.lower()))}")
     print(f"  OpenMP runtime: {omp[0]}")
     pe_check(Path(args.out), [])
