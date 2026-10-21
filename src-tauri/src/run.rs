@@ -358,6 +358,31 @@ mod sys {
     pub fn link_input(original: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
         std::os::windows::fs::symlink_file(original, link)
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        /// The job is made and its limit set (else cancel falls back to taskkill unnoticed): the
+        /// structure has the size Windows expects (JOBOBJECT_EXTENDED_LIMIT_INFORMATION, x64: 144 bytes).
+        #[test]
+        fn a_job_object_that_ends_its_processes_is_made_and_holds_the_tool() {
+            assert_eq!(std::mem::size_of::<ExtendedLimitInformation>(), 144);
+            let job = new_job().expect("a job object with KILL_ON_JOB_CLOSE");
+            // SAFETY: the handle was just made.
+            unsafe { CloseHandle(job) };
+            let mut child = Command::new("cmd")
+                .args(["/C", "ping -n 30 127.0.0.1 >NUL"])
+                .stdout(Stdio::null())
+                .spawn()
+                .unwrap();
+            let group = Group::new(&child);
+            assert!(group.job.is_some(), "the child is in a job");
+            group.kill();
+            let status = child.wait().unwrap();
+            assert_eq!(status.code(), Some(KILLED as i32), "ended by the job");
+        }
+    }
 }
 
 /// Lines of a stream, lossily decoded, without the line end.
