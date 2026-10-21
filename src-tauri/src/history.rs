@@ -177,7 +177,8 @@ fn entry_of(dir: &Path, id: &str) -> HistoryEntry {
 }
 
 /// The searches of History, the newest first (those with an `error` last). Never fails: what is wrong
-/// with a folder is in its entry's `error`, and a folder without a record is not listed.
+/// with a folder is in its entry's `error`; a finished folder without a record is listed with
+/// [`NO_RECORD`] (a partial folder, a running search's, is not listed).
 pub fn list(dir: &Path) -> Vec<HistoryEntry> {
     let Ok(read) = fs::read_dir(dir) else {
         return Vec::new();
