@@ -1,8 +1,7 @@
 // A large search through the screens: the TMT run of Erwinia against the human reference proteome with the
 // Erwinia proteins added, semi-tryptic and without database chunks (the bench's `erwinia_semi_human`, whose
 // database has the Erwinia proteins so that the run has identifications: against the human proteome alone
-// no PSM passes the FDR, and ProSE ends such a search with "Graph empty. Build it first."). On demand (it
-// takes minutes and several GB):
+// no PSM passes the FDR, and ProSE reports an empty result). On demand (it takes minutes and several GB):
 //
 //   PROSE_BIG=1 PROSE_BIN=… native/scripts/in-env.sh e2e/run.sh e2e/big.spec.ts
 //

@@ -2,7 +2,7 @@
 // scripts/results-example.mjs by the pinned ProSE tool, in a search folder as the shim makes it
 // (src-tauri/src/args.rs `build_args`, `with_contaminants`, `input_records`; run.rs `prepare_folder`).
 //
-//   node scripts/results-fixture-native.mjs <case> <ProSE>        (case: example, mods)
+//   node scripts/results-fixture-native.mjs <case> <ProSE>        (case: example, mods, open, empty)
 //
 // The fixture keeps what the reader reads: summary.yaml, inputs.json (with the paths of the inputs
 // replaced by /data/<name>), database.fasta (with the contaminants, as the shim writes it; without, the

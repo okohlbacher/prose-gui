@@ -1,0 +1,123 @@
+shared:
+  database_file: "/scratch/sachsenb/openms-desktop/src/tests/topp/ProSE_15_empty.fasta"
+  enzyme: "Trypsin/P"
+  precursor_tol_lower: 10
+  precursor_tol_upper: 10
+  precursor_tol_unit: "ppm"
+  fragment_tol: 20
+  fragment_tol_unit: "ppm"
+  min_charge: 2
+  max_charge: 5
+  missed_cleavages: 2
+  fixed_mods:
+    - "Carbamidomethyl (C)"
+  variable_mods:
+    - "Oxidation (M)"
+    - "Acetyl (Protein N-term)"
+  ion_series:
+    - "b"
+    - "y"
+    - "+c/z+1 for ETD/ECD/EThcD/ETciD"
+  open_search: false
+  calibration_enabled: false
+  peptide_mass_mode: false
+  chunked: false
+  decoy_mode: "external"
+  psm_fdr_threshold: 0.01
+  protein_fdr_threshold: 0.01
+  db_target_proteins: 49
+  db_decoy_proteins: 49
+  indexed_peptides: 16767
+  indexed_fragments: 403263
+  seconds_index_build: 0.018021
+  seconds_total: 7.51449
+per_file:
+  - input_file: "1__DatabaseSuitability_1.mzML"
+    exit_code: 0
+    ms2_spectra: 2789
+    matched_spectra: 0
+    target_psms: 0
+    decoy_psms: 0
+    fdr_applied: true
+    achieved_psm_fdr: -1
+    unique_peptides: 0
+    unique_proteins: 0
+    hyperscore:
+      valid: true
+      min: 12.2422
+      median: 30.902
+      max: 213.957
+    charge_histogram: {}
+    missed_cleavage_histogram: {}
+    precursor_error:
+      valid: false
+      median_ppm: 0
+      mad_ppm: 0
+      recommended_ppm: 0
+    fragment_error:
+      valid: false
+      median_ppm: 0
+      mad_ppm: 0
+      recommended_ppm: 0
+    timing_seconds:
+      calibration: 0
+      search: 0.010919
+      fdr: 0.000678
+    percolator:
+      applied: true
+      skipped_reason: ""
+      warning: "Percolator's sanity check rejected the learned model (on the held-out folds it found no target PSM at q < 0.01, or fewer than the best single feature; typical for blank runs and runs with few confident PSMs), so the PSMs are scored with that feature alone."
+    peptdeep_nce: null
+  - input_file: "2__DatabaseSuitability_2.mzML"
+    exit_code: 0
+    ms2_spectra: 2789
+    matched_spectra: 0
+    target_psms: 0
+    decoy_psms: 0
+    fdr_applied: true
+    achieved_psm_fdr: -1
+    unique_peptides: 0
+    unique_proteins: 0
+    hyperscore:
+      valid: true
+      min: 12.2422
+      median: 30.902
+      max: 213.957
+    charge_histogram: {}
+    missed_cleavage_histogram: {}
+    precursor_error:
+      valid: false
+      median_ppm: 0
+      mad_ppm: 0
+      recommended_ppm: 0
+    fragment_error:
+      valid: false
+      median_ppm: 0
+      mad_ppm: 0
+      recommended_ppm: 0
+    timing_seconds:
+      calibration: 0
+      search: 0.008972
+      fdr: 0.000713
+    percolator:
+      applied: true
+      skipped_reason: ""
+      warning: "Percolator's sanity check rejected the learned model (on the held-out folds it found no target PSM at q < 0.01, or fewer than the best single feature; typical for blank runs and runs with few confident PSMs), so the PSMs are scored with that feature alone."
+    peptdeep_nce: null
+outputs:
+  - type: "merged idXML"
+    paths:
+      - "/tmp/prose-fixture-khx5hT/search/merged.idXML"
+  - type: "QPX parquet"
+    paths:
+      - "/tmp/prose-fixture-khx5hT/search/qpx"
+  - type: "PSM spectra"
+    paths:
+      - "/tmp/prose-fixture-khx5hT/search/spectra/1__DatabaseSuitability_1.psm_spectra.parquet"
+      - "/tmp/prose-fixture-khx5hT/search/spectra/2__DatabaseSuitability_2.psm_spectra.parquet"
+  - type: "OpenMS parquet"
+    paths:
+      - "/tmp/prose-fixture-khx5hT/search/oms"
+files_failed: 0
+files_total: 2
+protein_fdr_applied: false

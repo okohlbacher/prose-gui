@@ -139,13 +139,15 @@ ctest --test-dir /scratch/sachsenb/openms-pr10564/build/native-release \
 `OPENMS_COMMIT` holds the full hash of the OpenMS commit the app's ProSE is built from: the local
 integration branch `claude/prose-desktop-pin` of the worktree `/scratch/sachsenb/openms-desktop`
 (a worktree of the clone `/scratch/sachsenb/openms-pr10564`), which is `develop` (8d0afe11a5) with
-two merges: #10641 (`claude/peptdeep-onnx-memory`, PeptDeep memory and NCE selection) and #10676
+three merges: #10641 (`claude/peptdeep-onnx-memory`, PeptDeep memory and NCE selection), #10676
 (`claude/prose-qpx-spectra`: `-out_psm_spectra` sidecar of peaks and PeptDeep predictions, `-keep_decoys`, the
-pooled proteins in Parquet and the summary additions; see `docs/parity.md`). The pin branch is not pushed. Build it with
+pooled proteins in Parquet and the summary additions; see `docs/parity.md`) and #10677
+(`claude/prose-empty-result`: a search in which no PSM passes the FDR ends with empty outputs instead of "Graph
+empty. Build it first."). The pin branch is not pushed. Build it with
 
 ```bash
 native/scripts/build-openms.sh /scratch/sachsenb/openms-desktop /scratch/sachsenb/openms-desktop/build
 ```
 
 and check it with `ctest --test-dir /scratch/sachsenb/openms-desktop/build -R "ProSE|PeptDeep|QPX|Percolator_test|ArrowIOHelpers_test"`
-(138 tests). Update the file whenever the pin branch moves.
+(158 tests). Update the file whenever the pin branch moves.

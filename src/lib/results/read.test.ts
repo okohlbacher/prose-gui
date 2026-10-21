@@ -432,6 +432,26 @@ describe('missing and broken files', () => {
     })
   })
 
+  test("ProSE's output of a search in which no PSM passes the FDR reads as an empty result", async () => {
+    // fixtures/empty: two inputs with the protein FDR and Percolator, the files as ProSE writes them (header only)
+    const { tables, spectra, predicted, summary, warnings } = await readSearch(folder(join(fixtures, 'empty')).files)
+    expect(tables.files).toEqual(['/data/DatabaseSuitability_1.mzML', '/data/DatabaseSuitability_2.mzML'])
+    expect(tables.psms.count).toBe(0)
+    expect(tables.peptides.count).toBe(0)
+    expect(tables.proteins.count).toBe(0)
+    expect(Array.from(tables.peptides.modOffsets)).toEqual([0])
+    expect(Array.from(tables.peptides.proteinOffsets)).toEqual([0])
+    expect(spectra.psmSpectrum.length).toBe(0)
+    expect(Array.from(spectra.offsets)).toEqual([0])
+    expect(Array.from(predicted.psmOffsets)).toEqual([0])
+    expect(summary.files.map((f) => [f.status, f.ms2Spectra, f.targetPSMs, f.decoyPSMs])).toEqual([
+      ['EXECUTION_OK', 2789, 0, 0],
+      ['EXECUTION_OK', 2789, 0, 0],
+    ])
+    expect(summary.proteinFdrApplied).toBe(false)
+    expect(warnings).toEqual([])
+  })
+
   test('an open search without its mod-analysis folder reads, without the analysis', async () => {
     await withCopy('open', async (dir) => {
       rmSync(join(dir, 'mods'), { recursive: true })
