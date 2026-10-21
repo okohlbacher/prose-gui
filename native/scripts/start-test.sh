@@ -15,7 +15,7 @@
 # 4. The app starts with --smoke-test (src-tauri/src/lib.rs): once its page has loaded it reports the page
 #    and tool_info, and exits. tool_info has to be the bundled ProSE inside the package, with ONNX, and the
 #    version of step 2.
-# A folder with a non-ASCII name is tried as well (step 3 again, shorter), and only reported.
+#    The same in a folder named 'Größe ü', which has to give the same number of PSMs.
 # The build machine's OpenMS must be gone (CI removes it after bundling), so that ProSE can only use the
 # package's share/OpenMS. Writes a summary to $GITHUB_STEP_SUMMARY when it is set.
 set -euo pipefail
@@ -115,17 +115,16 @@ psms=$(sed -n 's/^ *target_psms: *\([0-9]*\).*/\1/p' "$data/summary.yaml" | head
 [ -n "$psms" ] && [ "$psms" -gt 500 ] || die "the search found ${psms:-no} target PSMs, expected more than 500"
 echo "command-line search: $psms target PSMs at 1 % FDR, with PeptDeep, in ${seconds} s"
 
-# (only reported: a folder name outside ASCII)
-if search "$work/Größe ü"; then
-  wide=$(sed -n 's/^ *target_psms: *\([0-9]*\).*/\1/p' "$work/Größe ü/summary.yaml" | head -n 1)
-  wide_result="searched (${wide:-?} target PSMs)"
-else
-  wide_result="FAILED: $(grep -E 'Error|error' "$work/Größe ü/out.txt" | tail -n 2 | tr '\n' ' ')"
-  echo "--- ProSE's output in 'Größe ü' (only reported) ---"
-  grep -vE '^(Warning: |Schema error)' "$work/Größe ü/out.txt" | head -n 80
-  ls -la "$work/Größe ü" "$work/Größe ü"/* 2>&1 | head -n 30
-  echo "---"
+# a folder name outside ASCII (Windows: ProSE.exe runs with the UTF-8 code page, bundle_closure.py; without
+# it the search read its inputs wrongly and failed in Percolator)
+wide="$work/Größe ü"
+if ! search "$wide"; then
+  grep -vE '^(Warning: |Schema error)' "$wide/out.txt" | grep -v '^\s*$' | tail -n 30
+  die "the command-line search in a folder named 'Größe ü' failed"
 fi
+wide_psms=$(sed -n 's/^ *target_psms: *\([0-9]*\).*/\1/p' "$wide/summary.yaml" | head -n 1)
+[ "${wide_psms:-0}" = "$psms" ] || die "in 'Größe ü' the search found ${wide_psms:-no} target PSMs, not $psms"
+wide_result="searched ($wide_psms target PSMs)"
 echo "a folder named 'Größe ü': $wide_result"
 
 # --- 4. the app starts, finds its ProSE, and exits ---------------------------------------------------
