@@ -1,11 +1,15 @@
-// ProSE's end-of-search report (summary.yaml) and the open search's modification analysis
+// The statistics of a search: the footer of ProSE's QPX psm files ('prose_' keys of -qpx_extended, documented in
+// the tool's documentation) and the open search's modification analysis
 // (mods/*_ModificationAnalysis_{DeltaMassStats,PTMStats}.tsv) as the web app's ProSEMultiSummary
 // (docs/parity.md, "ProSEMultiSummary").
 
-import { load } from 'js-yaml'
 import type { ProSEFileSummary, ProSEMultiSummary, ProSESummary } from './types'
 
-type Yaml = Record<string, any>
+/** The footer key-value metadata of a psm.parquet. */
+export type Footer = Map<string, string>
+
+/** One entry of the footer's 'prose_files' (JSON). */
+type FileEntry = Record<string, any>
 
 /** ProSE's exit codes (TOPPBase::ExitCodes) as the web app's status. */
 const STATUS: Record<number, ProSEFileSummary['status']> = {
@@ -16,18 +20,27 @@ const STATUS: Record<number, ProSEFileSummary['status']> = {
   4: 'ILLEGAL_PARAMETERS',
 }
 
-export function parseSummaryYaml(text: string): Yaml {
-  const yaml = load(text)
-  if (yaml === null || typeof yaml !== 'object' || !('per_file' in yaml)) throw new Error('summary.yaml has no per_file')
-  return yaml as Yaml
+/** The footer's 'prose_files': one entry per input, in input order. Throws if it is missing or not JSON. */
+export function filesOf(footer: Footer): FileEntry[] {
+  const text = footer.get('prose_files')
+  if (text === undefined) throw new Error('the footer has no prose_files')
+  const files: unknown = JSON.parse(text)
+  if (!Array.isArray(files)) throw new Error('prose_files is not a list')
+  return files as FileEntry[]
 }
 
 const number = (v: unknown, fallback = 0): number => (typeof v === 'number' ? v : fallback)
 const text = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
+/** A footer number; `fallback` if it is missing or not a number. */
+export const footerNumber = (footer: Footer, key: string, fallback = 0): number => {
+  const v = Number(footer.get(key) ?? NaN)
+  return Number.isNaN(v) ? fallback : v
+}
+export const footerFlag = (footer: Footer, key: string): boolean => footer.get(key) === 'true'
 
-/** A mass error estimate; `valid: false` → null. */
-function massError(e: Yaml | undefined): ProSESummary['run']['precursorError'] {
-  if (!e || e.valid !== true) return null
+/** A mass error estimate; null: none. */
+function massError(e: FileEntry | null | undefined): ProSESummary['run']['precursorError'] {
+  if (!e || typeof e !== 'object') return null
   return { median: number(e.median_ppm), mad: number(e.mad_ppm), recommended: number(e.recommended_ppm) }
 }
 
@@ -35,7 +48,7 @@ function massError(e: Yaml | undefined): ProSESummary['run']['precursorError'] {
  * Percolator's outcome for a file: null when the search did not rescore (`applied: false` without a
  * reason; the web app has null for a search with `rescore: false`), else applied, skipped and warning.
  */
-function percolator(p: Yaml | undefined): ProSEFileSummary['percolator'] {
+function percolator(p: FileEntry | undefined): ProSEFileSummary['percolator'] {
   if (!p) return null
   const applied = p.applied === true
   const skipped = text(p.skipped_reason)
@@ -44,19 +57,11 @@ function percolator(p: Yaml | undefined): ProSEFileSummary['percolator'] {
 }
 
 /**
- * The summary of the search: `paths` are the app's inputs (in order; summary.yaml has their names in the
- * search folder), `decoyString` the search's decoy marker (OMS search params), `modificationAnalysis`
- * the parsed TSVs (null: closed search).
+ * The summary of the search: `paths` are the app's inputs (in order; the footer has their names in the
+ * search folder), `modificationAnalysis` the parsed TSVs (null: closed search).
  */
-export function toSummary(
-  yaml: Yaml,
-  paths: string[],
-  decoyString: string,
-  modificationAnalysis: ProSESummary['modificationAnalysis'],
-): ProSEMultiSummary {
-  const shared: Yaml = yaml.shared ?? {}
-  const perFile: Yaml[] = yaml.per_file ?? []
-  const files: ProSEFileSummary[] = perFile.map((f, i) => ({
+export function toSummary(footer: Footer, paths: string[], modificationAnalysis: ProSESummary['modificationAnalysis']): ProSEMultiSummary {
+  const files: ProSEFileSummary[] = filesOf(footer).map((f, i) => ({
     path: paths[i] ?? String(f.input_file ?? ''),
     status: STATUS[number(f.exit_code, 3)] ?? 'UNKNOWN_ERROR',
     ms2Spectra: number(f.ms2_spectra),
@@ -66,31 +71,40 @@ export function toSummary(
     peptdeepNce: typeof f.peptdeep_nce === 'number' ? f.peptdeep_nce : null,
     precursorError: massError(f.precursor_error),
     fragmentError: massError(f.fragment_error),
-    secondsSearch: number(f.timing_seconds?.search),
+    secondsSearch: number(f.seconds_search),
   }))
+  const openSearch = footerFlag(footer, 'prose_open_search')
   return {
     files,
     search: {
-      databaseFile: String(shared.database_file ?? ''),
-      enzyme: String(shared.enzyme ?? ''),
-      openSearch: shared.open_search === true,
-      calibration: shared.calibration_enabled === true,
-      chunked: shared.chunked === true,
-      decoyMode: String(shared.decoy_mode ?? ''),
-      targetProteins: number(shared.db_target_proteins),
-      decoyProteins: number(shared.db_decoy_proteins),
-      indexedPeptides: number(shared.indexed_peptides),
-      indexedFragments: number(shared.indexed_fragments),
-      secondsIndexBuild: number(shared.seconds_index_build),
-      secondsTotal: number(shared.seconds_total),
+      databaseFile: footer.get('prose_database_file') ?? '',
+      enzyme: footer.get('prose_enzyme') ?? '',
+      openSearch,
+      calibration: footerFlag(footer, 'prose_calibration'),
+      chunked: footerFlag(footer, 'prose_chunked'),
+      decoyMode: footer.get('prose_decoy_mode') ?? '',
+      targetProteins: footerNumber(footer, 'prose_db_target_proteins'),
+      decoyProteins: footerNumber(footer, 'prose_db_decoy_proteins'),
+      indexedPeptides: footerNumber(footer, 'prose_indexed_peptides'),
+      indexedFragments: footerNumber(footer, 'prose_indexed_fragments'),
+      secondsIndexBuild: footerNumber(footer, 'prose_seconds_index_build'),
+      secondsTotal: footerNumber(footer, 'prose_seconds_total'),
     },
-    proteinFdrApplied: yaml.protein_fdr_applied === true,
-    psmFdr: number(shared.psm_fdr_threshold),
-    proteinFdr: number(shared.protein_fdr_threshold),
-    decoyString,
-    openSearch: shared.open_search === true,
+    proteinFdrApplied: footerFlag(footer, 'prose_protein_fdr_applied'),
+    psmFdr: footerNumber(footer, 'prose_psm_fdr'),
+    proteinFdr: footerNumber(footer, 'prose_protein_fdr'),
+    decoyString: footer.get('prose_decoy_string') ?? 'DECOY_',
+    openSearch,
     modificationAnalysis,
   }
+}
+
+/** The target PSMs of a search by its footer (the sum of `prose_files[].target_psms`); 0 if it says none. */
+export function targetPsmsOf(footer: Footer): number {
+  return filesOf(footer).reduce((n: number, f) => {
+    const psms = f?.target_psms
+    return n + (typeof psms === 'number' && Number.isFinite(psms) ? psms : 0)
+  }, 0)
 }
 
 //------------------------------------------------------------------------------

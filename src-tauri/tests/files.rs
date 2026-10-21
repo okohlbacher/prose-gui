@@ -5,7 +5,7 @@ mod common;
 
 use common::TempDir;
 use prose_desktop_lib::files::{
-    example_files, inspect, parse_database_file, read_search_file, ReadError,
+    example_files, inspect, read_search_file, recorded_database, ReadError,
 };
 use std::fs;
 use std::path::Path;
@@ -15,8 +15,8 @@ fn link(original: &Path, link: &Path) {
     std::os::unix::fs::symlink(original, link).unwrap();
 }
 
-/// A searches folder with one finished search `1-0` (a summary naming `database`) and a user folder
-/// beside it with an input and the database.
+/// A searches folder with one finished search `1-0` (its database.json naming `database`) and a user
+/// folder beside it with an input and the database.
 fn search_with(database: &str) -> (TempDir, std::path::PathBuf) {
     let tmp = TempDir::new("files");
     let searches = tmp.path().join("searches");
@@ -24,11 +24,11 @@ fn search_with(database: &str) -> (TempDir, std::path::PathBuf) {
     fs::create_dir_all(folder.join("qpx")).unwrap();
     fs::write(folder.join("inputs.json"), "[]").unwrap();
     fs::write(folder.join("qpx/1__a.psm.parquet"), b"PAR1....PAR1").unwrap();
-    let yaml = format!(
-        "shared:\n  database_file: \"{}\"\n  enzyme: \"Trypsin\"\nper_file:\n",
-        database.replace('\\', "\\\\").replace('"', "\\\"")
-    );
-    fs::write(folder.join("summary.yaml"), yaml).unwrap();
+    fs::write(
+        folder.join("database.json"),
+        serde_json::json!({ "path": database }).to_string(),
+    )
+    .unwrap();
     tmp.write("user/a.mzML", "<mzML/>");
     (tmp, searches)
 }
@@ -57,11 +57,11 @@ fn refused(result: Result<Vec<u8>, ReadError>) -> bool {
 fn a_file_of_the_search_folder_is_served() {
     let (_tmp, searches) = search_with("/nowhere/db.fasta");
     assert_eq!(
-        read_search_file(&searches, "1-0", "inputs.json").unwrap(),
+        read_search_file(&searches, "1-0", "inputs.json", None).unwrap(),
         b"[]"
     );
     assert_eq!(
-        read_search_file(&searches, "1-0", "qpx/1__a.psm.parquet").unwrap(),
+        read_search_file(&searches, "1-0", "qpx/1__a.psm.parquet", None).unwrap(),
         b"PAR1....PAR1"
     );
 }
@@ -69,10 +69,10 @@ fn a_file_of_the_search_folder_is_served() {
 #[test]
 fn a_missing_file_rejects_with_not_found_and_a_message() {
     let (_tmp, searches) = search_with("/nowhere/db.fasta");
-    let error = read_search_file(&searches, "1-0", "oms/merged.pg.parquet").unwrap_err();
+    let error = read_search_file(&searches, "1-0", "qpx/quantms.pg.parquet", None).unwrap_err();
     assert!(error.not_found);
     assert!(
-        error.message.contains("oms/merged.pg.parquet"),
+        error.message.contains("qpx/quantms.pg.parquet"),
         "{}",
         error.message
     );
@@ -81,7 +81,12 @@ fn a_missing_file_rejects_with_not_found_and_a_message() {
     assert_eq!(json["notFound"], true);
     assert!(json["message"].is_string());
     // a search that does not exist: its files do not exist either
-    assert!(not_found(read_search_file(&searches, "9-9", "inputs.json")));
+    assert!(not_found(read_search_file(
+        &searches,
+        "9-9",
+        "inputs.json",
+        None
+    )));
 }
 
 #[test]
@@ -98,7 +103,7 @@ fn names_that_leave_the_folder_are_refused() {
         "/etc/passwd",
     ] {
         assert!(
-            refused(read_search_file(&searches, "1-0", name)),
+            refused(read_search_file(&searches, "1-0", name, None)),
             "{name:?} was not refused"
         );
     }
@@ -114,8 +119,13 @@ fn the_inputs_hard_links_are_not_served() {
         searches.join("1-0/1__a.mzML"),
     )
     .unwrap();
-    assert!(refused(read_search_file(&searches, "1-0", "1__a.mzML")));
-    let err = read_search_file(&searches, "1-0", "1__a.mzML").unwrap_err();
+    assert!(refused(read_search_file(
+        &searches,
+        "1-0",
+        "1__a.mzML",
+        None
+    )));
+    let err = read_search_file(&searches, "1-0", "1__a.mzML", None).unwrap_err();
     assert!(err.message.contains("input"), "{}", err.message);
 }
 
@@ -133,7 +143,7 @@ fn search_ids_that_are_paths_are_refused() {
         "a b",
     ] {
         assert!(
-            refused(read_search_file(&searches, id, "inputs.json")),
+            refused(read_search_file(&searches, id, "inputs.json", None)),
             "{id:?} was not refused"
         );
     }
@@ -146,14 +156,24 @@ fn the_input_links_and_other_symlinks_cannot_lead_out_of_the_folder() {
     let folder = searches.join("1-0");
     // the shim's input link, to the user's file
     link(&tmp.path().join("user/a.mzML"), &folder.join("1__a.mzML"));
-    assert!(refused(read_search_file(&searches, "1-0", "1__a.mzML")));
+    assert!(refused(read_search_file(
+        &searches,
+        "1-0",
+        "1__a.mzML",
+        None
+    )));
     // a link to a folder outside, and a file through it
     link(&tmp.path().join("user"), &folder.join("out"));
-    assert!(refused(read_search_file(&searches, "1-0", "out/a.mzML")));
+    assert!(refused(read_search_file(
+        &searches,
+        "1-0",
+        "out/a.mzML",
+        None
+    )));
     // a link inside the folder to a file inside is fine
     link(&folder.join("inputs.json"), &folder.join("again.json"));
     assert_eq!(
-        read_search_file(&searches, "1-0", "again.json").unwrap(),
+        read_search_file(&searches, "1-0", "again.json", None).unwrap(),
         b"[]"
     );
 }
@@ -175,7 +195,7 @@ fn a_search_folder_that_is_a_link_is_refused_by_the_reader_and_by_history() {
     fs::rename(&folder, &elsewhere).unwrap();
     link(&elsewhere, &folder);
     for name in ["inputs.json", "search.json", "qpx/1__a.psm.parquet"] {
-        let result = read_search_file(&searches, "1-0", name);
+        let result = read_search_file(&searches, "1-0", name, None);
         assert!(refused(result.clone()), "{name}: {result:?}");
         assert!(result.unwrap_err().message.contains("not a folder"));
     }
@@ -194,15 +214,15 @@ fn a_search_folder_that_is_a_link_is_refused_by_the_reader_and_by_history() {
     fs::remove_file(&folder).unwrap();
     fs::rename(&elsewhere, &folder).unwrap();
     assert_eq!(
-        read_search_file(&searches, "1-0", "inputs.json").unwrap(),
+        read_search_file(&searches, "1-0", "inputs.json", None).unwrap(),
         b"[]"
     );
 }
 
 #[test]
-fn the_database_that_summary_yaml_records_is_served_and_no_other_absolute_path() {
+fn the_database_that_database_json_records_is_served_and_no_other_absolute_path() {
     let tmp0 = TempDir::new("db");
-    // (a name with quotes for ProSE's quoted YAML; Windows allows no '"' in names, its paths have '\')
+    // (a name with quotes for the JSON; Windows allows no '"' in names, its paths have '\')
     let name = if cfg!(windows) {
         "my folder/it's db.fasta"
     } else {
@@ -212,51 +232,53 @@ fn the_database_that_summary_yaml_records_is_served_and_no_other_absolute_path()
     let other = tmp0.write("other.fasta", ">P2\nPEPTIDE\n");
     let (_tmp, searches) = search_with(db.to_str().unwrap());
     assert_eq!(
-        read_search_file(&searches, "1-0", db.to_str().unwrap()).unwrap(),
+        read_search_file(&searches, "1-0", db.to_str().unwrap(), None).unwrap(),
         b">P1\nPEPTIDE\n"
     );
     assert!(refused(read_search_file(
         &searches,
         "1-0",
-        other.to_str().unwrap()
+        other.to_str().unwrap(),
+        None
     )));
     // the recorded database gone (moved): not found, so the reader goes on without it
     fs::remove_file(&db).unwrap();
     assert!(not_found(read_search_file(
         &searches,
         "1-0",
-        db.to_str().unwrap()
+        db.to_str().unwrap(),
+        None
     )));
 }
 
 #[test]
-fn an_imported_search_never_reads_the_database_path_of_its_summary() {
+fn an_imported_search_never_reads_the_database_path_it_records() {
     let tmp0 = TempDir::new("db");
     let db = tmp0.write("db.fasta", ">P1\nPEPTIDE\n");
     let name = db.to_str().unwrap();
     let (_tmp, searches) = search_with(name);
     let record = searches.join("1-0/search.json");
     // a search of this app (a record without the mark, or none yet): served
-    assert!(read_search_file(&searches, "1-0", name).is_ok());
+    assert!(read_search_file(&searches, "1-0", name, None).is_ok());
     fs::write(&record, r#"{"schema":1,"id":"1-0"}"#).unwrap();
-    assert!(read_search_file(&searches, "1-0", name).is_ok());
+    assert!(read_search_file(&searches, "1-0", name, None).is_ok());
     fs::write(&record, r#"{"schema":1,"id":"1-0","imported":false}"#).unwrap();
-    assert!(read_search_file(&searches, "1-0", name).is_ok());
+    assert!(read_search_file(&searches, "1-0", name, None).is_ok());
     // an imported one: refused, with a message that is no not-found (the reader goes on to its own files)
     fs::write(&record, r#"{"schema":1,"id":"1-0","imported":true}"#).unwrap();
-    let err = read_search_file(&searches, "1-0", name).unwrap_err();
+    let err = read_search_file(&searches, "1-0", name, None).unwrap_err();
     assert!(
         !err.not_found && err.message.contains("imported"),
         "{err:?}"
     );
     // its own files are served as before
-    assert!(read_search_file(&searches, "1-0", "qpx/1__a.psm.parquet").is_ok());
+    assert!(read_search_file(&searches, "1-0", "qpx/1__a.psm.parquet", None).is_ok());
     // a record that cannot be read is not trusted either
     fs::write(&record, "{ broken").unwrap();
-    assert!(refused(read_search_file(&searches, "1-0", name)));
+    assert!(refused(read_search_file(&searches, "1-0", name, None)));
     fs::remove_file(&record).unwrap();
     fs::create_dir(&record).unwrap();
-    assert!(refused(read_search_file(&searches, "1-0", name)));
+    assert!(refused(read_search_file(&searches, "1-0", name, None)));
 }
 
 #[test]
@@ -267,31 +289,58 @@ fn a_recorded_database_that_is_not_a_fasta_file_is_not_served() {
     assert!(refused(read_search_file(
         &searches,
         "1-0",
-        secret.to_str().unwrap()
+        secret.to_str().unwrap(),
+        None
     )));
 }
 
 #[test]
-fn the_database_path_is_read_from_proses_quoted_yaml() {
+fn the_database_path_is_read_from_database_json() {
+    let tmp = TempDir::new("record");
+    let folder = tmp.path().join("1-0");
+    fs::create_dir_all(&folder).unwrap();
+    assert_eq!(recorded_database(&folder), None);
+    fs::write(
+        folder.join("database.json"),
+        r#"{"path":"/ä/\"q\" b.fasta"}"#,
+    )
+    .unwrap();
     assert_eq!(
-        parse_database_file("shared:\n  database_file: \"/a/b c.fasta\"\n").as_deref(),
-        Some("/a/b c.fasta")
+        recorded_database(&folder).as_deref(),
+        Some("/ä/\"q\" b.fasta")
+    );
+    // not JSON, no path, a path that is no string, a folder: none
+    for bad in ["{ broken", r#"{"file":"/x.fasta"}"#, r#"{"path":1}"#] {
+        fs::write(folder.join("database.json"), bad).unwrap();
+        assert_eq!(recorded_database(&folder), None, "{bad}");
+    }
+    fs::remove_file(folder.join("database.json")).unwrap();
+    fs::create_dir(folder.join("database.json")).unwrap();
+    assert_eq!(recorded_database(&folder), None);
+}
+
+#[test]
+fn the_last_bytes_of_a_file_are_served() {
+    let (_tmp, searches) = search_with("/nowhere/db.fasta");
+    let name = "qpx/1__a.psm.parquet";
+    assert_eq!(
+        read_search_file(&searches, "1-0", name, Some(4)).unwrap(),
+        b"PAR1"
     );
     assert_eq!(
-        parse_database_file("shared:\n  database_file: \"/a/\\\"q\\\"\\\\x\\x41.fasta\"\n")
-            .as_deref(),
-        Some("/a/\"q\"\\xA.fasta")
+        read_search_file(&searches, "1-0", name, Some(100)).unwrap(),
+        b"PAR1....PAR1"
     );
     assert_eq!(
-        parse_database_file("shared:\n  database_file: \"/ä/ö.fasta\"\n").as_deref(),
-        Some("/ä/ö.fasta")
+        read_search_file(&searches, "1-0", name, Some(0)).unwrap(),
+        b""
     );
-    // only shared's key, not one of another section
-    assert_eq!(
-        parse_database_file("per_file:\n  database_file: \"/x.fasta\"\nshared:\n  enzyme: \"T\"\n"),
-        None
-    );
-    assert_eq!(parse_database_file("shared:\n"), None);
+    assert!(not_found(read_search_file(
+        &searches,
+        "1-0",
+        "qpx/x.psm.parquet",
+        Some(4)
+    )));
 }
 
 #[test]

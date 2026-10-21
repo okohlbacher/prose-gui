@@ -27,7 +27,7 @@ import {
   openSearch,
   ProjectError,
   proteinsFasta,
-  psmsOfSummary,
+  psmsOfSearch,
   recordOf,
   type HistoryBackend,
   type HistoryEntry,
@@ -140,14 +140,14 @@ async function writeRecord(id: string, record: string): Promise<boolean> {
 
 /**
  * Saves the record of a search whose ProSE has just ended, before its results are read: from the request
- * and the target PSMs of its summary.yaml (0 if that cannot be read). Never rejects: the outcome is
+ * and the target PSMs of the footer of its merged QPX psm file (0 if that cannot be read). Never rejects: the outcome is
  * `history.save`.
  */
 export function saveEnded(search: EndedSearch): Promise<void> {
   return queued(async () => {
     let psms = 0
     try {
-      psms = psmsOfSummary(new TextDecoder().decode(await backend.read(search.id, 'summary.yaml')))
+      psms = await psmsOfSearch(backend, search.id)
     } catch {
       // (the record is written all the same; the reader reports a summary that cannot be read)
     }

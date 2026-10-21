@@ -78,7 +78,7 @@ function started(id: string) {
 }
 
 describe('a search as it ends', () => {
-  it('is saved to History as soon as ProSE has ended, from the request and summary.yaml; proteins.fasta follows the read', async () => {
+  it('is saved to History as soon as ProSE has ended, from the request and the footer of its QPX psm file; proteins.fasta follows the read', async () => {
     const search = started('30-0')
     let atRead: { record: boolean; proteins: boolean; listed: boolean } | null = null
     fake.read.mockImplementationOnce(async (files: SearchFiles) => {
@@ -93,7 +93,7 @@ describe('a search as it ends', () => {
     // when the results were read, the search was in History already (an app closed meanwhile keeps it)
     expect(atRead).toEqual({ record: true, proteins: false, listed: true })
     const record = JSON.parse(text(disk.folders.get('30-0')!.get('search.json')))
-    // the PSMs of the summary: 895 target PSMs in each of the two files
+    // the PSMs of the footer: 895 target PSMs in each of the two files
     expect(record).toMatchObject({ id: '30-0', name: 'DatabaseSuitability', psms: 1790, files: ['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'], database: 'human.fasta' })
     expect(record.seconds).toBeGreaterThanOrEqual(0)
     await settle()

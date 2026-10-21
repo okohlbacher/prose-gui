@@ -10,6 +10,10 @@ import { resolve } from 'node:path'
 const WEB_PUBLIC = process.env.WEB_PUBLIC ?? '/scratch/sachsenb/prose-pages/app/public'
 const OPENMS_TOPP = process.env.OPENMS_TOPP ?? '/scratch/sachsenb/openms-desktop/src/tests/topp'
 
+/** The peak filter of the shim (src-tauri/src/args.rs PEAK_WINDOW, PEAK_TOP). */
+export const PEAK_WINDOW = 100
+export const PEAK_TOP = 300
+
 /** The cRAP of the web app, which the shim bundles as well (src-tauri/resources/fasta/crap.fasta). */
 export const CRAP = resolve(WEB_PUBLIC, 'fasta/crap.fasta')
 

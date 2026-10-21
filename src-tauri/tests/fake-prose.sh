@@ -9,12 +9,12 @@
 #   segv      prints a step and a line to stderr, then ends with SIGSEGV
 #   <other>   searches every input and exits 0
 #
-# Next to -summary_out it leaves argv.txt (one argument per line), inputs.txt (every -in path with the
-# file it resolves to), prose.pid and, for hang and stubborn, children.pid.
+# Next to the -out_qpx folder it leaves argv.txt (one argument per line), inputs.txt (every -in path with
+# the file it resolves to), prose.pid and, for hang and stubborn, children.pid; in it, a psm file per input
+# and quantms.psm.parquet (stand-ins: not Parquet).
 set -u
 
 inputs=()
-summary=""
 qpx=""
 args=("$@")
 n=${#args[@]}
@@ -29,14 +29,13 @@ while [ "$i" -lt "$n" ]; do
       done
       continue
       ;;
-    -summary_out) summary="${args[$((i + 1))]}" ;;
     -out_qpx) qpx="${args[$((i + 1))]}" ;;
   esac
   i=$((i + 1))
 done
 
-[ -n "$summary" ] || { echo "fake-prose: no -summary_out" >&2; exit 2; }
-out=$(dirname "$summary")
+[ -n "$qpx" ] || { echo "fake-prose: no -out_qpx" >&2; exit 2; }
+out=$(dirname "$qpx")
 mkdir -p "$out"
 printf '%s\n' "$@" > "$out/argv.txt"
 echo $$ > "$out/prose.pid"
@@ -90,6 +89,4 @@ for f in "${inputs[@]}"; do
 done
 echo psm > "$qpx/quantms.psm.parquet"
 echo "[ProSE] ===================== Search Report ====================="
-echo "[ProSE] Wrote summary YAML -> $summary"
-echo "shared: {}" > "$summary"
 exit 0

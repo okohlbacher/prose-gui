@@ -1,7 +1,8 @@
 //! What the front end may read of the disk, and nothing more:
 //!
 //! - [`read_search_file`]: a file of one search's folder (`<searches>/<id>/`), by its name relative to
-//!   the folder, or the database that the search's `summary.yaml` records. Names are checked as text
+//!   the folder (or its last bytes), or the database that the search's `database.json` records (the shim
+//!   writes it when ProSE reads the user's FASTA as it is). Names are checked as text
 //!   (no `..`, `.`, empty parts, other absolute paths) and the file's canonical path must lie inside
 //!   the canonical folder, so no symlink leads out of it: the shim's input links (`<n>__<name>`, to the
 //!   user's files) are not readable through this. A file that does not exist rejects with
@@ -12,7 +13,7 @@
 //!   `.faa`); any other path is refused before the disk is asked.
 //! - [`example_files`]: the bundled example, as the two named runs the web app searches.
 
-use crate::args::{is_fasta_file, is_input_link, is_spectrum_file, suffix_start};
+use crate::args::{is_fasta_file, is_input_link, is_spectrum_file, suffix_start, DATABASE_RECORD};
 use serde::Serialize;
 use std::fs;
 use std::io::{self, Read};
@@ -134,17 +135,15 @@ pub fn resolve_search_file(
 ) -> Result<PathBuf, ReadError> {
     let folder = search_folder(searches_dir, search_id)?;
     if Path::new(name).is_absolute() {
-        // an imported search (a project from elsewhere) never reads outside its folder: the path its
-        // summary records is that of another computer, or an attempt to name one of this
+        // an imported search (a project from elsewhere) never reads outside its folder: a path it records
+        // is that of another computer, or an attempt to name one of this
         if is_imported(&folder) {
             return Err(ReadError::refused(format!(
                 "{name} is not a file of the search {search_id}: an imported search reads only its own folder."
             )));
         }
         // only the database this search was run with
-        let recorded = fs::read_to_string(folder.join("summary.yaml"))
-            .ok()
-            .and_then(|yaml| parse_database_file(&yaml));
+        let recorded = recorded_database(&folder);
         if recorded.as_deref() != Some(name) || !is_fasta_file(name) {
             return Err(ReadError::refused(format!(
                 "{name} is not a file of the search {search_id}."
@@ -179,75 +178,40 @@ pub fn resolve_search_file(
     Ok(canonical)
 }
 
-/// The contents of `name` of the search `search_id` (see the module docs for what is served).
+/// The contents of `name` of the search `search_id` (see the module docs for what is served): all of it, or
+/// with `tail` its last `tail` bytes (all of a smaller file; the footer of a Parquet file, which History reads).
 pub fn read_search_file(
     searches_dir: &Path,
     search_id: &str,
     name: &str,
+    tail: Option<u64>,
 ) -> Result<Vec<u8>, ReadError> {
     let path = resolve_search_file(searches_dir, search_id, name)?;
-    fs::read(&path).map_err(|e| ReadError::io(name, e))
+    let Some(tail) = tail else {
+        return fs::read(&path).map_err(|e| ReadError::io(name, e));
+    };
+    use io::Seek;
+    let mut file = fs::File::open(&path).map_err(|e| ReadError::io(name, e))?;
+    let size = file.metadata().map_err(|e| ReadError::io(name, e))?.len();
+    let start = size.saturating_sub(tail);
+    file.seek(io::SeekFrom::Start(start))
+        .map_err(|e| ReadError::io(name, e))?;
+    let mut bytes = Vec::with_capacity((size - start) as usize);
+    file.read_to_end(&mut bytes)
+        .map_err(|e| ReadError::io(name, e))?;
+    Ok(bytes)
 }
 
-/// A double-quoted YAML scalar as ProSE writes it (`ProSEAlgorithm.cpp`, its `q()`: `\\`, `\"`, `\n`,
-/// `\t`, `\r`, `\xNN`), without the quotes; None if it is not one.
-fn unquote(text: &str) -> Option<String> {
-    let inner = text.strip_prefix('"')?;
-    let mut out: Vec<u8> = Vec::with_capacity(inner.len());
-    let bytes = inner.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'"' => return String::from_utf8(out).ok(),
-            b'\\' => {
-                let c = *bytes.get(i + 1)?;
-                match c {
-                    b'\\' | b'"' | b'/' => out.push(c),
-                    b'n' => out.push(b'\n'),
-                    b't' => out.push(b'\t'),
-                    b'r' => out.push(b'\r'),
-                    b'0' => out.push(0),
-                    b'x' => {
-                        let hex = std::str::from_utf8(bytes.get(i + 2..i + 4)?).ok()?;
-                        out.push(u8::from_str_radix(hex, 16).ok()?);
-                        i += 2;
-                    }
-                    _ => return None,
-                }
-                i += 2;
-            }
-            b => {
-                out.push(b);
-                i += 1;
-            }
-        }
+/// The database the search `folder` read as it is (no contaminants): the path its [`DATABASE_RECORD`]
+/// records (written by the shim, `run.rs`), if it is one.
+pub fn recorded_database(folder: &Path) -> Option<String> {
+    const MAX: u64 = 1 << 20;
+    let path = folder.join(DATABASE_RECORD);
+    if fs::symlink_metadata(&path).map_or(true, |m| !m.is_file() || m.len() > MAX) {
+        return None;
     }
-    None
-}
-
-/// `shared.database_file` of ProSE's summary YAML (`-summary_out`): the FASTA the search read.
-pub fn parse_database_file(yaml: &str) -> Option<String> {
-    let mut in_shared = false;
-    for line in yaml.lines() {
-        if !line.starts_with(' ') && !line.is_empty() {
-            in_shared = line.trim_end() == "shared:";
-            continue;
-        }
-        if !in_shared {
-            continue;
-        }
-        if let Some(value) = line.strip_prefix("  database_file:") {
-            let value = value.trim();
-            return if value.starts_with('"') {
-                unquote(value)
-            } else if value.is_empty() {
-                None
-            } else {
-                Some(value.to_string())
-            };
-        }
-    }
-    None
+    let record: serde_json::Value = serde_json::from_slice(&fs::read(&path).ok()?).ok()?;
+    record.get("path")?.as_str().map(str::to_string)
 }
 
 /// What the New search page shows of a file it was given by path.

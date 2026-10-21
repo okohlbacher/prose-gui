@@ -1,22 +1,23 @@
-// The results reader: ProSE's outputs in a search folder (docs/parity.md) as the web app's result types,
+// The results reader: ProSE's QPX outputs in a search folder (docs/parity.md) as the web app's result types,
 // so that the web app's screens show them unchanged.
 //
 // The folder is the shim's (src-tauri/src/args.rs, run.rs): inputs.json (the inputs in order, with the
-// links `<n>__<name>` ProSE saw and their stems), summary.yaml, qpx/<stem>.psm.parquet,
-// oms/<stem>.{psm,search_params,proteins,pg}.parquet, oms/merged.{proteins,pg}.parquet (several
-// inputs), spectra/<stem>.psm_spectra.parquet, mods/ (open search), and database.fasta (with the
-// contaminants). Without contaminants ProSE searched the user's FASTA: the reader asks for the path of
-// summary.yaml's `shared.database_file`, an absolute path, which the `files` callback has to serve too.
-// The protein sequences and descriptions come from proteins.fasta (the identified proteins, if the
-// folder has it), else the database, else they are left out with a warning (`SearchResult.warnings`).
+// links `<n>__<name>` ProSE saw and their stems), qpx/<stem>.psm.parquet (the QPX psm view of each input with
+// the optional columns and the footer of ProSE's -qpx_extended), qpx/quantms.pg.parquet (the protein groups:
+// of several inputs the pooled inference), mods/ (open search: the tables the footer names), and
+// database.fasta (with the contaminants). Without contaminants ProSE searched the user's FASTA: the reader
+// asks for the path the footer records (`prose_database_file`), an absolute path, which the `files` callback
+// has to serve too. The protein sequences and descriptions come from proteins.fasta (the identified
+// proteins, if the folder has it), else the database, else they are left out with a warning
+// (`SearchResult.warnings`).
 //
 // The `files` contract: resolve with the contents, or reject with `FileNotFound` (or any error or object
 // with `notFound: true`, as a Tauri command can send it) when the file does not exist. Only that counts
 // as a missing file; any other rejection fails the read, with the file's name in the message. A file
 // that is there but cannot be read fails the read too, naming the file.
 //
-// Rows: the PSM rows are the QPX psm rows of the inputs in order; the OMS psm file has the same rows in
-// the same order (joined by position); the sidecar is joined by `psm_id`.
+// Rows: the PSM rows are the QPX psm rows of the inputs in order; their peaks and PeptDeep's prediction
+// are columns of the same rows.
 
 import {
   C13C12_MASSDIFF_U,
@@ -31,9 +32,9 @@ import {
   type DecoyGeneration,
   type Modification,
 } from './derive'
-import { hasColumn, openParquet, readLeaf, readObjects, readStructList, startZstd, type LeafMode, type ParquetFile } from './parquet'
-import { parseModificationAnalysis, parseSummaryYaml, toSummary } from './summary'
-import type { PredictedSpectra, ProSEMultiSummary, ProSESummary, ResultTables, StoredSpectra } from './types'
+import { footerOf, hasColumn, openParquet, readLeaf, readObjects, readStructList, startZstd, type LeafMode, type ParquetFile } from './parquet'
+import { filesOf, footerFlag, footerNumber, parseModificationAnalysis, toSummary, type Footer } from './summary'
+import type { PredictedSpectra, ProSESummary, ProSEMultiSummary, ResultTables, StoredSpectra } from './types'
 
 export { ZSTD } from './parquet'
 
@@ -57,6 +58,27 @@ export function isNotFound(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { notFound?: unknown }).notFound === true
 }
 
+/**
+ * A search folder of the app's earlier layout (summary.yaml and OpenMS' own Parquet files next to the QPX
+ * files), which this version does not read.
+ */
+export class OldLayoutError extends Error {
+  readonly oldLayout = true
+  constructor() {
+    super(
+      'This search was saved by an earlier version of ProSE Desktop, whose results this version cannot read. ' +
+        'Open it with that version, or run the search again.',
+    )
+    this.name = 'OldLayoutError'
+  }
+}
+
+/** The peak filter of the stored spectra: the `top` most intense peaks per `window` Th, and the annotated ones. */
+export interface PeakFilter {
+  top: number
+  window: number
+}
+
 export interface SearchResult {
   summary: ProSEMultiSummary
   tables: ResultTables
@@ -69,6 +91,8 @@ export interface SearchResult {
    * write proteins.fasta for this search (it does when this is false: history.ts, `openSearch`).
    */
   proteinsSaved: boolean
+  /** The peak filter ProSE applied to the stored spectra (the PSM view says so); null or absent: every peak. */
+  peakFilter?: PeakFilter | null
 }
 
 /** Runs `read` on the file `name`; an error names the file. */
@@ -94,9 +118,21 @@ interface InputRecord {
 
 const utf8 = new TextDecoder()
 
-/** ProSE's ln(hyperscore), also the name of its feature column */
+/** ProSE's ln(hyperscore): the name of its feature column (as the web app names it) */
 const HYPERSCORE = 'ln(hyperscore)'
 const PEPTDEEP_FEATURES = ['ms2_cosine', 'ms2_spectral_angle', 'ms2_pearson', 'ms2_frac_pred_found', 'rt_abs_error']
+
+/** The columns -qpx_extended adds to the QPX psm view (besides the scores). */
+const EXTENDED_COLUMNS = [
+  'spectrum_reference',
+  'isotope_error',
+  'protein_mappings',
+  'peak_mz_array',
+  'peak_intensity_array',
+  'predicted_ion_type_array',
+  'predicted_mz_array',
+  'predicted_intensity_array',
+]
 
 const first = (...values: number[]) => values.find((v) => !Number.isNaN(v)) ?? NaN
 
@@ -104,66 +140,7 @@ const first = (...values: number[]) => values.find((v) => !Number.isNaN(v)) ?? N
 const fmax = (a: number, b: number) => (Number.isNaN(a) ? b : Number.isNaN(b) ? a : Math.max(a, b))
 
 //------------------------------------------------------------------------------
-// One input's files
-
-interface SearchParams {
-  enzyme: string
-  unspecific: boolean
-  keepInitialMet: boolean
-  extraFeatures: string[]
-  observedMinusTheoretical: boolean
-  decoyString: string
-  decoyIsPrefix: boolean
-}
-
-async function readSearchParams(name: string, bytes: Uint8Array | null): Promise<SearchParams | null> {
-  if (!bytes) return null
-  return inFile(name, () => searchParamsOf(openParquet(bytes)))
-}
-
-async function searchParamsOf(file: ParquetFile): Promise<SearchParams | null> {
-  const [row] = await readObjects(file, ['digestion_enzyme', 'enzyme_term_specificity', 'sp_metavalues'])
-  if (!row) return null
-  const meta = new Map(((row.sp_metavalues as { name: string; value: string }[] | null) ?? []).map((m) => [m.name, m.value]))
-  return {
-    enzyme: String(row.digestion_enzyme ?? ''),
-    unspecific: String(row.enzyme_term_specificity ?? '').toUpperCase() === 'NONE',
-    keepInitialMet: meta.get('peptide:clip_nterm_methionine') === 'true',
-    extraFeatures: (meta.get('extra_features') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
-    observedMinusTheoretical: meta.get('isotope_error_convention') === 'observed_minus_theoretical',
-    decoyString: meta.get('PeptideIndexer:decoy_string') ?? 'DECOY_',
-    decoyIsPrefix: (meta.get('PeptideIndexer:decoy_string_position') ?? 'prefix') === 'prefix',
-  }
-}
-
-/** The PSM rows of one input: its QPX psm, OMS psm and sidecar columns. */
-interface InputRows {
-  count: number
-  psmId: unknown[]
-  sequence: unknown[]
-  charge: Float64Array
-  pep: Float64Array
-  decoy: unknown[]
-  /** the QPX scores: names as codes into `names` */
-  scores: { offsets: Uint32Array; name: Int32Array; names: string[]; value: Float64Array }
-  modifications: (QpxModification[] | null)[] | null
-  nativeId: unknown[]
-  rt: Float64Array
-  observedMz: Float64Array
-  calculatedMz: Float64Array
-  score: Float64Array
-  scoreType: unknown[]
-  /** the OMS meta values: names as codes into `names`, values as numbers */
-  meta: { offsets: Uint32Array; name: Int32Array; names: string[]; value: Float64Array }
-  evidence: { offsets: Uint32Array; accession: unknown[]; aa_before: unknown[]; aa_after: unknown[]; start: Float64Array; end: Float64Array }
-  sidecar: Sidecar | null
-}
-
-interface QpxModification {
-  name: string
-  accession: string | null
-  positions: { position: number }[]
-}
+// One input's file
 
 interface ListLeaf<T> {
   offsets: Uint32Array
@@ -171,9 +148,25 @@ interface ListLeaf<T> {
   values: T
 }
 
-interface Sidecar {
-  /** the sidecar row of each QPX row; -1: none */
-  rowOf: Int32Array
+/** The PSM rows of one input: the columns of its QPX psm file. */
+interface InputRows {
+  count: number
+  footer: Footer
+  sequence: unknown[]
+  charge: Float64Array
+  pep: Float64Array
+  decoy: unknown[]
+  /** the scores: names as codes into `names` */
+  scores: { offsets: Uint32Array; name: Int32Array; names: string[]; value: Float64Array }
+  modifications: (QpxModification[] | null)[] | null
+  nativeId: unknown[]
+  rt: ArrayLike<number>
+  observedMz: ArrayLike<number>
+  calculatedMz: ArrayLike<number>
+  /** QPX isotope_error (observed minus theoretical); NaN: null */
+  isotope: Float64Array
+  /** protein_mappings: 1-based start and end, NaN: null */
+  evidence: { offsets: Uint32Array; accession: unknown[]; aa_before: unknown[]; aa_after: unknown[]; start: Float64Array; end: Float64Array }
   peakMz: ListLeaf<Float32Array>
   peakIntensity: ListLeaf<Float32Array>
   /** the ion names as codes into `ionNames` */
@@ -183,29 +176,37 @@ interface Sidecar {
   predictedIntensity: ListLeaf<Float32Array>
 }
 
+interface QpxModification {
+  name: string
+  accession: string | null
+  positions: { position: number }[]
+}
+
 function listLeaf<T>(file: ParquetFile, column: string, mode: LeafMode = 'values'): ListLeaf<T> & { dictionary?: string[] } {
   const leaf = readLeaf(file, [column, 'list', 'element'], mode)
   return { offsets: leaf.offsets!, nullList: leaf.nullList!, values: leaf.values as T, dictionary: leaf.dictionary }
 }
 
-/** The names of an input's PSM files. */
-interface InputFiles {
-  qpx: string
-  oms: string
-  sidecar: string
-}
+/** A psm file without the columns or the footer of -qpx_extended. */
+class NotExtended extends Error {}
 
-async function readInput(names: InputFiles, qpxBytes: Uint8Array, omsBytes: Uint8Array, sidecarBytes: Uint8Array | null): Promise<InputRows> {
+async function readInput(name: string, bytes: Uint8Array): Promise<InputRows> {
   const flat = <T>(file: ParquetFile, column: string) => readLeaf(file, [column]).values as T
-  const q = await inFile(names.qpx, async () => {
-    const qpx = openParquet(qpxBytes)
+  return inFile(name, async () => {
+    const qpx = openParquet(bytes)
+    const footer = footerOf(qpx)
+    if (!footer.has('prose_files') || EXTENDED_COLUMNS.some((c) => !hasColumn(qpx, c))) {
+      throw new NotExtended(`${name}: the QPX psm view has not the columns and the footer of ProSE's -qpx_extended`)
+    }
     const scores = readStructList(qpx, 'additional_scores', ['score_name', 'score_value'], { score_name: 'codes' })
+    const evidence = readStructList(qpx, 'protein_mappings', ['accession', 'aa_before', 'aa_after', 'start', 'end'])
     // the modifications (a list of lists): only if some row has any
     const modLeaf = readLeaf(qpx, ['modifications', 'list', 'element', 'name'])
     const modified = modLeaf.offsets![qpx.rows] > 0
+    const ion = listLeaf<Int32Array>(qpx, 'predicted_ion_type_array', 'codes')
     return {
-      rows: qpx.rows,
-      psmId: flat<unknown[]>(qpx, 'psm_id'),
+      count: qpx.rows,
+      footer,
       sequence: flat<unknown[]>(qpx, 'sequence'),
       charge: flat<Float64Array>(qpx, 'charge'),
       pep: flat<Float64Array>(qpx, 'posterior_error_probability'),
@@ -219,22 +220,11 @@ async function readInput(names: InputFiles, qpxBytes: Uint8Array, omsBytes: Uint
       modifications: modified
         ? (await readObjects(qpx, ['modifications'])).map((r) => (r.modifications as QpxModification[] | null) ?? null)
         : null,
-    }
-  })
-  const o = await inFile(names.oms, () => {
-    const oms = openParquet(omsBytes)
-    // the names as codes, the values as numbers: the reader needs none of them as text
-    const meta = readStructList(oms, 'psm_metavalues', ['name', 'value'], { name: 'codes', value: 'numbers' })
-    const evidence = readStructList(oms, 'protein_accessions', ['accession', 'aa_before', 'aa_after', 'start', 'end'])
-    return {
-      rows: oms.rows,
-      nativeId: flat<unknown[]>(oms, 'spectrum_reference'),
-      rt: flat<Float64Array>(oms, 'rt'),
-      observedMz: flat<Float64Array>(oms, 'observed_mz'),
-      calculatedMz: flat<Float64Array>(oms, 'calculated_mz'),
-      score: flat<Float64Array>(oms, 'score'),
-      scoreType: flat<unknown[]>(oms, 'score_type'),
-      meta: { offsets: meta.offsets, name: meta.name as Int32Array, names: meta.dictionaries.name ?? [], value: meta.value as Float64Array },
+      nativeId: flat<unknown[]>(qpx, 'spectrum_reference'),
+      rt: flat<Float32Array>(qpx, 'rt'),
+      observedMz: flat<Float32Array>(qpx, 'observed_mz'),
+      calculatedMz: flat<Float32Array>(qpx, 'calculated_mz'),
+      isotope: flat<Float64Array>(qpx, 'isotope_error'),
       evidence: {
         offsets: evidence.offsets,
         accession: evidence.accession as unknown[],
@@ -243,40 +233,15 @@ async function readInput(names: InputFiles, qpxBytes: Uint8Array, omsBytes: Uint
         start: evidence.start as Float64Array,
         end: evidence.end as Float64Array,
       },
+      peakMz: listLeaf(qpx, 'peak_mz_array'),
+      peakIntensity: listLeaf(qpx, 'peak_intensity_array'),
+      ion,
+      // as the web app names them
+      ionNames: (ion.dictionary ?? []).map(webIonName),
+      predictedMz: listLeaf(qpx, 'predicted_mz_array'),
+      predictedIntensity: listLeaf(qpx, 'predicted_intensity_array'),
     }
   })
-  if (q.rows !== o.rows) throw new Error(`${names.oms}: ${o.rows} PSMs, but ${q.rows} in ${names.qpx}`)
-  const sidecar = sidecarBytes ? await inFile(names.sidecar, () => readSidecar(openParquet(sidecarBytes), q.psmId)) : null
-  const { rows, ...qpxColumns } = q
-  const { rows: _rows, ...omsColumns } = o
-  return { count: rows, ...qpxColumns, ...omsColumns, sidecar }
-}
-
-/** The sidecar's columns and, for each QPX row (by its psm_id), its sidecar row. */
-function readSidecar(file: ParquetFile, psmId: unknown[]): Sidecar {
-  const ids = readLeaf(file, ['psm_id']).values as unknown[]
-  const rowOf = new Int32Array(psmId.length).fill(-1)
-  const positional = ids.length === psmId.length && psmId.every((id, i) => id === ids[i])
-  if (positional) {
-    for (let i = 0; i < rowOf.length; i++) rowOf[i] = i
-  } else {
-    const row = new Map<unknown, number>()
-    ids.forEach((id, i) => row.set(id, i))
-    psmId.forEach((id, i) => (rowOf[i] = row.get(id) ?? -1))
-  }
-  const has = (c: string) => hasColumn(file, c)
-  const ion = has('predicted_ion_type_array') ? listLeaf<Int32Array>(file, 'predicted_ion_type_array', 'codes') : null
-  const empty = <T>(values: T): ListLeaf<T> => ({ offsets: new Uint32Array(ids.length + 1), nullList: new Uint8Array(ids.length).fill(1), values })
-  return {
-    rowOf,
-    peakMz: has('peak_mz_array') ? listLeaf(file, 'peak_mz_array') : empty(new Float32Array(0)),
-    peakIntensity: has('peak_intensity_array') ? listLeaf(file, 'peak_intensity_array') : empty(new Float32Array(0)),
-    ion: ion ?? empty(new Int32Array(0)),
-    // as the web app names them
-    ionNames: (ion?.dictionary ?? []).map(webIonName),
-    predictedMz: has('predicted_mz_array') ? listLeaf(file, 'predicted_mz_array') : empty(new Float32Array(0)),
-    predictedIntensity: has('predicted_intensity_array') ? listLeaf(file, 'predicted_intensity_array') : empty(new Float32Array(0)),
-  }
 }
 
 //------------------------------------------------------------------------------
@@ -338,80 +303,108 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   const inputs = await inFile('inputs.json', async () =>
     (JSON.parse(utf8.decode(await required('inputs.json'))) as InputRecord[]).sort((a, b) => a.index - b.index),
   )
-  const yaml = await inFile('summary.yaml', async () => parseSummaryYaml(utf8.decode(await required('summary.yaml'))))
   const several = inputs.length > 1
   await zstd
 
-  const proteinsName = several ? 'oms/merged.proteins.parquet' : `oms/${inputs[0]?.stem}.proteins.parquet`
-  const groupsName = several ? 'oms/merged.pg.parquet' : `oms/${inputs[0]?.stem}.pg.parquet`
-  const [perInput, params, proteinBytes, groupBytes] = await Promise.all([
-    Promise.all(
-      inputs.map(async ({ stem }) => {
-        const names = { qpx: `qpx/${stem}.psm.parquet`, oms: `oms/${stem}.psm.parquet`, sidecar: `spectra/${stem}.psm_spectra.parquet` }
-        const [qpx, oms, sidecar] = await Promise.all([optional(names.qpx), optional(names.oms), optional(names.sidecar)])
-        // an input whose search failed may have no outputs; but not one of the two PSM files only
-        if (!qpx !== !oms) throw new Error(`${qpx ? names.oms : names.qpx} does not exist, but ${qpx ? names.qpx : names.oms} does.`)
-        return qpx && oms ? readInput(names, qpx, oms, sidecar) : null
-      }),
-    ),
-    Promise.all(
-      inputs.map(({ stem }) => {
-        const name = `oms/${stem}.search_params.parquet`
-        return optional(name).then((bytes) => readSearchParams(name, bytes))
-      }),
-    ),
-    optional(proteinsName),
-    optional(groupsName),
-  ])
-  // an input without PSM files whose summary reports PSMs: its results are not under its stem (a stem
+  const groupsName = 'qpx/quantms.pg.parquet'
+  let perInput: (InputRows | null)[]
+  let groupBytes: Uint8Array | null
+  try {
+    ;[perInput, groupBytes] = await Promise.all([
+      Promise.all(
+        inputs.map(async ({ stem }) => {
+          const name = `qpx/${stem}.psm.parquet`
+          const bytes = await optional(name)
+          // an input whose search failed has no psm file
+          return bytes ? readInput(name, bytes) : null
+        }),
+      ),
+      optional(groupsName),
+    ])
+  } catch (e) {
+    // the earlier layout of the app's search folders: QPX files without the columns of -qpx_extended
+    if (e instanceof NotExtended || (e as { cause?: unknown })?.cause instanceof NotExtended) {
+      if (await optional('summary.yaml')) throw new OldLayoutError()
+    }
+    throw e
+  }
+  const footer = perInput.find((f) => f !== null)?.footer
+  if (!footer) {
+    if (await optional('summary.yaml')) throw new OldLayoutError()
+    throw new Error(`The search folder has no results of ProSE (qpx/<input>.psm.parquet) for any of its ${inputs.length} input(s).`)
+  }
+  // an input without its psm file whose search reports PSMs: its results are not under its stem (a stem
   // the shim got wrong, a file removed), and its PSMs would be left out without a word
-  const perFile: unknown[] = Array.isArray(yaml.per_file) ? yaml.per_file : []
+  const perFile = inFile('the footer of the psm files', () => filesOf(footer))
+  const fileEntries = await perFile
   inputs.forEach((input, k) => {
     if (perInput[k]) return
-    const own = perFile.find((f) => (f as { input_file?: unknown } | null)?.input_file === input.link) ?? perFile[k]
-    const psms = (own as { target_psms?: unknown } | undefined)?.target_psms
+    const own = fileEntries.find((f) => f?.input_file === input.link) ?? fileEntries[k]
+    const psms = own?.target_psms
     if (typeof psms === 'number' && psms > 0) {
       warnings.push(
         `${input.name}: ProSE reports ${psms} target PSMs for it, but its results (qpx/${input.stem}.psm.parquet) are not in the search folder, so its PSMs are not shown.`,
       )
     }
   })
-  const run = params.find((p) => p !== null) ?? null
-  const decoyString = run?.decoyString ?? 'DECOY_'
-  const decoyIsPrefix = run?.decoyIsPrefix ?? true
+  const decoyString = footer.get('prose_decoy_string') ?? 'DECOY_'
+  const decoyIsPrefix = (footer.get('prose_decoy_position') ?? 'prefix') === 'prefix'
   const hasDecoyMarker = (accession: string) =>
     decoyString !== '' && (decoyIsPrefix ? accession.startsWith(decoyString) : accession.endsWith(decoyString))
+  const proteinFdrApplied = footerFlag(footer, 'prose_protein_fdr_applied')
 
   //------------------------------------------------------------------------------
-  // Proteins: the hits of the pooled run (several inputs: the merged inference), with the FASTA
+  // Proteins and their groups: the protein groups of the QPX pg view (several inputs: the pooled inference;
+  // without protein inference, one group per protein), with the FASTA
 
-  const proteins = proteinBytes
-    ? await inFile(proteinsName, () => {
-        const file = openParquet(proteinBytes)
-        return {
-          rows: file.rows,
-          accession: (readLeaf(file, ['accession']).values as unknown[]).map(String),
-          score: readLeaf(file, ['score']).values as Float64Array,
-          isDecoy: readLeaf(file, ['is_decoy']).values as unknown[],
-          description: readLeaf(file, ['description']).values as unknown[],
-        }
-      })
-    : null
-  const proteinCount = proteins?.rows ?? 0
-  const accession = proteins?.accession ?? []
+  const accession: string[] = []
+  const ownDescription: string[] = []
+  const proteinQ: number[] = []
+  const proteinDecoy: number[] = []
+  const group: number[] = []
   const proteinRow = new Map<string, number>()
-  accession.forEach((a, p) => {
-    if (!proteinRow.has(a)) proteinRow.set(a, p)
-  })
+  if (groupBytes) {
+    const bytes = groupBytes
+    await inFile(groupsName, () => {
+      const pg = openParquet(bytes)
+      const members = readLeaf(pg, ['pg_accessions', 'list', 'element'])
+      const names = readLeaf(pg, ['pg_names', 'list', 'element'])
+      const isDecoy = readLeaf(pg, ['is_decoy']).values as unknown[]
+      const groupQ = readLeaf(pg, ['global_qvalue']).values as Float64Array
+      // the score of the group's first protein (the protein q-value once the protein FDR was applied)
+      const scores = readStructList(pg, 'additional_scores', ['score_value'])
+      const groupOf = new Map<string, number>()
+      for (let r = 0; r < pg.rows; r++) {
+        const from = members.offsets![r]
+        const to = members.offsets![r + 1]
+        const list = Array.from({ length: to - from }, (_, k) => String((members.values as unknown[])[from + k]))
+        // a group of several runs has a row per run
+        const key = list.join('\u0000')
+        let g = groupOf.get(key)
+        if (g === undefined) {
+          g = groupOf.size
+          groupOf.set(key, g)
+        }
+        const q = scores.offsets[r + 1] > scores.offsets[r] ? (scores.score_value as Float64Array)[scores.offsets[r]] : groupQ[r]
+        list.forEach((a, k) => {
+          if (proteinRow.has(a)) return
+          proteinRow.set(a, accession.length)
+          accession.push(a)
+          const own = names.offsets ? (names.values as unknown[])[names.offsets[r] + k] : null
+          ownDescription.push(typeof own === 'string' ? own : '')
+          proteinQ.push(proteinFdrApplied ? q : NaN)
+          proteinDecoy.push(hasDecoyMarker(a) || (isDecoy[r] === true && list.length === 1) ? 1 : 0)
+          group.push(g)
+        })
+      }
+    })
+  }
+  const proteinCount = accession.length
   let proteinsSaved = proteinCount === 0
-  const description = new Array<string>(proteinCount).fill('')
+  const description = ownDescription.slice()
   const proteinSequence = new Array<string>(proteinCount).fill('')
   const proteinScore = new Float64Array(proteinCount).fill(NaN)
-  const proteinQ = new Float64Array(proteinCount).fill(NaN)
-  const proteinDecoy = new Uint8Array(proteinCount)
-  const group = new Int32Array(proteinCount).fill(-1)
-  if (proteins && proteinCount > 0) {
-    const qValues = yaml.protein_fdr_applied === true
+  if (proteinCount > 0) {
     // the sequences and descriptions: proteins.fasta (the identified proteins), else the database (the
     // folder's database.fasta with contaminants, else the user's FASTA), else none, with a warning
     let fasta = new Map<string, FastaEntry>()
@@ -420,7 +413,7 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
     const sources: [string, boolean][] = [
       ['proteins.fasta', true],
       ['database.fasta', false],
-      [String(yaml.shared?.database_file ?? ''), false],
+      [footer.get('prose_database_file') ?? '', false],
     ]
     let found = false
     for (const [name, own] of sources) {
@@ -440,19 +433,14 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
       warnings.push(`The protein sequences are not available, so there is no sequence coverage: none of ${tried.join(', ')} could be read.`)
     }
     const decoys: DecoyGeneration = {
-      enzyme: run?.enzyme ?? String(yaml.shared?.enzyme ?? ''),
-      keepInitialMet: run?.keepInitialMet ?? true,
-      unspecific: run?.unspecific ?? false,
+      enzyme: footer.get('prose_enzyme') ?? '',
+      keepInitialMet: footerFlag(footer, 'prose_clip_nterm_methionine'),
+      unspecific: footer.get('prose_enzyme_specificity') === 'none',
     }
-    const generated = yaml.shared?.decoy_mode === 'generated'
+    const generated = footer.get('prose_decoy_mode') === 'generated'
     for (let p = 0; p < proteinCount; p++) {
       const a = accession[p]
-      const isDecoy = proteins.isDecoy[p]
-      const decoy = isDecoy === true || (isDecoy == null && hasDecoyMarker(a))
-      proteinDecoy[p] = decoy ? 1 : 0
-      if (qValues) proteinQ[p] = proteins.score[p]
-      const own = proteins.description[p]
-      description[p] = typeof own === 'string' ? own : ''
+      const decoy = proteinDecoy[p] === 1
       // proteins.fasta has the proteins as searched, decoys included
       const listed = identified ? fasta.get(a) : undefined
       // a decoy ProSE generated is the decoy marker + the accession of its target (whose description it
@@ -465,34 +453,13 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
       }
     }
   }
-  // the groups of indistinguishable proteins; where the tool wrote none (one input without protein FDR:
-  // no inference), each protein is a group of its own, as in the web app
-  let groupCount = 0
-  if (groupBytes && proteinCount > 0) {
-    groupCount = await inFile(groupsName, () => {
-      const groups = openParquet(groupBytes)
-      const types = readLeaf(groups, ['group_type']).values as unknown[]
-      const members = readLeaf(groups, ['accessions', 'list', 'element'])
-      let g = 0
-      for (let r = 0; r < groups.rows; r++) {
-        if (types[r] !== 'indistinguishable') continue
-        for (let k = members.offsets![r]; k < members.offsets![r + 1]; k++) {
-          const p = proteinRow.get(String((members.values as unknown[])[k]))
-          if (p !== undefined && group[p] < 0) group[p] = g
-        }
-        g++
-      }
-      return g
-    })
-  }
-  if (groupCount === 0) for (let p = 0; p < proteinCount; p++) group[p] = p
 
   //------------------------------------------------------------------------------
   // PSMs and their peptides
 
   const count = perInput.reduce((n, f) => n + (f?.count ?? 0), 0)
-  let minCharge = Number(yaml.shared?.min_charge ?? Infinity)
-  let maxCharge = Number(yaml.shared?.max_charge ?? -Infinity)
+  let minCharge = footerNumber(footer, 'prose_min_charge', Infinity)
+  let maxCharge = footerNumber(footer, 'prose_max_charge', -Infinity)
   for (const f of perInput) {
     if (!f) continue
     for (const c of f.charge) {
@@ -502,54 +469,45 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   }
 
   // the features: ln(hyperscore), the standard .pin features (PercolatorInfile::getStandardFeatureSet
-  // without the bookkeeping columns), the runs' extra_features, PeptDeep's; those some PSM has
+  // without the bookkeeping columns), the run's extra_features, PeptDeep's; those some PSM has
   const featureNames: string[] = [HYPERSCORE]
   const pin = new Set<string>()
   const addFeature = (name: string, isPin = false) => {
-    if (name === '' || name === 'score' || name === HYPERSCORE || featureNames.includes(name)) return
+    if (name === '' || name === 'score' || name === HYPERSCORE || name === 'ln_hyperscore' || featureNames.includes(name)) return
     featureNames.push(name)
     if (isPin) pin.add(name)
   }
   const chargeFeatures: string[] = []
   for (let c = minCharge; Number.isFinite(c) && c <= maxCharge; c++) chargeFeatures.push(`charge${c}`)
   for (const name of ['CalcMass', 'mass', 'peplen', ...chargeFeatures, 'enzN', 'enzC', 'enzInt', 'dm', 'absdm']) addFeature(name, true)
-  for (const p of params) for (const name of p?.extraFeatures ?? []) addFeature(name)
+  for (const name of (footer.get('prose_extra_features') ?? '').split(',')) addFeature(name.trim())
   for (const name of PEPTDEEP_FEATURES) addFeature(name)
   const nFeatures = featureNames.length
   const featureIndex = new Map(featureNames.map((n, j) => [n, j]))
 
-  // the meta values the columns need, by name: a slot of `values` below
-  const META = [
+  // the scores the columns need, by their QPX names: a slot of `values` below
+  const SCORES = [
+    'ln_hyperscore',
+    'percolator_score',
+    'global_qvalue',
+    'percolator_qvalue',
+    'percolator_pep',
     'precursor_mz_error_ppm',
     'isotope_error',
-    'IsotopeError',
-    'DeltaMass',
-    'CalcMass',
-    'percolator_score',
-    'percolator_q_value',
-    'percolator_pep',
-    'MS:1001492',
-    'MS:1001491',
-    'MS:1001493',
-    'q-value',
-    'q-value_score',
-    'Posterior Error Probability_score',
-    HYPERSCORE,
-    `${HYPERSCORE}_score`,
+    'delta_mass',
   ] as const
-  type MetaName = (typeof META)[number]
-  const metaSlot = new Map<string, number>(META.map((n, k) => [n, k]))
-  const values = new Float64Array(META.length)
-  const scoreValues = new Float64Array(META.length)
-  const slot = (n: MetaName) => metaSlot.get(n)!
-  const featureOfMeta = new Map<string, number>()
-  for (const [n, j] of featureIndex) if (!pin.has(n) && j > 0) featureOfMeta.set(n, j)
-  /** what a meta value name is for: [its slot or −1, its feature column or −1]; null: nothing */
+  type ScoreName = (typeof SCORES)[number]
+  const scoreSlot = new Map<string, number>(SCORES.map((n, k) => [n, k]))
+  const values = new Float64Array(SCORES.length)
+  const slot = (n: ScoreName) => scoreSlot.get(n)!
+  const featureOfScore = new Map<string, number>()
+  for (const [n, j] of featureIndex) if (!pin.has(n) && j > 0) featureOfScore.set(n, j)
+  /** what a score name is for: [its slot or −1, its feature column or −1]; null: nothing */
   const uses = new Map<string, [number, number] | null>()
   const useOf = (name: string) => {
     let use = uses.get(name)
     if (use === undefined) {
-      const [s, j] = [metaSlot.get(name) ?? -1, featureOfMeta.get(name) ?? -1]
+      const [s, j] = [scoreSlot.get(name) ?? -1, featureOfScore.get(name) ?? -1]
       use = s < 0 && j < 0 ? null : [s, j]
       uses.set(name, use)
     }
@@ -559,12 +517,8 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   const pinColumn = (name: string) => featureIndex.get(name)!
   const [calcMassJ, massJ, peplenJ, enzNJ, enzCJ, enzIntJ, dmJ, absdmJ] = ['CalcMass', 'mass', 'peplen', 'enzN', 'enzC', 'enzInt', 'dm', 'absdm'].map(pinColumn)
   const chargeColumns = chargeFeatures.map(pinColumn)
-  const [hyperscoreS, hyperscoreScoreS, percolatorScoreS, percolatorScoreCvS, percolatorQS, qCvS, qS, qScoreS, percolatorPepS, pepCvS, pepScoreS] = (
-    [HYPERSCORE, `${HYPERSCORE}_score`, 'percolator_score', 'MS:1001492', 'percolator_q_value', 'MS:1001491', 'q-value', 'q-value_score', 'percolator_pep', 'MS:1001493', 'Posterior Error Probability_score'] as MetaName[]
-  ).map(slot)
-  const [precursorErrorS, isotopeErrorS, legacyIsotopeErrorS, deltaMassS, calcMassS] = (
-    ['precursor_mz_error_ppm', 'isotope_error', 'IsotopeError', 'DeltaMass', 'CalcMass'] as MetaName[]
-  ).map(slot)
+  const [hyperscoreS, percolatorScoreS, qS, percolatorQS, percolatorPepS, precursorErrorS, isotopeErrorS, deltaMassS] = SCORES.map(slot)
+  const enzyme = pinEnzymeName(footer.get('prose_enzyme') ?? '')
 
   const psmFile = new Uint16Array(count)
   const nativeId = new Array<string>(count)
@@ -606,52 +560,43 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   let i = 0
   perInput.forEach((f, fileIndex) => {
     if (!f) return
-    const p = params[fileIndex] ?? run
-    const enzyme = pinEnzymeName(p?.enzyme ?? String(yaml.shared?.enzyme ?? ''))
-    const sign = p?.observedMinusTheoretical === false ? -1 : 1
-    const metaUses = f.meta.names.map(useOf)
     const scoreUses = f.scores.names.map(useOf)
     for (let r = 0; r < f.count; r++, i++) {
       psmFile[i] = fileIndex
       nativeId[i] = String(f.nativeId[r] ?? '')
       rt[i] = f.rt[r]
-      mz[i] = f.observedMz[r]
+      const observed = f.observedMz[r]
+      const calc = f.calculatedMz[r]
+      mz[i] = observed
       const z = f.charge[r]
       charge[i] = clampInt8(z)
       decoy[i] = f.decoy[r] === true ? 1 : 0
 
-      // the meta values (strings) and the QPX scores (doubles, full precision)
+      // the scores and the features among them
       values.fill(NaN)
-      scoreValues.fill(NaN)
       const row = i * nFeatures
-      for (let k = f.meta.offsets[r]; k < f.meta.offsets[r + 1]; k++) {
-        const c = f.meta.name[k]
-        const use = c < 0 ? null : metaUses[c]
+      for (let k = f.scores.offsets[r]; k < f.scores.offsets[r + 1]; k++) {
+        const c = f.scores.name[k]
+        const use = c < 0 ? null : scoreUses[c]
         if (use === null) continue
-        const v = f.meta.value[k]
+        const v = f.scores.value[k]
         if (use[0] >= 0) values[use[0]] = v
         if (use[1] >= 0 && !Number.isNaN(v)) {
           features[row + use[1]] = v
           featurePresent[use[1]] = 1
         }
       }
-      for (let k = f.scores.offsets[r]; k < f.scores.offsets[r + 1]; k++) {
-        const c = f.scores.name[k]
-        const use = c < 0 ? null : scoreUses[c]
-        if (use !== null && use[0] >= 0) scoreValues[use[0]] = f.scores.value[k]
-      }
-      // a score of the QPX file (a double) before the same of the meta values (a string of it)
-      const both = (s: number) => (Number.isNaN(scoreValues[s]) ? values[s] : scoreValues[s])
-      const type = f.scoreType[r]
-      const omsScore = f.score[r]
-      const hyperscore = type === HYPERSCORE ? omsScore : first(both(hyperscoreS), both(hyperscoreScoreS))
-      const percolator = type === 'svm' ? omsScore : first(both(percolatorScoreCvS), both(percolatorScoreS))
+      const hyperscore = values[hyperscoreS]
+      const percolator = values[percolatorScoreS]
       const s = Number.isNaN(percolator) ? hyperscore : percolator
       score[i] = s
-      qValue[i] = type === 'q-value' ? omsScore : first(both(percolatorQS), both(qCvS), both(qS), both(qScoreS))
-      pep[i] = type === 'Posterior Error Probability' ? omsScore : first(f.pep[r], both(percolatorPepS), both(pepCvS), both(pepScoreS))
-      precursorErrorPpm[i] = values[precursorErrorS]
-      isotopeError[i] = clampInt8(sign * values[isotopeErrorS])
+      qValue[i] = first(values[qS], values[percolatorQS])
+      pep[i] = first(f.pep[r], values[percolatorPepS])
+      // the isotope error of QPX (observed minus theoretical); the one Percolator saw (ProSE's meta value) for dm
+      const isotope = f.isotope[r]
+      isotopeError[i] = clampInt8(isotope)
+      const corrected = observed - ((Number.isNaN(isotope) ? 0 : isotope) * C13C12_MASSDIFF_U) / z
+      precursorErrorPpm[i] = first(values[precursorErrorS], calc > 0 ? ((corrected - calc) / calc) * 1e6 : NaN)
       deltaMass[i] = values[deltaMassS]
       features[row] = hyperscore
 
@@ -659,12 +604,11 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
       const sequence = String(f.sequence[r] ?? '')
       const e0 = f.evidence.offsets[r]
       if (f.evidence.offsets[r + 1] > e0) {
-        const calc = first(values[calcMassS], f.calculatedMz[r])
-        const observed = f.observedMz[r]
-        const iso = Math.fround(first(values[legacyIsotopeErrorS], values[isotopeErrorS]))
+        const iso = Math.fround(first(values[isotopeErrorS], isotope))
         const dm = (Number.isNaN(iso) ? observed : observed - (iso * C13C12_MASSDIFF_U) / z) - calc
-        const before = String(f.evidence.aa_before[e0] ?? '')
-        const after = String(f.evidence.aa_after[e0] ?? '')
+        // a protein terminus ('-' in QPX) as OpenMS' '[' and ']', which Percolator's features were computed with
+        const before = f.evidence.aa_before[e0] === '-' ? '[' : String(f.evidence.aa_before[e0] ?? '')
+        const after = f.evidence.aa_after[e0] === '-' ? ']' : String(f.evidence.aa_after[e0] ?? '')
         const set = (j: number, v: number) => {
           features[row + j] = v
           if (!Number.isNaN(v)) featurePresent[j] = 1
@@ -704,13 +648,14 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
         pt.modMass.push(m.mass)
       }
       pt.modOffsets.push(pt.modPosition.length)
-      // its proteins: the evidences of its first PSM whose protein is a row of the proteins
+      // its proteins: the protein mappings of its first PSM whose protein is a row of the proteins
       for (let e = e0; e < f.evidence.offsets[r + 1]; e++) {
         const p = proteinRow.get(String(f.evidence.accession[e]))
         if (p === undefined) continue // a protein the protein FDR removed
         const protein = proteinSequence[p]
-        let from = f.evidence.start[e]
-        let to = f.evidence.end[e]
+        // 1-based first and last position -> 0-based
+        let from = f.evidence.start[e] - 1
+        let to = f.evidence.end[e] - 1
         let known = from >= 0 && to >= from
         const inSequence =
           known && to < protein.length && to - from + 1 === sequence.length && protein.startsWith(sequence, from)
@@ -788,34 +733,35 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
       description,
       sequence: proteinSequence,
       score: proteinScore,
-      qValue: proteinQ,
-      decoy: proteinDecoy,
-      group,
+      qValue: Float64Array.from(proteinQ),
+      decoy: Uint8Array.from(proteinDecoy),
+      group: Int32Array.from(group),
     },
   }
 
   //------------------------------------------------------------------------------
-  // Spectra and predictions: the sidecar rows of the PSMs
+  // Spectra and predictions: the columns of the PSM rows
 
   const { spectra, predicted } = spectraOf(perInput, count)
+  const top = footerNumber(footer, 'prose_peak_top', 0)
+  const peakFilter = top > 0 ? { top, window: footerNumber(footer, 'prose_peak_window', 0) } : null
 
   //------------------------------------------------------------------------------
   // Summary
 
   let modificationAnalysis: ProSESummary['modificationAnalysis'] = null
-  if (yaml.shared?.open_search === true && inputs.length > 0) {
-    const prefix = several ? '_aggregate_across_files' : inputs[0].stem
-    const [deltas, ptms] = await Promise.all([
-      optional(`mods/${prefix}_ModificationAnalysis_DeltaMassStats.tsv`),
-      optional(`mods/${prefix}_ModificationAnalysis_PTMStats.tsv`),
-    ])
+  const deltaName = footer.get('prose_mod_analysis_delta_masses')
+  const ptmName = footer.get('prose_mod_analysis_ptms')
+  if (footerFlag(footer, 'prose_open_search') && deltaName && ptmName) {
+    const [deltas, ptms] = await Promise.all([optional(`mods/${deltaName}`), optional(`mods/${ptmName}`)])
     if (deltas && ptms) {
-      const name = `mods/${prefix}_ModificationAnalysis_{DeltaMassStats,PTMStats}.tsv`
-      modificationAnalysis = await inFile(name, () => parseModificationAnalysis(utf8.decode(deltas), utf8.decode(ptms)))
+      modificationAnalysis = await inFile(`mods/{${deltaName},${ptmName}}`, () =>
+        parseModificationAnalysis(utf8.decode(deltas), utf8.decode(ptms)),
+      )
     }
   }
-  const summary = toSummary(yaml, paths, decoyString, modificationAnalysis)
-  return { summary, tables, spectra, predicted, warnings, proteinsSaved }
+  const summary = await inFile('the footer of the psm files', () => toSummary(footer, paths, modificationAnalysis))
+  return { summary, tables, spectra, predicted, warnings, proteinsSaved, peakFilter }
 }
 
 /** The modifications of a QPX row, by position (−1 N-terminal, the length C-terminal, else 0-based). */
@@ -837,22 +783,19 @@ function modificationsOf(mods: QpxModification[] | null, length: number): Modifi
   return out.sort((a, b) => a.position - b.position)
 }
 
-/** StoredSpectra (one spectrum per PSM row with peaks) and PredictedSpectra of the sidecars. */
+/** StoredSpectra (one spectrum per PSM row with peaks) and PredictedSpectra of the PSM rows. */
 function spectraOf(perInput: (InputRows | null)[], count: number): { spectra: StoredSpectra; predicted: PredictedSpectra } {
   let peakCount = 0
   let spectrumCount = 0
   let ionCount = 0
   for (const f of perInput) {
-    const sc = f?.sidecar
-    if (!sc) continue
+    if (!f) continue
     for (let r = 0; r < f.count; r++) {
-      const s = sc.rowOf[r]
-      if (s < 0) continue
-      if (!sc.peakMz.nullList[s]) {
+      if (!f.peakMz.nullList[r]) {
         spectrumCount++
-        peakCount += sc.peakMz.offsets[s + 1] - sc.peakMz.offsets[s]
+        peakCount += f.peakMz.offsets[r + 1] - f.peakMz.offsets[r]
       }
-      if (!sc.ion.nullList[s]) ionCount += sc.ion.offsets[s + 1] - sc.ion.offsets[s]
+      if (!f.ion.nullList[r]) ionCount += f.ion.offsets[r + 1] - f.ion.offsets[r]
     }
   }
   const psmSpectrum = new Int32Array(count).fill(-1)
@@ -871,35 +814,32 @@ function spectraOf(perInput: (InputRows | null)[], count: number): { spectra: St
   let ions = 0
   for (const f of perInput) {
     if (!f) continue
-    const sc = f.sidecar
     for (let r = 0; r < f.count; r++, i++) {
       psmOffsets[i] = ions
-      const s = sc ? sc.rowOf[r] : -1
-      if (!sc || s < 0) continue
       // (element by element: a PSM has tens of peaks, too few for subarray() and set())
-      if (!sc.peakMz.nullList[s]) {
-        const from = sc.peakMz.offsets[s]
-        const n = sc.peakMz.offsets[s + 1] - from
-        const intensityFrom = sc.peakIntensity.offsets[s]
+      if (!f.peakMz.nullList[r]) {
+        const from = f.peakMz.offsets[r]
+        const n = f.peakMz.offsets[r + 1] - from
+        const intensityFrom = f.peakIntensity.offsets[r]
         for (let k = 0; k < n; k++) {
-          mz[peak + k] = sc.peakMz.values[from + k]
-          intensity[peak + k] = sc.peakIntensity.values[intensityFrom + k]
+          mz[peak + k] = f.peakMz.values[from + k]
+          intensity[peak + k] = f.peakIntensity.values[intensityFrom + k]
         }
         peak += n
         precursorMz[spectrum] = f.observedMz[r]
         psmSpectrum[i] = spectrum++
         offsets[spectrum] = peak
       }
-      if (!sc.ion.nullList[s]) {
-        const from = sc.ion.offsets[s]
-        const n = sc.ion.offsets[s + 1] - from
-        const mzFrom = sc.predictedMz.offsets[s]
-        const intensityFrom = sc.predictedIntensity.offsets[s]
+      if (!f.ion.nullList[r]) {
+        const from = f.ion.offsets[r]
+        const n = f.ion.offsets[r + 1] - from
+        const mzFrom = f.predictedMz.offsets[r]
+        const intensityFrom = f.predictedIntensity.offsets[r]
         for (let k = 0; k < n; k++) {
-          const c = sc.ion.values[from + k]
-          ion[ions + k] = c < 0 ? '' : sc.ionNames[c]
-          predictedMz[ions + k] = sc.predictedMz.values[mzFrom + k]
-          predictedIntensity[ions + k] = sc.predictedIntensity.values[intensityFrom + k]
+          const c = f.ion.values[from + k]
+          ion[ions + k] = c < 0 ? '' : f.ionNames[c]
+          predictedMz[ions + k] = f.predictedMz.values[mzFrom + k]
+          predictedIntensity[ions + k] = f.predictedIntensity.values[intensityFrom + k]
         }
         ions += n
       }

@@ -5,7 +5,8 @@
 // The folder is the shim's (docs/parity.md for the tool's outputs); History adds
 //
 //   search.json     the record below, written as soon as ProSE has ended (before the results are read,
-//                   from the request and summary.yaml): a folder with it is a saved search
+//                   from the request and the footer of qpx/quantms.psm.parquet): a folder with it is a
+//                   saved search
 //   proteins.fasta  every protein of the result's protein table (accession, description, sequence;
 //                   generated decoys as searched), written once the results are read, so that the search
 //                   opens when the FASTA it was searched with has moved, or on another computer; the
@@ -23,7 +24,8 @@ import { readSearch, type SearchFiles } from '../results/read'
 import type { ResultTables } from '../results/types'
 import { formatBytes } from '../format/bytes'
 import { fileSafe, resultName } from '../results/display'
-import { parseSummaryYaml } from '../results/summary'
+import { footerOfTail } from '../results/parquet'
+import { targetPsmsOf } from '../results/summary'
 import type { EndedSearch, OpenResult } from '../search/session.svelte'
 // (only the version: a named import of a JSON module leaves the rest of package.json out of the bundle)
 import { version } from '../../../package.json'
@@ -115,6 +117,8 @@ export interface HistoryBackend {
   list(): Promise<HistoryEntry[]>
   /** A file of a search folder (rejects `{ notFound: true }` if it is not there). */
   read(id: string, name: string): Promise<Uint8Array>
+  /** The last `bytes` bytes of a file of a search folder (all of a smaller one); rejects as `read`. */
+  readTail(id: string, name: string, bytes: number): Promise<Uint8Array>
   /** Writes the record: the search is then in History (a search that has one keeps it). */
   saveRecord(id: string, record: string): Promise<void>
   /** Writes `proteins.fasta` of a saved search, and removes its `database.fasta`. */
@@ -156,7 +160,7 @@ export function recordOf(result: OpenResult, name: string, toolVersion: string):
 
 /**
  * The record of a search whose ProSE has ended, before its results are read: from the request (`search`)
- * and the target PSMs that its summary.yaml reports (`psms`, `psmsOfSummary`).
+ * and the target PSMs that ProSE reports (`psms`, `psmsOfSearch`).
  */
 export function endedRecordOf(search: EndedSearch, name: string, toolVersion: string, psms: number): SearchRecord {
   const s = search.settings
@@ -185,14 +189,18 @@ export function endedRecordOf(search: EndedSearch, name: string, toolVersion: st
   }
 }
 
-/** The target PSMs of a search by its summary.yaml (the sum of `per_file[].target_psms`); 0 if it says none. */
-export function psmsOfSummary(text: string): number {
-  const perFile: unknown = parseSummaryYaml(text).per_file
-  if (!Array.isArray(perFile)) return 0
-  return perFile.reduce((n: number, f) => {
-    const psms = (f as { target_psms?: unknown } | null)?.target_psms
-    return n + (typeof psms === 'number' && Number.isFinite(psms) ? psms : 0)
-  }, 0)
+/** The QPX psm file of all inputs, whose footer has the statistics of the search. */
+export const MERGED_PSMS = 'qpx/quantms.psm.parquet'
+
+/**
+ * The target PSMs of a search by the footer of its merged QPX psm file (the sum of `prose_files[].target_psms`;
+ * 0 if it says none). Reads the end of the file only. Rejects if the file is missing or has no such footer.
+ */
+export async function psmsOfSearch(backend: HistoryBackend, id: string): Promise<number> {
+  let footer = footerOfTail(await backend.readTail(id, MERGED_PSMS, 1 << 16))
+  if (typeof footer === 'number') footer = footerOfTail(await backend.readTail(id, MERGED_PSMS, footer))
+  if (typeof footer === 'number') throw new Error(`${MERGED_PSMS}: its footer cannot be read.`)
+  return targetPsmsOf(footer)
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -328,7 +336,7 @@ const LEVEL = 1
  * Files of the folder that a project leaves out: the database copy (`proteins.fasta` has the sequences)
  * and the tool's log (its first line is the full command line, with paths of this computer).
  */
-const LEFT_OUT = new Set(['database.fasta', 'prose.log'])
+const LEFT_OUT = new Set(['database.fasta', 'database.json', 'prose.log'])
 
 /**
  * `inputs.json` as a project holds it: the files by name only, not the paths of this computer.

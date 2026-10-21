@@ -32,7 +32,7 @@
 
 use crate::args::{
     build_args_with, humanize, input_placements, input_records_with, with_contaminants, InputLinks,
-    InputRecord, Placement, SearchRequest, DATABASE_FILE,
+    InputRecord, Placement, SearchRequest, DATABASE_FILE, DATABASE_RECORD,
 };
 use crate::history::{finish_partial, lock_partial, remove_partial, with_backoff};
 use crate::progress::{ProgressTracker, STARTING};
@@ -784,6 +784,11 @@ fn prepare_folder(
             crap.ok_or("The contaminant database (cRAP) is not available in this installation.")?;
         with_contaminants(Path::new(&request.database), crap, &dir.join(DATABASE_FILE))
             .map_err(|e| format!("The database with contaminants cannot be written ({e})."))?;
+    } else {
+        // the one file outside the folder that the results reader may read (files::resolve_search_file)
+        let record = serde_json::json!({ "path": request.database }).to_string();
+        fs::write(dir.join(DATABASE_RECORD), record)
+            .map_err(|e| format!("{DATABASE_RECORD} cannot be written ({e})."))?;
     }
     Ok(())
 }

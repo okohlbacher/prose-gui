@@ -12,9 +12,10 @@
 //!             status 0xC0000005 (Windows)
 //!   <other>   searches every input and exits 0
 //!
-//! Next to -summary_out it leaves argv.txt (one argument per line), inputs.txt (every -in path with the
-//! file it resolves to), prose.pid and, for hang and stubborn, children.pid. `--help` prints a version
-//! line; `--sleep` (the children) sleeps five minutes.
+//! Next to the -out_qpx folder it leaves argv.txt (one argument per line), inputs.txt (every -in path with
+//! the file it resolves to), prose.pid and, for hang and stubborn, children.pid; in it, a psm file per input
+//! and quantms.psm.parquet (stand-ins: not Parquet). `--help` prints a version line; `--sleep` (the children)
+//! sleeps five minutes.
 
 use std::fs;
 use std::io::Write;
@@ -74,7 +75,6 @@ fn main() {
     }
 
     let mut inputs: Vec<String> = Vec::new();
-    let mut summary: Option<PathBuf> = None;
     let mut qpx: Option<PathBuf> = None;
     let mut i = 0;
     while i < args.len() {
@@ -87,18 +87,17 @@ fn main() {
                 }
                 continue;
             }
-            "-summary_out" => summary = args.get(i + 1).map(PathBuf::from),
             "-out_qpx" => qpx = args.get(i + 1).map(PathBuf::from),
             _ => {}
         }
         i += 1;
     }
 
-    let Some(summary) = summary else {
-        eprintln!("fake-prose: no -summary_out");
+    let Some(qpx) = qpx else {
+        eprintln!("fake-prose: no -out_qpx");
         exit(2);
     };
-    let out = summary.parent().unwrap_or(Path::new(".")).to_path_buf();
+    let out = qpx.parent().unwrap_or(Path::new(".")).to_path_buf();
     fs::create_dir_all(&out).unwrap();
     fs::write(
         out.join("argv.txt"),
@@ -169,7 +168,6 @@ fn main() {
         _ => {}
     }
 
-    let qpx = qpx.unwrap_or_else(|| out.join("qpx"));
     fs::create_dir_all(&qpx).unwrap();
     for (k, f) in inputs.iter().enumerate() {
         say(format!("[ProSE] [{}/{count}] Searching {f}", k + 1));
@@ -181,10 +179,5 @@ fn main() {
     }
     fs::write(qpx.join("quantms.psm.parquet"), "psm\n").unwrap();
     say("[ProSE] ===================== Search Report =====================".to_string());
-    say(format!(
-        "[ProSE] Wrote summary YAML -> {}",
-        summary.display()
-    ));
-    fs::write(&summary, "shared: {}\n").unwrap();
     exit(0);
 }

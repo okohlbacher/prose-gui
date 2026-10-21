@@ -145,30 +145,30 @@ fn the_example_is_searched_through_start_search() {
     // the outputs the app reads (docs/parity.md), for both inputs although they have one name
     for file in [
         "qpx/quantms.psm.parquet",
+        "qpx/quantms.pg.parquet",
         "qpx/1__DatabaseSuitability_in_spec.psm.parquet",
         "qpx/2__DatabaseSuitability_in_spec.psm.parquet",
-        "spectra/1__DatabaseSuitability_in_spec.psm_spectra.parquet",
-        "spectra/2__DatabaseSuitability_in_spec.psm_spectra.parquet",
-        "oms/openms.psm.parquet",
-        "oms/merged.proteins.parquet",
-        "oms/merged.pg.parquet",
     ] {
         assert!(parquet(&folder.join(file)), "{file} is a Parquet file");
     }
-    for file in [
-        "summary.yaml",
-        "merged.idXML",
-        "inputs.json",
-        "prose.log",
-        "database.fasta",
-    ] {
+    // only QPX: no OpenMS Parquet, no sidecar, no summary
+    for gone in ["oms", "spectra", "summary.yaml"] {
+        assert!(!folder.join(gone).exists(), "{gone}");
+    }
+    for file in ["merged.idXML", "inputs.json", "prose.log", "database.fasta"] {
         assert!(folder.join(file).is_file(), "{file}");
     }
     assert!(fs::read_to_string(folder.join("database.fasta"))
         .unwrap()
         .contains(">CON__sp|ALBU_BOVIN|"));
-    let summary = fs::read_to_string(folder.join("summary.yaml")).unwrap();
-    assert!(summary.contains("per_file"), "{summary}");
+    // the footer of the QPX psm files has the statistics of the search (the Parquet footer is not compressed)
+    let psm = fs::read(folder.join("qpx/quantms.psm.parquet")).unwrap();
+    for key in ["prose_files", "prose_protein_fdr_applied", "prose_peak_top"] {
+        assert!(
+            psm.windows(key.len()).any(|w| w == key.as_bytes()),
+            "{key} in the footer"
+        );
+    }
 
     // progress: both files, the PeptDeep and Percolator steps, a fraction that only grows
     let progress: Vec<_> = events

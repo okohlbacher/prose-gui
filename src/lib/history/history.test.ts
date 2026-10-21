@@ -4,6 +4,7 @@
 
 import { strToU8, zipSync } from 'fflate'
 import { beforeAll, describe, expect, test, vi } from 'vitest'
+import { OldLayoutError } from '../results/read'
 import type { OpenResult } from '../search/session.svelte'
 import {
   countPsms,
@@ -14,12 +15,14 @@ import {
   isPlainName,
   MAX_UNPACKED,
   MAX_ZIP_ENTRIES,
+  MERGED_PSMS,
   openSearch,
   parseRecord,
   ProjectError,
   ProjectVersionError,
   proteinsFasta,
   projectFileName,
+  psmsOfSearch,
   recordOf,
   saveSearch,
   unpackProject,
@@ -143,10 +146,43 @@ describe('a saved search', () => {
     expect([opened.result.psmFdr, opened.result.proteinFdr]).toEqual([0.01, 0.05])
   })
 
+  test('a search of the earlier layout (summary.yaml, no QPX columns) does not open, with a message that says why', async () => {
+    const backend = await savedBackend()
+    const folder = backend.folders.get('100-0')!
+    for (const name of [...folder.keys()]) if (name.startsWith('qpx/')) folder.delete(name)
+    folder.set('summary.yaml', strToU8('shared:\n  enzyme: "Trypsin"\nper_file: []\n'))
+    await expect(openSearch(backend, '100-0')).rejects.toBeInstanceOf(OldLayoutError)
+    await expect(openSearch(backend, '100-0')).rejects.toThrow(/saved by an earlier version of ProSE Desktop/)
+  })
+
+  test('the PSMs of a search come from the footer of its merged psm file, read from its end only', async () => {
+    const backend = new MemoryBackend()
+    backend.addFolder('7-0', fixture)
+    const tails: number[] = []
+    const readTail = backend.readTail.bind(backend)
+    backend.readTail = async (id, name, bytes) => {
+      tails.push(bytes)
+      expect(name).toBe(MERGED_PSMS)
+      return readTail(id, name, bytes)
+    }
+    // 895 target PSMs in each of the example's two files
+    expect(await psmsOfSearch(backend, '7-0')).toBe(1790)
+    expect(tails[0]).toBe(1 << 16)
+    // a footer larger than the first read: read again with its size
+    tails.length = 0
+    backend.readTail = async (id, name, bytes) => {
+      tails.push(bytes)
+      return readTail(id, name, Math.min(bytes, tails.length === 1 ? 100 : bytes))
+    }
+    expect(await psmsOfSearch(backend, '7-0')).toBe(1790)
+    expect(tails.length).toBe(2)
+    await expect(psmsOfSearch(backend, 'missing')).rejects.toThrow()
+  })
+
   test('opens when the FASTA it was searched with is gone: proteins.fasta has the sequences', async () => {
     const backend = await savedBackend()
     const folder = backend.folders.get('100-0')!
-    // the folder's own database copy is gone too (and summary.yaml's path was never served)
+    // the folder's own database copy is gone too (and the path of the footer was never served)
     folder.delete('database.fasta')
     const opened = await openSearch(backend, '100-0')
     expect(opened.result.outcome.warnings).toEqual(result.outcome.warnings)
@@ -206,7 +242,7 @@ describe('project files', () => {
     expect({ ...opened.result.outcome.summary, files: [] }).toEqual({ ...result.outcome.summary, files: [] })
     expect(opened.origin.id).toBe(id)
     expect(opened.result.stored?.name).toBe('My search')
-    // the imported search is marked, and the database path of its summary is refused (not "not found"):
+    // the imported search is marked, and the database path of its footer is refused (not "not found"):
     // the reader goes on with proteins.fasta and has no warning
     expect(JSON.parse(new TextDecoder().decode(other.folders.get(id!)!.get('search.json')!)).imported).toBe(true)
     await expect(other.read(id!, '/tmp/prose-fixture-rouhIU/search/database.fasta')).rejects.toThrow(/imported search reads only its own folder/)
@@ -288,7 +324,7 @@ describe('project files', () => {
       at += 30 + nameLength + extra + compressed
     }
     expect(methods.get('qpx/1__DatabaseSuitability_1.psm.parquet')).toBe(0)
-    expect(methods.get('summary.yaml')).toBe(8)
+    expect(methods.get('inputs.json')).toBe(8)
   })
 
   test('a newer schema is refused with a message, and nothing is written', async () => {

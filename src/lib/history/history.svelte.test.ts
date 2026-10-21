@@ -81,7 +81,7 @@ describe('History', () => {
     disk.addFolder('2-0', { 'search.json': '{ broken' })
     disk.addFolder('3-0', { 'search.json': JSON.stringify({ schema: 2, id: '3-0', name: 'future' }) })
     // a finished search that was not saved (no record): listed as such, so that it can be deleted
-    disk.addFolder('4-0', { 'summary.yaml': 'x' })
+    disk.addFolder('4-0', { 'qpx/quantms.psm.parquet': 'x' })
     await refreshHistory()
     expect(history.entries.map((e) => e.id).sort()).toEqual(['1-0', '2-0', '3-0', '4-0'])
     expect(history.entries.find((e) => e.id === '2-0')?.error).toMatch(/search\.json/)

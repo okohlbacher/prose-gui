@@ -197,7 +197,7 @@ const fontList = fonts()
 for (const name of ['tauri', 'tauri-plugin-dialog', 'serde', 'serde_json']) {
   if (!rust.some((c) => c.name === name)) throw new Error(`the crate ${name} is not among the app's dependencies`)
 }
-for (const name of ['svelte', 'bits-ui', '@tauri-apps/api', 'hyparquet', 'fflate', 'js-yaml', 'zstddec', 'fzstd', 'tailwindcss', '@fontsource-variable/inter']) {
+for (const name of ['svelte', 'bits-ui', '@tauri-apps/api', 'hyparquet', 'fflate', 'zstddec', 'fzstd', 'tailwindcss', '@fontsource-variable/inter']) {
   if (!js.some((p) => p.name === name)) throw new Error(`the package ${name} is not among the front end's`)
 }
 if (rust.length < 100) throw new Error(`only ${rust.length} crates: cargo metadata gave too little`)

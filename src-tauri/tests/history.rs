@@ -214,7 +214,7 @@ fn the_record_comes_first_then_proteins_fasta_replaces_the_database_copy() {
     // a finished search as the shim leaves it: its outputs and database.fasta (the FASTA with cRAP)
     let folder = dir.join("1-0");
     fs::create_dir_all(folder.join("qpx")).unwrap();
-    fs::write(folder.join("summary.yaml"), "per_file: []").unwrap();
+    fs::write(folder.join("qpx/quantms.psm.parquet"), "psm").unwrap();
     fs::write(
         folder.join("database.fasta"),
         ">P1\nPEPTIDE\n>CON__P2\nKR\n",
@@ -444,7 +444,7 @@ fn the_sweep_removes_what_an_interrupted_search_left_and_no_finished_search() {
     fs::write(dir.join("2-0.partial/prose.log"), "x").unwrap();
     // a finished folder that never got its record (the app ended as the search finished): the user's
     fs::create_dir_all(dir.join("3-0")).unwrap();
-    fs::write(dir.join("3-0/summary.yaml"), "x").unwrap();
+    fs::write(dir.join("3-0/inputs.json"), "x").unwrap();
     // things that are not searches stay
     fs::write(dir.join("loose.txt"), "x").unwrap();
     fs::create_dir_all(dir.join("not an id")).unwrap();
@@ -458,7 +458,7 @@ fn the_sweep_removes_what_an_interrupted_search_left_and_no_finished_search() {
     assert_eq!(sweep(&dir, later, SWEEP_GRACE), ["2-0.partial"]);
     // however much later: a finished search, with or without record, is never swept
     assert!(sweep(&dir, later + SWEEP_GRACE * 1000, SWEEP_GRACE).is_empty());
-    assert!(dir.join("3-0/summary.yaml").exists());
+    assert!(dir.join("3-0/inputs.json").exists());
     assert!(dir.join("1-0/search.json").exists());
     // a loose file and odd names are never touched
     assert!(dir.join("loose.txt").exists());
@@ -675,7 +675,7 @@ fn finish_partial_waits_for_a_lock_file_that_another_sweep_holds_open() {
     let partial = dir.join("9-0.partial");
     fs::create_dir_all(&partial).unwrap();
     let lock = lock_partial(&partial).unwrap();
-    fs::write(partial.join("summary.yaml"), "x").unwrap();
+    fs::write(partial.join("inputs.json"), "x").unwrap();
     // the sweep's handle (it opens the file, fails to take the lock, and closes it again)
     let sweeper = fs::File::options()
         .read(true)
@@ -690,7 +690,7 @@ fn finish_partial_waits_for_a_lock_file_that_another_sweep_holds_open() {
     finish_partial(Some(lock), &partial, &dir.join("9-0")).unwrap();
     closer.join().unwrap();
     assert!(!partial.exists());
-    assert!(dir.join("9-0/summary.yaml").is_file());
+    assert!(dir.join("9-0/inputs.json").is_file());
     assert!(!dir.join("9-0").join(LOCK_FILE).exists());
 }
 

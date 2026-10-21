@@ -46,7 +46,7 @@ describe('a search that finishes while it is cancelled', () => {
   it('has its folder deleted right away, and is not in History', async () => {
     initHistory()
     await refreshHistory()
-    disk.addFolder('19-0', { 'summary.yaml': 'x' })
+    disk.addFolder('19-0', { 'qpx/quantms.psm.parquet': 'x' })
     let finish!: (d: { folder: string }) => void
     const done = new Promise<{ folder: string }>((r) => (finish = r))
     fake.start.mockImplementationOnce(async () => ({ searchId: '19-0', done, stop: () => {} }))
@@ -65,7 +65,7 @@ describe('a search that finishes while it is cancelled', () => {
   })
 
   it('stays in the list when the folder cannot be deleted yet; the next attempt removes it', async () => {
-    disk.addFolder('20-0', { 'summary.yaml': 'x' })
+    disk.addFolder('20-0', { 'qpx/quantms.psm.parquet': 'x' })
     disk.failures.delete = 'busy'
     let finish!: (d: { folder: string }) => void
     const done = new Promise<{ folder: string }>((r) => (finish = r))

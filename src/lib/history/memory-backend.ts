@@ -99,6 +99,11 @@ export class MemoryBackend implements HistoryBackend {
     return data
   }
 
+  async readTail(id: string, name: string, bytes: number): Promise<Uint8Array> {
+    const data = await this.read(id, name)
+    return data.subarray(Math.max(0, data.length - bytes))
+  }
+
   async saveRecord(id: string, record: string): Promise<void> {
     if (this.failures.save) throw new Error(this.failures.save)
     const folder = this.folder(id)

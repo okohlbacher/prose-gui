@@ -148,6 +148,21 @@ pub const PARAMETERS: &[(&str, Kind)] = &[
 /// The name of the database in the search folder when contaminants are appended.
 pub const DATABASE_FILE: &str = "database.fasta";
 
+/// The record of the user's database in the search folder when ProSE searches it as it is (no contaminants):
+/// `{"path": "<absolute path>"}`, the one absolute path the reader may read (`files::resolve_search_file`).
+pub const DATABASE_RECORD: &str = "database.json";
+
+/// The QPX output of ProSE in the search folder: `-out_qpx`, with `-qpx_extended` (the columns and the footer
+/// the results reader needs, docs/parity.md).
+pub const QPX_DIR: &str = "qpx";
+
+/// The peak filter of the stored spectra (`-qpx_peak_window`, `-qpx_peak_top`): the 300 most intense peaks
+/// per 100 m/z (and every annotated peak). Measured (task 11 report): on an Orbitrap HCD run (~1,100 peaks
+/// per MS2 spectrum) it keeps ~89 % of the peaks and loses 1.5 % of the peaks the PSM view's annotation
+/// matches (b/y/a/c/x/z, charge 1-2); 10 per 100 m/z lost 26 %.
+pub const PEAK_WINDOW: f64 = 100.0;
+pub const PEAK_TOP: u32 = 300;
+
 /// The idXML of a search of several inputs (`-out_merged`), and of one input (`-out_idxml`), in the search
 /// folder (the Export menu's idXML: `src/lib/results/exports.ts`).
 pub const MERGED_IDXML: &str = "merged.idXML";
@@ -508,15 +523,13 @@ pub fn build_args_with(
     } else {
         OsString::from(&req.database)
     });
-    for (flag, name) in [
-        ("-out_qpx", "qpx"),
-        ("-out_psm_spectra", "spectra"),
-        ("-out_parquet", "oms"),
-        ("-summary_out", "summary.yaml"),
-    ] {
-        args.push(flag.into());
-        args.push(out_dir.join(name).into_os_string());
-    }
+    args.push("-out_qpx".into());
+    args.push(out_dir.join(QPX_DIR).into_os_string());
+    args.push("-qpx_extended".into());
+    args.push("-qpx_peak_window".into());
+    args.push(PEAK_WINDOW.to_string().into());
+    args.push("-qpx_peak_top".into());
+    args.push(PEAK_TOP.to_string().into());
     args.push("-keep_decoys".into());
     // the idXML of the Export menu: the merged one of several inputs, the one input's own
     if req.files.len() > 1 {

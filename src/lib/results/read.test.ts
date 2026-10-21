@@ -13,7 +13,7 @@ import { parquetMetadata, parquetReadObjects } from 'hyparquet'
 import { parquetWriteBuffer } from 'hyparquet-writer'
 import { describe, expect, test } from 'vitest'
 import { resolveDesign } from '../design/model'
-import { FileNotFound, readSearch, ZSTD } from './read'
+import { FileNotFound, OldLayoutError, readSearch, ZSTD } from './read'
 import type { ProSEMultiSummary, ResultTables, StoredSpectra } from './types'
 
 const fixtures = new URL('./fixtures/', import.meta.url).pathname
@@ -69,6 +69,26 @@ function expectClose(label: string, actual: ArrayLike<number>, expected: ArrayLi
   }
 }
 
+/**
+ * QPX has m/z and RT as float32 (the web app: doubles): equal within float32's precision, a relative 1e-7
+ * (docs/parity.md).
+ */
+const FLOAT32 = 1e-7
+
+/** Every value of `actual` equals `expected` within `relative` of the expected value (NaN only where NaN). */
+function expectCloseRelative(label: string, actual: ArrayLike<number>, expected: ArrayLike<number | null>, relative: number) {
+  expect(actual.length, `${label}: length`).toBe(expected.length)
+  for (let i = 0; i < actual.length; i++) {
+    const a = actual[i]
+    const e = num(expected[i])
+    if (Number.isNaN(e) || Number.isNaN(a)) {
+      if (!(Number.isNaN(e) && Number.isNaN(a))) expect.fail(`${label}[${i}]: ${a}, expected ${e}`)
+      continue
+    }
+    if (!(Math.abs(a - e) <= relative * Math.abs(e))) expect.fail(`${label}[${i}]: ${a}, expected ${e} (±${relative} relative)`)
+  }
+}
+
 /** As expectClose, relative to the expected value. */
 function expectRelative(label: string, actual: number, expected: number, tolerance: number) {
   if (!(Math.abs(actual - expected) <= tolerance * Math.max(1e-300, Math.abs(expected)))) {
@@ -77,6 +97,8 @@ function expectRelative(label: string, actual: number, expected: number, toleran
 }
 
 const PEPTDEEP_FEATURES = ['ms2_cosine', 'ms2_spectral_angle', 'ms2_pearson', 'ms2_frac_pred_found', 'rt_abs_error']
+/** The .pin features of the precursor's m/z: QPX calculated_mz and observed_mz (float32) */
+const MASS_FEATURES = ['CalcMass', 'mass']
 
 /**
  * Percolator's scores of the example with PeptDeep differ from the web app's by up to 1.4e-4: PeptDeep's
@@ -103,8 +125,8 @@ function expectTables(t: ResultTables, w: Json, names: string[], tol: Tolerances
   expect(Array.from(p.peptide)).toEqual(wp.peptide)
   expect(Array.from(p.decoy)).toEqual(wp.decoy)
   expect(Array.from(p.isotopeError)).toEqual(wp.isotopeError)
-  expectClose('psms.rt', p.rt, wp.rt, 1e-9)
-  expectClose('psms.mz', p.mz, wp.mz, 1e-9)
+  expectCloseRelative('psms.rt', p.rt, wp.rt, FLOAT32)
+  expectCloseRelative('psms.mz', p.mz, wp.mz, FLOAT32)
   expectClose('psms.score', p.score, wp.score, tol.score)
   expectClose('psms.qValue', p.qValue, wp.qValue, 1e-6)
   if (tol.pep !== 'differs') expectClose('psms.pep', p.pep, wp.pep, 1e-6)
@@ -116,7 +138,10 @@ function expectTables(t: ResultTables, w: Json, names: string[], tol: Tolerances
   expect(p.features.length).toBe(p.count * n)
   p.featureNames.forEach((name, j) => {
     const column = (f: ArrayLike<number | null>) => Array.from({ length: p.count }, (_, i) => num(f[i * n + j]))
-    expectClose(`feature ${name}`, column(p.features), column(wp.features), PEPTDEEP_FEATURES.includes(name) ? 1e-5 : 1e-6)
+    if (MASS_FEATURES.includes(name)) expectCloseRelative(`feature ${name}`, column(p.features), column(wp.features), FLOAT32)
+    // the difference of two float32 m/z: within their precision, a relative 1e-7 of the m/z (2e-4 at m/z 2000)
+    else if (name === 'dm' || name === 'absdm') expectClose(`feature ${name}`, column(p.features), column(wp.features), 2e-4)
+    else expectClose(`feature ${name}`, column(p.features), column(wp.features), PEPTDEEP_FEATURES.includes(name) ? 1e-5 : 1e-6)
   })
 
   const pt = t.peptides
@@ -230,7 +255,7 @@ describe('readSearch', () => {
     expect(tables.peptides.openms).toContain('IALSRPNVEVVALNDPFITNDYAAYM(Oxidation)FK')
     expectTables(tables, w.tables, w.names, { score: 1e-6 })
     expectSummary(summary, w.summary)
-    // without contaminants the search read the user's FASTA, named in summary.yaml
+    // without contaminants the search read the user's FASTA, named in the footer (prose_database_file)
     expect(asked.filter((n) => n.startsWith('/')).map((n) => basename(n))).toEqual(['SimpleSearchEngine_1.fasta'])
   })
 
@@ -284,6 +309,7 @@ const peaks = (sp: StoredSpectra | Json, s: number) => {
 }
 
 describe('peaks and predictions belong to their PSM', () => {
+  // (the example's spectra have at most 77 peaks: the peak filter, 300 per 100 m/z and the annotated ones, keeps them all)
   test('the peaks and the precursor of each PSM are the web app\'s', async () => {
     const w = web('example')
     const { spectra, tables } = await readSearch(folder(join(fixtures, 'example')).files)
@@ -293,7 +319,7 @@ describe('peaks and predictions belong to their PSM', () => {
       const ws = w.spectra.psmSpectrum[i]
       expect(s >= 0, `row ${i} has peaks`).toBe(ws >= 0)
       expect(peaks(spectra, s), `peaks of row ${i}`).toEqual(peaks(w.spectra, ws))
-      expectClose(`precursorMz of row ${i}`, [spectra.precursorMz[s]], [w.spectra.precursorMz[ws]], 1e-9)
+      expectCloseRelative(`precursorMz of row ${i}`, [spectra.precursorMz[s]], [w.spectra.precursorMz[ws]], FLOAT32)
     }
     // the collision energy is not read (docs/parity.md: the predictions are ProSE's)
     expect(Array.from(spectra.collisionEnergy).every(Number.isNaN)).toBe(true)
@@ -314,25 +340,13 @@ describe('peaks and predictions belong to their PSM', () => {
     }
   })
 
-  test('rows are joined by psm_id, not by position', async () => {
-    // the sidecar written in reverse order: every PSM keeps its own peaks and prediction
-    const dir = mkdtempSync(join(tmpdir(), 'prose-reader-'))
-    try {
-      cpSync(join(fixtures, 'example'), dir, { recursive: true })
-      for (const stem of ['1__DatabaseSuitability_1', '2__DatabaseSuitability_2']) {
-        const path = join(dir, 'spectra', `${stem}.psm_spectra.parquet`)
-        writeFileSync(path, await reversed(new Uint8Array(readFileSync(path))))
-      }
-      const original = await readSearch(folder(join(fixtures, 'example')).files)
-      const shuffled = await readSearch(folder(dir).files)
-      for (let i = 0; i < original.tables.psms.count; i++) {
-        expect(peaks(shuffled.spectra, shuffled.spectra.psmSpectrum[i])).toEqual(peaks(original.spectra, original.spectra.psmSpectrum[i]))
-        const ions = (p: typeof original.predicted) => p.ion.slice(p.psmOffsets[i], p.psmOffsets[i + 1])
-        expect(ions(shuffled.predicted)).toEqual(ions(original.predicted))
-      }
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
+  test('the peak filter of the footer is passed on, for the PSM view\'s note', async () => {
+    expect((await readSearch(folder(join(fixtures, 'example')).files)).peakFilter).toEqual({ top: 300, window: 100 })
+    await withCopy('mods', async (dir) => {
+      const path = join(dir, 'qpx', '1__SimpleSearchEngine_1.psm.parquet')
+      writeFileSync(path, await withFooter(new Uint8Array(readFileSync(path)), (f) => f.set('prose_peak_top', '0')))
+      expect((await readSearch(folder(dir).files)).peakFilter).toBeNull()
+    })
   })
 })
 
@@ -351,9 +365,14 @@ function topColumns(metadata: ReturnType<typeof parquetMetadata>): string[] {
   return names
 }
 
-/** A Parquet file with `rows` in the schema of `bytes` (hyparquet-writer, Zstandard as ProSE's: Node's zlib). */
-function rewrite(bytes: Uint8Array, rows: Record<string, unknown>[], extraMetadata = true): Uint8Array {
+/**
+ * A Parquet file with `rows` in the schema of `bytes` (hyparquet-writer, Zstandard as ProSE's: Node's zlib), with
+ * the footer key-value metadata of `bytes` changed by `footer`.
+ */
+function rewrite(bytes: Uint8Array, rows: Record<string, unknown>[], footer: (kv: Map<string, string>) => void = () => {}): Uint8Array {
   const metadata = parquetMetadata(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer)
+  const kv = new Map((metadata.key_value_metadata ?? []).map((e) => [e.key, e.value ?? '']))
+  footer(kv)
   const columnData = topColumns(metadata).map((name) => ({ name, data: rows.map((r) => r[name]) as never[] }))
   return new Uint8Array(
     parquetWriteBuffer({
@@ -362,7 +381,7 @@ function rewrite(bytes: Uint8Array, rows: Record<string, unknown>[], extraMetada
       rowGroupSize: 100_000,
       codec: 'ZSTD',
       compressors: { ZSTD: (input: Uint8Array) => new Uint8Array(zstdCompressSync(input)) },
-      kvMetadata: extraMetadata ? metadata.key_value_metadata : undefined,
+      kvMetadata: [...kv].map(([key, value]) => ({ key, value })),
     }),
   )
 }
@@ -372,8 +391,16 @@ async function rowsOf(bytes: Uint8Array): Promise<Record<string, unknown>[]> {
   return parquetReadObjects({ file, compressors: { ZSTD } })
 }
 
-async function reversed(bytes: Uint8Array): Promise<Uint8Array> {
-  return rewrite(bytes, (await rowsOf(bytes)).reverse())
+/** `bytes` with its own rows and its footer changed by `change`. */
+async function withFooter(bytes: Uint8Array, change: (kv: Map<string, string>) => void): Promise<Uint8Array> {
+  return rewrite(bytes, await rowsOf(bytes), change)
+}
+
+/** Changes the entry `index` of the footer's prose_files. */
+const fileEntry = (index: number, change: (entry: Record<string, unknown>) => void) => (kv: Map<string, string>) => {
+  const files = JSON.parse(kv.get('prose_files')!)
+  change(files[index])
+  kv.set('prose_files', JSON.stringify(files))
 }
 
 describe('missing and broken files', () => {
@@ -381,36 +408,45 @@ describe('missing and broken files', () => {
 
   test('a corrupt Parquet file fails the read, naming the file', async () => {
     await withCopy('example', async (dir) => {
-      const path = join(dir, 'oms', `${example[0]}.psm.parquet`)
+      const path = join(dir, 'qpx', `${example[0]}.psm.parquet`)
       const bytes = readFileSync(path)
       writeFileSync(path, bytes.subarray(0, bytes.length >> 1))
-      await expect(readSearch(folder(dir).files)).rejects.toThrow(`oms/${example[0]}.psm.parquet:`)
+      await expect(readSearch(folder(dir).files)).rejects.toThrow(`qpx/${example[0]}.psm.parquet:`)
     })
   })
 
   test('an error of the files callback other than not found fails the read, naming the file', async () => {
     const { files } = folder(join(fixtures, 'example'))
-    const failing = (name: string) => (name.startsWith('spectra/') ? Promise.reject(new Error('permission denied')) : files(name))
-    await expect(readSearch(failing)).rejects.toThrow(`spectra/${example[0]}.psm_spectra.parquet: permission denied`)
+    const failing = (name: string) => (name.endsWith('.pg.parquet') ? Promise.reject(new Error('permission denied')) : files(name))
+    await expect(readSearch(failing)).rejects.toThrow('qpx/quantms.pg.parquet: permission denied')
   })
 
-  test('one of the two PSM files of an input alone fails the read', async () => {
-    await withCopy('example', async (dir) => {
-      rmSync(join(dir, 'qpx', `${example[1]}.psm.parquet`))
-      await expect(readSearch(folder(dir).files)).rejects.toThrow(
-        `qpx/${example[1]}.psm.parquet does not exist, but oms/${example[1]}.psm.parquet does.`,
-      )
+  test('a QPX psm file without the columns and the footer of -qpx_extended fails the read, naming the file', async () => {
+    await withCopy('mods', async (dir) => {
+      const path = join(dir, 'qpx', '1__SimpleSearchEngine_1.psm.parquet')
+      writeFileSync(path, await withFooter(new Uint8Array(readFileSync(path)), (f) => f.delete('prose_files')))
+      await expect(readSearch(folder(dir).files)).rejects.toThrow("qpx/1__SimpleSearchEngine_1.psm.parquet: the QPX psm view has not the columns and the footer of ProSE's -qpx_extended")
     })
   })
 
-  test('an input without PSM files (a failed search) has no PSMs', async () => {
+  test('a search folder of the earlier layout (summary.yaml) fails the read with a clear message', async () => {
+    await withCopy('mods', async (dir) => {
+      const path = join(dir, 'qpx', '1__SimpleSearchEngine_1.psm.parquet')
+      writeFileSync(path, await withFooter(new Uint8Array(readFileSync(path)), (f) => f.delete('prose_files')))
+      writeFileSync(join(dir, 'summary.yaml'), 'shared:\n  enzyme: "Trypsin"\nper_file: []\n')
+      await expect(readSearch(folder(dir).files)).rejects.toThrow(OldLayoutError)
+      // without any QPX psm file too
+      rmSync(path)
+      await expect(readSearch(folder(dir).files)).rejects.toThrow('saved by an earlier version of ProSE Desktop')
+    })
+  })
+
+  test('an input without its psm file (a failed search) has no PSMs', async () => {
     await withCopy('example', async (dir) => {
-      for (const f of [`qpx/${example[1]}.psm.parquet`, `oms/${example[1]}.psm.parquet`, `spectra/${example[1]}.psm_spectra.parquet`]) rmSync(join(dir, f))
-      // the summary of a failed input reports no PSMs for it
-      const summary = join(dir, 'summary.yaml')
-      const yaml = readFileSync(summary, 'utf8')
-      const second = yaml.indexOf('input_file: "2__DatabaseSuitability_2.mzML"')
-      writeFileSync(summary, yaml.slice(0, second) + yaml.slice(second).replace('target_psms: 895', 'target_psms: 0'))
+      rmSync(join(dir, 'qpx', `${example[1]}.psm.parquet`))
+      // the footer of a failed input reports no PSMs for it
+      const path = join(dir, 'qpx', `${example[0]}.psm.parquet`)
+      writeFileSync(path, await withFooter(new Uint8Array(readFileSync(path)), fileEntry(1, (e) => (e.target_psms = 0))))
       const { tables, warnings } = await readSearch(folder(dir).files)
       expect(tables.psms.count).toBe(896)
       expect(Array.from(tables.psms.file).every((f) => f === 0)).toBe(true)
@@ -418,10 +454,10 @@ describe('missing and broken files', () => {
     })
   })
 
-  test('an input whose summary reports PSMs but whose PSM files are missing is named in a warning', async () => {
+  test('an input whose footer reports PSMs but whose psm file is missing is named in a warning', async () => {
     // (e.g. a stem the shim got wrong: the reader looks for <stem>.psm.parquet and finds nothing)
     await withCopy('example', async (dir) => {
-      for (const f of [`qpx/${example[1]}.psm.parquet`, `oms/${example[1]}.psm.parquet`, `spectra/${example[1]}.psm_spectra.parquet`]) rmSync(join(dir, f))
+      rmSync(join(dir, 'qpx', `${example[1]}.psm.parquet`))
       const { tables, warnings } = await readSearch(folder(dir).files)
       expect(tables.psms.count).toBe(896)
       expect(warnings).toEqual([
@@ -432,8 +468,7 @@ describe('missing and broken files', () => {
 
   test('an empty result (no PSMs, no proteins) reads', async () => {
     await withCopy('mods', async (dir) => {
-      const stem = '1__SimpleSearchEngine_1'
-      for (const f of [`qpx/${stem}.psm.parquet`, `oms/${stem}.psm.parquet`, `spectra/${stem}.psm_spectra.parquet`, `oms/${stem}.proteins.parquet`, `oms/${stem}.pg.parquet`]) {
+      for (const f of ['qpx/1__SimpleSearchEngine_1.psm.parquet', 'qpx/quantms.pg.parquet']) {
         const path = join(dir, f)
         writeFileSync(path, rewrite(new Uint8Array(readFileSync(path)), []))
       }
@@ -481,26 +516,15 @@ describe('missing and broken files', () => {
     })
   })
 
-  test('one input reads its own proteins and groups, without merged files', async () => {
-    await withCopy('example', async (dir) => {
-      // the example as a search of its first replicate only
-      const inputs = JSON.parse(readFileSync(join(dir, 'inputs.json'), 'utf8')).slice(0, 1)
-      writeFileSync(join(dir, 'inputs.json'), JSON.stringify(inputs))
-      const yaml = readFileSync(join(dir, 'summary.yaml'), 'utf8')
-      const [head, rest] = yaml.split('per_file:\n')
-      const second = rest.indexOf('  - input_file: "2__')
-      writeFileSync(join(dir, 'summary.yaml'), `${head}per_file:\n${rest.slice(0, second)}${rest.slice(rest.indexOf('outputs:'))}`)
-      for (const f of ['oms/merged.proteins.parquet', 'oms/merged.pg.parquet']) rmSync(join(dir, f))
-      const { files, asked } = folder(dir)
-      const { tables, summary } = await readSearch(files)
-      expect(tables.psms.count).toBe(896)
-      expect(summary.files.length).toBe(1)
-      expect(asked.some((n) => n.includes('merged'))).toBe(false)
-      expect(asked).toContain(`oms/${example[0]}.proteins.parquet`)
-      expect(tables.proteins.count).toBe(50)
-      // the file's run has no protein groups: each protein is its own
-      expect(Array.from(tables.proteins.group)).toEqual(Array.from({ length: 50 }, (_, p) => p))
-    })
+  test('one input without protein inference: a group per protein, as the tool writes them', async () => {
+    // mods: one input, no protein FDR, so no inference; -qpx_extended writes a group of its own for each protein
+    const { files, asked } = folder(join(fixtures, 'mods'))
+    const { tables, summary } = await readSearch(files)
+    expect(summary.proteinFdrApplied).toBe(false)
+    expect(asked).toContain('qpx/quantms.pg.parquet')
+    expect(tables.proteins.count).toBe(3)
+    expect(Array.from(tables.proteins.group)).toEqual([0, 1, 2])
+    expect(Array.from(tables.proteins.qValue).every(Number.isNaN)).toBe(true)
   })
 })
 
@@ -538,7 +562,7 @@ describe('protein sequences', () => {
       const { tables, warnings } = await readSearch(folder(dir).files)
       expect(tables.proteins.count).toBe(3)
       expect(tables.proteins.sequence).toEqual(['', '', ''])
-      // the OMS descriptions (none in this search)
+      // the descriptions of the pg view (none in this search)
       expect(tables.proteins.description).toEqual(['', '', ''])
       // the peptides keep the positions the search recorded
       expect(Array.from(tables.peptides.end)).toEqual(web('mods').tables.peptides.end)
@@ -550,48 +574,38 @@ describe('protein sequences', () => {
 
 /**
  * A search folder of one input with `n` PSMs: the rows of the example's first file, repeated, each with its
- * own psm_id, in the schemas of the tool's files (QPX psm, OMS psm, PSM spectra sidecar).
+ * own psm_id and scores, in the schema of the tool's QPX psm file, with its footer for one input.
  */
 async function writeLargeFolder(dir: string, n: number): Promise<void> {
   const source = join(fixtures, 'example')
   const stem = '1__DatabaseSuitability_1'
   const read = (p: string) => new Uint8Array(readFileSync(join(source, p)))
   const qpx = await rowsOf(read(`qpx/${stem}.psm.parquet`))
-  const oms = await rowsOf(read(`oms/${stem}.psm.parquet`))
-  const sidecar = await rowsOf(read(`spectra/${stem}.psm_spectra.parquet`))
   const id = (i: number) => BigInt(i + 1) * 7919n
-  const many = <T extends Record<string, unknown>>(rows: T[], each: (row: T, i: number) => T) =>
-    Array.from({ length: n }, (_, i) => each(rows[i % rows.length], i))
-  for (const sub of ['qpx', 'oms', 'spectra']) mkdirSync(join(dir, sub), { recursive: true })
-  writeFileSync(join(dir, `qpx/${stem}.psm.parquet`), rewrite(read(`qpx/${stem}.psm.parquet`), many(qpx, (r, i) => ({ ...r, psm_id: id(i) }))))
-  // the meta values of every row its own (as in a real search, where they are hardly ever repeated:
-  // Arrow writes them without a dictionary)
-  type Meta = { name: string; value: string; value_type: string }
-  const distinct = (r: Record<string, unknown>, i: number) => ({
-    ...r,
-    psm_metavalues: (r.psm_metavalues as Meta[]).map((m) =>
-      m.value_type === 'double' ? { ...m, value: String(Number(m.value) + i * 1e-9) } : m,
-    ),
+  // the scores of every row its own (as in a real search, where they are hardly ever repeated: Arrow writes
+  // them without a dictionary)
+  type Score = { score_name: string; score_value: number; higher_better: boolean | null }
+  const rows = Array.from({ length: n }, (_, i) => {
+    const r = qpx[i % qpx.length]
+    return {
+      ...r,
+      psm_id: id(i),
+      additional_scores: (r.additional_scores as Score[]).map((sc) => ({ ...sc, score_value: sc.score_value + i * 1e-9 })),
+    }
   })
-  writeFileSync(join(dir, `oms/${stem}.psm.parquet`), rewrite(read(`oms/${stem}.psm.parquet`), many(oms, distinct)))
+  mkdirSync(join(dir, 'qpx'), { recursive: true })
   writeFileSync(
-    join(dir, `spectra/${stem}.psm_spectra.parquet`),
-    rewrite(read(`spectra/${stem}.psm_spectra.parquet`), many(sidecar, (r, i) => ({ ...r, psm_id: id(i) }))),
+    join(dir, `qpx/${stem}.psm.parquet`),
+    rewrite(read(`qpx/${stem}.psm.parquet`), rows, (kv) => {
+      const files = JSON.parse(kv.get('prose_files')!).slice(0, 1)
+      files[0].target_psms = n
+      kv.set('prose_files', JSON.stringify(files))
+      kv.set('prose_protein_fdr_applied', 'false')
+    }),
   )
-  for (const f of [`oms/${stem}.search_params.parquet`, `oms/${stem}.proteins.parquet`, `oms/${stem}.pg.parquet`, 'database.fasta']) {
-    cpSync(join(source, f), join(dir, f))
-  }
+  for (const f of ['qpx/quantms.pg.parquet', 'database.fasta']) cpSync(join(source, f), join(dir, f))
   const inputs = JSON.parse(readFileSync(join(source, 'inputs.json'), 'utf8')).slice(0, 1)
   writeFileSync(join(dir, 'inputs.json'), JSON.stringify(inputs))
-  // the summary of one file
-  const yaml = readFileSync(join(source, 'summary.yaml'), 'utf8')
-  const [head, rest] = yaml.split('per_file:\n')
-  const second = rest.indexOf('  - input_file: "2__')
-  const tail = rest.slice(rest.indexOf('outputs:'))
-  writeFileSync(
-    join(dir, 'summary.yaml'),
-    `${head}per_file:\n${rest.slice(0, second)}${tail}`.replace('protein_fdr_applied: true', 'protein_fdr_applied: false').replace(/target_psms: \d+/, `target_psms: ${n}`),
-  )
 }
 
 describe('performance', () => {

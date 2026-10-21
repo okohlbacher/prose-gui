@@ -101,10 +101,7 @@ fn arguments_keep_paths_with_spaces_and_umlauts_intact() {
         values_of(&args, "-out_qpx"),
         vec![out.join("qpx").into_os_string()]
     );
-    assert_eq!(
-        values_of(&args, "-summary_out"),
-        vec![out.join("summary.yaml").into_os_string()]
-    );
+    assert!(!has(&args, "-summary_out"));
 }
 
 #[test]
@@ -112,17 +109,22 @@ fn the_app_outputs_are_always_requested() {
     let i = inputs();
     let out = i.dir.path().join("o");
     let args = args_of(&request(&[&i.mzml], &i.fasta, false, json!({})), &out);
-    for (flag, path) in [
-        ("-out_qpx", "qpx"),
-        ("-out_psm_spectra", "spectra"),
-        ("-out_parquet", "oms"),
-        ("-summary_out", "summary.yaml"),
-    ] {
-        assert_eq!(
-            values_of(&args, flag),
-            vec![out.join(path).into_os_string()],
-            "{flag}"
-        );
+    // the QPX files with the columns and the footer of -qpx_extended are all the app reads
+    assert_eq!(
+        values_of(&args, "-out_qpx"),
+        vec![out.join("qpx").into_os_string()]
+    );
+    assert!(has(&args, "-qpx_extended"));
+    assert_eq!(
+        values_of(&args, "-qpx_peak_window"),
+        vec![OsString::from("100")]
+    );
+    assert_eq!(
+        values_of(&args, "-qpx_peak_top"),
+        vec![OsString::from("300")]
+    );
+    for flag in ["-out_parquet", "-out_psm_spectra", "-summary_out"] {
+        assert!(!has(&args, flag), "{flag}");
     }
     assert!(has(&args, "-keep_decoys"));
     assert_eq!(values_of(&args, "-threads"), vec![OsString::from("2")]);
@@ -1234,6 +1236,24 @@ fn done_folder(events: &[SearchEvent]) -> PathBuf {
 }
 
 #[test]
+fn a_search_of_the_users_database_records_its_path_for_the_reader() {
+    let run = Run::new();
+    let i = inputs();
+    let (id, rx) = run.start(request(&[&i.mzml], &i.fasta, false, json!({})), None);
+    let id = id.unwrap();
+    let folder = done_folder(&until_terminal(&rx, WAIT));
+    assert_eq!(folder, run.dir().join(&id));
+    assert!(!folder.join("database.fasta").exists());
+    let record: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(folder.join("database.json")).unwrap()).unwrap();
+    assert_eq!(record["path"].as_str(), i.fasta.to_str());
+    assert_eq!(
+        prose_desktop_lib::files::recorded_database(&folder).as_deref(),
+        i.fasta.to_str()
+    );
+}
+
+#[test]
 fn a_search_ends_with_done_and_the_partial_folder_becomes_the_search_folder() {
     let run = Run::new();
     let i = inputs();
@@ -1250,7 +1270,6 @@ fn a_search_ends_with_done_and_the_partial_folder_becomes_the_search_folder() {
         "no .partial folder is left"
     );
     assert!(folder.join("qpx/quantms.psm.parquet").is_file());
-    assert!(folder.join("summary.yaml").is_file());
     assert!(
         !folder.join(".lock").exists(),
         "the lock file does not belong to the search"
@@ -1258,6 +1277,8 @@ fn a_search_ends_with_done_and_the_partial_folder_becomes_the_search_folder() {
     assert!(fs::read_to_string(folder.join("database.fasta"))
         .unwrap()
         .contains(">CON__ALBU"));
+    // ProSE searched the folder's own database: no path outside the folder is recorded
+    assert!(!folder.join("database.json").exists());
     // every event carries the search id; progress stays below 1 (the search is not done before `done`)
     for event in &events {
         match event {

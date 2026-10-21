@@ -4,17 +4,17 @@
 //
 //   node scripts/results-fixture-native.mjs <case> <ProSE>        (case: example, mods, open, empty)
 //
-// The fixture keeps what the reader reads: summary.yaml, inputs.json (with the paths of the inputs
-// replaced by /data/<name>), database.fasta (with the contaminants, as the shim writes it; without, the
-// search reads the user's FASTA, kept as user/<name>), qpx/, spectra/, oms/, mods/. Not
-// kept: the links to the inputs, prose.log, merged.idXML and, of several inputs, the concatenated
-// quantms/openms files. OUT=<dir> writes it elsewhere, KEEP=1 keeps the search folder.
+// The fixture keeps what the app reads: inputs.json (with the paths of the inputs replaced by
+// /data/<name>), database.fasta (with the contaminants, as the shim writes it; without, the search reads
+// the user's FASTA, kept as user/<name>), qpx/ and mods/. Not kept: the links to the inputs, prose.log,
+// database.json and the idXML.
+// OUT=<dir> writes it elsewhere, KEEP=1 keeps the search folder.
 
 import { spawnSync } from 'node:child_process'
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { CRAP, getCase } from './results-example.mjs'
+import { CRAP, getCase, PEAK_TOP, PEAK_WINDOW } from './results-example.mjs'
 
 const [caseName, prose] = process.argv.slice(2)
 if (!caseName || !prose) {
@@ -64,11 +64,10 @@ try {
 
   // args.rs build_args
   const args = ['-in', ...records.map((r) => join(dir, r.link)), '-database', database]
-  for (const [flag, name] of [['-out_qpx', 'qpx'], ['-out_psm_spectra', 'spectra'], ['-out_parquet', 'oms'], ['-summary_out', 'summary.yaml']]) {
-    args.push(flag, join(dir, name))
-  }
+  args.push('-out_qpx', join(dir, 'qpx'), '-qpx_extended', '-qpx_peak_window', String(PEAK_WINDOW), '-qpx_peak_top', String(PEAK_TOP))
   args.push('-keep_decoys')
   if (records.length > 1) args.push('-out_merged', join(dir, 'merged.idXML'))
+  else args.push('-out_idxml', join(dir, 'search.idXML'))
   if (openSearch) args.push('-out_mod_analysis_dir', join(dir, 'mods'))
   args.push('-threads', '4', '-Search:rescore', String(search.rescore))
   if (search.peptdeep && process.env.PEPTDEEP !== '0') args.push('-Search:peptdeep:enable')
@@ -89,8 +88,7 @@ try {
   writeFileSync(join(fixture, 'inputs.json'), JSON.stringify(kept, null, 2) + '\n')
   if (search.contaminants) cpSync(database, join(fixture, 'database.fasta'))
   else cpSync(database, join(fixture, 'user', basename(database)), { recursive: true })
-  cpSync(join(dir, 'summary.yaml'), join(fixture, 'summary.yaml'))
-  for (const sub of ['qpx', 'spectra', 'oms', 'mods']) {
+  for (const sub of ['qpx', 'mods']) {
     let files
     try {
       files = readdirSync(join(dir, sub))
@@ -99,7 +97,6 @@ try {
     }
     mkdirSync(join(fixture, sub))
     for (const file of files) {
-      if (/^(quantms|openms)\./.test(file)) continue
       cpSync(join(dir, sub, file), join(fixture, sub, file))
     }
   }

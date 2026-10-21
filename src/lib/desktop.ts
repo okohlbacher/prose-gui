@@ -149,7 +149,7 @@ export function cancelSearch(searchId: string): Promise<void> {
 
 /**
  * The files of a search for the results reader (`readSearch`): its folder's files by relative name,
- * and the database its summary records by absolute path. A missing file rejects with
+ * and the database it was searched with (its database.json) by absolute path. A missing file rejects with
  * `{ notFound: true, message }`.
  */
 export function searchFiles(searchId: string): SearchFiles {
@@ -214,6 +214,7 @@ export function saveSearchFile(searchId: string, name: string, suggested: string
 export const desktopBackend: HistoryBackend = {
   list: () => invoke<HistoryEntry[]>('history_list'),
   read: async (searchId, name) => new Uint8Array(await invoke<ArrayBuffer>('read_search_file', { searchId, name })),
+  readTail: async (searchId, name, bytes) => new Uint8Array(await invoke<ArrayBuffer>('read_search_file', { searchId, name, tail: bytes })),
   saveRecord: (searchId, record) => invoke('history_save_record', { searchId, record }),
   saveProteins: (searchId, proteins) => invoke('history_save_proteins', { searchId, proteins }),
   rename: (searchId, name) => invoke('history_rename', { searchId, name }),

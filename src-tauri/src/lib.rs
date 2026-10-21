@@ -7,8 +7,8 @@
 //! - `start_search(request)` -> `{ searchId }`; `cancel_search(searchId)`
 //! - events `search://progress` `{ searchId, label, file, fraction }`, `search://done`
 //!   `{ searchId, folder }` and `search://failed` `{ searchId, message, stage, file?, ended?, detail?, log? }`
-//! - `read_search_file(searchId, name)` -> the bytes of a file of the search's folder, or of the
-//!   database its summary records (`files`; rejects `{ notFound, message }`)
+//! - `read_search_file(searchId, name, tail?)` -> the bytes of a file of the search's folder (with `tail`: its
+//!   last `tail` bytes), or of the database its database.json records (`files`; rejects `{ notFound, message }`)
 //! - `inspect_files(paths)` -> `[{ path, name, size, spectra?, proteins?, residues?, error? }]`
 //! - `example_files()` -> `{ spectra: [path, path], database }`
 //! - `save_text(name, contents)` and `save_search_file(searchId, name, suggested)`: a save dialog of
@@ -173,13 +173,14 @@ async fn read_search_file(
     app: AppHandle,
     search_id: String,
     name: String,
+    tail: Option<u64>,
 ) -> Result<Response, files::ReadError> {
     let dir = searches_dir(&app).map_err(|message| files::ReadError {
         not_found: false,
         message,
     })?;
     let bytes = tauri::async_runtime::spawn_blocking(move || {
-        files::read_search_file(&dir, &search_id, &name)
+        files::read_search_file(&dir, &search_id, &name, tail)
     })
     .await
     .map_err(|e| files::ReadError {

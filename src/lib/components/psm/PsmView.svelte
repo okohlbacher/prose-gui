@@ -95,6 +95,8 @@
   const onnx = $derived(predicted.ion.length > 0)
 
   const peaks = $derived(spectrumPeaks(view.result.outcome.spectra, row))
+  // ProSE stored the spectra filtered (its -qpx_peak_top and -qpx_peak_window, in the footer of its QPX files)
+  const peakFilter = $derived(view.result.outcome.peakFilter ?? null)
   const mods = $derived.by(() => {
     const out: { name: string; residue: string }[] = []
     for (let i = pt.modOffsets[k]; i < pt.modOffsets[k + 1]; i++) out.push({ name: pt.modName[i], residue: sequence[pt.modPosition[i]] ?? '' })
@@ -510,6 +512,11 @@
         title={spectrumTitle}
         description={spectrumDescription}
         onTheoretical={() => (view.psmOptions.bottom = 'theoretical')} />
+      {#if peakFilter}
+        <p class="pb-1 text-xs text-muted-foreground" data-testid="peak-filter-note">
+          Top {peakFilter.top} peaks per {peakFilter.window} m/z shown, and every peak ProSE annotated.
+        </p>
+      {/if}
       {#if annotationError}
         <p class="pb-1 text-xs text-destructive" role="alert">The spectrum could not be annotated: {annotationError}</p>
       {:else if precursorError}
