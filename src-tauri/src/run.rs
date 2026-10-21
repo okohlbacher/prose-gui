@@ -18,10 +18,14 @@
 //!
 //! The tool runs in a process group of its own, started from a thread of its own that waits for it.
 //! Cancel signals the group (SIGTERM, then SIGKILL after a grace period), and the group is swept with
-//! SIGKILL after the tool has ended, so nothing it started outlives it. On Linux the tool also gets
-//! SIGKILL if the app dies (`PR_SET_PDEATHSIG`; the thread that starts it lives as long as it runs).
-//! On Windows the group is a job object: cancel terminates the job (Windows has no SIGTERM for a
-//! console tool), and the job is closed with the app, which ends whatever is still in it.
+//! SIGKILL after the tool has ended, so nothing it started outlives it. If the app dies:
+//! - Linux: the tool gets SIGKILL (`PR_SET_PDEATHSIG`; the thread that starts it lives as long as it runs);
+//! - Windows: the group is a job object, closed with the app, which ends whatever is still in it (cancel
+//!   terminates the job: Windows has no SIGTERM for a console tool);
+//! - macOS has no death signal: the tool ends at its next write to stdout or stderr, whose reading ends
+//!   died with the app (SIGPIPE: the app ignores it, as every Rust program, but `Command` resets it to
+//!   the default in the child, and OpenMS sets no handler). ProSE writes a line per step, so it runs on
+//!   until its current step ends, at most that step's time; a later start of the app sweeps the folder.
 
 use crate::args::{
     build_args_with, humanize, input_placements, input_records_with, with_contaminants, InputLinks,

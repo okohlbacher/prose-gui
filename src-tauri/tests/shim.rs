@@ -961,6 +961,46 @@ fn the_tool_is_found_through_prose_bin_then_the_bundle_then_path() {
     );
 }
 
+/// macOS: Tauri names no resource folder when the app's path goes through a symbolic link; the app then
+/// takes the Resources folder of the bundle its executable really is in.
+#[cfg(unix)]
+#[test]
+fn the_resources_of_an_app_bundle_are_found_through_a_link() {
+    let dir = TempDir::new("bundle");
+    let exe = executable(&dir, "real/ProSE.app/Contents/MacOS/prose-desktop");
+    dir.write(
+        "real/ProSE.app/Contents/Resources/resources/prose/build.json",
+        "{}",
+    );
+    let resources = dir
+        .path()
+        .join("real/ProSE.app/Contents/Resources")
+        .canonicalize()
+        .unwrap();
+    assert_eq!(tool::bundle_resources(&exe), Some(resources.clone()));
+    // the app through a linked folder, and as a linked bundle
+    std::os::unix::fs::symlink(dir.path().join("real"), dir.path().join("linked")).unwrap();
+    std::os::unix::fs::symlink(
+        dir.path().join("real/ProSE.app"),
+        dir.path().join("Linked.app"),
+    )
+    .unwrap();
+    for through in [
+        "linked/ProSE.app/Contents/MacOS/prose-desktop",
+        "Linked.app/Contents/MacOS/prose-desktop",
+    ] {
+        assert_eq!(
+            tool::bundle_resources(&dir.path().join(through)),
+            Some(resources.clone()),
+            "{through}"
+        );
+    }
+    // not in a bundle: no Resources folder, none
+    let loose = executable(&dir, "bin/prose-desktop");
+    assert_eq!(tool::bundle_resources(&loose), None);
+    assert_eq!(tool::bundle_resources(&dir.path().join("nothing")), None);
+}
+
 #[test]
 fn the_tools_version_is_read_from_its_help() {
     let help = "ProSE -- Annotates bottom-up MS/MS spectra using ProSE.\nFull documentation: http://x\nVersion: 3.7.0-pre-exported-20261020 Oct 20 2026, 22:16:02\nTo cite OpenMS:\n";

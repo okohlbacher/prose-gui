@@ -289,6 +289,11 @@ macOS, and on Windows it needs msedgedriver of the runner's WebView2 version.
 - **Cancel** ends a job object the tool runs in (`run.rs`): Windows has no SIGTERM for a console tool; the job
   takes every process the tool starts, and it is closed with the app (`KILL_ON_JOB_CLOSE`), so ProSE ends with
   the app however the app ends. The tool runs without a console window.
+- **If the app dies** while ProSE runs: on Linux ProSE gets SIGKILL (`PR_SET_PDEATHSIG`), on Windows the job
+  ends it. macOS has no death signal: ProSE ends at its next write to stdout or stderr, whose reading ends died
+  with the app. SIGPIPE is at its default in ProSE: Rust's `Command` resets the app's ignored SIGPIPE in the
+  child (checked: `SigIgn` 0x1000 in the app, 0 in the child), and OpenMS sets no handler. ProSE prints a line
+  per step, so an orphan runs at most until its current step ends; the next start of the app sweeps its folder.
 - **Folders**: `finish_partial` retries the rename with back-off (another instance's sweep may hold the
   deleted `.lock` open), and partial folders are removed lock file first, also with back-off (`history.rs`).
 - **File names** the app suggests never are device names (`CON`, `NUL.txt`, ...: a `_` in front) and have at
@@ -343,7 +348,11 @@ Jobs: `linux` (below), `macos` and `windows` (see "macOS and Windows": each buil
 cached, with vcpkg's binary cache and ccache; the vcpkg dependencies are built by a configure step of their own
 and saved before OpenMS is built, so a first run that runs out of time keeps them), `shim` (`cargo test` on
 macOS and Windows, minutes after a push) and `release`. Concurrency is per job and platform: a push waits for
-the running build of its platform instead of cancelling it.
+the running build of its platform instead of cancelling it. GitHub keeps at most 10 GB of Actions caches per
+repository and evicts the least recently used beyond that; ccache's objects are saved under a key per run
+(`…-<run id>-<attempt>`) and vcpkg's binary cache under the hash of its content, so each failed or changed build
+adds an entry (Windows' vcpkg cache alone is about 2.6 GB): delete the superseded ones (`gh cache list`,
+`gh cache delete`) when the total nears the limit.
 
 The `linux` job of `.github/workflows/desktop.yml` (branch `prose-desktop` of timosachsenberg/prose-web) runs on
 `ubuntu-22.04`:

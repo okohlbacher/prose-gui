@@ -22,6 +22,16 @@ pub fn bundled_tool(resource_dir: &Path) -> PathBuf {
     resource_dir.join("resources/prose/bin").join(EXE)
 }
 
+/// The Resources folder of the macOS app bundle that `exe` (`<App>.app/Contents/MacOS/<exe>`) really is
+/// in: the executable's path with every symbolic link resolved, then `../Resources`, which has to be a
+/// folder. (The app's fallback where Tauri names none: `lib.rs`, `resource_dir`.)
+pub fn bundle_resources(exe: &Path) -> Option<PathBuf> {
+    let real = exe.canonicalize().ok()?;
+    let contents = real.parent()?.parent()?;
+    let resources = contents.join("Resources").canonicalize().ok()?;
+    resources.is_dir().then_some(resources)
+}
+
 /// Where the bundled cRAP FASTA is. In development (no bundle yet) the file in the source tree.
 pub fn bundled_crap(resource_dir: Option<&Path>) -> Option<PathBuf> {
     let in_bundle = resource_dir.map(|d| d.join("resources/fasta/crap.fasta"));

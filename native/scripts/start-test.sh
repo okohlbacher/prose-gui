@@ -4,18 +4,20 @@
 #   start-test.sh <ProSE_*.dmg | ProSE_*-setup.exe> <example-dir>
 #
 # 1. The package is opened: the .dmg is mounted and ProSE.app copied out of it; the installer is run
-#    silently (/S) into a folder of its own. The bundled ProSE inside is checked (bundle_closure.py
-#    macho-verify / pe-verify).
+#    silently (/S). Either goes into a folder named 'Größe ü/install', as under a user profile of a
+#    non-ASCII name. The bundled ProSE inside is checked (bundle_closure.py macho-verify / pe-verify).
 # 2. The bundled ProSE prints its version, from an empty environment (Windows: only Windows' folders on
 #    PATH).
 # 3. It searches the example (<example-dir>: DatabaseSuitability_in_spec.mzML and
 #    DatabaseSuitability_database.fasta, copied into a folder with a space in its name) from the command
 #    line, with Percolator and PeptDeep: it has to end with 0, write the outputs the app reads, rescore
 #    with PeptDeep, and find more than 500 target PSMs (895 with these settings).
-#    The same in a folder named 'Größe ü', which has to give the same number of PSMs.
+#    The same in a folder named 'Größe ü', with the temporary folder there too, has to give the same number
+#    of PSMs.
 # 4. The app starts with --smoke-test (src-tauri/src/lib.rs): once its page has loaded it reports the page
 #    and tool_info, and exits. tool_info has to be the bundled ProSE inside the package, with ONNX, and the
-#    version of step 2.
+#    version of step 2. On macOS the app is started a second time through a symbolic link to it, where
+#    Tauri names no resource folder and the app finds its bundle by the executable's real path.
 # The build machine's OpenMS must be gone (CI removes it after bundling), so that ProSE can only use the
 # package's share/OpenMS. Writes a summary to $GITHUB_STEP_SUMMARY when it is set.
 set -euo pipefail
@@ -35,6 +37,8 @@ summary() { if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then printf '%s\n' "$*" >> "$G
 # path with a link in it, StartingBinary, so its resource folder would not be found)
 work=$(cd "$(mktemp -d)" && pwd -P)
 trap 'rm -rf "$work"' EXIT
+wide_root="$work/Größe ü"
+mkdir -p "$wide_root/install" "$wide_root/temp"
 
 case "$(uname -s)" in
   Darwin)
@@ -43,20 +47,20 @@ case "$(uname -s)" in
     hdiutil attach -nobrowse -readonly -mountpoint "$work/mnt" "$PACKAGE" >/dev/null
     source_app=$(find "$work/mnt" -maxdepth 1 -name '*.app' | head -n 1)
     [ -n "$source_app" ] || die "no .app in $PACKAGE"
-    ditto "$source_app" "$work/$(basename "$source_app")"
+    app=$wide_root/install/$(basename "$source_app")
+    ditto "$source_app" "$app"
     hdiutil detach "$work/mnt" >/dev/null
-    app=$work/$(basename "$source_app")
     executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
     APP_BIN=$app/Contents/MacOS/$executable
     BUNDLE=$app/Contents/Resources/resources/prose
     TOOL=$BUNDLE/bin/ProSE
     "$PY" -I "$HERE/bundle_closure.py" macho-verify "$BUNDLE"
     native() { printf '%s\n' "$1"; }
-    clean() { env -i HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" PATH=/usr/bin:/bin "$@"; }
+    clean() { env -i HOME="$HOME" TMPDIR="${SEARCH_TEMP:-${TMPDIR:-/tmp}}" PATH=/usr/bin:/bin "$@"; }
     ;;
   MINGW* | MSYS* | CYGWIN*)
     platform=windows
-    install=$work/install
+    install=$wide_root/install
     # (no MSYS path conversion: /S and /D= are the installer's switches; /D= comes last, unquoted)
     MSYS_NO_PATHCONV=1 "$PACKAGE" /S "/D=$(cygpath -w "$install")"
     for _ in $(seq 60); do [ -d "$install/resources/prose/bin" ] && break; sleep 1; done
@@ -68,7 +72,8 @@ case "$(uname -s)" in
     native() { cygpath -w "$1"; }
     clean() {
       env -i SYSTEMROOT="$SYSTEMROOT" WINDIR="$WINDIR" PATH="/c/Windows/System32:/c/Windows" \
-        TEMP="$TEMP" TMP="$TMP" USERPROFILE="$USERPROFILE" LOCALAPPDATA="$LOCALAPPDATA" APPDATA="$APPDATA" \
+        TEMP="${SEARCH_TEMP:-$TEMP}" TMP="${SEARCH_TEMP:-$TMP}" USERPROFILE="$USERPROFILE" \
+        LOCALAPPDATA="$LOCALAPPDATA" APPDATA="$APPDATA" \
         "$@"
     }
     ;;
@@ -115,37 +120,40 @@ psms=$(sed -n 's/^ *target_psms: *\([0-9]*\).*/\1/p' "$data/summary.yaml" | head
 [ -n "$psms" ] && [ "$psms" -gt 500 ] || die "the search found ${psms:-no} target PSMs, expected more than 500"
 echo "command-line search: $psms target PSMs at 1 % FDR, with PeptDeep, in ${seconds} s"
 
-# a folder name outside ASCII (Windows: ProSE.exe runs with the UTF-8 code page, bundle_closure.py; without
-# it the search read its inputs wrongly and failed in Percolator)
-wide="$work/Größe ü"
+# a folder name outside ASCII, the temporary folder too (Windows: ProSE.exe runs with the UTF-8 code page,
+# bundle_closure.py; without it the search read its inputs wrongly and failed in Percolator)
+wide="$wide_root/data"
+SEARCH_TEMP=$(native "$wide_root/temp")
 if ! search "$wide"; then
   grep -vE '^(Warning: |Schema error)' "$wide/out.txt" | grep -v '^\s*$' | tail -n 30
   die "the command-line search in a folder named 'Größe ü' failed"
 fi
 wide_psms=$(sed -n 's/^ *target_psms: *\([0-9]*\).*/\1/p' "$wide/summary.yaml" | head -n 1)
 [ "${wide_psms:-0}" = "$psms" ] || die "in 'Größe ü' the search found ${wide_psms:-no} target PSMs, not $psms"
-wide_result="searched ($wide_psms target PSMs)"
+unset SEARCH_TEMP
+wide_result="searched ($wide_psms target PSMs; the package installed below it)"
 echo "a folder named 'Größe ü': $wide_result"
 
 # --- 4. the app starts, finds its ProSE, and exits ---------------------------------------------------
-"$APP_BIN" --smoke-test >"$work/app.json" 2>"$work/app.err" &
-pid=$!
-for _ in $(seq 180); do
-  kill -0 "$pid" 2>/dev/null || break
-  sleep 1
-done
-if kill -0 "$pid" 2>/dev/null; then
-  kill "$pid" 2>/dev/null || true
-  die "the app did not exit within 180 s: $(tail -n 20 "$work/app.err")"
-fi
-status=0
-wait "$pid" || status=$?
-report=$(grep -m1 '^{' "$work/app.json" || true)
-echo "app --smoke-test (exit $status): $report"
-[ "$status" -eq 0 ] && [ -n "$report" ] || die "the app's start failed: $(tail -n 20 "$work/app.err")"
-"$PY" -I - "$report" "$(native "$TOOL")" "$version" <<'PY'
+smoke() { # <app binary> <label> <through-a-link: 0|1>: starts it with --smoke-test; sets report
+  local bin=$1 label=$2 linked=$3 pid status=0
+  "$bin" --smoke-test >"$work/app-$label.json" 2>"$work/app-$label.err" &
+  pid=$!
+  for _ in $(seq 180); do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 1
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
+    die "the app ($label) did not exit within 180 s: $(tail -n 20 "$work/app-$label.err")"
+  fi
+  wait "$pid" || status=$?
+  report=$(grep -m1 '^{' "$work/app-$label.json" || true)
+  echo "app --smoke-test, $label (exit $status): $report"
+  [ "$status" -eq 0 ] && [ -n "$report" ] || die "the app's start ($label) failed: $(tail -n 20 "$work/app-$label.err")"
+  "$PY" -I - "$report" "$(native "$TOOL")" "$version" "$linked" <<'PY'
 import json, os, sys
-report, tool, version = sys.argv[1:]
+report, tool, version, linked = sys.argv[1:]
 data = json.loads(report)
 info = data.get("tool") or sys.exit(f"no tool_info: {data}")
 def norm(p):
@@ -161,8 +169,20 @@ if info.get("version") != version:
     sys.exit(f"the app reports version {info.get('version')}, the tool {version}")
 if not data.get("page"):
     sys.exit("no page loaded")
-print(f"app: page {data['page']}, ProSE {info['version']} with ONNX, inside the package")
+if linked == "1" and not str(data.get("tauriResources", "")).startswith("(none"):
+    sys.exit(f"started through a link, Tauri still named a resource folder: {data.get('tauriResources')}")
+how = " (Tauri named none: the bundle's own Resources)" if linked == "1" else ""
+print(f"app: page {data['page']}, ProSE {info['version']} with ONNX, inside the package{how}")
 PY
+}
+smoke "$APP_BIN" installed 0
+report_installed=$report
+report_linked=""
+if [ "$platform" = macos ]; then
+  ln -s "$app" "$work/Linked.app"
+  smoke "$work/Linked.app/Contents/MacOS/$executable" linked 1
+  report_linked=$report
+fi
 
 summary "### Start test ($platform)"
 summary ""
@@ -170,5 +190,6 @@ summary "- package: \`$(basename "$PACKAGE")\`"
 summary "- bundled ProSE: \`$version\`"
 summary "- command-line search of the example with PeptDeep: $psms target PSMs at 1 % FDR, ${seconds} s"
 summary "- a folder named \`Größe ü\`: $wide_result"
-summary "- app \`--smoke-test\`: \`$report\`"
+summary "- app \`--smoke-test\`: \`$report_installed\`"
+if [ -n "$report_linked" ]; then summary "- the app through a symbolic link: \`$report_linked\`"; fi
 echo "start test passed"

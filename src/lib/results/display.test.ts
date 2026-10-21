@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   fileSafe,
-  fileSafeMaxLength,
+  fileSafeMaxBytes,
   formatCount,
   formatQValue,
   formatScore,
@@ -127,16 +127,29 @@ describe('resultName', () => {
     expect(resultName(['nul_1.mzML', 'nul_2.mzML'])).toBe('_nul')
   })
 
-  it('caps a name at 100 characters, of any script', () => {
-    expect(fileSafeMaxLength).toBe(100)
-    expect(fileSafe('a'.repeat(250))).toBe('a'.repeat(100))
-    const cjk = '蛋'.repeat(150)
-    expect(Array.from(fileSafe(cjk))).toHaveLength(100)
-    // a character outside the BMP counts once and is not split
-    expect(fileSafe('𝔸'.repeat(120))).toBe('𝔸'.repeat(100))
+  it('caps a name at 200 UTF-8 bytes, cut between characters', () => {
+    const bytes = (s: string) => new TextEncoder().encode(s).length
+    expect(fileSafeMaxBytes).toBe(200)
+    expect(fileSafe('a'.repeat(250))).toBe('a'.repeat(200))
+    // three bytes a character: 66 of them (198 bytes; a 67th would make 201)
+    const cjk = fileSafe('蛋'.repeat(150))
+    expect(cjk).toBe('蛋'.repeat(66))
+    expect(bytes(cjk)).toBe(198)
+    // outside the BMP: four bytes (two UTF-16 units) a character, never split in half
+    expect(fileSafe('𝔸'.repeat(120))).toBe('𝔸'.repeat(50))
+    const mixed = fileSafe(`a${'𠀀'.repeat(60)}`)
+    expect(mixed).toBe(`a${'𠀀'.repeat(49)}`)
+    expect(bytes(mixed)).toBe(197)
+    expect(/\p{Cs}/u.test(mixed)).toBe(false) // no lone surrogate
+    // two bytes: "ü" 100 times fits exactly
+    expect(fileSafe('ü'.repeat(130))).toBe('ü'.repeat(100))
     // no separator is left at the cut
-    expect(fileSafe(`${'b'.repeat(99)}_c`)).toBe('b'.repeat(99))
-    expect(resultName([`${'x'.repeat(300)}.mzML`])).toBe('x'.repeat(100))
+    expect(fileSafe(`${'b'.repeat(199)}_c`)).toBe('b'.repeat(199))
+    // the "_" of a reserved name is inside the limit
+    const reserved = fileSafe(`CON.${'x'.repeat(300)}`)
+    expect(reserved.startsWith('_CON.x')).toBe(true)
+    expect(bytes(reserved)).toBe(200)
+    expect(resultName([`${'x'.repeat(300)}.mzML`])).toBe('x'.repeat(200))
   })
 })
 

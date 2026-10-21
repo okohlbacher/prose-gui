@@ -268,7 +268,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          shared-key: desktop
+          # (its own: the debug test build; the long jobs' cache holds their release build)
+          shared-key: desktop-shim
 
       - name: cargo test (examples/fake_prose.rs stands in for ProSE)
         working-directory: src-tauri
@@ -441,7 +442,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          shared-key: desktop
+          shared-key: desktop-package
 
       - run: npm ci
 
@@ -664,7 +665,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          shared-key: desktop
+          shared-key: desktop-package
 
       - run: npm ci
 
@@ -714,8 +715,8 @@ jobs:
   # A draft release of the packages, for a tag desktop-native-v* only; publishing it is a person's step. The
   # packages are those of the successful prose-desktop run of the tagged commit, the build that ran the unit
   # tests, the smoke test and the start tests (artifacts are kept 14 days; an older run can be re-run with
-  # `gh run rerun`). The Linux packages are required; the macOS and Windows ones are attached when that run
-  # has them.
+  # `gh run rerun`). All three platforms' packages are required: the AppImage, the .deb, the .dmg and the
+  # Windows installer.
   release:
     name: Draft release
     if: startsWith(github.ref, 'refs/tags/desktop-native-v')
@@ -737,20 +738,17 @@ jobs:
             exit 1
           fi
           echo "packages of run $GITHUB_SERVER_URL/$GH_REPO/actions/runs/$run"
-          if ! gh run download "$run" --name prose-desktop-linux --dir packages; then
-            echo "::error::Run $run has no artifact prose-desktop-linux (expired after 14 days?): re-run it with 'gh run rerun $run', then this job."
-            exit 1
-          fi
-          [ -n "$(find packages -type f -name '*.AppImage')" ] && [ -n "$(find packages -type f -name '*.deb')" ] \
-            || { echo "::error::run $run's artifact lacks the AppImage or the .deb"; exit 1; }
-          for platform in macos windows; do
-            if gh run download "$run" --name "prose-desktop-$platform" --dir "packages/$platform"; then
-              echo "with the $platform package"
-            else
-              echo "::warning::Run $run has no artifact prose-desktop-$platform: the release has no $platform package."
+          for platform in linux macos windows; do
+            if ! gh run download "$run" --name "prose-desktop-$platform" --dir "packages/$platform"; then
+              echo "::error::Run $run has no artifact prose-desktop-$platform (expired after 14 days?): re-run it with 'gh run rerun $run', then this job."
+              exit 1
             fi
           done
           find packages -type f -printf '%s\t%p\n'
+          for pattern in '*.AppImage' '*.deb' '*.dmg' '*-setup.exe'; do
+            [ -n "$(find packages -type f -name "$pattern")" ] \
+              || { echo "::error::run $run's artifacts lack the $pattern package"; exit 1; }
+          done
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -765,24 +763,16 @@ jobs:
           libGLESv2.so.2"). Install it with
           - Ubuntu, Debian: `sudo apt install libgles2`
           - Fedora: `sudo dnf install libglvnd-gles`
-          NOTES
-          if [ -n "$(find packages -type f -name '*.dmg')" ]; then
-            cat >> notes.md <<'NOTES'
 
           ProSE desktop for macOS 15 or later on Apple silicon (arm64): the .dmg. It is not signed with a
           Developer ID nor notarized: the first time, macOS refuses to open it; allow it in System Settings >
           Privacy & Security > "Open Anyway" (or run `xattr -dr com.apple.quarantine /Applications/ProSE.app`).
-          NOTES
-          fi
-          if [ -n "$(find packages -type f -name '*-setup.exe')" ]; then
-            cat >> notes.md <<'NOTES'
 
-          ProSE desktop for Windows 10 and 11 (x64): the installer (-setup.exe), for the current user, without
-          administrator rights. It is not signed: SmartScreen asks once ("More info" > "Run anyway"). Two input
-          files of one name can be searched together only when they are on the drive of the app's data (usually
-          C:); otherwise the app asks to rename one of them.
+          ProSE desktop for Windows 10 (1903 or later) and 11 (x64): the installer (-setup.exe), for the current
+          user, without administrator rights. It is not signed: SmartScreen asks once ("More info" > "Run
+          anyway"). Two input files of one name can be searched together only when they are on the drive of the
+          app's data (usually C:); otherwise the app asks to rename one of them.
           NOTES
-          fi
           gh release create "$TAG" --draft --verify-tag --title "ProSE desktop ${TAG#desktop-native-v}" \
             --notes-file notes.md \
             $(find packages -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' -o -name '*-setup.exe' \))

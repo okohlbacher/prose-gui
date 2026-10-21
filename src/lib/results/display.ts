@@ -108,24 +108,43 @@ export function resultName(files: string[]): string {
   return name.length >= 3 ? name : fallbackName
 }
 
-/** The longest piece `fileSafe` returns, in characters (code points); the caller adds a suffix. */
-export const fileSafeMaxLength = 100
+/**
+ * The longest piece `fileSafe` returns, in UTF-8 bytes (file systems count bytes, ext4 255 per name, or
+ * UTF-16 units, NTFS 255): room for a suffix such as "-proteins.csv" or ".prose".
+ */
+export const fileSafeMaxBytes = 200
 
 /** Names Windows reserves for devices, with or without an extension ("CON", "nul.txt", "COM1.csv"). */
 const reservedOnWindows = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\.|$)/i
+
+/** The UTF-8 length of one code point. */
+function utf8Bytes(char: string): number {
+  const code = char.codePointAt(0) ?? 0
+  return code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4
+}
+
+/** `text` cut to at most `max` UTF-8 bytes, at a code point boundary. */
+function cutToBytes(text: string, max: number): string {
+  let bytes = 0
+  let out = ''
+  for (const char of text) {
+    bytes += utf8Bytes(char)
+    if (bytes > max) break
+    out += char
+  }
+  return out
+}
 
 /**
  * `text` as a piece of a file name: letters (of any script), digits, combining marks, "_", "-" and "."
  * are kept, every run of anything else (spaces, separators, characters that are invalid on Windows, control
  * characters) becomes one "_", and "_", "-" and "." at the ends are dropped. "Probe Größe (1)" is
- * "Probe_Größe_1". At most `fileSafeMaxLength` characters, and never a name Windows reserves for a device
- * (CON, PRN, AUX, NUL, COM1-9, LPT1-9, in any case, with or without an extension): those get a "_" in
- * front ("_CON"). May be empty.
+ * "Probe_Größe_1". At most `fileSafeMaxBytes` UTF-8 bytes, cut between characters, and never a name Windows
+ * reserves for a device (CON, PRN, AUX, NUL, COM1-9, LPT1-9, in any case, with or without an extension):
+ * those get a "_" in front ("_CON"), within the limit. May be empty.
  */
 export function fileSafe(text: string): string {
   const trim = (s: string) => s.replace(/^[_.-]+|[_.-]+$/g, '')
-  let safe = trim(text.normalize('NFC').replace(/[^\p{L}\p{N}\p{M}_.-]+/gu, '_'))
-  const chars = Array.from(safe)
-  if (chars.length > fileSafeMaxLength) safe = trim(chars.slice(0, fileSafeMaxLength).join(''))
-  return reservedOnWindows.test(safe) ? `_${safe}` : safe
+  const safe = trim(cutToBytes(trim(text.normalize('NFC').replace(/[^\p{L}\p{N}\p{M}_.-]+/gu, '_')), fileSafeMaxBytes))
+  return reservedOnWindows.test(safe) ? `_${trim(cutToBytes(safe, fileSafeMaxBytes - 1))}` : safe
 }

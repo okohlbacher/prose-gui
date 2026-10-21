@@ -51,8 +51,18 @@ struct StartResult {
     search_id: String,
 }
 
+/// The app's resource folder: Tauri's; on macOS, where Tauri refuses to name one when the app's path has
+/// a symbolic link in it (tauri-utils' StartingBinary, against relaunch tricks), the Resources folder of
+/// the bundle the executable really is in (`tool::bundle_resources`). Only read from (the bundled tool,
+/// the example, cRAP).
 fn resource_dir(app: &AppHandle) -> Option<PathBuf> {
-    app.path().resource_dir().ok()
+    match app.path().resource_dir() {
+        Ok(dir) => Some(dir),
+        Err(_) if cfg!(target_os = "macos") => std::env::current_exe()
+            .ok()
+            .and_then(|exe| tool::bundle_resources(&exe)),
+        Err(_) => None,
+    }
 }
 
 /// Sends the shim's events to the front end.
@@ -368,8 +378,8 @@ async fn save_project_file(
 
 /// The flag of the packaged app's start test (CI: `native/scripts/start-test.sh`). The app starts as
 /// usual; once its page has loaded it prints one line of JSON, `{"page": <url>, "resources": <the
-/// resource folder, or why there is none>, "tool": <tool_info>}` (or `"error"` in place of `"tool"`),
-/// and exits: 0, or 1 when the tool cannot be used. A page that has not loaded after [`SMOKE_TIMEOUT`]
+/// resource folder the app uses>, "tauriResources": <Tauri's, or why there is none>, "tool":
+/// <tool_info>}` (or `"error"` in place of `"tool"`), and exits: 0, or 1 when the tool cannot be used. A page that has not loaded after [`SMOKE_TIMEOUT`]
 /// ends the app with 2. It reads nothing and writes nothing else.
 pub const SMOKE_TEST: &str = "--smoke-test";
 const SMOKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
@@ -381,16 +391,23 @@ fn smoke_report(app: &AppHandle, page: &str) -> (i32, String) {
         Ok(info) => (0, "tool", serde_json::to_value(info).unwrap_or_default()),
         Err(e) => (1, "error", serde_json::Value::String(e)),
     };
-    let resources = match app.path().resource_dir() {
+    let resources = resource_dir(app).map(|dir| dir.to_string_lossy().into_owned());
+    let tauri_resources = match app.path().resource_dir() {
         Ok(dir) => dir.to_string_lossy().into_owned(),
         Err(e) => format!("(none: {e})"),
     };
-    let line = serde_json::json!({ "page": page, "resources": resources, key: value }).to_string();
+    let line = serde_json::json!({
+        "page": page,
+        "resources": resources,
+        "tauriResources": tauri_resources,
+        key: value,
+    })
+    .to_string();
     (code, line)
 }
 
 pub fn run() {
-    let smoke = std::env::args().any(|a| a == SMOKE_TEST);
+    let smoke = std::env::args_os().any(|a| a == SMOKE_TEST);
     let reported = std::sync::atomic::AtomicBool::new(false);
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
