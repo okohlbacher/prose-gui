@@ -206,13 +206,18 @@ fn the_example_is_searched_through_start_search() {
     assert!(progress.windows(2).all(|w| w[1].fraction >= w[0].fraction));
     assert!(progress.iter().any(|p| p.file == 1) && progress.last().unwrap().fraction < 1.0);
 
-    // the inputs are linked, not copied, and nothing was written next to them
+    // the inputs are linked, not copied (on Windows hard links, gone once the search is done), and
+    // nothing was written next to them
     for (n, original) in originals.iter().enumerate() {
         let link = folder.join(format!("{}__DatabaseSuitability_in_spec.mzML", n + 1));
-        assert_eq!(
-            fs::read_link(&link).unwrap(),
-            Path::new(original).canonicalize().unwrap()
-        );
+        if cfg!(windows) {
+            assert!(!link.exists(), "{link:?} is gone");
+        } else {
+            assert_eq!(
+                fs::read_link(&link).unwrap(),
+                Path::new(original).canonicalize().unwrap()
+            );
+        }
         let mut names: Vec<_> = fs::read_dir(Path::new(original).parent().unwrap())
             .unwrap()
             .flatten()
@@ -313,6 +318,31 @@ fn cancelling_the_real_tool_leaves_no_process_and_no_folder() {
 }
 
 /// The number of live processes whose command line mentions `needle`.
+#[cfg(not(target_os = "linux"))]
+fn processes_with(needle: &str) -> usize {
+    #[cfg(windows)]
+    let output = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            "Get-CimInstance Win32_Process | ForEach-Object { $_.CommandLine }",
+        ])
+        .output()
+        .unwrap();
+    #[cfg(not(windows))]
+    let output = std::process::Command::new("ps")
+        .args(["-axww", "-o", "stat=,command="])
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|l| !l.trim_start().starts_with('Z'))
+        .filter(|l| l.contains(needle) && !l.contains("real_prose") && !l.contains("CimInstance"))
+        .count()
+}
+
+/// The number of live processes whose command line mentions `needle`.
+#[cfg(target_os = "linux")]
 fn processes_with(needle: &str) -> usize {
     fs::read_dir("/proc")
         .unwrap()

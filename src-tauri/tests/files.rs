@@ -104,6 +104,21 @@ fn names_that_leave_the_folder_are_refused() {
     }
 }
 
+/// On Windows a search's inputs of one name are hard links in the folder while ProSE runs (removed
+/// when it ends): regular files inside the folder, which are still the user's and never served.
+#[test]
+fn the_inputs_hard_links_are_not_served() {
+    let (tmp, searches) = search_with("/nowhere/db.fasta");
+    fs::hard_link(
+        tmp.path().join("user/a.mzML"),
+        searches.join("1-0/1__a.mzML"),
+    )
+    .unwrap();
+    assert!(refused(read_search_file(&searches, "1-0", "1__a.mzML")));
+    let err = read_search_file(&searches, "1-0", "1__a.mzML").unwrap_err();
+    assert!(err.message.contains("input"), "{}", err.message);
+}
+
 #[test]
 fn search_ids_that_are_paths_are_refused() {
     let (tmp, searches) = search_with("/nowhere/db.fasta");
@@ -287,7 +302,6 @@ fn what_is_not_an_absolute_existing_file_has_an_error() {
     }
 }
 
-#[cfg(unix)]
 #[test]
 fn the_example_is_two_named_links_to_the_bundled_run_and_its_fasta() {
     let source = TempDir::new("example-src");

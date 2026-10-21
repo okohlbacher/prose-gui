@@ -108,15 +108,24 @@ export function resultName(files: string[]): string {
   return name.length >= 3 ? name : fallbackName
 }
 
+/** The longest piece `fileSafe` returns, in characters (code points); the caller adds a suffix. */
+export const fileSafeMaxLength = 100
+
+/** Names Windows reserves for devices, with or without an extension ("CON", "nul.txt", "COM1.csv"). */
+const reservedOnWindows = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\.|$)/i
+
 /**
  * `text` as a piece of a file name: letters (of any script), digits, combining marks, "_", "-" and "."
  * are kept, every run of anything else (spaces, separators, characters that are invalid on Windows, control
  * characters) becomes one "_", and "_", "-" and "." at the ends are dropped. "Probe Größe (1)" is
- * "Probe_Größe_1". May be empty.
+ * "Probe_Größe_1". At most `fileSafeMaxLength` characters, and never a name Windows reserves for a device
+ * (CON, PRN, AUX, NUL, COM1-9, LPT1-9, in any case, with or without an extension): those get a "_" in
+ * front ("_CON"). May be empty.
  */
 export function fileSafe(text: string): string {
-  return text
-    .normalize('NFC')
-    .replace(/[^\p{L}\p{N}\p{M}_.-]+/gu, '_')
-    .replace(/^[_.-]+|[_.-]+$/g, '')
+  const trim = (s: string) => s.replace(/^[_.-]+|[_.-]+$/g, '')
+  let safe = trim(text.normalize('NFC').replace(/[^\p{L}\p{N}\p{M}_.-]+/gu, '_'))
+  const chars = Array.from(safe)
+  if (chars.length > fileSafeMaxLength) safe = trim(chars.slice(0, fileSafeMaxLength).join(''))
+  return reservedOnWindows.test(safe) ? `_${safe}` : safe
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   fileSafe,
+  fileSafeMaxLength,
   formatCount,
   formatQValue,
   formatScore,
@@ -104,6 +105,38 @@ describe('resultName', () => {
     expect(fileSafe('a<b>c:d"e/f\\g|h?i*j')).toBe('a_b_c_d_e_f_g_h_i_j')
     expect(fileSafe('tab\there\u0000nul')).toBe('tab_here_nul')
     expect(fileSafe('../ü')).toBe('ü')
+  })
+
+  it('never makes a name Windows reserves for a device', () => {
+    for (const name of ['CON', 'con', 'Prn', 'AUX', 'nul', 'COM1', 'com9', 'LPT1', 'lpt5', 'COM¹', 'LPT³']) {
+      expect(fileSafe(name)).toBe(`_${name}`)
+    }
+    // with an extension too ("NUL.txt" is the device as well)
+    expect(fileSafe('NUL.txt')).toBe('_NUL.txt')
+    expect(fileSafe('con.tar.gz')).toBe('_con.tar.gz')
+    expect(fileSafe('Aux. data')).toBe('_Aux._data')
+    // made reserved by the replacements: "CON " and "(nul)" become CON and nul
+    expect(fileSafe('CON ')).toBe('_CON')
+    expect(fileSafe('(nul)')).toBe('_nul')
+    // names that only start like one are names
+    for (const name of ['CONSOLE', 'nullable', 'COM10', 'LPT0x', 'auxiliary', 'CON_1', 'PRN-2', 'com']) {
+      expect(fileSafe(name)).toBe(name)
+    }
+    // a result named after such a file gets the prefix too
+    expect(resultName(['AUX.mzML'])).toBe('_AUX')
+    expect(resultName(['nul_1.mzML', 'nul_2.mzML'])).toBe('_nul')
+  })
+
+  it('caps a name at 100 characters, of any script', () => {
+    expect(fileSafeMaxLength).toBe(100)
+    expect(fileSafe('a'.repeat(250))).toBe('a'.repeat(100))
+    const cjk = '蛋'.repeat(150)
+    expect(Array.from(fileSafe(cjk))).toHaveLength(100)
+    // a character outside the BMP counts once and is not split
+    expect(fileSafe('𝔸'.repeat(120))).toBe('𝔸'.repeat(100))
+    // no separator is left at the cut
+    expect(fileSafe(`${'b'.repeat(99)}_c`)).toBe('b'.repeat(99))
+    expect(resultName([`${'x'.repeat(300)}.mzML`])).toBe('x'.repeat(100))
   })
 })
 

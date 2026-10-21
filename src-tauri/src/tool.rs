@@ -15,7 +15,7 @@ pub struct ToolInfo {
     pub onnx: bool,
 }
 
-const EXE: &str = if cfg!(windows) { "ProSE.exe" } else { "ProSE" };
+pub const EXE: &str = if cfg!(windows) { "ProSE.exe" } else { "ProSE" };
 
 /// Where the bundled tool is, below the app's resource directory.
 pub fn bundled_tool(resource_dir: &Path) -> PathBuf {
@@ -74,13 +74,34 @@ pub fn resolve(resource_dir: Option<&Path>) -> Result<PathBuf, String> {
     )
 }
 
+/// Variables of the dynamic loader that would make the bundled tool load other libraries than its own
+/// (macOS: they are searched before the bundle's `@rpath`); removed from the tool's environment.
+pub const LOADER_VARIABLES: &[&str] = &[
+    "DYLD_LIBRARY_PATH",
+    "DYLD_FALLBACK_LIBRARY_PATH",
+    "DYLD_FRAMEWORK_PATH",
+    "DYLD_INSERT_LIBRARIES",
+];
+
 /// The command that runs the tool: `OPENBLAS_NUM_THREADS=1` unless the user has set it (Percolator's
 /// linear algebra would otherwise start a thread per core inside ProSE's own threads), as the
-/// FASTag shim does. `openblas` is the variable's current value.
+/// FASTag shim does. `openblas` is the variable's current value. On macOS without the
+/// [`LOADER_VARIABLES`]; on Windows without a console window (the app has none to share).
 pub fn command_with(path: &Path, openblas: Option<OsString>) -> Command {
     let mut command = Command::new(path);
     if openblas.is_none() {
         command.env("OPENBLAS_NUM_THREADS", "1");
+    }
+    if cfg!(target_os = "macos") {
+        for name in LOADER_VARIABLES {
+            command.env_remove(name);
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
     }
     command
 }

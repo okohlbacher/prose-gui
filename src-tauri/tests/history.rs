@@ -3,12 +3,13 @@
 
 mod common;
 
-use common::TempDir;
+use common::{set_folder_modified, TempDir};
 use prose_desktop_lib::history::{
     delete, finish_partial, folder_files, frame, import, list, lock_partial, read_chosen_project,
-    rename, save, sweep, LOCK_FILE, SWEEP_GRACE,
+    remove_partial, rename, save, sweep, with_backoff, BACKOFF_TRIES, LOCK_FILE, SWEEP_GRACE,
 };
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -200,10 +201,14 @@ fn save_refuses_what_is_not_a_record() {
 
 #[test]
 fn folder_files_lists_regular_files_only() {
-    let (_tmp, dir) = searches();
+    let (tmp, dir) = searches();
     saved(&dir, "1-0", "x");
     #[cfg(unix)]
     std::os::unix::fs::symlink("/etc/hostname", dir.join("1-0/0__a.mzML")).unwrap();
+    // a hard link to an input that a search on Windows left (it removes them; one in use may stay)
+    let input = tmp.path().join("b.mzML.gz");
+    fs::write(&input, "<mzML/>").unwrap();
+    fs::hard_link(&input, dir.join("1-0/2__b.mzML.gz")).unwrap();
     let files = folder_files(&dir, "1-0").unwrap();
     let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(
@@ -466,10 +471,7 @@ fn the_sweep_spares_a_folder_that_was_just_written() {
     fs::create_dir_all(dir.join("3-0")).unwrap();
     fs::write(dir.join("3-0/prose.log"), "x").unwrap();
     let old = SystemTime::now() - Duration::from_secs(3600);
-    fs::File::open(dir.join("3-0"))
-        .unwrap()
-        .set_modified(old)
-        .unwrap();
+    set_folder_modified(&dir.join("3-0"), old);
     assert!(sweep(&dir, SystemTime::now(), SWEEP_GRACE).is_empty());
     // and one whose log is old too goes
     fs::File::options()
@@ -559,4 +561,98 @@ fn an_imported_search_is_marked() {
     // a search of this app is not marked
     saved(&dir, "1-0", "mine");
     assert!(json(&dir.join("1-0/search.json")).get("imported").is_none());
+}
+
+#[test]
+fn with_backoff_retries_what_passes_and_nothing_else() {
+    let denied = || io::Error::from(io::ErrorKind::PermissionDenied);
+    // a file held open for a moment (Windows): it works on the third try
+    let mut tries = 0;
+    let started = std::time::Instant::now();
+    let result = with_backoff(|| {
+        tries += 1;
+        if tries < 3 {
+            Err(denied())
+        } else {
+            Ok(tries)
+        }
+    });
+    assert_eq!(result.unwrap(), 3);
+    assert!(
+        started.elapsed() >= Duration::from_millis(30),
+        "10 + 20 ms waited"
+    );
+    // one that stays: given up after BACKOFF_TRIES tries, with the last error
+    let mut tries = 0;
+    let err = with_backoff(|| -> io::Result<()> {
+        tries += 1;
+        Err(denied())
+    })
+    .unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+    assert_eq!(tries, BACKOFF_TRIES);
+    // an error that does not pass is not retried
+    let mut tries = 0;
+    let err = with_backoff(|| -> io::Result<()> {
+        tries += 1;
+        Err(io::Error::from(io::ErrorKind::NotFound))
+    })
+    .unwrap_err();
+    assert_eq!((err.kind(), tries), (io::ErrorKind::NotFound, 1));
+}
+
+/// Another app instance's sweep has the lock file open while the owner finishes (on Windows the deleted
+/// file then stays pending in the folder, and the folder cannot be renamed, until that handle is closed).
+#[test]
+fn finish_partial_waits_for_a_lock_file_that_another_sweep_holds_open() {
+    let (_tmp, dir) = searches();
+    let partial = dir.join("9-0.partial");
+    fs::create_dir_all(&partial).unwrap();
+    let lock = lock_partial(&partial).unwrap();
+    fs::write(partial.join("summary.yaml"), "x").unwrap();
+    // the sweep's handle (it opens the file, fails to take the lock, and closes it again)
+    let sweeper = fs::File::options()
+        .read(true)
+        .write(true)
+        .open(partial.join(LOCK_FILE))
+        .unwrap();
+    assert!(sweeper.try_lock().is_err(), "the owner holds the lock");
+    let closer = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(150));
+        drop(sweeper);
+    });
+    finish_partial(Some(lock), &partial, &dir.join("9-0")).unwrap();
+    closer.join().unwrap();
+    assert!(!partial.exists());
+    assert!(dir.join("9-0/summary.yaml").is_file());
+    assert!(!dir.join("9-0").join(LOCK_FILE).exists());
+}
+
+/// The sweep and a cancelled search remove a partial folder whose lock file is open and locked (the
+/// sweep holds the lock it claimed; the search its own). That has to work on Windows too.
+#[test]
+fn a_partial_folder_is_removed_while_its_lock_is_held() {
+    let (_tmp, dir) = searches();
+    // std's remove_dir_all, with the lock held by the remover
+    let partial = dir.join("10-0.partial");
+    fs::create_dir_all(partial.join("qpx")).unwrap();
+    let lock = lock_partial(&partial).unwrap();
+    fs::write(partial.join("qpx/a.psm.parquet"), "x").unwrap();
+    fs::remove_dir_all(&partial).unwrap();
+    assert!(!partial.exists());
+    drop(lock);
+    // remove_partial, with the lock held by the remover and the lock file open in another handle
+    let partial = dir.join("11-0.partial");
+    fs::create_dir_all(partial.join("qpx")).unwrap();
+    let lock = lock_partial(&partial).unwrap();
+    let other = fs::File::open(partial.join(LOCK_FILE)).unwrap();
+    let closer = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(150));
+        drop(other);
+    });
+    remove_partial(Some(lock), &partial).unwrap();
+    closer.join().unwrap();
+    assert!(!partial.exists());
+    // a folder that is gone already is fine
+    remove_partial(None, &partial).unwrap();
 }

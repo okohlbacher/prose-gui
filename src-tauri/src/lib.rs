@@ -20,6 +20,8 @@
 //!   save dialog, then the zip written where the user chose), `open_project_file()` (the open dialog, then the
 //!   bytes of the `.prose` file chosen; empty if cancelled) and `history_import(body)` (the entries of a project
 //!   in a fresh folder -> the new id). At startup the searches folder is swept (`history::sweep`).
+//!
+//! `--smoke-test` on the command line is the packaged app's start test ([`SMOKE_TEST`]).
 
 pub mod args;
 pub mod files;
@@ -34,6 +36,7 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::ipc::Response;
+use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use tauri_plugin_dialog::DialogExt;
 
@@ -363,12 +366,57 @@ async fn save_project_file(
     .map_err(|e| e.to_string())?
 }
 
+/// The flag of the packaged app's start test (CI: `native/scripts/start-test.sh`). The app starts as
+/// usual; once its page has loaded it prints one line of JSON, `{"page": <url>, "tool": <tool_info>}`
+/// (or `"error"` in place of `"tool"`), and exits: 0, or 1 when the tool cannot be used. A page that has
+/// not loaded after [`SMOKE_TIMEOUT`] ends the app with 2. It reads nothing and writes nothing else.
+pub const SMOKE_TEST: &str = "--smoke-test";
+const SMOKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// What `--smoke-test` reports, and the exit code.
+fn smoke_report(app: &AppHandle, page: &str) -> (i32, String) {
+    let tool = tool::resolve(resource_dir(app).as_deref()).and_then(|path| tool::probe(&path));
+    let (code, key, value) = match tool {
+        Ok(info) => (0, "tool", serde_json::to_value(info).unwrap_or_default()),
+        Err(e) => (1, "error", serde_json::Value::String(e)),
+    };
+    let line = serde_json::json!({ "page": page, key: value }).to_string();
+    (code, line)
+}
+
 pub fn run() {
+    let smoke = std::env::args().any(|a| a == SMOKE_TEST);
+    let reported = std::sync::atomic::AtomicBool::new(false);
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
-        .setup(|app| {
+        .on_page_load(move |webview, payload| {
+            use std::sync::atomic::Ordering;
+            if !smoke
+                || payload.event() != PageLoadEvent::Finished
+                || reported.swap(true, Ordering::SeqCst)
+            {
+                return;
+            }
+            let app = webview.app_handle().clone();
+            let page = payload.url().to_string();
+            std::thread::spawn(move || {
+                use std::io::Write;
+                let (code, line) = smoke_report(&app, &page);
+                println!("{line}");
+                let _ = std::io::stdout().flush();
+                app.exit(code);
+            });
+        })
+        .setup(move |app| {
+            if smoke {
+                std::thread::spawn(|| {
+                    std::thread::sleep(SMOKE_TIMEOUT);
+                    eprintln!("smoke test: the page did not load within {SMOKE_TIMEOUT:?}");
+                    std::process::exit(2);
+                });
+            }
             // what interrupted searches left (no search runs yet); a failure to sweep is no failure to start
             if let Ok(dir) = searches_dir(app.handle()) {
                 std::thread::spawn(move || {

@@ -41,8 +41,30 @@ impl Drop for TempDir {
     }
 }
 
+/// The fake tool: `tests/fake-prose.sh`, or on Windows (and with `PROSE_FAKE_EXE` set) the same as an
+/// executable, `examples/fake_prose.rs`.
 pub fn fake_prose() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fake-prose.sh")
+    if cfg!(windows) || std::env::var_os("PROSE_FAKE_EXE").is_some() {
+        fake_prose_exe()
+    } else {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fake-prose.sh")
+    }
+}
+
+/// The example `fake_prose`, which `cargo test` builds with the tests (into `<target>/<profile>/examples`,
+/// beside the tests' own `deps` folder).
+pub fn fake_prose_exe() -> PathBuf {
+    let test = std::env::current_exe().unwrap();
+    let profile = test.parent().and_then(Path::parent).unwrap();
+    let exe = profile
+        .join("examples")
+        .join(format!("fake_prose{}", std::env::consts::EXE_SUFFIX));
+    assert!(
+        exe.is_file(),
+        "{} is missing: run all of `cargo test` (or `cargo build --example fake_prose`)",
+        exe.display()
+    );
+    exe
 }
 
 pub fn fixture(name: &str) -> String {
@@ -100,6 +122,7 @@ pub fn first_progress(rx: &Receiver<SearchEvent>, timeout: Duration) {
 }
 
 /// Whether a process exists and is not a zombie (a killed child whose parent has not reaped it yet).
+#[cfg(target_os = "linux")]
 pub fn process_alive(pid: u32) -> bool {
     match fs::read_to_string(format!("/proc/{pid}/stat")) {
         Ok(stat) => {
@@ -108,6 +131,41 @@ pub fn process_alive(pid: u32) -> bool {
         }
         Err(_) => false,
     }
+}
+
+/// Whether a process exists and is not a zombie.
+#[cfg(all(unix, not(target_os = "linux")))]
+pub fn process_alive(pid: u32) -> bool {
+    let out = std::process::Command::new("ps")
+        .args(["-o", "stat=", "-p", &pid.to_string()])
+        .output()
+        .unwrap();
+    let state = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    !state.is_empty() && !state.starts_with('Z')
+}
+
+/// Whether a process is running.
+#[cfg(windows)]
+pub fn process_alive(pid: u32) -> bool {
+    let out = std::process::Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).contains(&format!("\"{pid}\""))
+}
+
+/// Sets a folder's modification time (Windows opens a folder only with backup semantics).
+pub fn set_folder_modified(folder: &Path, time: std::time::SystemTime) {
+    let mut options = fs::File::options();
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+        options.write(true).custom_flags(FILE_FLAG_BACKUP_SEMANTICS);
+    }
+    #[cfg(not(windows))]
+    options.read(true);
+    options.open(folder).unwrap().set_modified(time).unwrap();
 }
 
 pub fn read_pids(file: &Path) -> Vec<u32> {

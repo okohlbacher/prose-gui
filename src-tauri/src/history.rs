@@ -17,6 +17,7 @@
 //! front end; Rust reads the chosen file (`open_project_file`, with [`read_chosen_project`]) and writes the entries the front end
 //! sends ([`import`], in the framing of [`frame`]), after checking every path again.
 
+use crate::args::is_input_link;
 use crate::files::{resolve_search_file, valid_id, valid_relative};
 use serde::Serialize;
 use std::collections::HashSet;
@@ -44,6 +45,9 @@ const RECORD: &str = "search.json";
 pub const LOCK_FILE: &str = ".lock";
 /// A lock file younger than this is not taken for a stale one (its owner may not have locked it yet).
 const LOCK_SETTLE: Duration = Duration::from_secs(5);
+/// How often [`with_backoff`] tries, waiting 10 ms before the second try and twice as long before each
+/// next one (about 2.5 s in all).
+pub const BACKOFF_TRIES: u32 = 9;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -95,7 +99,8 @@ fn parse_record(text: &str) -> Result<serde_json::Map<String, serde_json::Value>
     }
 }
 
-/// The size of the regular files of `dir`, links not followed.
+/// The size of the regular files of `dir`, links not followed (nor the hard links to the inputs that a
+/// search on Windows may have left: [`is_input_link`]).
 fn folder_size(dir: &Path, depth: usize) -> u64 {
     let Ok(read) = fs::read_dir(dir) else {
         return 0;
@@ -106,6 +111,9 @@ fn folder_size(dir: &Path, depth: usize) -> u64 {
             continue;
         };
         if meta.is_file() {
+            if depth == 0 && entry.file_name().to_str().is_some_and(is_input_link) {
+                continue;
+            }
             total += meta.len();
         } else if meta.is_dir() && depth < MAX_DEPTH {
             total += folder_size(&entry.path(), depth + 1);
@@ -305,7 +313,8 @@ pub fn delete(dir: &Path, id: &str) -> Result<(), String> {
         Ok(meta) if !meta.is_dir() => return Err(format!("The search {id} is not a folder.")),
         Ok(_) => {}
     }
-    fs::remove_dir_all(&folder).map_err(|e| format!("The search {id} cannot be deleted ({e})."))
+    with_backoff(|| fs::remove_dir_all(&folder))
+        .map_err(|e| format!("The search {id} cannot be deleted ({e})."))
 }
 
 fn collect_files(root: &Path, dir: &Path, depth: usize, out: &mut Vec<FolderFile>) {
@@ -318,7 +327,8 @@ fn collect_files(root: &Path, dir: &Path, depth: usize, out: &mut Vec<FolderFile
             continue;
         };
         if meta.is_file() {
-            if depth == 0 && entry.file_name() == LOCK_FILE {
+            let top_level_skip = |name: &str| name == LOCK_FILE || is_input_link(name);
+            if depth == 0 && entry.file_name().to_str().is_none_or(top_level_skip) {
                 continue;
             }
             if let Ok(relative) = path.strip_prefix(root) {
@@ -338,7 +348,8 @@ fn collect_files(root: &Path, dir: &Path, depth: usize, out: &mut Vec<FolderFile
     }
 }
 
-/// The regular files of a search folder (a project file's content), without the links to the inputs.
+/// The regular files of a search folder (a project file's content), without the links to the inputs
+/// (symbolic links, and on Windows hard links named like them: [`is_input_link`]).
 pub fn folder_files(dir: &Path, id: &str) -> Result<Vec<FolderFile>, String> {
     let folder = existing_folder(dir, id)?;
     let mut files = Vec::new();
@@ -385,10 +396,52 @@ pub fn lock_partial(folder: &Path) -> io::Result<fs::File> {
 /// or a project), the lock released, and the folder renamed to `target`. (Windows cannot rename a folder
 /// that has an open file, even a deleted one, in it.) Between the release and the rename the folder has
 /// no lock file and has just been written to, which the sweep spares (`claim_partial`).
+///
+/// On Windows the rename can still fail for a moment: another app instance's sweep may have the lock
+/// file open (it opens it to try the lock), which leaves the deleted file pending in the folder until
+/// that handle is closed; so the rename is retried with back-off ([`with_backoff`]).
 pub fn finish_partial(lock: Option<fs::File>, partial: &Path, target: &Path) -> io::Result<()> {
     let _ = fs::remove_file(partial.join(LOCK_FILE));
     drop(lock);
-    fs::rename(partial, target)
+    with_backoff(|| fs::rename(partial, target))
+}
+
+/// Removes a partial folder (a search that failed or was cancelled, an import that failed, a stale one
+/// the sweep claimed): as [`finish_partial`], the lock file goes first and the lock is released before
+/// the folder is removed, with back-off. A missing folder is not an error.
+pub fn remove_partial(lock: Option<fs::File>, partial: &Path) -> io::Result<()> {
+    let _ = fs::remove_file(partial.join(LOCK_FILE));
+    drop(lock);
+    with_backoff(|| match fs::remove_dir_all(partial) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        other => other,
+    })
+}
+
+/// Whether an error of a file operation may pass by itself: on Windows a file that another process
+/// has open without sharing, or that is pending deletion, refuses a rename or delete for a moment
+/// (access denied, a sharing or lock violation, and a folder that is not empty yet because of a deleted
+/// file still open elsewhere); a virus scanner opening a fresh file does the same.
+fn is_transient(e: &io::Error) -> bool {
+    // ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION, ERROR_DIR_NOT_EMPTY
+    e.kind() == io::ErrorKind::PermissionDenied
+        || (cfg!(windows) && matches!(e.raw_os_error(), Some(32) | Some(33) | Some(145)))
+}
+
+/// Runs `op` until it succeeds, fails for a reason that does not pass ([`is_transient`]), or has been
+/// tried [`BACKOFF_TRIES`] times, waiting 10, 20, 40, ... ms in between.
+pub fn with_backoff<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+    let mut wait = Duration::from_millis(10);
+    for _ in 1..BACKOFF_TRIES {
+        match op() {
+            Err(e) if is_transient(&e) => {
+                std::thread::sleep(wait);
+                wait *= 2;
+            }
+            done => return done,
+        }
+    }
+    op()
 }
 
 //------------------------------------------------------------------------------------------------
@@ -460,7 +513,7 @@ fn reserve_import(dir: &Path) -> Result<(String, PathBuf, fs::File), String> {
             Ok(()) => match lock_partial(&partial) {
                 Ok(lock) => return Ok((id, partial, lock)),
                 Err(e) => {
-                    let _ = fs::remove_dir_all(&partial);
+                    let _ = remove_partial(None, &partial);
                     return Err(format!("The search folder cannot be locked ({e})."));
                 }
             },
@@ -562,12 +615,11 @@ pub fn import(dir: &Path, body: &[u8]) -> Result<String, String> {
         Ok(()) => finish_partial(Some(lock), &partial, &dir.join(&id))
             .map(|()| id)
             .map_err(|e| {
-                let _ = fs::remove_dir_all(&partial);
+                let _ = remove_partial(None, &partial);
                 format!("The search folder cannot be finished ({e}).")
             }),
         Err(e) => {
-            let _ = fs::remove_dir_all(&partial);
-            drop(lock);
+            let _ = remove_partial(Some(lock), &partial);
             Err(e)
         }
     }
@@ -643,20 +695,19 @@ pub fn sweep(dir: &Path, now: SystemTime, grace: Duration) -> Vec<String> {
         .collect();
     let mut removed = Vec::new();
     for (name, path) in found {
-        let (remove, _guard) = match name.strip_suffix(".partial") {
-            Some(id) if valid_id(id) => match claim_partial(&path, now, grace) {
-                Some(guard) => (true, guard),
-                None => (false, None),
-            },
-            Some(_) => (false, None),
-            None => (
-                valid_id(&name)
-                    && fs::symlink_metadata(path.join(RECORD)).is_err()
-                    && older_than(last_written(&path), now, grace),
-                None,
-            ),
+        let gone = match name.strip_suffix(".partial") {
+            // the claimed lock is released only once its file is gone (`remove_partial`), so no other
+            // sweep claims the folder meanwhile, and Windows can remove the folder
+            Some(id) if valid_id(id) => {
+                claim_partial(&path, now, grace).map(|guard| remove_partial(guard, &path))
+            }
+            Some(_) => None,
+            None => (valid_id(&name)
+                && fs::symlink_metadata(path.join(RECORD)).is_err()
+                && older_than(last_written(&path), now, grace))
+            .then(|| with_backoff(|| fs::remove_dir_all(&path))),
         };
-        if remove && fs::remove_dir_all(&path).is_ok() {
+        if matches!(gone, Some(Ok(()))) {
             removed.push(name);
         }
     }

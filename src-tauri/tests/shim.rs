@@ -1,10 +1,12 @@
-//! The shim against a fake ProSE (tests/fake-prose.sh) and fixtures of real ProSE output.
+//! The shim against a fake ProSE (tests/fake-prose.sh; on Windows examples/fake_prose.rs) and fixtures of
+//! real ProSE output.
 
 mod common;
 
 use common::*;
 use prose_desktop_lib::args::{
-    build_args, input_stem, link_name, with_contaminants, SearchRequest,
+    build_args, build_args_with, input_placements, input_records_with, input_stem, is_input_link,
+    link_name, with_contaminants, InputLinks, Placement, SearchRequest,
 };
 use prose_desktop_lib::progress::ProgressTracker;
 use prose_desktop_lib::run::{SearchEvent, Searches};
@@ -34,8 +36,9 @@ fn request(
     .unwrap()
 }
 
+/// The arguments with every input as a link `<n>__<name>` (Linux, macOS; Windows below).
 fn args_of(req: &SearchRequest, out: &Path) -> Vec<OsString> {
-    build_args(req, out).unwrap()
+    build_args_with(req, out, InputLinks::Symlinks).unwrap()
 }
 
 /// The values after `flag` up to the next option.
@@ -483,6 +486,109 @@ fn the_bundled_crap_has_116_entries_and_gets_the_prefix() {
 }
 
 #[test]
+fn on_windows_inputs_go_by_their_own_paths_unless_their_names_clash() {
+    let dir = TempDir::new("placements");
+    let a = dir.write("one/a.mzML", "<mzML/>");
+    let b = dir.write("one/b.mzML.gz", "gz");
+    let a_upper = dir.write("two/A.MZML", "<mzML/>");
+    let a_gz = dir.write("three/a.mzML.gz", "gz");
+    let fasta = dir.write("db.fasta", ">a\nMK\n");
+    let out = dir.path().join("s.partial");
+    let windows = InputLinks::PathsOrHardLinks;
+    let plan = |files: &[&Path]| {
+        let req = request(files, &fasta, false, json!({}));
+        let args = build_args_with(&req, &out, windows).unwrap();
+        let records = input_records_with(&req, windows);
+        (
+            input_placements(&req, windows),
+            values_of(&args, "-in"),
+            records
+                .iter()
+                .map(|r| (r.link.clone(), r.stem.clone()))
+                .collect::<Vec<_>>(),
+        )
+    };
+
+    // names that differ: the user's paths themselves, and ProSE names the outputs after them
+    let (placements, ins, records) = plan(&[&a, &b]);
+    assert_eq!(placements, [Placement::OwnPath, Placement::OwnPath]);
+    assert_eq!(
+        ins,
+        [a.clone().into_os_string(), b.clone().into_os_string()]
+    );
+    assert_eq!(
+        records,
+        [
+            ("a.mzML".to_string(), "a".to_string()),
+            ("b.mzML.gz".to_string(), "b".to_string())
+        ]
+    );
+    // one stem, ignoring case (NTFS) or the .gz: the clashing ones as hard links in the folder
+    let (placements, ins, records) = plan(&[&a, &b, &a_upper, &a_gz]);
+    use Placement::*;
+    assert_eq!(placements, [HardLink, OwnPath, HardLink, HardLink]);
+    assert_eq!(
+        ins,
+        [
+            out.join("1__a.mzML").into_os_string(),
+            b.clone().into_os_string(),
+            out.join("3__A.MZML").into_os_string(),
+            out.join("4__a.mzML.gz").into_os_string(),
+        ]
+    );
+    assert_eq!(
+        records
+            .iter()
+            .map(|(_, stem)| stem.as_str())
+            .collect::<Vec<_>>(),
+        ["1__a", "b", "3__A", "4__a"]
+    );
+    // a file whose own name looks like a link beside the clash it would meet: all of them as links
+    let tricky = dir.write("four/1__a.mzML", "<mzML/>");
+    let (placements, _, records) = plan(&[&a, &a_upper, &tricky]);
+    assert_eq!(placements, [HardLink, HardLink, HardLink]);
+    assert_eq!(
+        records
+            .iter()
+            .map(|(link, _)| link.as_str())
+            .collect::<Vec<_>>(),
+        ["1__a.mzML", "2__A.MZML", "3__1__a.mzML"]
+    );
+    // elsewhere every input is a symbolic link
+    let req = request(&[&a, &b], &fasta, false, json!({}));
+    assert_eq!(
+        input_placements(&req, InputLinks::Symlinks),
+        [Symlink, Symlink]
+    );
+    assert_eq!(
+        InputLinks::PLATFORM,
+        if cfg!(windows) {
+            windows
+        } else {
+            InputLinks::Symlinks
+        }
+    );
+}
+
+#[test]
+fn input_links_are_known_by_their_names() {
+    for name in ["1__a.mzML", "12__x y.mzML.gz", "3__1__a.MZML"] {
+        assert!(is_input_link(name), "{name}");
+    }
+    for name in [
+        "a.mzML",
+        "__a.mzML",
+        "x__a.mzML",
+        "1__a.fasta",
+        "1__",
+        "summary.yaml",
+        "1_a.mzML",
+    ] {
+        assert!(!is_input_link(name), "{name}");
+    }
+}
+
+#[test]
 fn link_names_keep_the_name_and_the_gz_suffix() {
     assert_eq!(link_name(0, "/data/x.mzML"), "1__x.mzML");
     assert_eq!(link_name(9, "/data/x.mzML.gz"), "10__x.mzML.gz");
@@ -814,8 +920,11 @@ fn lines_without_a_step_give_no_event() {
 
 fn executable(dir: &TempDir, relative: &str) -> PathBuf {
     let path = dir.write(relative, "#!/bin/sh\n");
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
     path
 }
 
@@ -823,8 +932,8 @@ fn executable(dir: &TempDir, relative: &str) -> PathBuf {
 fn the_tool_is_found_through_prose_bin_then_the_bundle_then_path() {
     let dir = TempDir::new("resolve");
     let env_bin = executable(&dir, "env/ProSE");
-    let bundled = executable(&dir, "res/resources/prose/bin/ProSE");
-    let on_path = executable(&dir, "pathdir/ProSE");
+    let bundled = executable(&dir, &format!("res/resources/prose/bin/{}", tool::EXE));
+    let on_path = executable(&dir, &format!("pathdir/{}", tool::EXE));
     let res = dir.path().join("res");
     let path_var = OsString::from(dir.path().join("pathdir"));
 
@@ -865,9 +974,13 @@ fn the_tools_version_is_read_from_its_help() {
 #[test]
 fn probing_a_tool_reports_its_version_path_and_onnx_support() {
     let dir = TempDir::new("probe");
-    let script = dir.write("ProSE", "#!/bin/sh\necho 'Version: 9.9.9 Oct 20 2026'\n");
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    // a script on Unix; on Windows the fake tool, which answers --help the same way
+    #[cfg(unix)]
+    let script = executable(&dir, "ProSE");
+    #[cfg(unix)]
+    fs::write(&script, "#!/bin/sh\necho 'Version: 9.9.9 Oct 20 2026'\n").unwrap();
+    #[cfg(not(unix))]
+    let script = fake_prose_exe();
     let info = tool::probe(&script).unwrap();
     assert_eq!(info.version, "9.9.9");
     assert_eq!(info.path, script.to_string_lossy());
@@ -931,6 +1044,11 @@ fn the_tool_runs_with_one_blas_thread_unless_set() {
         cmd.get_envs().all(|(k, _)| k != "OPENBLAS_NUM_THREADS"),
         "the user's value stays"
     );
+    // macOS: the loader's search variables never reach the bundled tool
+    for name in tool::LOADER_VARIABLES {
+        let removed = cmd.get_envs().any(|(k, v)| k == *name && v.is_none());
+        assert_eq!(removed, cfg!(target_os = "macos"), "{name}");
+    }
 }
 
 // ---- running --------------------------------------------------------------------------------
@@ -978,6 +1096,16 @@ impl Run {
             .unwrap_or_default();
         names.sort();
         names
+    }
+}
+
+impl Run {
+    /// As `new`, with the inputs reaching the tool as `links` says (Windows' way on any platform).
+    fn with_links(links: InputLinks) -> Run {
+        Run {
+            work: TempDir::new("run"),
+            searches: Arc::new(Searches::with_links(links)),
+        }
     }
 }
 
@@ -1032,9 +1160,13 @@ fn a_search_ends_with_done_and_the_partial_folder_becomes_the_search_folder() {
     assert!(events.iter().any(|e| matches!(e, SearchEvent::Progress(p) if p.label == "Searching a.mzML (1 of 1)..." && p.file == 0)));
     // the fake ran with exactly the arguments build_args makes for the partial folder
     let argv = fs::read_to_string(folder.join("argv.txt")).unwrap();
+    let input = match InputLinks::PLATFORM {
+        InputLinks::Symlinks => run.dir().join(format!("{id}.partial")).join("1__a.mzML"),
+        InputLinks::PathsOrHardLinks => i.mzml.clone(),
+    };
     assert!(
-        argv.contains(&format!("{}/{id}.partial/1__a.mzML", run.dir().display())),
-        "{argv}"
+        argv.lines().any(|l| Path::new(l) == input),
+        "{input:?} in {argv}"
     );
     // nothing was written next to the input
     let mut data: Vec<_> = fs::read_dir(i.mzml.parent().unwrap())
@@ -1046,6 +1178,7 @@ fn a_search_ends_with_done_and_the_partial_folder_becomes_the_search_folder() {
     assert_eq!(data, ["a.mzML", "db.fasta"]);
 }
 
+#[cfg(unix)]
 #[test]
 fn two_inputs_with_the_same_name_from_different_folders_are_both_searched() {
     let run = Run::new();
@@ -1105,6 +1238,7 @@ fn two_inputs_with_the_same_name_from_different_folders_are_both_searched() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn gz_inputs_keep_their_suffix_in_the_link() {
     let run = Run::new();
@@ -1122,6 +1256,129 @@ fn gz_inputs_keep_their_suffix_in_the_link() {
         serde_json::from_str(&fs::read_to_string(folder.join("inputs.json")).unwrap()).unwrap();
     assert_eq!(mapping[0]["link"], "1__x.mzML.gz");
     assert_eq!(mapping[0]["name"], "x.mzML.gz");
+}
+
+/// Windows' way (`InputLinks::PathsOrHardLinks`), run on every platform: inputs of different names go to
+/// the tool by their own paths, and nothing of them is in the search folder.
+#[test]
+fn inputs_of_different_names_go_to_the_tool_by_their_own_paths() {
+    let run = Run::with_links(InputLinks::PathsOrHardLinks);
+    let i = inputs();
+    let b = i.dir.write("other/b.mzML.gz", "gz");
+    let (id, rx) = run.start(request(&[&i.mzml, &b], &i.fasta, false, json!({})), None);
+    let id = id.unwrap();
+    let folder = done_folder(&until_terminal(&rx, WAIT));
+    assert_eq!(folder, run.dir().join(&id));
+    let argv = fs::read_to_string(folder.join("argv.txt")).unwrap();
+    let ins: Vec<&str> = argv.lines().skip(1).take(2).collect();
+    assert_eq!(
+        ins.iter().map(PathBuf::from).collect::<Vec<_>>(),
+        [i.mzml.clone(), b.clone()],
+        "{argv}"
+    );
+    assert!(
+        folder.join("qpx/a.psm.parquet").is_file() && folder.join("qpx/b.psm.parquet").is_file()
+    );
+    let mapping: Value =
+        serde_json::from_str(&fs::read_to_string(folder.join("inputs.json")).unwrap()).unwrap();
+    assert_eq!(
+        mapping,
+        json!([
+            { "id": "f0", "index": 0, "link": "a.mzML", "stem": "a", "name": "a.mzML", "path": i.mzml },
+            { "id": "f1", "index": 1, "link": "b.mzML.gz", "stem": "b", "name": "b.mzML.gz", "path": b },
+        ])
+    );
+    let names: Vec<String> = fs::read_dir(&folder)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(
+        !names
+            .iter()
+            .any(|n| n.ends_with(".mzML") || n.ends_with(".gz")),
+        "{names:?}"
+    );
+}
+
+/// Windows' way, run on every platform: two inputs of one name go to the tool as hard links in the
+/// search folder, which are gone when the search is done; the user's files stay as they are.
+#[test]
+fn inputs_of_one_name_go_as_hard_links_that_the_finished_search_drops() {
+    let run = Run::with_links(InputLinks::PathsOrHardLinks);
+    let i = inputs();
+    let first = i.dir.write("run1/sample.mzML", "<mzML>first</mzML>");
+    let second = i.dir.write("run2/Sample.mzML", "<mzML>second</mzML>");
+    let (id, rx) = run.start(
+        request(&[&first, &second], &i.fasta, false, json!({})),
+        None,
+    );
+    let id = id.unwrap();
+    let folder = done_folder(&until_terminal(&rx, WAIT));
+    assert_eq!(folder, run.dir().join(&id));
+    let resolved = fs::read_to_string(folder.join("inputs.txt")).unwrap();
+    let partial = run.dir().join(format!("{id}.partial"));
+    for (n, name) in [(1, "1__sample.mzML"), (2, "2__Sample.mzML")] {
+        let line = resolved.lines().nth(n - 1).unwrap_or_default();
+        assert!(
+            line.starts_with(&format!("{} ->", partial.join(name).display())),
+            "{resolved}"
+        );
+        assert!(!folder.join(name).exists(), "{name} is gone");
+    }
+    assert!(
+        folder.join("qpx/1__sample.psm.parquet").is_file()
+            && folder.join("qpx/2__Sample.psm.parquet").is_file()
+    );
+    assert_eq!(fs::read_to_string(&first).unwrap(), "<mzML>first</mzML>");
+    assert_eq!(fs::read_to_string(&second).unwrap(), "<mzML>second</mzML>");
+    let mapping: Value =
+        serde_json::from_str(&fs::read_to_string(folder.join("inputs.json")).unwrap()).unwrap();
+    assert_eq!(mapping[0]["link"], "1__sample.mzML");
+    assert_eq!(mapping[1]["stem"], "2__Sample");
+    assert_eq!(mapping[1]["path"], json!(second));
+}
+
+/// Windows' way: a hard link cannot leave its volume. Two inputs of one name, one of them on another
+/// volume than the searches folder (on the CI runner: the checkout on D:, the temporary folder on C:),
+/// are refused with a message that asks to rename one; nothing is copied, no folder is left.
+#[test]
+fn inputs_of_one_name_on_another_volume_are_refused() {
+    let elsewhere =
+        PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("volume-{}", std::process::id()));
+    fs::create_dir_all(&elsewhere).unwrap();
+    let far = elsewhere.join("sample.mzML");
+    fs::write(&far, "<mzML>far</mzML>").unwrap();
+    let run = Run::with_links(InputLinks::PathsOrHardLinks);
+    fs::create_dir_all(run.dir()).unwrap();
+    let probe = run.dir().join("probe");
+    let same_volume = fs::hard_link(&far, &probe).is_ok();
+    let _ = fs::remove_file(&probe);
+    if same_volume {
+        let _ = fs::remove_dir_all(&elsewhere);
+        eprintln!(
+            "skipped: {} and {} are on one volume",
+            elsewhere.display(),
+            run.dir().display()
+        );
+        return;
+    }
+    let i = inputs();
+    let near = i.dir.write("near/sample.mzML", "<mzML>near</mzML>");
+    let (result, _rx) = run.start(request(&[&near, &far], &i.fasta, false, json!({})), None);
+    let err = result.unwrap_err();
+    let _ = fs::remove_dir_all(&elsewhere);
+    assert!(
+        err.contains("Two inputs are named sample.mzML")
+            && err.contains("Rename one of the files")
+            && err.contains(&far.display().to_string()),
+        "{err}"
+    );
+    assert!(
+        run.listing().is_empty(),
+        "no folder is left: {:?}",
+        run.listing()
+    );
 }
 
 #[test]

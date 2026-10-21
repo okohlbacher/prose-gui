@@ -3,7 +3,10 @@
 //! A search lives in `<searches>/<id>.partial/` while it runs. Beside the tool's outputs it holds
 //!
 //! - the inputs as links `<n>__<name>` to the user's files (never copies) and `inputs.json`, the
-//!   mapping from link to the user's path (see [`crate::args::InputRecord`]);
+//!   mapping from link to the user's path (see [`crate::args::InputRecord`]). On Windows, where a
+//!   symbolic link needs a privilege, ProSE gets the user's paths themselves when the inputs' names
+//!   differ, and hard links only for inputs that share a name, removed again when the search ends
+//!   ([`crate::args::InputLinks`]);
 //! - `database.fasta`, the user's FASTA with the contaminants, if they were asked for;
 //! - `prose.log`, the tool's output.
 //!
@@ -17,12 +20,14 @@
 //! Cancel signals the group (SIGTERM, then SIGKILL after a grace period), and the group is swept with
 //! SIGKILL after the tool has ended, so nothing it started outlives it. On Linux the tool also gets
 //! SIGKILL if the app dies (`PR_SET_PDEATHSIG`; the thread that starts it lives as long as it runs).
+//! On Windows the group is a job object: cancel terminates the job (Windows has no SIGTERM for a
+//! console tool), and the job is closed with the app, which ends whatever is still in it.
 
 use crate::args::{
-    build_args, humanize, input_records, with_contaminants, InputRecord, SearchRequest,
-    DATABASE_FILE,
+    build_args_with, humanize, input_placements, input_records_with, with_contaminants, InputLinks,
+    InputRecord, Placement, SearchRequest, DATABASE_FILE,
 };
-use crate::history::{finish_partial, lock_partial};
+use crate::history::{finish_partial, lock_partial, remove_partial, with_backoff};
 use crate::progress::{ProgressTracker, STARTING};
 use crate::tool;
 use serde::Serialize;
@@ -31,7 +36,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ExitStatus, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -85,8 +90,9 @@ pub type Sink = Arc<dyn Fn(SearchEvent) + Send + Sync>;
 
 /// A running search, as `cancel` sees it.
 struct Handle {
-    /// The tool's process id (and process group id); 0 until it runs.
-    pid: AtomicU32,
+    /// The tool's process group (see `sys::Group`); set before `start` returns, taken when the search
+    /// is over.
+    group: Mutex<Option<Arc<sys::Group>>>,
     cancelled: AtomicBool,
     /// Set when the search is over and its folder dealt with.
     finished: Mutex<bool>,
@@ -94,6 +100,10 @@ struct Handle {
 }
 
 impl Handle {
+    fn group(&self) -> Option<Arc<sys::Group>> {
+        self.group.lock().unwrap().clone()
+    }
+
     fn finish(&self) {
         *self.finished.lock().unwrap() = true;
         self.changed.notify_all();
@@ -110,10 +120,17 @@ impl Handle {
 }
 
 /// The searches running in this app.
-#[derive(Default)]
 pub struct Searches {
     running: Mutex<HashMap<String, Arc<Handle>>>,
     counter: AtomicU64,
+    /// How the inputs reach the tool: this platform's way, unless a test chooses.
+    links: InputLinks,
+}
+
+impl Default for Searches {
+    fn default() -> Searches {
+        Searches::with_links(InputLinks::PLATFORM)
+    }
 }
 
 #[cfg(unix)]
@@ -129,20 +146,37 @@ mod sys {
     const SIGKILL: c_int = 9;
     const SIGTERM: c_int = 15;
 
-    /// Signals every process of the group led by `pid` (the tool is started as the leader of one).
-    fn signal_group(pid: u32, signal: c_int) {
-        if pid > 0 && pid <= i32::MAX as u32 {
-            // SAFETY: kill(2) with a negative pid signals a process group; it has no memory effects.
-            unsafe { kill(-(pid as c_int), signal) };
+    /// The tool's process group: the tool is started as the leader of one (`prepare`).
+    pub struct Group {
+        pid: u32,
+    }
+
+    impl Group {
+        pub fn new(child: &std::process::Child) -> Group {
+            Group { pid: child.id() }
         }
-    }
 
-    pub fn terminate(pid: u32) {
-        signal_group(pid, SIGTERM);
-    }
+        pub fn pid(&self) -> u32 {
+            self.pid
+        }
 
-    pub fn kill_group(pid: u32) {
-        signal_group(pid, SIGKILL);
+        /// Signals every process of the group.
+        fn signal(&self, signal: c_int) {
+            if self.pid > 0 && self.pid <= i32::MAX as u32 {
+                // SAFETY: kill(2) with a negative pid signals a process group; it has no memory effects.
+                unsafe { kill(-(self.pid as c_int), signal) };
+            }
+        }
+
+        /// Asks the group to end (SIGTERM).
+        pub fn terminate(&self) {
+            self.signal(SIGTERM);
+        }
+
+        /// Ends the group (SIGKILL).
+        pub fn kill(&self) {
+            self.signal(SIGKILL);
+        }
     }
 
     pub fn exit_signal(status: &std::process::ExitStatus) -> Option<i32> {
@@ -163,44 +197,167 @@ mod sys {
             });
         }
     }
+
+    pub fn link_input(original: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(original, link)
+    }
 }
 
 #[cfg(windows)]
 mod sys {
-    // Task 10 replaces this stub with job objects or a tested taskkill; it ends the tree by `taskkill /T`.
+    //! The tool's processes as a job object: every process the tool starts joins the job, which
+    //! `TerminateJobObject` ends at once, and which ends with the app (`KILL_ON_JOB_CLOSE`: the app's
+    //! handle is the only one, and Windows closes it when the app ends, however it ends).
+    use std::ffi::c_void;
+    use std::os::windows::io::AsRawHandle;
     use std::process::{Command, Stdio};
 
-    fn taskkill(pid: u32) {
-        let _ = Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+    type Handle = *mut c_void;
+
+    #[repr(C)]
+    #[derive(Default)]
+    struct BasicLimitInformation {
+        per_process_user_time_limit: i64,
+        per_job_user_time_limit: i64,
+        limit_flags: u32,
+        minimum_working_set_size: usize,
+        maximum_working_set_size: usize,
+        active_process_limit: u32,
+        affinity: usize,
+        priority_class: u32,
+        scheduling_class: u32,
     }
 
-    pub fn terminate(pid: u32) {
-        taskkill(pid);
+    /// JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+    #[repr(C)]
+    #[derive(Default)]
+    struct ExtendedLimitInformation {
+        basic: BasicLimitInformation,
+        io_info: [u64; 6],
+        process_memory_limit: usize,
+        job_memory_limit: usize,
+        peak_process_memory_used: usize,
+        peak_job_memory_used: usize,
     }
 
-    pub fn kill_group(pid: u32) {
-        taskkill(pid);
+    const JOB_OBJECT_EXTENDED_LIMIT_INFORMATION: i32 = 9;
+    const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x2000;
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn CreateJobObjectW(attributes: *mut c_void, name: *const u16) -> Handle;
+        fn SetInformationJobObject(job: Handle, class: i32, info: *mut c_void, length: u32) -> i32;
+        fn AssignProcessToJobObject(job: Handle, process: Handle) -> i32;
+        fn TerminateJobObject(job: Handle, exit_code: u32) -> i32;
+        fn CloseHandle(handle: Handle) -> i32;
+    }
+
+    /// The exit code of a tool ended by cancel.
+    const KILLED: u32 = 1;
+
+    /// A job with the tool in it; without one (it could not be made) the tool's tree is ended with
+    /// `taskkill /T /F`.
+    pub struct Group {
+        pid: u32,
+        job: Option<Handle>,
+    }
+
+    // SAFETY: a job handle is a kernel handle, usable from any thread; it is closed only in Drop.
+    unsafe impl Send for Group {}
+    unsafe impl Sync for Group {}
+
+    /// A job that ends its processes when its last handle is closed.
+    fn new_job() -> Option<Handle> {
+        // SAFETY: plain Win32 calls with valid pointers; the handle is closed on failure.
+        unsafe {
+            let job = CreateJobObjectW(std::ptr::null_mut(), std::ptr::null());
+            if job.is_null() {
+                return None;
+            }
+            let mut info = ExtendedLimitInformation::default();
+            info.basic.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            let ok = SetInformationJobObject(
+                job,
+                JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+                (&mut info as *mut ExtendedLimitInformation).cast(),
+                std::mem::size_of::<ExtendedLimitInformation>() as u32,
+            );
+            if ok == 0 {
+                CloseHandle(job);
+                return None;
+            }
+            Some(job)
+        }
+    }
+
+    impl Group {
+        /// Puts the child into a job of its own. (The child runs from its start; a process it starts
+        /// before it is assigned, within microseconds, would not be in the job. ProSE starts none.)
+        pub fn new(child: &std::process::Child) -> Group {
+            let job = new_job().filter(|job| {
+                // SAFETY: the child's process handle is valid while `child` lives.
+                let assigned =
+                    unsafe { AssignProcessToJobObject(*job, child.as_raw_handle() as Handle) };
+                if assigned == 0 {
+                    // SAFETY: the job was made above and is not used elsewhere.
+                    unsafe { CloseHandle(*job) };
+                }
+                assigned != 0
+            });
+            Group {
+                pid: child.id(),
+                job,
+            }
+        }
+
+        pub fn pid(&self) -> u32 {
+            self.pid
+        }
+
+        /// Windows has no request to end for a console tool without a console: ends the job.
+        pub fn terminate(&self) {
+            self.kill();
+        }
+
+        /// Ends every process of the job.
+        pub fn kill(&self) {
+            match self.job {
+                // SAFETY: the job handle is open until Drop.
+                Some(job) => unsafe {
+                    TerminateJobObject(job, KILLED);
+                },
+                None => {
+                    let _ = Command::new("taskkill")
+                        .args(["/PID", &self.pid.to_string(), "/T", "/F"])
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status();
+                }
+            }
+        }
+    }
+
+    impl Drop for Group {
+        fn drop(&mut self) {
+            if let Some(job) = self.job.take() {
+                // SAFETY: the handle was opened by `new_job` and is closed once.
+                unsafe { CloseHandle(job) };
+            }
+        }
     }
 
     pub fn exit_signal(_status: &std::process::ExitStatus) -> Option<i32> {
         None
     }
 
+    /// (The console window is suppressed for every run of the tool: `tool::command`.)
     pub fn prepare(_command: &mut std::process::Command) {}
-}
 
-#[cfg(unix)]
-fn link_file(original: &Path, link: &Path) -> std::io::Result<()> {
-    std::os::unix::fs::symlink(original, link)
-}
-
-#[cfg(windows)]
-fn link_file(original: &Path, link: &Path) -> std::io::Result<()> {
-    std::os::windows::fs::symlink_file(original, link)
+    /// Only `Placement::HardLink` reaches the folder on Windows; a symbolic link needs a privilege.
+    pub fn link_input(original: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_file(original, link)
+    }
 }
 
 /// Lines of a stream, lossily decoded, without the line end.
@@ -247,6 +404,7 @@ struct Job {
     partial: PathBuf,
     done_dir: PathBuf,
     records: Vec<InputRecord>,
+    placements: Vec<Placement>,
     sink: Sink,
     handle: Arc<Handle>,
     /// The lock of the partial folder (see `history::lock_partial`), held until the folder is renamed
@@ -255,6 +413,15 @@ struct Job {
 }
 
 impl Searches {
+    /// Searches whose inputs reach the tool as `links` says (the default: this platform's way).
+    pub fn with_links(links: InputLinks) -> Searches {
+        Searches {
+            running: Mutex::new(HashMap::new()),
+            counter: AtomicU64::new(0),
+            links,
+        }
+    }
+
     fn new_id(&self, dir: &Path) -> String {
         loop {
             let millis = SystemTime::now()
@@ -295,7 +462,7 @@ impl Searches {
         let partial = searches_dir.join(format!("{id}.partial"));
         let done_dir = searches_dir.join(&id);
         // everything that can be wrong with the request is found before a folder exists
-        let args = build_args(&request, &partial)?;
+        let args = build_args_with(&request, &partial, self.links)?;
 
         fs::create_dir(&partial).map_err(|e| {
             format!(
@@ -306,18 +473,19 @@ impl Searches {
         let lock = match lock_partial(&partial) {
             Ok(lock) => lock,
             Err(e) => {
-                let _ = fs::remove_dir_all(&partial);
+                let _ = remove_partial(None, &partial);
                 return Err(format!("The search folder cannot be locked ({e})."));
             }
         };
-        let records = input_records(&request);
-        if let Err(e) = prepare_folder(&partial, &request, &records, crap) {
-            let _ = fs::remove_dir_all(&partial);
+        let records = input_records_with(&request, self.links);
+        let placements = input_placements(&request, self.links);
+        if let Err(e) = prepare_folder(&partial, &request, &records, &placements, crap) {
+            let _ = remove_partial(Some(lock), &partial);
             return Err(e);
         }
 
         let handle = Arc::new(Handle {
-            pid: AtomicU32::new(0),
+            group: Mutex::new(None),
             cancelled: AtomicBool::new(false),
             finished: Mutex::new(false),
             changed: Condvar::new(),
@@ -333,6 +501,7 @@ impl Searches {
             partial: partial.clone(),
             done_dir,
             records,
+            placements,
             sink,
             handle,
             lock: Some(lock),
@@ -350,29 +519,36 @@ impl Searches {
         };
         if let Err(e) = result {
             self.running.lock().unwrap().remove(&id);
-            let _ = fs::remove_dir_all(&partial);
+            // (the thread has ended and released the lock)
+            let _ = remove_partial(None, &partial);
             return Err(e);
         }
         Ok(id)
     }
 
     /// Stops a search: its process group gets SIGTERM, and SIGKILL if it is still there after a few
-    /// seconds. Returns when the process is gone and the partial folder is removed. A search that is
-    /// not running (finished, or never existed) is not an error.
+    /// seconds (Windows: its job is terminated at once). Returns when the process is gone and the
+    /// partial folder is removed. A search that is not running (finished, or never existed) is not an
+    /// error.
     pub fn cancel(&self, id: &str) -> Result<(), String> {
         let Some(handle) = self.running.lock().unwrap().get(id).cloned() else {
             return Ok(());
         };
         handle.cancelled.store(true, Ordering::SeqCst);
-        let pid = handle.pid.load(Ordering::SeqCst);
-        sys::terminate(pid);
+        let group = handle.group();
+        if let Some(group) = &group {
+            group.terminate();
+        }
         if handle.wait_finished(GRACE) {
             return Ok(());
         }
-        sys::kill_group(pid);
+        if let Some(group) = &group {
+            group.kill();
+        }
         if handle.wait_finished(KILL_WAIT) {
             Ok(())
         } else {
+            let pid = group.map(|g| g.pid()).unwrap_or(0);
             Err(format!("ProSE (process {pid}) did not stop."))
         }
     }
@@ -380,18 +556,22 @@ impl Searches {
     /// Cancels every running search (the app is closing).
     pub fn cancel_all(&self) {
         let handles: Vec<Arc<Handle>> = self.running.lock().unwrap().values().cloned().collect();
-        let running: Vec<(Arc<Handle>, u32)> = handles
+        let running: Vec<(Arc<Handle>, Option<Arc<sys::Group>>)> = handles
             .into_iter()
             .map(|h| {
                 h.cancelled.store(true, Ordering::SeqCst);
-                let pid = h.pid.load(Ordering::SeqCst);
-                sys::terminate(pid);
-                (h, pid)
+                let group = h.group();
+                if let Some(group) = &group {
+                    group.terminate();
+                }
+                (h, group)
             })
             .collect();
-        for (handle, pid) in running {
+        for (handle, group) in running {
             if !handle.wait_finished(GRACE) {
-                sys::kill_group(pid);
+                if let Some(group) = &group {
+                    group.kill();
+                }
                 handle.wait_finished(KILL_WAIT);
             }
         }
@@ -403,16 +583,33 @@ fn prepare_folder(
     dir: &Path,
     request: &SearchRequest,
     records: &[InputRecord],
+    placements: &[Placement],
     crap: Option<&Path>,
 ) -> Result<(), String> {
-    for (file, record) in request.files.iter().zip(records) {
+    for ((file, record), placement) in request.files.iter().zip(records).zip(placements) {
         let original = fs::canonicalize(&file.path).unwrap_or_else(|_| PathBuf::from(&file.path));
-        link_file(&original, &dir.join(&record.link)).map_err(|e| {
-            format!(
-                "The input {} cannot be linked into the search folder ({e}).",
-                file.path
-            )
-        })?;
+        let link = dir.join(&record.link);
+        match placement {
+            Placement::OwnPath => {}
+            Placement::Symlink => sys::link_input(&original, &link).map_err(|e| {
+                format!(
+                    "The input {} cannot be linked into the search folder ({e}).",
+                    file.path
+                )
+            })?,
+            // (Windows) a hard link works on the folder's own volume only; nothing is ever copied
+            Placement::HardLink => fs::hard_link(&original, &link).map_err(|e| {
+                format!(
+                    "Two inputs are named {}. ProSE names its results after the files, so files of one \
+                     name are searched together only through links in the search folder, which Windows \
+                     can make only on the drive of the app's data ({}) and on NTFS; {} cannot be linked \
+                     there ({e}). Rename one of the files and start the search again.",
+                    record.name,
+                    dir.parent().unwrap_or(dir).display(),
+                    file.path
+                )
+            })?,
+        }
     }
     let json = serde_json::to_string_pretty(records).map_err(|e| e.to_string())?;
     fs::write(dir.join("inputs.json"), json)
@@ -436,6 +633,7 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
         partial,
         done_dir,
         records,
+        placements,
         sink,
         handle,
         mut lock,
@@ -457,8 +655,8 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
             return;
         }
     };
-    let pid = child.id();
-    handle.pid.store(pid, Ordering::SeqCst);
+    let group = Arc::new(sys::Group::new(&child));
+    *handle.group.lock().unwrap() = Some(group.clone());
     let _ = started.send(Ok(()));
     let emit = |event: SearchEvent| (sink)(event);
     emit(SearchEvent::Progress(ProgressEvent {
@@ -534,15 +732,22 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
 
     let status = child.wait();
     // whatever the tool left running goes with it (and holds no pipe open for the readers)
-    sys::kill_group(pid);
+    group.kill();
     let tracker = out_reader
         .join()
         .unwrap_or_else(|_| ProgressTracker::new(Vec::new()));
     let tail = err_reader.join().unwrap_or_default();
     drop(log);
 
+    // the hard links to the inputs (Windows) have served: they do not belong to the search, and would
+    // keep a file the user deletes on the disk
+    for (record, placement) in records.iter().zip(&placements) {
+        if *placement == Placement::HardLink {
+            let _ = with_backoff(|| fs::remove_file(partial.join(&record.link)));
+        }
+    }
     let outcome = if handle.cancelled.load(Ordering::SeqCst) {
-        let _ = fs::remove_dir_all(&partial);
+        let _ = remove_partial(lock.take(), &partial);
         None
     } else {
         match status {
@@ -553,7 +758,7 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
                         folder: done_dir.to_string_lossy().into_owned(),
                     })),
                     Err(e) => {
-                        let _ = fs::remove_dir_all(&partial);
+                        let _ = remove_partial(None, &partial);
                         Some(failed(
                             &id,
                             format!("The search folder cannot be finished ({e})."),
@@ -564,11 +769,11 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
             }
             Ok(status) => {
                 let message = humanize(&failure_message(&tail, &status), &partial, &records);
-                let _ = fs::remove_dir_all(&partial);
+                let _ = remove_partial(lock.take(), &partial);
                 Some(failed(&id, message, &tracker))
             }
             Err(e) => {
-                let _ = fs::remove_dir_all(&partial);
+                let _ = remove_partial(lock.take(), &partial);
                 Some(failed(
                     &id,
                     format!("Waiting for ProSE failed ({e})."),
@@ -578,6 +783,11 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
         }
     };
     searches.running.lock().unwrap().remove(&id);
+    // (Windows: closing the job ends anything still in it; the process's own handle goes too, so that
+    // it is gone from the process list when cancel returns)
+    handle.group.lock().unwrap().take();
+    drop(group);
+    drop(child);
     if let Some(event) = outcome {
         emit(event);
     }

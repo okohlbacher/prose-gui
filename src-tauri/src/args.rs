@@ -174,10 +174,104 @@ fn file_name(path: &str) -> String {
 }
 
 /// The name of input `index` (0-based) in the search folder: `<n>__<name>` with `n` from 1. ProSE names
-/// its per-input outputs after the input and refuses two inputs of one name, so every input goes in as
-/// a link with a name of its own; the suffix (`.mzML.gz`) stays as it is.
+/// its per-input outputs after the input and refuses two inputs of one name, so an input goes in as
+/// a link with a name of its own (see [`InputLinks`]); the suffix (`.mzML.gz`) stays as it is.
 pub fn link_name(index: usize, path: &str) -> String {
     format!("{}__{}", index + 1, file_name(path))
+}
+
+/// Whether `name`, a name in the top level of a search folder, is one of the links to the inputs
+/// (`<n>__<name>.mzML[.gz]`): never one of the search's own files.
+pub fn is_input_link(name: &str) -> bool {
+    name.split_once("__").is_some_and(|(n, rest)| {
+        !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) && is_spectrum_file(rest)
+    })
+}
+
+/// How the inputs reach ProSE, which names its outputs after each input's stem and refuses two inputs
+/// of one stem.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputLinks {
+    /// Every input as a symbolic link `<n>__<name>` in the search folder (Linux, macOS).
+    Symlinks,
+    /// Windows, where a symbolic link needs a privilege (developer mode): the inputs by their own paths
+    /// when their stems differ (ignoring case, as NTFS does); those that share a stem as hard links
+    /// `<n>__<name>` in the search folder, which works on the same volume only; never a copy.
+    PathsOrHardLinks,
+}
+
+impl InputLinks {
+    /// This platform's way.
+    pub const PLATFORM: InputLinks = if cfg!(windows) {
+        InputLinks::PathsOrHardLinks
+    } else {
+        InputLinks::Symlinks
+    };
+}
+
+/// How one input reaches ProSE.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Placement {
+    /// A symbolic link `<n>__<name>` in the search folder.
+    Symlink,
+    /// A hard link `<n>__<name>` in the search folder, removed again when the search ends.
+    HardLink,
+    /// The user's path itself.
+    OwnPath,
+}
+
+/// The stem ProSE gives an input of this name, compared as NTFS compares names.
+fn stem_key(name: &str) -> String {
+    input_stem(name).to_lowercase()
+}
+
+fn all_unique(names: impl IntoIterator<Item = String>) -> bool {
+    let mut seen = std::collections::HashSet::new();
+    names.into_iter().all(|n| seen.insert(stem_key(&n)))
+}
+
+/// How each input of `req` reaches ProSE (in order).
+pub fn input_placements(req: &SearchRequest, links: InputLinks) -> Vec<Placement> {
+    match links {
+        InputLinks::Symlinks => vec![Placement::Symlink; req.files.len()],
+        InputLinks::PathsOrHardLinks => {
+            let keys: Vec<String> = req
+                .files
+                .iter()
+                .map(|f| stem_key(&file_name(&f.path)))
+                .collect();
+            let placements: Vec<Placement> = keys
+                .iter()
+                .map(|k| {
+                    if keys.iter().filter(|other| *other == k).count() > 1 {
+                        Placement::HardLink
+                    } else {
+                        Placement::OwnPath
+                    }
+                })
+                .collect();
+            // a file whose own name looks like a link (`1__a.mzML` beside two `a.mzML`): all as links
+            let names = req
+                .files
+                .iter()
+                .enumerate()
+                .zip(&placements)
+                .map(|((i, f), p)| seen_name(i, &f.path, *p));
+            if all_unique(names) {
+                placements
+            } else {
+                vec![Placement::HardLink; req.files.len()]
+            }
+        }
+    }
+}
+
+/// The name ProSE sees for input `index`: the link's, or the file's own.
+fn seen_name(index: usize, path: &str, placement: Placement) -> String {
+    match placement {
+        Placement::OwnPath => file_name(path),
+        Placement::Symlink | Placement::HardLink => link_name(index, path),
+    }
 }
 
 /// What ProSE calls an input in its outputs (`<stem>.psm.parquet`): the link's name without `.gz`
@@ -311,10 +405,20 @@ pub fn is_open_search(params: &Map<String, Value>) -> bool {
     lower.max(upper) > if ppm { 1000.0 } else { 1.0 }
 }
 
-/// The command line of a search whose folder is `out_dir`: the inputs as the links `<n>__<name>` in it,
-/// the database (the folder's `database.fasta` with contaminants, else the user's file), and the
-/// outputs the app reads (`docs/parity.md`, "How the app runs ProSE"). Checks the request first.
+/// The command line of a search whose folder is `out_dir`, with this platform's [`InputLinks`].
 pub fn build_args(req: &SearchRequest, out_dir: &Path) -> Result<Vec<OsString>, String> {
+    build_args_with(req, out_dir, InputLinks::PLATFORM)
+}
+
+/// The command line of a search whose folder is `out_dir`: the inputs as the links `<n>__<name>` in it
+/// or by their own paths ([`input_placements`]), the database (the folder's `database.fasta` with
+/// contaminants, else the user's file), and the outputs the app reads (`docs/parity.md`, "How the app
+/// runs ProSE"). Checks the request first.
+pub fn build_args_with(
+    req: &SearchRequest,
+    out_dir: &Path,
+    links: InputLinks,
+) -> Result<Vec<OsString>, String> {
     if req.files.is_empty() {
         return Err("There is no input file.".to_string());
     }
@@ -377,8 +481,14 @@ pub fn build_args(req: &SearchRequest, out_dir: &Path) -> Result<Vec<OsString>, 
     args.extend(
         req.files
             .iter()
+            .zip(input_placements(req, links))
             .enumerate()
-            .map(|(i, f)| out_dir.join(link_name(i, &f.path)).into_os_string()),
+            .map(|(i, (f, placement))| match placement {
+                Placement::OwnPath => OsString::from(&f.path),
+                Placement::Symlink | Placement::HardLink => {
+                    out_dir.join(link_name(i, &f.path)).into_os_string()
+                }
+            }),
     );
     args.push("-database".into());
     args.push(if req.contaminants {
@@ -456,7 +566,8 @@ pub struct InputRecord {
     pub id: String,
     /// Position in the request.
     pub index: usize,
-    /// The link in the search folder (`<n>__<name>`), which ProSE saw as the input.
+    /// The name ProSE saw: the link in the search folder (`<n>__<name>`), or the file's own name when
+    /// it was given its own path (Windows, [`InputLinks::PathsOrHardLinks`]).
     pub link: String,
     /// What ProSE calls the input in its outputs.
     pub stem: String,
@@ -467,11 +578,17 @@ pub struct InputRecord {
 }
 
 pub fn input_records(req: &SearchRequest) -> Vec<InputRecord> {
+    input_records_with(req, InputLinks::PLATFORM)
+}
+
+pub fn input_records_with(req: &SearchRequest, links: InputLinks) -> Vec<InputRecord> {
+    let placements = input_placements(req, links);
     req.files
         .iter()
+        .zip(placements)
         .enumerate()
-        .map(|(index, f)| {
-            let link = link_name(index, &f.path);
+        .map(|(index, (f, placement))| {
+            let link = seen_name(index, &f.path, placement);
             InputRecord {
                 id: f.id.clone(),
                 index,

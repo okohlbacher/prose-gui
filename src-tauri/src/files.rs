@@ -12,7 +12,7 @@
 //!   `.faa`); any other path is refused before the disk is asked.
 //! - [`example_files`]: the bundled example, as the two named runs the web app searches.
 
-use crate::args::{is_fasta_file, is_spectrum_file};
+use crate::args::{is_fasta_file, is_input_link, is_spectrum_file};
 use serde::Serialize;
 use std::fs;
 use std::io::{self, Read};
@@ -153,6 +153,12 @@ pub fn resolve_search_file(
     if !valid_relative(name) {
         return Err(ReadError::refused(format!(
             "{name:?} is not a file of the search {search_id}."
+        )));
+    }
+    // a link to an input (on Windows a hard link, which resolves inside the folder) is the user's file
+    if is_input_link(name) {
+        return Err(ReadError::refused(format!(
+            "{name} is an input of the search {search_id}, not one of its files."
         )));
     }
     let canonical = fs::canonicalize(folder.join(name)).map_err(|e| ReadError::io(name, e))?;
@@ -389,14 +395,30 @@ pub struct ExampleFiles {
     pub database: String,
 }
 
-#[cfg(unix)]
-fn link_or_copy(original: &Path, link: &Path) -> io::Result<()> {
-    std::os::unix::fs::symlink(original, link)
+/// Whether `link` already is the example run under its name: a symbolic link to `run` (Unix), or a file
+/// of the run's size (Windows: a hard link or copy of it, see `link_example`).
+fn is_example_link(link: &Path, run: &Path) -> bool {
+    if cfg!(unix) {
+        fs::read_link(link).ok().as_deref() == Some(run) && link.is_file()
+    } else {
+        let size = |p: &Path| {
+            fs::symlink_metadata(p)
+                .ok()
+                .filter(|m| m.is_file())
+                .map(|m| m.len())
+        };
+        size(link).is_some() && size(link) == size(run)
+    }
 }
 
-#[cfg(not(unix))]
-fn link_or_copy(original: &Path, link: &Path) -> io::Result<()> {
-    fs::copy(original, link).map(|_| ())
+/// The bundled example run under another name. Windows has no symbolic links without a privilege: a
+/// hard link, or, where the app's data is on another drive than the app, a copy of the bundled file (the
+/// app's own example, 6.5 MB; the user's files are never copied).
+fn link_example(run: &Path, link: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    return std::os::unix::fs::symlink(run, link);
+    #[cfg(not(unix))]
+    return fs::hard_link(run, link).or_else(|_| fs::copy(run, link).map(|_| ()));
 }
 
 /// The example's inputs: the bundled run under its two names, as links in `<data_dir>/example/`
@@ -413,12 +435,11 @@ pub fn example_files(source_dir: &Path, data_dir: &Path) -> Result<ExampleFiles,
     let mut spectra = Vec::new();
     for name in EXAMPLE_NAMES {
         let link = dir.join(name);
-        let current = fs::read_link(&link).ok();
-        if current.as_deref() != Some(run.as_path()) || !link.is_file() {
+        if !is_example_link(&link, &run) {
             if fs::symlink_metadata(&link).is_ok() {
                 fs::remove_file(&link).map_err(|e| format!("{} ({e})", link.display()))?;
             }
-            link_or_copy(&run, &link).map_err(|e| {
+            link_example(&run, &link).map_err(|e| {
                 format!("The example cannot be prepared in {} ({e}).", dir.display())
             })?;
         }
