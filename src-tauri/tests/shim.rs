@@ -1091,6 +1091,26 @@ fn the_tool_runs_with_one_blas_thread_unless_set() {
     }
 }
 
+#[test]
+fn the_tool_never_runs_the_update_check_of_openms() {
+    for openblas in [None, Some(OsString::from("4"))] {
+        let cmd = tool::command_with(Path::new("/x/ProSE"), openblas);
+        let set: Vec<_> = cmd
+            .get_envs()
+            .filter(|(k, _)| *k == "OPENMS_DISABLE_UPDATE_CHECK")
+            .collect();
+        // set explicitly, so a user's OPENMS_DISABLE_UPDATE_CHECK=OFF (which turns the check on) is replaced
+        assert_eq!(
+            set,
+            vec![(
+                OsStr::new("OPENMS_DISABLE_UPDATE_CHECK"),
+                Some(OsStr::new("ON"))
+            )]
+        );
+    }
+    assert_eq!(tool::NO_UPDATE_CHECK, ("OPENMS_DISABLE_UPDATE_CHECK", "ON"));
+}
+
 // ---- running --------------------------------------------------------------------------------
 
 struct Run {

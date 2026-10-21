@@ -93,12 +93,21 @@ pub const LOADER_VARIABLES: &[&str] = &[
     "DYLD_INSERT_LIBRARIES",
 ];
 
+/// The variable that turns off the update check of OpenMS tools, and its value: a tool of a build with
+/// the check (CMake's `ENABLE_UPDATE_CHECK`, on by default) otherwise contacts openms-update.cs.uni-tuebingen.de
+/// once a day, waits up to 5 s for it when offline, and writes `<tool>.ver` beside the user's OpenMS
+/// settings. The bundled tool is built without the check (`native/scripts/build-openms.sh`); the variable
+/// covers a tool from `PROSE_BIN` or the PATH. Any value but `OFF` turns the check off.
+pub const NO_UPDATE_CHECK: (&str, &str) = ("OPENMS_DISABLE_UPDATE_CHECK", "ON");
+
 /// The command that runs the tool: `OPENBLAS_NUM_THREADS=1` unless the user has set it (Percolator's
 /// linear algebra would otherwise start a thread per core inside ProSE's own threads), as the
-/// FASTag shim does. `openblas` is the variable's current value. On macOS without the
+/// FASTag shim does. `openblas` is the variable's current value. Always with [`NO_UPDATE_CHECK`] (a
+/// user's `OFF` included: the app makes no network contact). On macOS without the
 /// [`LOADER_VARIABLES`]; on Windows without a console window (the app has none to share).
 pub fn command_with(path: &Path, openblas: Option<OsString>) -> Command {
     let mut command = Command::new(path);
+    command.env(NO_UPDATE_CHECK.0, NO_UPDATE_CHECK.1);
     if openblas.is_none() {
         command.env("OPENBLAS_NUM_THREADS", "1");
     }

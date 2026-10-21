@@ -44,6 +44,8 @@ export VCPKG_BINARY_SOURCES="clear;files,$BINCACHE,readwrite"
 export VCPKG_MAX_CONCURRENCY=${VCPKG_MAX_CONCURRENCY:-32}
 
 # Thermo RAW is off because its bridge needs dotnet; OpenTIMS is off because the app does not read .d files.
+# The update check is off: OpenMS tools otherwise contact openms-update.cs.uni-tuebingen.de once a day (the app has no
+# network access at run time; the app also sets OPENMS_DISABLE_UPDATE_CHECK for the tool, src-tauri/src/tool.rs).
 # shellcheck disable=SC2086 # OPENMS_CMAKE_ARGS: options, split at spaces
 cmake -G Ninja -S "$SRC" -B "$BUILD" \
   -DCMAKE_BUILD_TYPE=Release \
@@ -56,6 +58,7 @@ cmake -G Ninja -S "$SRC" -B "$BUILD" \
   -DWITH_THERMO_RAW=OFF \
   -DWITH_OPENTIMS=OFF \
   -DENABLE_DOCS=OFF \
+  -DENABLE_UPDATE_CHECK=OFF \
   -DPYOPENMS=OFF \
   -DENABLE_CLASS_TESTING=ON \
   -DENABLE_TOPP_TESTING=ON \

@@ -120,6 +120,9 @@ the dependencies. `JOBS` (default 100) sets the parallelism. Notes on the config
 
 - `WITH_THERMO_RAW=OFF`: the Thermo bridge needs dotnet. `WITH_OPENTIMS=OFF`, `WITH_GUI=OFF`,
   `ENABLE_DOCS=OFF` and `PYOPENMS=OFF` leave out what the app does not use.
+- `ENABLE_UPDATE_CHECK=OFF`: an OpenMS tool otherwise contacts `openms-update.cs.uni-tuebingen.de` once a day
+  (and waits up to 5 s for it when offline), and the app makes no network contact. The app also runs every
+  ProSE with `OPENMS_DISABLE_UPDATE_CHECK=ON` (`src-tauri/src/tool.rs`), for a tool from `PROSE_BIN` or the PATH.
 - `PATH` is rebuilt without linuxbrew: its binutils (`as` 2.36) cannot assemble the
   AVX-NE-CONVERT code in ONNX Runtime.
 - The targets include `FileInfo`, `ParquetDiff` and `FuzzyDiff` (the `TOPP_ProSE` tests run them)
