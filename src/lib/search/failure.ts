@@ -19,6 +19,11 @@ export type Failure = {
   summary: string
   /** OpenMS' raw text, when the summary shortens it. */
   detail: string | null
+  /**
+   * The search, when ProSE finished it but its results could not be read: it is kept in History and can be
+   * opened again from there.
+   */
+  searchId?: string
 }
 
 /** Without a report for this long, the engine was in a step that reports no progress (Percolator). */

@@ -64,6 +64,11 @@ export interface SearchResult {
   predicted: PredictedSpectra
   /** what could not be read and was left out, for the user (e.g. the protein sequences) */
   warnings: string[]
+  /**
+   * The protein sequences came from the folder's proteins.fasta, or there are no proteins: History need not
+   * write proteins.fasta for this search (it does when this is false: history.ts, `openSearch`).
+   */
+  proteinsSaved: boolean
 }
 
 /** Runs `read` on the file `name`; an error names the file. */
@@ -398,6 +403,7 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   accession.forEach((a, p) => {
     if (!proteinRow.has(a)) proteinRow.set(a, p)
   })
+  let proteinsSaved = proteinCount === 0
   const description = new Array<string>(proteinCount).fill('')
   const proteinSequence = new Array<string>(proteinCount).fill('')
   const proteinScore = new Float64Array(proteinCount).fill(NaN)
@@ -423,6 +429,7 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
         const bytes = await files(name)
         fasta = readFasta(utf8.decode(bytes))
         identified = own
+        proteinsSaved = own
         found = true
         break
       } catch (e) {
@@ -808,7 +815,7 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
     }
   }
   const summary = toSummary(yaml, paths, decoyString, modificationAnalysis)
-  return { summary, tables, spectra, predicted, warnings }
+  return { summary, tables, spectra, predicted, warnings, proteinsSaved }
 }
 
 /** The modifications of a QPX row, by position (−1 N-terminal, the length C-terminal, else 0-based). */

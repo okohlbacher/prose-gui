@@ -13,13 +13,15 @@
 //! - `example_files()` -> `{ spectra: [path, path], database }`
 //! - `save_text(name, contents)` and `save_search_file(searchId, name, suggested)`: a save dialog of
 //!   the system, then the file written where the user chose (-> the path, or null if cancelled)
-//! - History (`history`): `history_list()` -> entries (a folder with a broken record has `error`),
-//!   `history_save(searchId, record, proteins)` (a finished search gets its `search.json`),
-//!   `history_rename(searchId, name)`, `history_delete(searchId)`, `history_files(searchId)` (the
-//!   regular files of the folder, for a project file), `save_project_file(body, header name)` (a
-//!   save dialog, then the zip written where the user chose), `open_project_file()` (the open dialog, then the
-//!   bytes of the `.prose` file chosen; empty if cancelled) and `history_import(body)` (the entries of a project
-//!   in a fresh folder -> the new id). At startup the searches folder is swept (`history::sweep`).
+//! - History (`history`): `history_list()` -> entries (a folder with a broken record, or none, has
+//!   `error`), `history_save_record(searchId, record)` (a finished search gets its `search.json`, right
+//!   after `search://done`), `history_save_proteins(searchId, proteins)` (its `proteins.fasta`, once the
+//!   results are read; the folder's `database.fasta` goes), `history_rename(searchId, name)`,
+//!   `history_delete(searchId)`, `history_files(searchId)` (the regular files of the folder, for a project
+//!   file), `save_project_file(body, header name)` (a save dialog, then the zip written where the user
+//!   chose), `open_project_file()` (the open dialog, then the bytes of the file chosen; empty if
+//!   cancelled) and `history_import(body)` (the entries of a project in a fresh folder -> the new id). At
+//!   startup the partial folders of interrupted searches are swept (`history::sweep`).
 //!
 //! `--smoke-test` on the command line is the packaged app's start test ([`SMOKE_TEST`]).
 
@@ -253,14 +255,25 @@ async fn history_list(app: AppHandle) -> Result<Vec<history::HistoryEntry>, Stri
 }
 
 #[tauri::command]
-async fn history_save(
+async fn history_save_record(
     app: AppHandle,
     search_id: String,
     record: String,
+) -> Result<(), String> {
+    on_searches(&app, move |dir| {
+        history::save_record(&dir, &search_id, &record)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn history_save_proteins(
+    app: AppHandle,
+    search_id: String,
     proteins: String,
 ) -> Result<(), String> {
     on_searches(&app, move |dir| {
-        history::save(&dir, &search_id, &record, &proteins)
+        history::save_proteins(&dir, &search_id, &proteins)
     })
     .await
 }
@@ -458,7 +471,8 @@ pub fn run() {
             save_text,
             save_search_file,
             history_list,
-            history_save,
+            history_save_record,
+            history_save_proteins,
             history_rename,
             history_delete,
             history_files,

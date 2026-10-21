@@ -115,9 +115,13 @@ describe('the example search', () => {
     await row().waitForDisplayed({ timeout: 20000 })
     // (textContent: WebKit's visible text leaves out the cells that the table cuts to its width)
     expect(await row().getProperty('textContent')).toContain('DatabaseSuitability_1.mzML, DatabaseSuitability_2.mzML')
-    // the folder has its record: the shim's outputs, proteins.fasta and search.json
+    // the folder has its record: the shim's outputs, proteins.fasta and search.json; proteins.fasta replaced the
+    // copy of the database with the contaminants
     expect(existsSync(join(searchesDir(), searchId, 'search.json'))).toBe(true)
     expect(existsSync(join(searchesDir(), searchId, 'proteins.fasta'))).toBe(true)
+    expect(existsSync(join(searchesDir(), searchId, 'database.fasta'))).toBe(false)
+    // the record's PSMs (written when ProSE ended, from summary.yaml) are the result's
+    expect(await row().$('[data-column="psms"]').getProperty('textContent')).toBe('1,790')
 
     await row().$('button=Rename').click()
     await row().$('input').waitForDisplayed()

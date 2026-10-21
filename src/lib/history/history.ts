@@ -4,10 +4,12 @@
 //
 // The folder is the shim's (docs/parity.md for the tool's outputs); History adds
 //
-//   search.json     the record below, written last: a folder with it is a saved search
+//   search.json     the record below, written as soon as ProSE has ended (before the results are read,
+//                   from the request and summary.yaml): a folder with it is a saved search
 //   proteins.fasta  every protein of the result's protein table (accession, description, sequence;
-//                   generated decoys as searched), so that the search opens when the FASTA it was
-//                   searched with has moved, or on another computer
+//                   generated decoys as searched), written once the results are read, so that the search
+//                   opens when the FASTA it was searched with has moved, or on another computer; the
+//                   folder's database.fasta (the FASTA with the contaminants) goes then
 //
 // A project file holds the same files (the links to the inputs are not files and stay out). Opening
 // one writes its files to a fresh folder of the app, as a new search of History.
@@ -21,7 +23,8 @@ import { readSearch, type SearchFiles } from '../results/read'
 import type { ResultTables } from '../results/types'
 import { formatBytes } from '../format/bytes'
 import { fileSafe, resultName } from '../results/display'
-import type { OpenResult } from '../search/session.svelte'
+import { parseSummaryYaml } from '../results/summary'
+import type { EndedSearch, OpenResult } from '../search/session.svelte'
 // (only the version: a named import of a JSON module leaves the rest of package.json out of the bundle)
 import { version } from '../../../package.json'
 
@@ -112,8 +115,10 @@ export interface HistoryBackend {
   list(): Promise<HistoryEntry[]>
   /** A file of a search folder (rejects `{ notFound: true }` if it is not there). */
   read(id: string, name: string): Promise<Uint8Array>
-  /** Writes `proteins.fasta`, then the record: the search is then in History. */
-  save(id: string, record: string, proteins: string): Promise<void>
+  /** Writes the record: the search is then in History (a search that has one keeps it). */
+  saveRecord(id: string, record: string): Promise<void>
+  /** Writes `proteins.fasta` of a saved search, and removes its `database.fasta`. */
+  saveProteins(id: string, proteins: string): Promise<void>
   rename(id: string, name: string): Promise<void>
   delete(id: string): Promise<void>
   /** The regular files of the folder (no links to the inputs). */
@@ -142,17 +147,29 @@ export function countPsms(tables: ResultTables, psmFdr: number): number {
 
 /** The record of `result` under `name`. A stored result keeps the versions that made it. */
 export function recordOf(result: OpenResult, name: string, toolVersion: string): SearchRecord {
-  const s = result.settings
   return {
-    schema: SCHEMA_VERSION,
-    id: result.id,
-    name,
-    createdAt: result.createdAt,
+    ...endedRecordOf({ ...result, seconds: result.outcome.seconds }, name, toolVersion, countPsms(result.outcome.tables, result.psmFdr)),
     appVersion: result.stored?.appVersion ?? APP_VERSION,
     toolVersion: result.stored?.moduleVersion ?? toolVersion,
-    files: result.design.rows.map((r) => r.fileName),
+  }
+}
+
+/**
+ * The record of a search whose ProSE has ended, before its results are read: from the request (`search`)
+ * and the target PSMs that its summary.yaml reports (`psms`, `psmsOfSummary`).
+ */
+export function endedRecordOf(search: EndedSearch, name: string, toolVersion: string, psms: number): SearchRecord {
+  const s = search.settings
+  return {
+    schema: SCHEMA_VERSION,
+    id: search.id,
+    name,
+    createdAt: search.createdAt,
+    appVersion: APP_VERSION,
+    toolVersion,
+    files: search.design.rows.map((r) => r.fileName),
     database: s.database,
-    design: result.design,
+    design: search.design,
     settings: {
       parameters: s.parameters,
       fixedMods: s.fixedMods,
@@ -161,11 +178,21 @@ export function recordOf(result: OpenResult, name: string, toolVersion: string):
       contaminants: s.contaminants,
       ...(s.presetId !== undefined ? { presetId: s.presetId } : {}),
     },
-    psms: countPsms(result.outcome.tables, result.psmFdr),
-    psmFdr: result.psmFdr,
-    proteinFdr: result.proteinFdr,
-    seconds: result.outcome.seconds,
+    psms,
+    psmFdr: search.psmFdr,
+    proteinFdr: search.proteinFdr,
+    seconds: search.seconds,
   }
+}
+
+/** The target PSMs of a search by its summary.yaml (the sum of `per_file[].target_psms`); 0 if it says none. */
+export function psmsOfSummary(text: string): number {
+  const perFile: unknown = parseSummaryYaml(text).per_file
+  if (!Array.isArray(perFile)) return 0
+  return perFile.reduce((n: number, f) => {
+    const psms = (f as { target_psms?: unknown } | null)?.target_psms
+    return n + (typeof psms === 'number' && Number.isFinite(psms) ? psms : 0)
+  }, 0)
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -240,10 +267,10 @@ export function proteinsFasta(tables: ResultTables): string {
 //------------------------------------------------------------------------------------------------
 // Saving and opening
 
-/** Puts a search that has finished into History: its `proteins.fasta` and `search.json`. */
+/** Puts a search whose results have been read into History: its `search.json`, then its `proteins.fasta`. */
 export async function saveSearch(backend: HistoryBackend, result: OpenResult, name: string, toolVersion: string): Promise<void> {
-  const record = recordOf(result, name, toolVersion)
-  await backend.save(result.id, JSON.stringify(record), proteinsFasta(result.outcome.tables))
+  await backend.saveRecord(result.id, JSON.stringify(recordOf(result, name, toolVersion)))
+  await backend.saveProteins(result.id, proteinsFasta(result.outcome.tables))
 }
 
 /** The `files` of the results reader for a search folder. */
@@ -267,6 +294,11 @@ export async function openSearch(
   }
   const record = parseRecord(text)
   const read = await readSearch(folderFiles(backend, id))
+  // a search saved before its results could be read (or by an older version) gets its proteins.fasta now;
+  // a failure leaves it as it was (it opens with its database, and the next open tries again)
+  if (!read.proteinsSaved && record.imported !== true) {
+    await backend.saveProteins(id, proteinsFasta(read.tables)).catch(() => {})
+  }
   return {
     result: resultFromRecord(record, { ...read, seconds: record.seconds }),
     origin: { id, createdAt: record.createdAt },

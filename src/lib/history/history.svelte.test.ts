@@ -8,6 +8,7 @@ import type { OpenResult } from '../search/session.svelte'
 import { exampleFolder, exampleResult } from './fixtures'
 import { MemoryBackend } from './memory-backend'
 import {
+  canRetrySave,
   dismissSaveStatus,
   history,
   openFromHistory,
@@ -16,6 +17,7 @@ import {
   removeFromHistory,
   rename,
   restoreFromHistory,
+  retrySave,
   saveFinished,
   saveProjectFile,
   useBackend,
@@ -78,18 +80,21 @@ describe('History', () => {
     await finished('1-0', 'good', '2026-10-20T09:00:00.000Z')
     disk.addFolder('2-0', { 'search.json': '{ broken' })
     disk.addFolder('3-0', { 'search.json': JSON.stringify({ schema: 2, id: '3-0', name: 'future' }) })
-    // not in History: no record yet
+    // a finished search that was not saved (no record): listed as such, so that it can be deleted
     disk.addFolder('4-0', { 'summary.yaml': 'x' })
     await refreshHistory()
-    expect(history.entries.map((e) => e.id).sort()).toEqual(['1-0', '2-0', '3-0'])
+    expect(history.entries.map((e) => e.id).sort()).toEqual(['1-0', '2-0', '3-0', '4-0'])
     expect(history.entries.find((e) => e.id === '2-0')?.error).toMatch(/search\.json/)
     expect(history.entries.find((e) => e.id === '3-0')?.error).toMatch(/newer version of ProSE/)
+    expect(history.entries.find((e) => e.id === '4-0')?.error).toMatch(/This search was not saved/)
     expect(history.entries.find((e) => e.id === '1-0')?.error).toBeNull()
     // opening a broken one says why; opening the good one works
     await expect(openFromHistory('2-0')).rejects.toBeInstanceOf(ProjectError)
     await expect(openFromHistory('3-0')).rejects.toBeInstanceOf(ProjectVersionError)
+    await expect(openFromHistory('4-0')).rejects.toBeInstanceOf(ProjectError)
     // a broken folder can be deleted
     await removeFromHistory('2-0')
+    await removeFromHistory('4-0')
     expect(history.entries.map((e) => e.id).sort()).toEqual(['1-0', '3-0'])
   })
 
@@ -116,9 +121,36 @@ describe('History', () => {
     await saveFinished({ ...result, id: '2-0' })
     expect(history.save).toMatchObject({ id: '2-0', state: 'unsaved' })
     expect((history.save as { message: string }).message).toMatch(/Not saved to History \(no space left\)/)
-    expect(history.entries.map((e) => e.id)).toEqual(['1-0'])
+    // its folder stays, listed as not saved
+    expect(history.entries.map((e) => [e.id, e.error === null])).toEqual([
+      ['1-0', true],
+      ['2-0', false],
+    ])
+    // the save can be tried again while the app has the record
+    expect(canRetrySave('2-0')).toBe(true)
+    disk.failures.save = undefined
+    await retrySave('2-0')
+    expect(history.save).toEqual({ id: '2-0', state: 'saved' })
+    expect(canRetrySave('2-0')).toBe(false)
+    expect(history.entries.find((e) => e.id === '2-0')?.error).toBeNull()
     dismissSaveStatus()
     expect(history.save).toBeNull()
+  })
+
+  test('a saved search gets proteins.fasta in place of database.fasta; a failure there is retried on its next opening', async () => {
+    disk.addFolder('7-0', fixture)
+    expect(disk.folders.get('7-0')!.has('database.fasta')).toBe(true)
+    disk.failures.proteins = 'busy'
+    await saveFinished({ ...result, id: '7-0' })
+    // saved (the record), without proteins.fasta
+    expect(history.save).toEqual({ id: '7-0', state: 'saved' })
+    expect(disk.folders.get('7-0')!.has('proteins.fasta')).toBe(false)
+    expect(disk.folders.get('7-0')!.has('database.fasta')).toBe(true)
+    disk.failures.proteins = undefined
+    await openFromHistory('7-0')
+    expect(disk.folders.get('7-0')!.has('proteins.fasta')).toBe(true)
+    expect(disk.folders.get('7-0')!.has('database.fasta')).toBe(false)
+    expect(openResult.current?.outcome.tables).toEqual(result.outcome.tables)
   })
 
   test('opens a saved search in Results, and an address of one after a restart', async () => {

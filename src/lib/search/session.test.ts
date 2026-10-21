@@ -32,8 +32,17 @@ vi.mock('../desktop', async () => {
 vi.mock('../results/read', () => ({ readSearch: fake.read }))
 
 const { SearchFailed } = await import('../desktop')
-const { cancelSearch, finishedWhileCancelled, forgetFinishedWhileCancelled, onFinishedWhileCancelled, openResult, runSearch, searchProgress, searchRun } =
-  await import('./session.svelte')
+const {
+  cancelSearch,
+  finishedWhileCancelled,
+  forgetFinishedWhileCancelled,
+  onFinishedWhileCancelled,
+  onSearchEnded,
+  openResult,
+  runSearch,
+  searchProgress,
+  searchRun,
+} = await import('./session.svelte')
 
 const request: SearchRequest = {
   files: [
@@ -217,6 +226,51 @@ describe('runSearch', () => {
     await settle()
     search.done.resolve({ folder: '/x' })
     expect(await run).toBeNull()
-    expect(searchRun.failure).toEqual({ context: 'While reading the results', summary: 'qpx/1__a.psm.parquet: not a Parquet file', detail: null })
+    // (the search is kept: SearchError offers to open it again)
+    expect(searchRun.failure).toEqual({ context: 'While reading the results', summary: 'qpx/1__a.psm.parquet: not a Parquet file', detail: null, searchId: '17-0' })
+  })
+
+  it('once ProSE has ended, Cancel does nothing: the done won, and the search is read and opened', async () => {
+    const search = started('24-0')
+    const read = deferred<unknown>()
+    fake.read.mockReturnValueOnce(read.promise)
+    const run = runSearch(request, meta)
+    await settle()
+    expect(searchRun.toolEnded).toBe(false)
+    search.done.resolve({ folder: '/data/searches/24-0' })
+    await settle()
+    // the results are being read: the search is complete
+    expect(searchRun.toolEnded).toBe(true)
+    expect(searchProgress.label).toBe('Reading the results…')
+    cancelSearch()
+    expect(searchRun.status).toBe('running')
+    expect(fake.cancel).not.toHaveBeenCalled()
+    read.resolve({ summary: {}, tables: {}, spectra: {}, predicted: {}, warnings: [], proteinsSaved: true })
+    expect(await run).toBe('24-0')
+    expect(searchRun.status).toBe('done')
+    expect(openResult.current?.id).toBe('24-0')
+    expect(finishedWhileCancelled()).not.toContain('24-0')
+  })
+
+  it('the listeners of an ended search run before its results are read, and a failing one does not stop the read', async () => {
+    const order: string[] = []
+    const removeA = onSearchEnded(async (ended) => {
+      order.push(`ended ${ended.id} ${ended.seconds >= 0} ${ended.settings.database}`)
+    })
+    const removeB = onSearchEnded(() => {
+      throw new Error('a listener that fails')
+    })
+    const search = started('25-0')
+    fake.read.mockImplementationOnce(async () => {
+      order.push('read')
+      return { summary: {}, tables: {}, spectra: {}, predicted: {}, warnings: [], proteinsSaved: true }
+    })
+    const run = runSearch(request, meta)
+    await settle()
+    search.done.resolve({ folder: '/data/searches/25-0' })
+    expect(await run).toBe('25-0')
+    expect(order).toEqual(['ended 25-0 true human.fasta', 'read'])
+    removeA()
+    removeB()
   })
 })

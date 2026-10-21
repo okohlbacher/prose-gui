@@ -7,6 +7,10 @@ export class NotFound extends Error {
   readonly notFound = true
 }
 
+/** The error `history::list` gives a folder without a record (`history::NO_RECORD`). */
+export const NO_RECORD =
+  'This search was not saved: its folder has no record (search.json), because the app ended, or the record could not be written, as the search finished. Delete it to free its space.'
+
 /** The entries of a `frameEntries` body (the layout of `history::frame`). */
 export function unframe(body: Uint8Array): { name: string; data: Uint8Array }[] {
   const view = new DataView(body.buffer, body.byteOffset, body.byteLength)
@@ -32,7 +36,7 @@ export class MemoryBackend implements HistoryBackend {
   saved: { name: string; bytes: Uint8Array }[] = []
   cancelSave = false
   imported = 0
-  failures: Partial<Record<'list' | 'save' | 'rename' | 'delete', string>> = {}
+  failures: Partial<Record<'list' | 'save' | 'proteins' | 'rename' | 'delete', string>> = {}
 
   /** A folder as the shim leaves it. */
   addFolder(id: string, files: Record<string, Uint8Array | string>): void {
@@ -53,9 +57,13 @@ export class MemoryBackend implements HistoryBackend {
     const entries: HistoryEntry[] = []
     for (const [id, folder] of this.folders) {
       const record = folder.get('search.json')
-      if (!record) continue
       const bytes = [...folder.values()].reduce((n, f) => n + f.length, 0)
       const entry: HistoryEntry = { id, name: null, createdAt: null, appVersion: null, toolVersion: null, files: [], database: null, psms: null, bytes, error: null }
+      // (as `history::list`: a folder without a record is a search that was not saved)
+      if (!record) {
+        entries.push({ ...entry, error: NO_RECORD })
+        continue
+      }
       try {
         const json = JSON.parse(new TextDecoder().decode(record))
         if (typeof json?.schema !== 'number') throw new Error('search.json has no schema: it is not a ProSE search record.')
@@ -91,12 +99,19 @@ export class MemoryBackend implements HistoryBackend {
     return data
   }
 
-  async save(id: string, record: string, proteins: string): Promise<void> {
+  async saveRecord(id: string, record: string): Promise<void> {
     if (this.failures.save) throw new Error(this.failures.save)
     const folder = this.folder(id)
-    if (folder.has('search.json')) throw new Error(`The search ${id} is already saved.`)
+    // (a search that has a record keeps it)
+    if (!folder.has('search.json')) folder.set('search.json', new TextEncoder().encode(record))
+  }
+
+  async saveProteins(id: string, proteins: string): Promise<void> {
+    if (this.failures.proteins) throw new Error(this.failures.proteins)
+    const folder = this.folder(id)
+    if (!folder.has('search.json')) throw new Error(`The search ${id} is not saved (it has no search.json).`)
     folder.set('proteins.fasta', new TextEncoder().encode(proteins))
-    folder.set('search.json', new TextEncoder().encode(record))
+    folder.delete('database.fasta')
   }
 
   async rename(id: string, name: string): Promise<void> {

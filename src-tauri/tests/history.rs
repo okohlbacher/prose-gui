@@ -6,7 +6,8 @@ mod common;
 use common::{set_folder_modified, TempDir};
 use prose_desktop_lib::history::{
     delete, finish_partial, folder_files, frame, import, list, lock_partial, read_chosen_project,
-    remove_partial, rename, save, sweep, with_backoff, BACKOFF_TRIES, LOCK_FILE, SWEEP_GRACE,
+    remove_partial, rename, save_proteins, save_record, sweep, with_backoff, BACKOFF_TRIES,
+    LOCK_FILE, NO_RECORD, SWEEP_GRACE,
 };
 use std::fs;
 use std::io;
@@ -33,7 +34,8 @@ fn saved(dir: &Path, id: &str, name: &str) {
     fs::create_dir_all(folder.join("qpx")).unwrap();
     fs::write(folder.join("qpx/1__a.psm.parquet"), b"PAR1....PAR1").unwrap();
     fs::write(folder.join("inputs.json"), "[]").unwrap();
-    save(dir, id, &record(id, name), ">P1 first\nPEPTIDE\n").unwrap();
+    save_record(dir, id, &record(id, name)).unwrap();
+    save_proteins(dir, id, ">P1 first\nPEPTIDE\n").unwrap();
 }
 
 fn json(path: &Path) -> serde_json::Value {
@@ -131,8 +133,9 @@ fn history_lists_an_incomplete_folder_with_its_message() {
         r#"{"schema":1,"id":"8-0","name":5,"files":"a","psms":"many"}"#,
     )
     .unwrap();
-    // not listed: no search.json (unfinished), a partial folder, a file, a name that is no id
+    // no search.json: a search that was not saved, listed as such
     fs::create_dir_all(dir.join("9-0")).unwrap();
+    // not listed: a partial folder (running), a file, a name that is no id
     fs::create_dir_all(dir.join("10-0.partial")).unwrap();
     fs::write(dir.join("loose.txt"), "x").unwrap();
     fs::create_dir_all(dir.join("not an id")).unwrap();
@@ -140,9 +143,10 @@ fn history_lists_an_incomplete_folder_with_its_message() {
 
     let entries = list(&dir);
     let ids: Vec<&str> = entries.iter().map(|e| e.id.as_str()).collect();
-    assert_eq!(entries.len(), 8, "{ids:?}");
+    assert_eq!(entries.len(), 9, "{ids:?}");
     let get = |id: &str| entries.iter().find(|e| e.id == id).unwrap();
     assert!(get("1-0").error.is_none());
+    assert_eq!(get("9-0").error.as_deref(), Some(NO_RECORD));
     for id in ["2-0", "3-0", "5-0", "6-0", "7-0"] {
         assert!(get(id).error.is_some(), "{id} lists with an error");
     }
@@ -171,32 +175,85 @@ fn history_lists_an_incomplete_folder_with_its_message() {
 fn save_refuses_what_is_not_a_record() {
     let (_tmp, dir) = searches();
     fs::create_dir_all(dir.join("1-0")).unwrap();
-    assert!(save(&dir, "1-0", "not json", "").is_err());
-    assert!(save(&dir, "1-0", r#"{"schema":2,"id":"1-0"}"#, "").is_err());
+    assert!(save_record(&dir, "1-0", "not json").is_err());
+    assert!(save_record(&dir, "1-0", r#"{"schema":2,"id":"1-0"}"#).is_err());
     assert!(
-        save(&dir, "1-0", &record("other", "x"), "").is_err(),
+        save_record(&dir, "1-0", &record("other", "x")).is_err(),
         "the id is the folder's"
     );
     assert!(
-        save(&dir, "2-0", &record("2-0", "x"), "").is_err(),
+        save_record(&dir, "2-0", &record("2-0", "x")).is_err(),
         "no such folder"
     );
-    assert!(save(&dir, "../x", &record("../x", "x"), "").is_err());
+    assert!(save_record(&dir, "../x", &record("../x", "x")).is_err());
     assert!(
         !dir.join("1-0/search.json").exists(),
         "a refused save leaves no record"
     );
-    save(&dir, "1-0", &record("1-0", "x"), ">A\nB\n").unwrap();
-    // a record is written once; History's name is changed by rename
-    assert!(save(&dir, "1-0", &record("1-0", "y"), "").is_err());
+    // proteins go only to a saved search
+    assert!(save_proteins(&dir, "1-0", ">A\nB\n")
+        .unwrap_err()
+        .contains("not saved"));
+    save_record(&dir, "1-0", &record("1-0", "x")).unwrap();
+    // a record is written once (History's name is changed by rename): saving again keeps it
+    save_record(&dir, "1-0", &record("1-0", "y")).unwrap();
     assert_eq!(json(&dir.join("1-0/search.json"))["name"], "x");
-    // no leftovers of the atomic write
+    save_proteins(&dir, "1-0", ">A\nB\n").unwrap();
+    // no leftovers of the atomic writes
     let mut names: Vec<String> = fs::read_dir(dir.join("1-0"))
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     names.sort();
     assert_eq!(names, ["proteins.fasta", "search.json"]);
+}
+
+#[test]
+fn the_record_comes_first_then_proteins_fasta_replaces_the_database_copy() {
+    let (_tmp, dir) = searches();
+    // a finished search as the shim leaves it: its outputs and database.fasta (the FASTA with cRAP)
+    let folder = dir.join("1-0");
+    fs::create_dir_all(folder.join("qpx")).unwrap();
+    fs::write(folder.join("summary.yaml"), "per_file: []").unwrap();
+    fs::write(
+        folder.join("database.fasta"),
+        ">P1\nPEPTIDE\n>CON__P2\nKR\n",
+    )
+    .unwrap();
+    // right after done: the record alone; the search is in History, database.fasta still there
+    save_record(&dir, "1-0", &record("1-0", "x")).unwrap();
+    assert!(list(&dir)[0].error.is_none());
+    assert!(folder.join("database.fasta").exists());
+    // the results read: proteins.fasta, and database.fasta goes
+    save_proteins(&dir, "1-0", ">P1\nPEPTIDE\n").unwrap();
+    assert_eq!(
+        fs::read_to_string(folder.join("proteins.fasta")).unwrap(),
+        ">P1\nPEPTIDE\n"
+    );
+    assert!(!folder.join("database.fasta").exists());
+    // again (an opening that writes it once more): fine without database.fasta
+    save_proteins(&dir, "1-0", ">P1\nPEPTIDE\n").unwrap();
+}
+
+#[test]
+fn a_finished_folder_without_record_is_listed_as_not_saved() {
+    let (_tmp, dir) = searches();
+    saved(&dir, "1-0", "kept");
+    fs::create_dir_all(dir.join("2-0/qpx")).unwrap();
+    fs::write(dir.join("2-0/qpx/1__a.psm.parquet"), "x".repeat(100)).unwrap();
+    let entries = list(&dir);
+    assert_eq!(entries.len(), 2);
+    let unsaved = entries.iter().find(|e| e.id == "2-0").unwrap();
+    assert_eq!(unsaved.error.as_deref(), Some(NO_RECORD));
+    assert_eq!(unsaved.bytes, 100);
+    assert_eq!(unsaved.name, None);
+    // listed last (with the errors), and it can be deleted
+    assert_eq!(entries.last().unwrap().id, "2-0");
+    delete(&dir, "2-0").unwrap();
+    assert_eq!(list(&dir).len(), 1);
+    // a partial folder (a running search) is not listed
+    fs::create_dir_all(dir.join("3-0.partial")).unwrap();
+    assert_eq!(list(&dir).len(), 1);
 }
 
 #[test]
@@ -379,13 +436,13 @@ fn read_chosen_project_does_not_follow_a_link() {
 }
 
 #[test]
-fn the_sweep_removes_what_a_search_left() {
+fn the_sweep_removes_what_an_interrupted_search_left_and_no_finished_search() {
     let (_tmp, dir) = searches();
     saved(&dir, "1-0", "kept");
     // a partial folder of an interrupted search of an older version (no lock file)
     fs::create_dir_all(dir.join("2-0.partial/qpx")).unwrap();
     fs::write(dir.join("2-0.partial/prose.log"), "x").unwrap();
-    // a finished folder that never got its record
+    // a finished folder that never got its record (the app ended as the search finished): the user's
     fs::create_dir_all(dir.join("3-0")).unwrap();
     fs::write(dir.join("3-0/summary.yaml"), "x").unwrap();
     // things that are not searches stay
@@ -394,13 +451,16 @@ fn the_sweep_removes_what_a_search_left() {
     fs::create_dir_all(dir.join("x.partial.keep")).unwrap();
     fs::create_dir_all(dir.join("not an id.partial")).unwrap();
 
-    // now: both are younger than the grace and stay
+    // now: the partial folder is younger than the grace and stays
     assert!(sweep(&dir, SystemTime::now(), SWEEP_GRACE).is_empty());
-    // later than the grace
+    // later than the grace: the partial folder only
     let later = SystemTime::now() + SWEEP_GRACE + Duration::from_secs(60);
-    assert_eq!(sweep(&dir, later, SWEEP_GRACE), ["2-0.partial", "3-0"]);
-    // a saved search, a loose file and odd names are never touched
+    assert_eq!(sweep(&dir, later, SWEEP_GRACE), ["2-0.partial"]);
+    // however much later: a finished search, with or without record, is never swept
+    assert!(sweep(&dir, later + SWEEP_GRACE * 1000, SWEEP_GRACE).is_empty());
+    assert!(dir.join("3-0/summary.yaml").exists());
     assert!(dir.join("1-0/search.json").exists());
+    // a loose file and odd names are never touched
     assert!(dir.join("loose.txt").exists());
     assert!(dir.join("not an id").exists());
     assert!(dir.join("x.partial.keep").exists());
@@ -470,22 +530,23 @@ fn the_lock_file_never_belongs_to_a_search_or_a_project() {
 }
 
 #[test]
-fn the_sweep_spares_a_folder_that_was_just_written() {
+fn the_sweep_spares_an_old_partial_folder_that_was_just_written() {
     let (_tmp, dir) = searches();
-    // a folder whose own time is old but whose log was written a moment ago (a long search that has just finished)
-    fs::create_dir_all(dir.join("3-0")).unwrap();
-    fs::write(dir.join("3-0/prose.log"), "x").unwrap();
+    // a partial folder of an older version (no lock file) whose own time is old but whose log was written a
+    // moment ago (a long search of another instance that is still running)
+    fs::create_dir_all(dir.join("3-0.partial")).unwrap();
+    fs::write(dir.join("3-0.partial/prose.log"), "x").unwrap();
     let old = SystemTime::now() - Duration::from_secs(3600);
-    set_folder_modified(&dir.join("3-0"), old);
+    set_folder_modified(&dir.join("3-0.partial"), old);
     assert!(sweep(&dir, SystemTime::now(), SWEEP_GRACE).is_empty());
     // and one whose log is old too goes
     fs::File::options()
         .write(true)
-        .open(dir.join("3-0/prose.log"))
+        .open(dir.join("3-0.partial/prose.log"))
         .unwrap()
         .set_modified(old)
         .unwrap();
-    assert_eq!(sweep(&dir, SystemTime::now(), SWEEP_GRACE), ["3-0"]);
+    assert_eq!(sweep(&dir, SystemTime::now(), SWEEP_GRACE), ["3-0.partial"]);
 }
 
 #[test]
@@ -517,16 +578,16 @@ fn names_are_checked_on_save_and_import() {
     let (_tmp, dir) = searches();
     fs::create_dir_all(dir.join("1-0")).unwrap();
     let long = "x".repeat(201);
-    assert!(save(&dir, "1-0", &record("1-0", &long), "")
+    assert!(save_record(&dir, "1-0", &record("1-0", &long))
         .unwrap_err()
         .contains("at most 200"));
-    assert!(save(&dir, "1-0", &record("1-0", "a\\u0007b"), "")
+    assert!(save_record(&dir, "1-0", &record("1-0", "a\\u0007b"))
         .unwrap_err()
         .contains("one line"));
-    assert!(save(&dir, "1-0", &record("1-0", "   "), "").is_err());
+    assert!(save_record(&dir, "1-0", &record("1-0", "   ")).is_err());
     assert!(!dir.join("1-0/search.json").exists());
     // a name with spaces around is kept trimmed
-    save(&dir, "1-0", &record("1-0", "  padded  "), "").unwrap();
+    save_record(&dir, "1-0", &record("1-0", "  padded  ")).unwrap();
     assert_eq!(json(&dir.join("1-0/search.json"))["name"], "padded");
 
     // a project's record with such a name is refused, nothing written

@@ -22,6 +22,7 @@ function result(psmFdr = 0.01, proteinFdr = 0.01, rescored = false, proteinFdrAp
       spectra: {} as StoredSpectra,
       predicted: { psmOffsets: new Uint32Array(tables.psms.count + 1), ion: [], mz: new Float32Array(), intensity: new Float32Array() },
       warnings: [],
+      proteinsSaved: true,
       seconds: 1,
       summary: {
         files: tables.files.map((path) => ({ path, ms2Spectra: 10, percolator: rescored ? { applied: true } : null })),

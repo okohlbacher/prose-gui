@@ -1,7 +1,9 @@
 // The state of History for the views: the saved searches, what became of the last save, and the actions
-// of the views (open from History, save and open a project file, rename, delete). A finished search is
-// saved here automatically, right after the shim's `done`; saving never breaks the results view, it only
-// reports. A search that finished while it was being cancelled has its folder removed at once.
+// of the views (open from History, save and open a project file, rename, delete). A search is saved here
+// automatically: its record as soon as ProSE has ended (before its results are read, so that a search
+// whose results cannot be read stays in History and can be opened again), its proteins.fasta once its
+// results are read. Saving never breaks the results view, it only reports. A search that finished while it
+// was being cancelled has its folder removed at once.
 
 import { desktopBackend, errorText } from '../desktop'
 import { resultName } from '../results/display'
@@ -10,13 +12,26 @@ import {
   finishedWhileCancelled,
   forgetFinishedWhileCancelled,
   onFinishedWhileCancelled,
+  onSearchEnded,
   onSearchFinished,
   openResult,
   openStoredResult,
+  type EndedSearch,
   type OpenResult,
 } from '../search/session.svelte'
 import { toolState } from '../search/tool.svelte'
-import { exportProject, importProject, openSearch, ProjectError, saveSearch, type HistoryBackend, type HistoryEntry } from './history'
+import {
+  endedRecordOf,
+  exportProject,
+  importProject,
+  openSearch,
+  ProjectError,
+  proteinsFasta,
+  psmsOfSummary,
+  recordOf,
+  type HistoryBackend,
+  type HistoryEntry,
+} from './history'
 
 /** What became of the save of a finished search. */
 export type SaveStatus =
@@ -86,31 +101,108 @@ export async function refreshHistory(): Promise<void> {
  * The name of a result in History and in its project file: the one History has (it may have been
  * renamed since it was opened), else the one it was stored with, else the exports' (from its files).
  */
-function nameOf(result: OpenResult): string {
+function nameOf(result: Pick<OpenResult, 'id' | 'design' | 'stored'>): string {
   const listed = entries.find((e) => e.id === result.id)?.name
   return listed ?? result.stored?.name ?? resultName(result.design.rows.map((r) => r.fileName))
 }
 
+const toolVersion = () => toolState.info?.version ?? 'unknown'
+
+/** Whether History lists the search as saved (with a record it can open). */
+const isListed = (id: string) => entries.some((e) => e.id === id && e.error === null)
+
+/** The records of this session's searches whose save failed: written again by `retrySave` and `openAgain`. */
+const unsavedRecords = new Map<string, string>()
+
 let queue: Promise<unknown> = Promise.resolve()
 
-/**
- * Saves a search that finished in this session to History. Saves go one after the other; this never
- * rejects: the outcome is `history.save`.
- */
-export function saveFinished(result: OpenResult): Promise<void> {
-  const run = queue.then(async () => {
-    status = { id: result.id, state: 'saving' }
-    try {
-      await saveSearch(backend, result, nameOf(result), toolState.info?.version ?? 'unknown')
-      status = { id: result.id, state: 'saved' }
-    } catch (e) {
-      status = { id: result.id, state: 'unsaved', message: describeSaveFailure(e) }
-      return
-    }
-    await refreshHistory()
-  })
+/** Runs `work` after the saves before it (saves go one after the other). */
+function queued(work: () => Promise<void>): Promise<void> {
+  const run = queue.then(work)
   queue = run.catch(() => {})
   return run
+}
+
+/** Writes a record; the outcome is `history.save` (true: saved). */
+async function writeRecord(id: string, record: string): Promise<boolean> {
+  status = { id, state: 'saving' }
+  try {
+    await backend.saveRecord(id, record)
+  } catch (e) {
+    unsavedRecords.set(id, record)
+    status = { id, state: 'unsaved', message: describeSaveFailure(e) }
+    return false
+  }
+  unsavedRecords.delete(id)
+  status = { id, state: 'saved' }
+  return true
+}
+
+/**
+ * Saves the record of a search whose ProSE has just ended, before its results are read: from the request
+ * and the target PSMs of its summary.yaml (0 if that cannot be read). Never rejects: the outcome is
+ * `history.save`.
+ */
+export function saveEnded(search: EndedSearch): Promise<void> {
+  return queued(async () => {
+    let psms = 0
+    try {
+      psms = psmsOfSummary(new TextDecoder().decode(await backend.read(search.id, 'summary.yaml')))
+    } catch {
+      // (the record is written all the same; the reader reports a summary that cannot be read)
+    }
+    const record = endedRecordOf(search, nameOf({ ...search, stored: undefined }), toolVersion(), psms)
+    await writeRecord(search.id, JSON.stringify(record))
+    await refreshHistory()
+  })
+}
+
+/**
+ * Completes the save of a search whose results have been read in this session: its record, if it has none
+ * yet (the save when ProSE ended failed, or a result opened otherwise), then its proteins.fasta, which
+ * replaces the folder's database.fasta. Saves go one after the other; this never rejects: the outcome is
+ * `history.save` (a failure of proteins.fasta alone is not reported: the search is saved, opens with its
+ * database, and its next opening writes proteins.fasta).
+ */
+export function saveFinished(result: OpenResult): Promise<void> {
+  return queued(async () => {
+    if (!isListed(result.id)) await refreshHistory()
+    if (!isListed(result.id) && !(await writeRecord(result.id, JSON.stringify(recordOf(result, nameOf(result), toolVersion()))))) return
+    await backend.saveProteins(result.id, proteinsFasta(result.outcome.tables)).catch(() => {})
+    await refreshHistory()
+  })
+}
+
+/** Whether the save of search `id` failed in this session and can be tried again (`retrySave`). */
+export function canRetrySave(id: string): boolean {
+  return unsavedRecords.has(id)
+}
+
+/**
+ * Tries the failed save of search `id` again: its record, and, when its result is open, its
+ * proteins.fasta. The outcome is `history.save`.
+ */
+export function retrySave(id: string): Promise<void> {
+  const open = openResult.current
+  if (open?.id === id) return saveFinished(open)
+  const record = unsavedRecords.get(id)
+  if (record === undefined) return Promise.resolve()
+  return queued(async () => {
+    await writeRecord(id, record)
+    await refreshHistory()
+  })
+}
+
+/**
+ * Opens search `id` again after its results could not be read: its record is saved first if that had
+ * failed, then the results are read again and shown (Results). Throws what is wrong, as `openFromHistory`.
+ */
+export async function openAgain(id: string): Promise<void> {
+  if (unsavedRecords.has(id)) {
+    await retrySave(id)
+    if (unsavedRecords.has(id)) throw new ProjectError((status?.state === 'unsaved' && status.message) || 'The search is not saved to History.')
+  }
+  await openFromHistory(id)
 }
 
 /** Removes the folders of the searches that finished while they were cancelled. */
@@ -127,10 +219,11 @@ export async function removeCancelled(): Promise<void> {
 
 let started = false
 
-/** Starts History: saves the searches that finish, removes the cancelled ones, reads the list. */
+/** Starts History: saves the searches that end and finish, removes the cancelled ones, reads the list. */
 export function initHistory(): void {
   if (started) return
   started = true
+  onSearchEnded((search) => saveEnded(search))
   onSearchFinished((result) => void saveFinished(result))
   onFinishedWhileCancelled(() => void removeCancelled())
   void removeCancelled()
@@ -187,9 +280,8 @@ export async function openProjectFile(): Promise<boolean> {
  * History yet (its save failed) is saved first. Resolves with the path, or null if the user cancelled.
  */
 export async function saveProjectFile(result: OpenResult): Promise<string | null> {
-  const saved = () => entries.some((e) => e.id === result.id && e.error === null)
-  if (!saved()) await refreshHistory()
-  if (!saved()) {
+  if (!isListed(result.id)) await refreshHistory()
+  if (!isListed(result.id)) {
     await saveFinished(result)
     if (status?.state === 'unsaved' && status.id === result.id) throw new ProjectError(status.message)
   }

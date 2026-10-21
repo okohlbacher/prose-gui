@@ -3,9 +3,9 @@
 // plain types below, so that the screens stay the web app's and the tests need no Tauri.
 //
 // Commands (src-tauri/src/lib.rs): tool_info, start_search, cancel_search, read_search_file,
-// inspect_files, example_files, save_text, save_search_file, history_list, history_save, history_rename,
-// history_delete, history_files, history_import, open_project_file, save_project_file. Events:
-// search://progress, search://done, search://failed.
+// inspect_files, example_files, save_text, save_search_file, history_list, history_save_record,
+// history_save_proteins, history_rename, history_delete, history_files, history_import, open_project_file,
+// save_project_file. Events: search://progress, search://done, search://failed.
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
@@ -202,7 +202,8 @@ export function saveSearchFile(searchId: string, name: string, suggested: string
 export const desktopBackend: HistoryBackend = {
   list: () => invoke<HistoryEntry[]>('history_list'),
   read: async (searchId, name) => new Uint8Array(await invoke<ArrayBuffer>('read_search_file', { searchId, name })),
-  save: (searchId, record, proteins) => invoke('history_save', { searchId, record, proteins }),
+  saveRecord: (searchId, record) => invoke('history_save_record', { searchId, record }),
+  saveProteins: (searchId, proteins) => invoke('history_save_proteins', { searchId, proteins }),
   rename: (searchId, name) => invoke('history_rename', { searchId, name }),
   delete: (searchId) => invoke('history_delete', { searchId }),
   files: (searchId) => invoke('history_files', { searchId }),

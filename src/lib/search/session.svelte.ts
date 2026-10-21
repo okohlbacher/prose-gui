@@ -50,6 +50,15 @@ export type OpenResult = {
   }
 }
 
+/**
+ * A search whose ProSE has ended successfully, before its results are read: History saves its record from
+ * this at once (history.svelte.ts), so that a search whose results then cannot be read is not lost.
+ */
+export type EndedSearch = Omit<OpenResult, 'outcome' | 'stored'> & {
+  /** The time from the start of ProSE to its end (s). */
+  seconds: number
+}
+
 export type RunStatus = 'idle' | 'running' | 'done' | 'failed' | 'cancelled'
 
 export const searchRun = $state<{
@@ -69,6 +78,11 @@ export const searchRun = $state<{
   now: number
   /** What went wrong: the stage and file, the message, ProSE's raw text. */
   failure: Failure | null
+  /**
+   * ProSE has ended (successfully) and the results are being read: the search is complete and saved, so it
+   * can no longer be cancelled (Cancel is hidden).
+   */
+  toolEnded: boolean
 }>({
   status: 'idle',
   label: '',
@@ -80,6 +94,7 @@ export const searchRun = $state<{
   startedAt: 0,
   now: 0,
   failure: null,
+  toolEnded: false,
 })
 
 /** No move of the fraction for this long: the progress turns indeterminate (Percolator sends no progress). */
@@ -135,6 +150,19 @@ export function openStoredResult(result: Omit<OpenResult, 'id' | 'createdAt'>, o
   releaseResultsView()
   open = { ...result, id: origin.id, createdAt: origin.createdAt }
   return origin.id
+}
+
+/**
+ * Called with every search of this session whose ProSE has ended successfully, before its results are read;
+ * the read waits for the listeners (History writes the search's record).
+ */
+type EndedListener = (search: EndedSearch) => Promise<void> | void
+const endedListeners = new Set<EndedListener>()
+
+/** Registers `listener` for the searches whose ProSE ends from now on; returns the way to remove it. */
+export function onSearchEnded(listener: EndedListener): () => void {
+  endedListeners.add(listener)
+  return () => endedListeners.delete(listener)
 }
 
 /** Called with every search that finished in this session (not with failed or cancelled ones). */
@@ -248,6 +276,7 @@ export async function runSearch(
     movedAt: now,
     startedAt: now,
     failure: null,
+    toolEnded: false,
   })
   startClock()
   // when the tool last reported (a step without reports, like Percolator, leaves a long silence)
@@ -276,18 +305,22 @@ export async function runSearch(
     const seconds = (performance.now() - now) / 1000
     // a cancel that came too late (the search had finished): the user asked to stop, so it stays cancelled
     if (id !== runId) return null
-    Object.assign(searchRun, { label: READING_RESULTS, file: -1 })
+    // ProSE has ended: the search is complete, and from here on it is kept, not cancelled
+    Object.assign(searchRun, { label: READING_RESULTS, file: -1, toolEnded: true })
+    const createdAt = new Date().toISOString()
+    const ended: EndedSearch = { ...meta, id: started.searchId, createdAt, seconds }
+    // History saves the search's record before its results are read (a listener's failure is its own to report)
+    await Promise.allSettled([...endedListeners].map(async (listener) => listener(ended)))
     let result: SearchResult
     try {
       result = await readSearch(searchFiles(started.searchId))
     } catch (e) {
-      if (id !== runId) return null
-      fail({ context: 'While reading the results', summary: errorText(e), detail: null })
+      // the search stays in History, where it can be opened again (SearchError offers it)
+      fail({ context: 'While reading the results', summary: errorText(e), detail: null, searchId: started.searchId })
       return null
     }
-    if (id !== runId) return null
     releaseResultsView() // the previous result's view, model and caches
-    const finished: OpenResult = { ...meta, id: started.searchId, createdAt: new Date().toISOString(), outcome: { ...result, seconds } }
+    const finished: OpenResult = { ...meta, id: started.searchId, createdAt, outcome: { ...result, seconds } }
     open = finished
     searchRun.status = 'done'
     for (const listener of finishedListeners) {
@@ -324,10 +357,11 @@ export async function runSearch(
 
 /**
  * Cancels the running search: the run ends at once (a search finishing meanwhile is not opened), and
- * the shim ends ProSE and removes its folder.
+ * the shim ends ProSE and removes its folder. Once ProSE has ended (`toolEnded`: its results are being
+ * read) there is nothing to cancel: the search is complete and saved, and this does nothing.
  */
 export function cancelSearch(): void {
-  if (searchRun.status !== 'running') return
+  if (searchRun.status !== 'running' || searchRun.toolEnded) return
   runId++
   stopClock()
   searchRun.status = 'cancelled'

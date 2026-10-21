@@ -1,12 +1,14 @@
 //! History: the searches of the app's data folder (`<searches>/<id>/`), and the project files.
 //!
 //! A search is in History when its folder has `search.json` (the record: see `src/lib/history/history.ts`
-//! for its schema, version 1). The app writes the record right after `search://done` ([`save`], with
-//! `proteins.fasta`); from then on Rust owns the folder: [`list`], [`rename`], [`delete`], and
-//! [`import`], which makes a folder of a project file's entries. A folder without a record is not
-//! listed; [`sweep`] (at startup) removes the partial folders of interrupted searches and the finished
-//! folders that never got a record. A folder with an unreadable or unknown record is listed with its
-//! `error`, and never fails the list.
+//! for its schema, version 1). The app writes the record right after `search://done`, before it reads the
+//! results ([`save_record`]), and `proteins.fasta` once it has read them ([`save_proteins`], which also
+//! drops the folder's `database.fasta`); from then on Rust owns the folder: [`list`], [`rename`],
+//! [`delete`], and [`import`], which makes a folder of a project file's entries. A finished folder
+//! without a record (the app ended, or the record could not be written, as the search finished) is
+//! listed with an `error`, so that it can be deleted, as is a folder with an unreadable or unknown record;
+//! none fails the list. [`sweep`] (at startup) removes only the partial folders of interrupted searches:
+//! a finished search is never removed but by the user.
 //!
 //! A `<id>.partial` folder (a running search or import) holds `.lock`, locked exclusively by its owner
 //! ([`lock_partial`]) until the folder is renamed or removed; the sweep removes a partial folder only
@@ -28,8 +30,12 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The version of `search.json` this app reads and writes.
 pub const SCHEMA: u64 = 1;
-/// A finished folder without a record is removed by the sweep after this long.
+/// A partial folder without a lock file (one of an older version of the app) is removed by the sweep when
+/// it has not been written to for this long.
 pub const SWEEP_GRACE: Duration = Duration::from_secs(600);
+/// The `error` of a finished search folder without a record.
+pub const NO_RECORD: &str = "This search was not saved: its folder has no record (search.json), because the app \
+     ended, or the record could not be written, as the search finished. Delete it to free its space.";
 /// The largest `search.json` (it holds the design; a few kB to a few MB).
 const MAX_RECORD: u64 = 64 << 20;
 /// The longest name of a search.
@@ -41,6 +47,8 @@ const MAX_ENTRY_NAME: usize = 1024;
 const MAX_DEPTH: usize = 8;
 
 const RECORD: &str = "search.json";
+/// The proteins of a saved search (see [`save_proteins`]).
+const PROTEINS: &str = "proteins.fasta";
 /// The lock file of a partial folder.
 pub const LOCK_FILE: &str = ".lock";
 /// A lock file younger than this is not taken for a stale one (its owner may not have locked it yet).
@@ -188,8 +196,21 @@ pub fn list(dir: &Path) -> Vec<HistoryEntry> {
         if !meta.is_dir() {
             continue;
         }
-        // (a record that is a link or a folder is listed with its error; none: not in History)
+        // (a record that is a link or a folder is listed with its error; none: the folder of a search that
+        // was not saved, listed with that as its error)
         if fs::symlink_metadata(item.path().join(RECORD)).is_err() {
+            entries.push(HistoryEntry {
+                id: id.clone(),
+                name: None,
+                created_at: None,
+                app_version: None,
+                tool_version: None,
+                files: Vec::new(),
+                database: None,
+                psms: None,
+                bytes: folder_size(&item.path(), 0),
+                error: Some(NO_RECORD.to_string()),
+            });
             continue;
         }
         entries.push(entry_of(dir, &id));
@@ -241,17 +262,19 @@ fn existing_folder(dir: &Path, id: &str) -> Result<PathBuf, String> {
     }
 }
 
-/// Puts the finished search `id` into History: writes `proteins.fasta`, then `search.json` (so that a
-/// record means a complete folder). The record has to be of this schema and name this folder as its
-/// `id`; a search that has a record is not saved again.
-pub fn save(dir: &Path, id: &str, record_json: &str, proteins_fasta: &str) -> Result<(), String> {
+/// Puts the finished search `id` into History: writes its `search.json`. The app does so right after the
+/// search's `done`, before it reads the results, so that a search whose results cannot be read (or an app
+/// that ends meanwhile) does not lose it. The record has to be of this schema and name this folder as its
+/// `id`. A search that has a record keeps it (History's name is changed by [`rename`]): saving it again
+/// does nothing.
+pub fn save_record(dir: &Path, id: &str, record_json: &str) -> Result<(), String> {
     let folder = existing_folder(dir, id)?;
     let map = parse_record(record_json)?;
     if map.get("id").and_then(|v| v.as_str()) != Some(id) {
         return Err(format!("The record does not belong to the search {id}."));
     }
     if fs::symlink_metadata(folder.join(RECORD)).is_ok() {
-        return Err(format!("The search {id} is already saved."));
+        return Ok(());
     }
     // (a name that is not a name is refused; the text is kept as the app wrote it unless the name is trimmed)
     let mut map = map;
@@ -269,10 +292,30 @@ pub fn save(dir: &Path, id: &str, record_json: &str, proteins_fasta: &str) -> Re
     } else {
         record_json.to_string()
     };
-    write_atomically(&folder.join("proteins.fasta"), proteins_fasta.as_bytes())
-        .map_err(|e| format!("proteins.fasta cannot be written ({e})."))?;
     write_atomically(&folder.join(RECORD), record_text.as_bytes())
         .map_err(|e| format!("{RECORD} cannot be written ({e})."))
+}
+
+/// The proteins of a saved search, written once its results have been read: `proteins.fasta` (every
+/// protein of the result's protein table, from which the search opens without its database), and then the
+/// folder's `database.fasta` (the user's FASTA with the contaminants, which ProSE searched) is removed:
+/// `proteins.fasta` replaces it. The search has to have its record.
+pub fn save_proteins(dir: &Path, id: &str, proteins_fasta: &str) -> Result<(), String> {
+    let folder = existing_folder(dir, id)?;
+    if fs::symlink_metadata(folder.join(RECORD)).is_err() {
+        return Err(format!(
+            "The search {id} is not saved (it has no {RECORD})."
+        ));
+    }
+    write_atomically(&folder.join(PROTEINS), proteins_fasta.as_bytes())
+        .map_err(|e| format!("{PROTEINS} cannot be written ({e})."))?;
+    match fs::remove_file(folder.join(crate::args::DATABASE_FILE)) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(format!(
+            "{} cannot be removed ({e}).",
+            crate::args::DATABASE_FILE
+        )),
+        _ => Ok(()),
+    }
 }
 
 /// A name for a search: not empty, one line, not longer than [`MAX_NAME`] characters.
@@ -672,11 +715,11 @@ fn claim_partial(folder: &Path, now: SystemTime, grace: Duration) -> Option<Opti
 }
 
 /// The startup sweep of the searches folder: removes `<id>.partial` folders whose owner is gone (see
-/// `claim_partial`: a running search or import, of this or another app instance, holds its lock), and
-/// finished `<id>` folders without a record whose last write is more than `grace` before `now` (the app
-/// saves a record within moments of a search's end). The folders are listed first, so none made while
-/// the sweep runs is looked at. Links, files, and anything not named like a search are left alone.
-/// Returns the names removed.
+/// `claim_partial`: a running search or import, of this or another app instance, holds its lock; a folder
+/// of an older version without lock file goes when it has not been written to for `grace`). Finished
+/// `<id>` folders are never removed, with or without a record ([`list`] shows one without as not saved).
+/// The folders are listed first, so none made while the sweep runs is looked at. Links, files, and
+/// anything not named like a search are left alone. Returns the names removed.
 pub fn sweep(dir: &Path, now: SystemTime, grace: Duration) -> Vec<String> {
     let Ok(read) = fs::read_dir(dir) else {
         return Vec::new();
@@ -699,11 +742,8 @@ pub fn sweep(dir: &Path, now: SystemTime, grace: Duration) -> Vec<String> {
             Some(id) if valid_id(id) => {
                 claim_partial(&path, now, grace).map(|guard| remove_partial(guard, &path))
             }
-            Some(_) => None,
-            None => (valid_id(&name)
-                && fs::symlink_metadata(path.join(RECORD)).is_err()
-                && older_than(last_written(&path), now, grace))
-            .then(|| with_backoff(|| fs::remove_dir_all(&path))),
+            // (a finished search is the user's to delete)
+            Some(_) | None => None,
         };
         if matches!(gone, Some(Ok(()))) {
             removed.push(name);
