@@ -224,6 +224,15 @@ fn test_dialog_path() -> Option<PathBuf> {
 
 /// The system's save dialog for `name`; None if the user cancelled.
 fn ask_save_path(app: &AppHandle, name: &str) -> Result<Option<PathBuf>, String> {
+    ask_save_path_titled(app, name, None)
+}
+
+/// The same, with the dialog's title.
+fn ask_save_path_titled(
+    app: &AppHandle,
+    name: &str,
+    title: Option<&str>,
+) -> Result<Option<PathBuf>, String> {
     if let Some(path) = test_dialog_path() {
         return Ok(Some(path));
     }
@@ -231,6 +240,9 @@ fn ask_save_path(app: &AppHandle, name: &str) -> Result<Option<PathBuf>, String>
         .extension()
         .map(|e| e.to_string_lossy().into_owned());
     let mut dialog = app.dialog().file().set_file_name(name);
+    if let Some(title) = title {
+        dialog = dialog.set_title(title);
+    }
     if let Some(ext) = extension.as_deref() {
         dialog = dialog.add_filter(ext.to_uppercase(), &[ext]);
     }
@@ -400,6 +412,10 @@ fn unescape(text: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
+/// The title of the save dialog of a project file: what it holds, beyond the results.
+pub const PROJECT_DIALOG_TITLE: &str =
+    "Save the project: the search's results, including folder paths of this computer";
+
 /// A project file: the zip (the raw body; the suggested name in the header `name`) written where
 /// the user chooses in the system's save dialog, as `.prose`. -> the path, or null if cancelled.
 #[tauri::command]
@@ -423,8 +439,9 @@ async fn save_project_file(
         .unwrap_or_else(|| "prose.prose".to_string());
     let body = body.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        // (the path as chosen: the dialog's filter and the suggested name carry the extension)
-        let Some(path) = ask_save_path(&app, &name)? else {
+        // (the path as chosen: the dialog's filter and the suggested name carry the extension; the title says
+        // what a project holds, as README.md does)
+        let Some(path) = ask_save_path_titled(&app, &name, Some(PROJECT_DIALOG_TITLE))? else {
             return Ok(None);
         };
         std::fs::write(&path, body)
