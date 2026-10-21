@@ -3,7 +3,7 @@
 // (results/fixtures/example) held in memory; the Rust side has its own tests (src-tauri/tests/history.rs).
 
 import { strToU8, zipSync } from 'fflate'
-import { beforeAll, describe, expect, test } from 'vitest'
+import { beforeAll, describe, expect, test, vi } from 'vitest'
 import type { OpenResult } from '../search/session.svelte'
 import {
   countPsms,
@@ -12,6 +12,8 @@ import {
   importProject,
   importProjectBytes,
   isPlainName,
+  MAX_UNPACKED,
+  MAX_ZIP_ENTRIES,
   openSearch,
   parseRecord,
   ProjectError,
@@ -234,6 +236,25 @@ describe('project files', () => {
     await expect(exportProject(backend, '100-0', 'x')).rejects.toThrow(/inputs.json/)
     backend.folders.get('100-0')!.set('inputs.json', strToU8('nope'))
     await expect(exportProject(backend, '100-0', 'x')).rejects.toThrow(/inputs.json/)
+  })
+
+  test('a search too large for a project file is refused before anything is read or zipped', async () => {
+    const backend = await savedBackend()
+    const read = vi.spyOn(backend, 'read')
+    const files = backend.files.bind(backend)
+    // results of more than the 3 GB a project opens with (and so near the 4 GB a zip without zip64 holds)
+    backend.files = async (id: string) => [...(await files(id)), { name: 'qpx/huge.psm.parquet', size: MAX_UNPACKED }]
+    await expect(exportProject(backend, '100-0', 'x')).rejects.toThrow(
+      /too large for a project file: its results take 3\.\d+ GB, and a project file holds at most 3\.\d+ GB/,
+    )
+    expect(read).not.toHaveBeenCalled()
+    expect(backend.saved).toEqual([])
+    // the files left out of a project do not count (prose.log, database.fasta)
+    backend.files = async (id: string) => [...(await files(id)), { name: 'database.fasta', size: MAX_UNPACKED }]
+    expect(await exportProject(backend, '100-0', 'x')).toBe('/saved/x.prose')
+    // a project of more files than a zip without zip64 holds
+    backend.files = async () => Array.from({ length: MAX_ZIP_ENTRIES + 1 }, (_, i) => ({ name: i === 0 ? 'search.json' : `f/${i}`, size: 1 }))
+    await expect(exportProject(backend, '100-0', 'x')).rejects.toThrow(/its results take 65536 files/)
   })
 
   test('the project of a search that is not saved is refused', async () => {

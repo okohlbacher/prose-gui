@@ -361,16 +361,36 @@ export async function exportProject(backend: HistoryBackend, id: string, name: s
   if (!listed.some((f) => f.name === RECORD_FILE)) {
     throw new ProjectError(`The search is not saved to History (it has no ${RECORD_FILE}), so there is no project to make.`)
   }
-  const names = listed
+  const kept = listed.filter((f) => !LEFT_OUT.has(f.name))
+  // what the project would hold, before anything is read: within what a project opens with (MAX_UNPACKED)
+  // and what a zip without zip64 can hold (MAX_ZIP; fflate writes no zip64)
+  const total = kept.reduce((n, f) => n + f.size, 0)
+  if (total > MAX_UNPACKED || kept.length > MAX_ZIP_ENTRIES) throw tooLargeForAProject(total, kept.length)
+  const names = kept
     .map((f) => f.name)
-    .filter((n) => !LEFT_OUT.has(n))
     .sort((a, b) => (a === RECORD_FILE ? -1 : b === RECORD_FILE ? 1 : a < b ? -1 : 1))
   const zippable: Zippable = {}
   for (const file of names) {
     const data = await backend.read(id, file)
     zippable[file] = [file === 'inputs.json' ? withoutPaths(data) : data, { level: STORE.test(file) ? 0 : LEVEL }]
   }
-  return backend.saveProject(projectFileName(name), zipSync(zippable))
+  const zip = zipSync(zippable)
+  if (zip.length > MAX_ZIP) throw tooLargeForAProject(zip.length, names.length)
+  return backend.saveProject(projectFileName(name), zip)
+}
+
+/** The most a zip without zip64 holds: 4 GiB less a byte, and 65,535 entries. */
+export const MAX_ZIP = 2 ** 32 - 1
+export const MAX_ZIP_ENTRIES = 0xffff
+
+/** Why a search makes no project file: it is too large for one. */
+function tooLargeForAProject(bytes: number, files: number): ProjectError {
+  const what = files > MAX_ZIP_ENTRIES ? `${files} files` : formatBytes(bytes)
+  return new ProjectError(
+    `This search is too large for a project file: its results take ${what}, and a project file holds at most ` +
+      `${formatBytes(MAX_UNPACKED)} (what ProSE opens of one; a zip of more than 4 GB, or of more than 65,535 files, ` +
+      'needs the zip64 format, which ProSE does not write). The search stays in History on this computer.',
+  )
 }
 
 /** The most a project may unpack to (the zip is read into memory). */
