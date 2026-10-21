@@ -99,14 +99,14 @@ export const CASES = {
     rescore: false,
     peptdeep: false,
   },
-  // A search in which no PSM passes the FDR (as a search on the wrong database): ProSE's TOPP test data of
-  // ProSE_15_empty, whose decoys (DECOY_, reused by decoys auto) are the real proteins of the example and its targets
+  // A search in which no PSM passes the FDR (as a search on the wrong database): ProSE's TOPP test database
+  // ProSE_empty.fasta, whose decoys (DECOY_, reused by decoys auto) are the real proteins of the example and its targets
   // their reversed sequences, so the spectra match decoys only. Two inputs (the merged files) with the PSM and protein
   // FDR at 1 % and Percolator. No web counterpart: the reader's test checks that it reads as an empty result.
   empty: {
     mzML: resolve(OPENMS_TOPP, 'THIRDPARTY/DatabaseSuitability_in_spec.mzML'),
     names: ['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'],
-    fasta: resolve(OPENMS_TOPP, 'ProSE_15_empty.fasta'),
+    fasta: resolve(OPENMS_TOPP, 'ProSE_empty.fasta'),
     contaminants: false,
     parameters: { ...ORBITRAP, 'FDR:protein': 0.01 },
     rescore: true,

@@ -1,5 +1,5 @@
 shared:
-  database_file: "/scratch/sachsenb/openms-desktop/src/tests/topp/ProSE_15_empty.fasta"
+  database_file: "/scratch/sachsenb/openms-desktop/src/tests/topp/ProSE_empty.fasta"
   enzyme: "Trypsin/P"
   precursor_tol_lower: 10
   precursor_tol_upper: 10
@@ -29,8 +29,8 @@ shared:
   db_decoy_proteins: 49
   indexed_peptides: 16767
   indexed_fragments: 403263
-  seconds_index_build: 0.018021
-  seconds_total: 7.51449
+  seconds_index_build: 0.018299
+  seconds_total: 7.54947
 per_file:
   - input_file: "1__DatabaseSuitability_1.mzML"
     exit_code: 0
@@ -61,8 +61,8 @@ per_file:
       recommended_ppm: 0
     timing_seconds:
       calibration: 0
-      search: 0.010919
-      fdr: 0.000678
+      search: 0.010593
+      fdr: 0.000806
     percolator:
       applied: true
       skipped_reason: ""
@@ -97,8 +97,8 @@ per_file:
       recommended_ppm: 0
     timing_seconds:
       calibration: 0
-      search: 0.008972
-      fdr: 0.000713
+      search: 0.010072
+      fdr: 0.000721
     percolator:
       applied: true
       skipped_reason: ""
@@ -107,17 +107,17 @@ per_file:
 outputs:
   - type: "merged idXML"
     paths:
-      - "/tmp/prose-fixture-khx5hT/search/merged.idXML"
+      - "/tmp/prose-fixture-UF56kq/search/merged.idXML"
   - type: "QPX parquet"
     paths:
-      - "/tmp/prose-fixture-khx5hT/search/qpx"
+      - "/tmp/prose-fixture-UF56kq/search/qpx"
   - type: "PSM spectra"
     paths:
-      - "/tmp/prose-fixture-khx5hT/search/spectra/1__DatabaseSuitability_1.psm_spectra.parquet"
-      - "/tmp/prose-fixture-khx5hT/search/spectra/2__DatabaseSuitability_2.psm_spectra.parquet"
+      - "/tmp/prose-fixture-UF56kq/search/spectra/1__DatabaseSuitability_1.psm_spectra.parquet"
+      - "/tmp/prose-fixture-UF56kq/search/spectra/2__DatabaseSuitability_2.psm_spectra.parquet"
   - type: "OpenMS parquet"
     paths:
-      - "/tmp/prose-fixture-khx5hT/search/oms"
+      - "/tmp/prose-fixture-UF56kq/search/oms"
 files_failed: 0
 files_total: 2
 protein_fdr_applied: false
