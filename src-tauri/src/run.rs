@@ -147,7 +147,8 @@ pub struct Searches {
     /// How the inputs reach the tool: this platform's way, unless a test chooses.
     links: InputLinks,
     /// The executable that watches each search's tool ([`crate::watchdog`]; macOS: the app's own), or
-    /// none.
+    /// none. (Unix only: Windows' job object ends the tool with the app.)
+    #[cfg_attr(not(unix), allow(dead_code))]
     watchdog: Option<PathBuf>,
 }
 
