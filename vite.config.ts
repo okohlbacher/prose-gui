@@ -11,6 +11,8 @@ export default defineConfig({
   plugins: [tailwindcss(), svelte()],
   resolve: {
     alias: { $lib: fileURLToPath(new URL('./src/lib', import.meta.url)) },
+    // the unit tests mount components (happy-dom): Svelte's client build, as in the app
+    ...(process.env.VITEST ? { conditions: ['browser'] } : {}),
   },
   server: { port: 1420, strictPort: true },
   // one bundle, loaded from disk by the app (the modification and chemistry tables are in it)

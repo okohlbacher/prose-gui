@@ -76,13 +76,22 @@ export class LevelState {
   /** The rows at the search's cutoff, before the user's filters ("n of total"). */
   readonly total = $derived.by(() => levelTotal(this.#view.model, this.level, this.filters.showDecoys))
 
-  /** What the table says without rows: nothing passed the search's cutoff, or the filters hide everything. */
+  /**
+   * What the table says without rows: the filters hide everything, or nothing passed the search's cutoff. A search
+   * without a target PSM says so on every level, with the likely cause; the protein FDR is named only if it was applied.
+   */
   readonly emptyText = $derived.by(() => {
     const what = { proteins: 'proteins', peptides: 'peptides', psms: 'PSMs' }[this.level]
     if (this.total > 0) return `No ${what} match the filters.`
     const m = this.#view.model
-    const [fdr, q] = this.level === 'proteins' ? ['protein FDR', m.proteinFdr] : ['PSM FDR', m.psmFdr]
-    return `No ${what} pass the search's ${fdr} (${formatPercent(q)}, ${formatQ(q)}).`
+    const cutoff = (fdr: string, q: number) => `the search's ${fdr} (${formatPercent(q)}, ${formatQ(q)})`
+    if (levelTotal(m, 'psms', false) === 0) {
+      return `No PSMs pass ${cutoff('PSM FDR', m.psmFdr)}. The database may not match the organism of the sample.`
+    }
+    if (this.level === 'proteins' && this.#view.result.outcome.summary.proteinFdrApplied) {
+      return `No proteins pass ${cutoff('protein FDR', m.proteinFdr)}.`
+    }
+    return `No ${what} pass ${cutoff('PSM FDR', m.psmFdr)}.`
   })
 
   readonly specs = $derived.by(() => columnSpecs(this.#view.model, this.level, this.#view.search))

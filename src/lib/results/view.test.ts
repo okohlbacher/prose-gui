@@ -8,7 +8,7 @@ import { makeTables } from './synthetic'
 import { peptidePsms } from './protein'
 import { releaseResultsView, resultsViewFor } from './view.svelte'
 
-function result(psmFdr = 0.01, proteinFdr = 0.01, rescored = false): OpenResult {
+function result(psmFdr = 0.01, proteinFdr = 0.01, rescored = false, proteinFdrApplied = true): OpenResult {
   const tables = sampleTables()
   return {
     id: 'r1',
@@ -25,7 +25,7 @@ function result(psmFdr = 0.01, proteinFdr = 0.01, rescored = false): OpenResult 
       seconds: 1,
       summary: {
         files: tables.files.map((path) => ({ path, ms2Spectra: 10, percolator: rescored ? { applied: true } : null })),
-        proteinFdrApplied: true,
+        proteinFdrApplied,
         psmFdr,
         proteinFdr,
         decoyString: 'DECOY_',
@@ -117,6 +117,19 @@ describe('ResultsView', () => {
     expect(view.proteins.emptyText).toBe("No proteins pass the search's protein FDR (0.01 %, q ≤ 0.0001).")
     view.psms.filters.text = 'nothing like this'
     expect(view.psms.emptyText).toBe('No PSMs match the filters.')
+  })
+
+  it('says on every level that no PSM passed the PSM FDR, with the likely cause, and names a protein FDR only if applied', () => {
+    const noPsm = "No PSMs pass the search's PSM FDR (0.01 %, q ≤ 0.0001). The database may not match the organism of the sample."
+    for (const applied of [true, false]) {
+      releaseResultsView()
+      const view = resultsViewFor(result(0.0001, 0.0001, false, applied)) // no PSM and no protein is at q ≤ 0.0001
+      expect([view.proteins.emptyText, view.peptides.emptyText, view.psms.emptyText]).toEqual([noPsm, noPsm, noPsm])
+    }
+    // PSMs pass, no protein does, and no protein FDR was applied: the PSM FDR is the cutoff
+    releaseResultsView()
+    const view = resultsViewFor(result(0.01, 0.0001, false, false))
+    expect(view.proteins.emptyText).toBe("No proteins pass the search's PSM FDR (1 %, q ≤ 0.01).")
   })
 
   it('keeps sorting by the same sample when technical replicates are split or merged', () => {
