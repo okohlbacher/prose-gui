@@ -9,6 +9,7 @@
   import KeyFigures from '$lib/components/results/KeyFigures.svelte'
   import OverviewTab from '$lib/components/results/OverviewTab.svelte'
   import ProteinPanel from '$lib/components/protein/ProteinPanel.svelte'
+  import PsmView from '$lib/components/psm/PsmView.svelte'
   import PeptidesTable from '$lib/components/results/PeptidesTable.svelte'
   import ProteinsEmpty from '$lib/components/results/ProteinsEmpty.svelte'
   import ProteinsTable from '$lib/components/results/ProteinsTable.svelte'
@@ -64,7 +65,7 @@
   let proteinsTable = $state<ProteinsTable | null>(null)
   let psmsTable = $state<PsmsTable | null>(null)
   let panel = $state<ProteinPanel | null>(null)
-  let psmView = $state<{ focus: () => void } | null>(null)
+  let psmView = $state<PsmView | null>(null)
 
   async function openProtein(protein: number) {
     view?.openProtein(protein)
@@ -225,8 +226,7 @@
       {/key}
     {/if}
     {#if psmOpen}
-      <!-- the PSM view: next commit ({closePsm} {breadcrumb}) -->
-      <button type="button" class="m-4 self-start text-xs underline" onclick={() => (void closePsm(), void breadcrumb)}>Back</button>
+      <PsmView bind:this={psmView} {view} onClose={closePsm} onBreadcrumb={breadcrumb} />
     {/if}
   </section>
 {:else}
