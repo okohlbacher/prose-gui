@@ -531,6 +531,10 @@ jobs:
         with:
           arch: x64
 
+      # with VCINSTALLDIR set, rustc takes link.exe from PATH, where Git Bash's /usr/bin/link comes first
+      - name: MSVC's linker for cargo
+        run: echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=${VCToolsInstallDir}bin\Hostx64\x64\link.exe" >> "$GITHUB_ENV"
+
       # --- OpenMS (only without a bundle in the cache) ------------------------------------------------
       - name: Build tools for OpenMS
         if: steps.bundle.outputs.cache-hit != 'true'
