@@ -733,13 +733,30 @@ jobs:
       contents: write
       actions: read
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # the tag names the version the packages carry (tauri.conf.json): desktop-native-v0.1.0 for 0.1.0
+      - name: The tag's version is the app's
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(jq -r .version src-tauri/tauri.conf.json)
+          if [ "${TAG#desktop-native-v}" != "$version" ]; then
+            echo "::error::The tag $TAG names version ${TAG#desktop-native-v}, but src-tauri/tauri.conf.json of its commit says $version: tag desktop-native-v$version."
+            exit 1
+          fi
+          echo "version $version"
+
       - name: The packages of the tested branch run of this commit
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
-          run=$(gh run list --workflow desktop.yml --branch prose-desktop --commit "$SHA" --status success \
+          # (a push of the branch: a pull request from a fork's branch of that name is not the tested build)
+          run=$(gh run list --workflow desktop.yml --branch prose-desktop --event push --commit "$SHA" --status success \
             --limit 1 --json databaseId --jq '.[0].databaseId // empty')
           if [ -z "$run" ]; then
             echo "::error::No successful run of desktop.yml on prose-desktop for $SHA. Tag a commit of prose-desktop whose run passed (or wait for its run to finish)."
@@ -764,22 +781,25 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           cat > notes.md <<'NOTES'
-          ProSE desktop for Linux x64 (Ubuntu 22.04 or later): the AppImage runs as is, the .deb installs with apt.
+          **macOS** 15 or later on Apple silicon (arm64): the .dmg. Drag ProSE to Applications, then, once, in
+          Terminal:
 
-          The AppImage needs the system's OpenGL ES library, libGLESv2.so.2 (the .deb pulls it in with WebKitGTK).
-          Desktop installations have it; without it the app exits at once (exit code 127, "Couldn't open
-          libGLESv2.so.2"). Install it with
+              xattr -dr com.apple.quarantine /Applications/ProSE.app
+
+          The app is not signed with a Developer ID nor notarized, so macOS refuses to open it until then
+          (System Settings > Privacy & Security > "Open Anyway" also works after a first attempt).
+
+          **Linux** x64 (Ubuntu 22.04 or later): the AppImage runs as is, the .deb (package `prose`) installs with
+          apt. The AppImage needs the system's OpenGL ES library, libGLESv2.so.2 (the .deb pulls it in with
+          WebKitGTK). Desktop installations have it; without it the app exits at once (exit code 127, "Couldn't
+          open libGLESv2.so.2"). Install it with
           - Ubuntu, Debian: `sudo apt install libgles2`
           - Fedora: `sudo dnf install libglvnd-gles`
 
-          ProSE desktop for macOS 15 or later on Apple silicon (arm64): the .dmg. It is not signed with a
-          Developer ID nor notarized: the first time, macOS refuses to open it; allow it in System Settings >
-          Privacy & Security > "Open Anyway" (or run `xattr -dr com.apple.quarantine /Applications/ProSE.app`).
-
-          ProSE desktop for Windows 10 (1903 or later) and 11 (x64): the installer (-setup.exe), for the current
-          user, without administrator rights. It is not signed: SmartScreen asks once ("More info" > "Run
-          anyway"). Two input files of one name can be searched together only when they are on the drive of the
-          app's data (usually C:); otherwise the app asks to rename one of them.
+          **Windows** 10 (1903 or later) and 11 (x64): the installer (-setup.exe), for the current user, without
+          administrator rights. It is not signed: SmartScreen asks once ("More info" > "Run anyway"). Two input
+          files of one name can be searched together only when they are on the drive of the app's data (usually
+          C:); otherwise the app asks to rename one of them.
           NOTES
           gh release create "$TAG" --draft --verify-tag --title "ProSE desktop ${TAG#desktop-native-v}" \
             --notes-file notes.md \
