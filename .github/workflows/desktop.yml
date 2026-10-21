@@ -108,8 +108,16 @@ jobs:
         if: steps.bundle.outputs.cache-hit != 'true'
         run: |
           cd "$RUNNER_TEMP"
-          curl -sSfLO https://ftpmirror.gnu.org/binutils/binutils-2.42.tar.xz
-          echo "f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800  binutils-2.42.tar.xz" | sha256sum -c -
+          # (ftpmirror.gnu.org redirects to a random mirror, one of which had an expired certificate: several
+          # sources in turn; the checksum decides)
+          for url in https://ftpmirror.gnu.org/binutils https://ftp.gnu.org/gnu/binutils \
+            https://sourceware.org/pub/binutils/releases https://mirrors.kernel.org/gnu/binutils; do
+            curl -sSfLO --retry 3 "$url/binutils-2.42.tar.xz" \
+              && echo "f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800  binutils-2.42.tar.xz" | sha256sum -c - \
+              && break
+            rm -f binutils-2.42.tar.xz
+          done
+          [ -f binutils-2.42.tar.xz ] || { echo "::error::binutils 2.42 could not be downloaded"; exit 1; }
           tar xf binutils-2.42.tar.xz
           mkdir gas-build
           cd gas-build
