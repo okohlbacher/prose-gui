@@ -7,6 +7,11 @@ shadcn-svelte components and colours). Design and plan: `docs/superpowers/`.
 Linux packages (AppImage and `.deb`, Ubuntu 22.04 or later) come from CI (`.github/workflows/desktop.yml`);
 they bundle ProSE with its libraries and the PeptDeep models (`native/README.md`).
 
+The AppImage needs one library of the system: OpenGL ES, `libGLESv2.so.2`, which desktop installations have
+(the `.deb` pulls it in with WebKitGTK). Without it the app exits at once with exit code 127 ("Couldn't open
+libGLESv2.so.2"). Install it with `sudo apt install libgles2` (Ubuntu, Debian) or `sudo dnf install
+libglvnd-gles` (Fedora).
+
 ## Develop (ibminode06, no root)
 
 Everything runs inside the user-space toolchain of `native/scripts/in-env.sh` (Rust, the WebKitGTK 4.1 sysroot,

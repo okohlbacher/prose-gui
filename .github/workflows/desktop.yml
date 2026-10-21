@@ -1,6 +1,8 @@
 # The ProSE desktop app on Linux: the pinned OpenMS (native/OPENMS_COMMIT) built and bundled, the app's unit
 # tests, the .deb and the AppImage, and the AppImage's smoke test (the example with PeptDeep through WebDriver).
-# A tag desktop-native-v* also makes a draft release with the two packages.
+# A tag desktop-native-v* makes a draft release with the two packages of the tested prose-desktop run of the
+# tagged commit (a tag run builds nothing: the caches below belong to the branch, and a tag run cannot read
+# them, so it would build OpenMS and its dependencies from scratch).
 #
 # Caches (actions/cache): the bundled ProSE (src-tauri/resources/prose), keyed by the pin and the two scripts
 # that make it, so OpenMS is built only when one of them changes; and vcpkg's binary cache, keyed by the pin
@@ -31,6 +33,8 @@ env:
 jobs:
   linux:
     name: Linux (ubuntu-22.04)
+    # a tag takes the packages of the branch run instead (the release job)
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-22.04
     # the first run builds vcpkg's dependencies (Arrow, the AWS SDK, ONNX Runtime, ...) and OpenMS
     timeout-minutes: 360
@@ -226,25 +230,51 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # A draft release of the two packages, for a tag desktop-native-v* only; publishing it is a person's step.
+  # A draft release of the two packages, for a tag desktop-native-v* only; publishing it is a person's step. The
+  # packages are those of the successful prose-desktop run of the tagged commit, the build that ran the unit
+  # tests and the smoke test (artifacts are kept 14 days; an older run can be re-run with `gh run rerun`).
   release:
     name: Draft release
     if: startsWith(github.ref, 'refs/tags/desktop-native-v')
-    needs: linux
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+      actions: read
     steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: prose-desktop-linux
-          path: packages
+      - name: The packages of the tested branch run of this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          run=$(gh run list --workflow desktop.yml --branch prose-desktop --commit "$SHA" --status success \
+            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$run" ]; then
+            echo "::error::No successful run of desktop.yml on prose-desktop for $SHA. Tag a commit of prose-desktop whose run passed (or wait for its run to finish)."
+            exit 1
+          fi
+          echo "packages of run $GITHUB_SERVER_URL/$GH_REPO/actions/runs/$run"
+          if ! gh run download "$run" --name prose-desktop-linux --dir packages; then
+            echo "::error::Run $run has no artifact prose-desktop-linux (expired after 14 days?): re-run it with 'gh run rerun $run', then this job."
+            exit 1
+          fi
+          find packages -type f -printf '%s\t%p\n'
+          [ -n "$(find packages -type f -name '*.AppImage')" ] && [ -n "$(find packages -type f -name '*.deb')" ] \
+            || { echo "::error::run $run's artifact lacks the AppImage or the .deb"; exit 1; }
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
+          cat > notes.md <<'NOTES'
+          ProSE desktop for Linux x64 (Ubuntu 22.04 or later): the AppImage runs as is, the .deb installs with apt.
+
+          The AppImage needs the system's OpenGL ES library, libGLESv2.so.2 (the .deb pulls it in with WebKitGTK).
+          Desktop installations have it; without it the app exits at once (exit code 127, "Couldn't open
+          libGLESv2.so.2"). Install it with
+          - Ubuntu, Debian: `sudo apt install libgles2`
+          - Fedora: `sudo dnf install libglvnd-gles`
+          NOTES
           gh release create "$TAG" --draft --verify-tag --title "ProSE desktop ${TAG#desktop-native-v}" \
-            --notes "ProSE desktop for Linux x64 (Ubuntu 22.04 or later): the AppImage runs as is, the .deb installs with apt." \
-            $(find packages -type f \( -name '*.AppImage' -o -name '*.deb' \))
+            --notes-file notes.md $(find packages -type f \( -name '*.AppImage' -o -name '*.deb' \))

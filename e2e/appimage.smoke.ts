@@ -35,6 +35,30 @@ function processesBelow(dir: string): { pid: number; exe: string }[] {
   return found
 }
 
+/**
+ * The GUI stack the AppImage brings itself: a library of it mapped from outside the AppImage means the app runs
+ * on the host's WebKitGTK/GTK/GLib (as it would on the CI runner, where WebKitGTK is installed), not its own.
+ */
+const bundledStack = /(webkit|javascriptcore|soup|gtk-3|gdk-3|glib|gio|gobject)/i
+
+/**
+ * What the app and WebKit may take from the host: glibc and the GCC runtime, the GL driver stack (as on
+ * linuxdeploy's exclude list: it has to match the host's drivers) with what the Mesa drivers load, the X11,
+ * xcb and Wayland client libraries, and the font and text libraries linuxdeploy leaves to the host. By soname
+ * stem (the name without `.so` and the version).
+ */
+const hostAllowed = [
+  // glibc, the GCC runtime
+  /^(ld-linux-x86-64|libc|libm|libmvec|libdl|libpthread|librt|libresolv|libutil|libstdc\+\+|libgcc_s)$/,
+  // GL: glvnd, Mesa (its drivers, LLVM and what they link), libdrm
+  /^(libGL|libGLX|libGLX_mesa|libEGL|libEGL_mesa|libGLESv2|libGLdispatch|libOpenGL|libglapi|libgbm|libgallium-.*|.*_dri|libdrm(_[a-z]+)?|libLLVM.*|libpciaccess|libsensors|libedit|libtinfo|libelf|libxshmfence|libXxf86vm|libvulkan)$/,
+  // the X11, xcb and Wayland client libraries
+  /^(libX11|libX11-xcb|libxcb(-[a-z0-9]+)?|libwayland-(client|server|egl|cursor))$/,
+  // fonts and text, and what they link
+  /^(libfontconfig|libfreetype|libharfbuzz|libfribidi|libexpat|libz|libuuid|libcom_err|libgpg-error)$/,
+]
+const stem = (file: string) => file.split('/').pop()!.replace(/\.so(\.[\d.]+)?$/, '').replace(/\.so$/, '')
+
 const offending = (files: string[]) => files.filter((f) => forbidden.some((p) => f === p || f.startsWith(p + '/')))
 const sharedLibraries = (files: string[]) => files.filter((f) => /\.so(\.\d+)*$/.test(f))
 
@@ -114,7 +138,7 @@ describe('the AppImage', () => {
     expect(offending([...proseMaps])).toEqual([])
   })
 
-  it('the app and WebKit run on the AppImage’s libraries, none of the build machine’s', () => {
+  it('the app and WebKit run on the AppImage’s libraries: its own GUI stack, from the host only what an AppImage leaves to it, nothing of the build machine', () => {
     expect(appRoot).toMatch(/appimage_extracted_/)
     const processes = processesBelow(appRoot)
     const names = processes.map((p) => p.exe.slice(appRoot.length))
@@ -129,9 +153,21 @@ describe('the AppImage', () => {
         expect(files).toContain(`${appRoot}/usr/lib/libwebkit2gtk-4.1.so.0`)
       }
     }
-    const app = processes.find((p) => p.exe.endsWith('/usr/bin/prose-desktop'))!
-    const outside = sharedLibraries(mappedFiles(app.pid)).filter((f) => !f.startsWith(appRoot + '/'))
-    console.log(`the app maps ${outside.length} libraries of the system: ${outside.map((f) => f.split('/').pop()).join(' ')}`)
+    // what the app and WebKit's processes take from the host: none of the GUI stack the AppImage brings, and
+    // nothing beyond the host libraries an AppImage leaves to the system
+    for (const p of processes) {
+      const outside = sharedLibraries(mappedFiles(p.pid)).filter((f) => !f.startsWith(appRoot + '/'))
+      const name = p.exe.slice(appRoot.length)
+      console.log(`${name} maps ${outside.length} libraries of the host: ${outside.map((f) => f.split('/').pop()).join(' ')}`)
+      expect({ process: name, hostGuiStack: outside.filter((f) => bundledStack.test(f.split('/').pop()!)) }).toEqual({
+        process: name,
+        hostGuiStack: [],
+      })
+      expect({ process: name, notAllowed: outside.filter((f) => !hostAllowed.some((r) => r.test(stem(f)))) }).toEqual({
+        process: name,
+        notAllowed: [],
+      })
+    }
     expect(existsSync(`${appRoot}/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess`)).toBe(true)
   })
 })

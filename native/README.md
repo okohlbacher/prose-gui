@@ -228,7 +228,11 @@ file of the sysroot or the OpenMS build (`SMOKE_FORBIDDEN`). `--hide-openms` ren
 `share/OpenMS`, models and tool registry for the duration of the test, so ProSE has to use the bundle's.
 
 The one thing a host must have that the AppImage does not bring is the GL driver stack, as for every AppImage:
-libEGL, libGL and libGLESv2 (`libgles2`, on every Ubuntu desktop). ibminode06 is a server without `libgles2`, so
+libEGL, libGL and libGLESv2 (`libgles2` on Ubuntu/Debian, `libglvnd-gles` on Fedora; desktops have it). The
+smoke test checks the other side too: the app and WebKit's processes map none of the GUI stack the AppImage
+brings (WebKitGTK, JavaScriptCore, libsoup, GTK, GDK, GLib) from the host, which matters on the CI runner, where
+WebKitGTK is installed, and from the host nothing beyond an allowlist (glibc and the GCC runtime, the GL driver
+stack, the X11/xcb/Wayland client libraries, fonts and text). ibminode06 is a server without `libgles2`, so
 the script supplies the sysroot's `libGLESv2.so.2`, alone in a folder of its own, and reports it.
 
 ## CI
@@ -236,8 +240,18 @@ the script supplies the sysroot's `libGLESv2.so.2`, alone in a folder of its own
 `.github/workflows/desktop.yml` (branch `prose-desktop` of timosachsenberg/prose-web) runs on `ubuntu-22.04`:
 it checks out OpenMS at `OPENMS_COMMIT`, builds libOpenMS and ProSE with GCC 13 (toolchain PPA) through
 `build-openms.sh`, with GNU as 2.42 built from source for it (ONNX Runtime's AVX-NE-CONVERT code needs as >= 2.40,
-Ubuntu 22.04 has 2.38; GCC gets it through `COMPILER_PATH`), bundles ProSE, runs svelte-check, vitest and `cargo test` (with the bundled ProSE, so the
-`real_prose` tests run too), builds the packages with `package-linux.sh`, runs the smoke test and uploads the
-AppImage and the `.deb`. The bundled ProSE is cached (key: the pin, the triplet and the two scripts), so OpenMS
-is only built when one of them changes; vcpkg's binary cache is cached by the pin and the triplet, plus the hash of
-its content (so the packages built before a failure are kept; restored from an earlier pin's when the pin moves). A tag `desktop-native-v*` adds a draft release of the two packages.
+Ubuntu 22.04 has 2.38; GCC gets it through `COMPILER_PATH`), bundles ProSE, runs svelte-check, vitest and
+`cargo test` (with the bundled ProSE, so the `real_prose` tests run too), builds the packages with
+`package-linux.sh`, runs the smoke test and uploads the AppImage and the `.deb` (kept 14 days).
+
+Caches (`actions/cache`) belong to the ref that saved them and are readable from that ref and the default branch
+(`main`) only. The runs of the branch `prose-desktop` share them: the bundled ProSE (key: the pin, the triplet and
+the two scripts), so OpenMS is only built when one of them changes, and vcpkg's binary cache (key: the pin and the
+triplet, plus the hash of its content, so the packages built before a failure are kept; restored from an earlier
+pin's when the pin moves). Pull requests read the branch's caches; their own saves stay with the pull request.
+
+A tag `desktop-native-v*` builds nothing (a tag run cannot read the branch's caches and would build OpenMS and its
+dependencies from scratch): its release job looks up the successful `prose-desktop` run of the tagged commit,
+downloads that run's packages, the ones its tests and smoke test passed on, and makes a draft release of them. It
+fails with a message when there is no such run (tag a commit of `prose-desktop` whose run passed) or its artifact
+has expired (`gh run rerun <run>`, then re-run the release job).
