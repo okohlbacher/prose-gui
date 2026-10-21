@@ -126,8 +126,6 @@ class ProgressView {
   })
   /** "16 threads", "all threads". */
   threads = $derived(threadsLabel(searchRun.threads))
-  /** (The web app's "64-bit" engine mark: never, the tool has no such limit.) */
-  engine = $derived<string | null>(null)
 }
 
 export const searchProgress = new ProgressView()

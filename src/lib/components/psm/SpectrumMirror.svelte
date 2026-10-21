@@ -20,7 +20,7 @@
   // Drawn by hand: each series is one path, so thousands of peaks stay a handful of nodes; labels are
   // placed most intense first and left out where they would collide. Hovering tells a peak's m/z,
   // intensity and ions; the ion table is the chart's table view. What only the page shows (a prediction
-  // on its way, "annotating…") is marked `data-no-export`.
+  // on its way) is marked `data-no-export`.
   import { signedNumber } from '$lib/format/number'
   import { ionLabel, COLORS, type PeakGroup } from '$lib/psm/psm'
   import { clipMarks, mzDomain, nearest, niceTicks, placeLabels, px, scale, stickGroups, stickPath, stripFits, textWidth } from '$lib/psm/plot'
@@ -34,7 +34,6 @@
     similarity = null,
     title,
     description,
-    annotating = false,
     onTheoretical,
   }: {
     mz: Float32Array
@@ -48,8 +47,6 @@
     similarity?: string | null
     title: string
     description: string
-    /** The annotation is on its way: the peaks show unannotated meanwhile. */
-    annotating?: boolean
     /** Offered when the prediction failed: switch to the theoretical spectrum. */
     onTheoretical?: () => void
   } = $props()
@@ -291,10 +288,6 @@
 
     <!-- above: what the upper half is and the legend; below: what the lower half is, the similarity -->
     <text x={M.left} y="14" font-size="11" fill={muted} data-testid="top-label">Observed · 100 % = {reference.text}</text>
-    {#if annotating}
-      <text x={M.left + 6 + textWidth(`Observed · 100 % = ${reference.text}`, 11)} y="14" font-size="11" fill={muted} data-no-export=""
-        >· annotating…</text>
-    {/if}
     {#each legend as item (item.text)}
       <rect x={px(item.x)} y="5" width="10" height="10" rx="2" fill={item.color} />
       <text x={px(item.x + 15)} y="14" font-size="11" fill={ink}>{item.text}</text>

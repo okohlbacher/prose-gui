@@ -78,7 +78,8 @@ export const BUILTIN_PRESETS: Preset[] = [
 
 export const DEFAULT_PRESET_ID = 'orbitrap-hcd-tryptic'
 
-function browserStorage(): PresetStorage | null {
+/** The webview's localStorage: kept by the app on this computer (its data folder), across restarts. */
+function appStorage(): PresetStorage | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage
   } catch {
@@ -111,7 +112,7 @@ function readUserPresets(storage: PresetStorage | null): Preset[] {
 }
 
 /** The built-in presets, then the user's. */
-export function loadPresets(storage: PresetStorage | null = browserStorage()): Preset[] {
+export function loadPresets(storage: PresetStorage | null = appStorage()): Preset[] {
   return [...BUILTIN_PRESETS, ...readUserPresets(storage)]
 }
 
@@ -122,7 +123,7 @@ export function loadPresets(storage: PresetStorage | null = browserStorage()): P
 export function savePreset(
   name: string,
   parameters: Record<string, unknown>,
-  storage: PresetStorage | null = browserStorage(),
+  storage: PresetStorage | null = appStorage(),
 ): Preset {
   const values = copyValues(parameters)
   for (const s of SWITCH_PARAMETERS) delete values[s]

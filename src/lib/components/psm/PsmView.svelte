@@ -134,7 +134,6 @@
 
   const fragments = $derived(annotation.result)
   const result = $derived(fragments ? withPrecursor(fragments, precursorResult) : null)
-  const annotating = false
   const annotationError = $derived(annotation.error)
 
   const shown = $derived(result ? visibleMatches(result.matches, options) : [])
@@ -182,8 +181,8 @@
     return matched !== null ? { intensity: matched, text: 'strongest matched b/y' } : { intensity: base, text: 'base peak' }
   })
 
-  /** The annotation or the prediction is on its way: the spectrum is not exported meanwhile. */
-  const pending = $derived(annotating || (bottom.kind === 'status' && !bottom.failed))
+  /** The prediction is on its way: the spectrum is not exported meanwhile. */
+  const pending = $derived(bottom.kind === 'status' && !bottom.failed)
 
   const domain = $derived(peaks ? mzDomain([peaks.mz, bottom.kind === 'ions' ? bottom.ions.map((b) => b.mz) : []]) : ([0, 100] as [number, number]))
 
@@ -510,7 +509,6 @@
         {similarity}
         title={spectrumTitle}
         description={spectrumDescription}
-        {annotating}
         onTheoretical={() => (view.psmOptions.bottom = 'theoretical')} />
       {#if annotationError}
         <p class="pb-1 text-xs text-destructive" role="alert">The spectrum could not be annotated: {annotationError}</p>

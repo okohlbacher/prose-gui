@@ -14,7 +14,6 @@
     kind,
     value,
     options,
-    trusted = new Set<string>(),
     onChange,
   }: {
     labelId: string
@@ -23,8 +22,6 @@
     value: string[]
     /** ProSE's modification names (`validStrings`, generated from the pinned tool). */
     options: string[] | undefined
-    /** Names known to be valid without the list (those of the presets). */
-    trusted?: ReadonlySet<string>
     onChange: (value: string[]) => void
   } = $props()
 
@@ -36,26 +33,16 @@
   const known = $derived(options ? new Map(options.map((o) => [o.toLowerCase(), o])) : null)
   const validNames = $derived(options ? new Set(options) : null)
 
-  /**
-   * Each badge with its state: `unknown` if the name is not among ProSE's names;
-   * `unverified` while it is loading for a name that no preset uses (typed, checked when the search starts).
-   */
+  /** Each badge with its state: `unknown` if the name is not among ProSE's names. */
   const groups = $derived(
     groupModifications(value).map((g) => {
-      const state: 'ok' | 'unknown' | 'unverified' = validNames
-        ? g.specs.some((s) => !validNames.has(s))
-          ? 'unknown'
-          : 'ok'
-        : g.specs.some((s) => !trusted.has(s))
-          ? 'unverified'
-          : 'ok'
+      const state: 'ok' | 'unknown' = validNames && g.specs.some((s) => !validNames.has(s)) ? 'unknown' : 'ok'
       return { ...g, state }
     }),
   )
   const titles = {
     ok: undefined,
     unknown: 'ProSE does not know this modification: remove it and choose one from the list.',
-    unverified: 'Not checked yet: OpenMS is still loading. The name is checked when the search starts.',
   }
 
   /** The typed name expanded to ProSE's names, if they all exist (or anything without the list). */
@@ -101,12 +88,11 @@
       class={cn(
         'inline-flex h-5 items-center gap-0.5 rounded-[5px] border bg-muted pr-0.5 pl-1.5 text-[11.5px] font-medium',
         g.state === 'unknown' && 'border-destructive/60 bg-destructive/5 text-destructive',
-        g.state === 'unverified' && 'border-dashed border-muted-foreground/60 bg-background',
       )}
       title={titles[g.state]}
       data-state={g.state}>
       {g.label}
-      {#if g.state !== 'ok'}<span class="sr-only">({g.state === 'unknown' ? 'unknown to ProSE' : 'not checked yet'})</span>{/if}
+      {#if g.state !== 'ok'}<span class="sr-only">(unknown to ProSE)</span>{/if}
       <button
         type="button"
         class="rounded-sm p-px text-muted-foreground hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
@@ -132,7 +118,7 @@
             </Command.Group>
           {/if}
           {#if matches.length === 0 && !expansion}
-            <Command.Empty>{options ? 'No modification of that name.' : 'Loading OpenMS…'}</Command.Empty>
+            <Command.Empty>{options ? 'No modification of that name.' : 'The list of modifications is not available.'}</Command.Empty>
           {/if}
           {#if matches.length > 0}
             <Command.Group heading={query.trim() === '' ? 'Unimod names' : undefined}>

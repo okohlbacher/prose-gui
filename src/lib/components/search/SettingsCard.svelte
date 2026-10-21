@@ -48,16 +48,6 @@
   }
 
   const modOptions = $derived(form.entry('modifications:variable')?.validStrings)
-  // valid names before OpenMS is loaded: those the presets use
-  const trustedMods = $derived(
-    new Set(
-      form.presets.flatMap((p) =>
-        ['modifications:fixed', 'modifications:variable'].flatMap((k) =>
-          Array.isArray(p.parameters[k]) ? (p.parameters[k] as string[]) : [],
-        ),
-      ),
-    ),
-  )
   const fixedOptions = $derived(form.entry('modifications:fixed')?.validStrings)
 </script>
 
@@ -126,7 +116,6 @@
         kind="fixed"
         value={form.value<string[]>('modifications:fixed') ?? []}
         options={fixedOptions}
-        trusted={trustedMods}
         onChange={(v) => form.setParam('modifications:fixed', v)} />
     </div>
     <div class="col-span-2 grid min-w-0 gap-1">
@@ -136,7 +125,6 @@
         kind="variable"
         value={form.value<string[]>('modifications:variable') ?? []}
         options={modOptions}
-        trusted={trustedMods}
         onChange={(v) => form.setParam('modifications:variable', v)} />
     </div>
 

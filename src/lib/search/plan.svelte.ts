@@ -42,12 +42,6 @@ class SearchPlan {
     return parts.join(' · ')
   })
 
-  /** The line in full (the footer may cut it). */
-  lineTitle = $derived(this.line)
-
-  /** (The web app's memory advice: none, the tool has no memory limit of its own.) */
-  advice = $derived<{ text: string; over: boolean } | null>(null)
-
   /** Modification names ProSE does not know. */
   unknownMods = $derived(unknownModifications(form.values, PROSE_PARAMETERS))
 

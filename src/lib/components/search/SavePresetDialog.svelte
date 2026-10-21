@@ -1,5 +1,5 @@
 <script lang="ts">
-  // "Save as preset": the settings that differ from ProSE's defaults, kept in this browser.
+  // "Save as preset": the settings that differ from ProSE's defaults, kept by the app on this computer.
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
   import { Input } from '$lib/components/ui/input'
@@ -28,8 +28,8 @@
     <Dialog.Header>
       <Dialog.Title>Save as preset</Dialog.Title>
       <Dialog.Description>
-        Keeps the settings that differ from ProSE's defaults in this browser. Percolator and PeptDeep are not part of a
-        preset.
+        Keeps the settings that differ from ProSE's defaults in the app, on this computer. Percolator and PeptDeep are not
+        part of a preset.
       </Dialog.Description>
     </Dialog.Header>
     <form

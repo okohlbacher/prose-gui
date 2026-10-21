@@ -13,7 +13,7 @@ export function exportName(result: OpenResult): string {
   return resultName(result.design.rows.map((r) => r.fileName))
 }
 
-/** After the browser has painted (so that "Exporting…" shows before a long export). */
+/** After the webview has painted (so that "Exporting…" shows before a long export). */
 const painted = () => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
 
 /**
