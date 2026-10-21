@@ -148,8 +148,24 @@ async fn example_files(app: AppHandle) -> Result<files::ExampleFiles, String> {
         .map_err(|e| e.to_string())?
 }
 
+/// The file that the end-to-end specs choose in place of the system's dialogs (`PROSE_TEST_DIALOG_PATH`):
+/// WebDriver cannot reach a dialog of the system. Debug builds only; a release build has no such way, and
+/// the page never names a path in either.
+fn test_dialog_path() -> Option<PathBuf> {
+    if cfg!(debug_assertions) {
+        std::env::var_os("PROSE_TEST_DIALOG_PATH")
+            .filter(|p| !p.is_empty())
+            .map(PathBuf::from)
+    } else {
+        None
+    }
+}
+
 /// The system's save dialog for `name`; None if the user cancelled.
 fn ask_save_path(app: &AppHandle, name: &str) -> Result<Option<PathBuf>, String> {
+    if let Some(path) = test_dialog_path() {
+        return Ok(Some(path));
+    }
     let extension = Path::new(name)
         .extension()
         .map(|e| e.to_string_lossy().into_owned());
@@ -270,6 +286,9 @@ async fn history_import(
 #[tauri::command]
 async fn open_project_file(app: AppHandle) -> Result<Response, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        if let Some(path) = test_dialog_path() {
+            return history::read_chosen_project(&path);
+        }
         let chosen = app
             .dialog()
             .file()
