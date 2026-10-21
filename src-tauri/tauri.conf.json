@@ -32,7 +32,8 @@
     "resources": [
       "resources/fasta/crap.fasta",
       "resources/example/DatabaseSuitability_in_spec.mzML",
-      "resources/example/DatabaseSuitability_database.fasta"
+      "resources/example/DatabaseSuitability_database.fasta",
+      "resources/prose/"
     ],
     "icon": [
       "icons/32x32.png",
@@ -42,6 +43,19 @@
       "icons/icon.icns",
       "icons/icon.ico",
       "icons/icon.png"
-    ]
+    ],
+    "shortDescription": "ProSE: the OpenMS search engine for bottom-up proteomics",
+    "longDescription": "ProSE searches MS/MS spectra (mzML) against a protein database (FASTA) with the ProSE engine of OpenMS, rescores with Percolator and PeptDeep, and shows the PSMs, peptides and proteins with annotated spectra. Everything runs on this computer.",
+    "publisher": "OpenMS",
+    "homepage": "https://openms.de",
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": false,
+        "files": {}
+      },
+      "deb": {
+        "section": "science"
+      }
+    }
   }
 }

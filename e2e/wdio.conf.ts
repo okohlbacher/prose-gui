@@ -1,5 +1,6 @@
 // WebdriverIO through tauri-driver (which starts WebKitWebDriver) against the debug build of the app.
-// Started by e2e/run.sh, inside native/scripts/in-env.sh and under xvfb-run.
+// Started by e2e/run.sh, inside native/scripts/in-env.sh and under xvfb-run. E2E_APPLICATION names another
+// application script in place of e2e/app.sh (native/scripts/smoke-appimage.sh: the AppImage).
 //
 // tauri-driver belongs to the run (onPrepare .. onComplete) and lives in a process group of its own, so
 // that it, its WebKitWebDriver and the app go together; a port that something else already listens on
@@ -12,7 +13,7 @@ import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const application = resolve(root, 'e2e/app.sh')
+const application = process.env.E2E_APPLICATION ? resolve(process.env.E2E_APPLICATION) : resolve(root, 'e2e/app.sh')
 const driverPort = 4444
 
 let driver: ChildProcess | undefined
@@ -66,7 +67,7 @@ function cleanUp() {
 
 /** Starts tauri-driver for the run, once the port is free; throws if that is not possible. */
 async function prepare() {
-  if (!existsSync(resolve(root, 'src-tauri/target/debug/prose-desktop'))) {
+  if (!process.env.E2E_APPLICATION && !existsSync(resolve(root, 'src-tauri/target/debug/prose-desktop'))) {
     throw new Error('The debug build is missing: run `npm run tauri:build:debug` (e2e/run.sh does).')
   }
   if (await listening(driverPort)) {

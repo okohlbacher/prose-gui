@@ -143,7 +143,8 @@ three merges: #10641 (`claude/peptdeep-onnx-memory`, PeptDeep memory and NCE sel
 (`claude/prose-qpx-spectra`: `-out_psm_spectra` sidecar of peaks and PeptDeep predictions, `-keep_decoys`, the
 pooled proteins in Parquet and the summary additions; see `docs/parity.md`) and #10677
 (`claude/prose-empty-result`: a search in which no PSM passes the FDR ends with empty outputs instead of "Graph
-empty. Build it first."). The pin branch is not pushed. Build it with
+empty. Build it first."). The pin branch is pushed to OpenMS/OpenMS (a branch, no pull request), so CI can
+fetch the commit; CI never builds from local state. Build it with
 
 ```bash
 native/scripts/build-openms.sh /scratch/sachsenb/openms-desktop /scratch/sachsenb/openms-desktop/build
@@ -151,3 +152,91 @@ native/scripts/build-openms.sh /scratch/sachsenb/openms-desktop /scratch/sachsen
 
 and check it with `ctest --test-dir /scratch/sachsenb/openms-desktop/build -R "ProSE|PeptDeep|QPX|Percolator_test|ArrowIOHelpers_test"`
 (164 tests). Update the file whenever the pin branch moves.
+
+## Bundling ProSE
+
+`scripts/bundle-prose.sh <openms-build> <out>` (host toolchain) fills `<out>`, normally
+`src-tauri/resources/prose` (git-ignored; `tauri.conf.json` bundles the folder, and `build.rs` makes an empty
+one so builds without it work), with what the app ships:
+
+```bash
+native/scripts/bundle-prose.sh /scratch/sachsenb/openms-desktop/build src-tauri/resources/prose
+```
+
+| Part | What |
+| --- | --- |
+| `bin/ProSE` | stripped, `DT_RPATH` `$ORIGIN/../lib` |
+| `lib/` | the whole closure that `ldd` lists, under its sonames, stripped, `DT_RPATH` `$ORIGIN`: libOpenMS, ONNX Runtime, Arrow/Parquet, the AWS SDK Arrow links, Xerces, HiGHS, ..., libgomp (the one OpenMP runtime; the script fails on any other) and the GCC runtime (libstdc++, libgcc_s: OpenMS needs GCC 13, newer than Ubuntu 22.04's). Left out: glibc only. |
+| `share/OpenMS/` | `CHEMISTRY` (without the 49 MB of HMDB tables), `CV`, `MAPPING`, `SCHEMAS`, the `TOOLS` registry: what ProSE reads (checked with strace) |
+| `share/OpenMS/models/` | `peptdeep_ms2_dynamic.onnx`, `peptdeep_rt_dynamic.onnx` (builds with ONNX) |
+| `share/OpenMS/LICENSES/` | OpenMS, its vendored code, every vcpkg port, the bundled system packages (GCC runtime) |
+| `build.json` | the manifest: OpenMS commit, `withOnnx` (from `WITH_ONNX` in the CMakeCache), triplet, the models |
+
+`DT_RPATH`, not `RUNPATH`: it is searched before `LD_LIBRARY_PATH`, so the AppImage's library path (its
+`usr/lib`, with WebKit's dependencies) cannot swap in a different libzstd or libssl. The script checks that
+every library resolves into the bundle, also with the build's library directories on `LD_LIBRARY_PATH`, and that
+the tool runs from an empty environment. It refuses a build whose source is not at `OPENMS_COMMIT`
+(`ALLOW_PIN_MISMATCH=1` overrides).
+
+**Where ProSE finds share/OpenMS.** OpenMS tries paths compiled into it first: the install prefix
+(`/usr/local/share/OpenMS`), then the source tree's `share/OpenMS` and, for the PeptDeep models, the build tree;
+only then `bin/../share/OpenMS` next to the executable, and the `OPENMS_DATA_PATH` variable last of all. So
+setting `OPENMS_DATA_PATH` cannot steer the bundled tool, and the app does not set it. The bundled tool must not
+pick up an OpenMS a user installed in `/usr/local`, so `bundle-prose.sh` overwrites that one string in the
+bundle's `libOpenMS.so` with a path of the same length that cannot exist (`/dev/null////...`), as conda does with
+the prefix (OpenMS reads it through a volatile pointer for this; `File.cpp`, `installPath_`). The source and build
+tree paths are the build machine's (in CI below `/home/runner/work`) and cannot be patched (GCC writes them into
+the code as immediates); they do not exist on a user's machine. On the build machine they do, so the smoke test
+hides them (`--hide-openms`, below).
+
+**The `onnx` flag of `tool_info`** comes from `build.json`: `withOnnx` and every model it names present inside
+the bundle (`src-tauri/src/tool.rs`, `has_onnx`). A tool without a manifest (a build tree's, one on the PATH)
+counts as without ONNX, so `PROSE_BIN=src-tauri/resources/prose/bin/ProSE` is the tool for the e2e specs and
+`real_prose` tests with PeptDeep.
+
+## Packages
+
+```bash
+native/scripts/package-linux.sh        # .deb and AppImage into src-tauri/target/release/bundle
+```
+
+The same script runs in CI and here (it enters `in-env.sh` when the sysroot exists). The `.deb` is Tauri's
+(it depends on the system's WebKitGTK; ProSE goes to `/usr/lib/ProSE/resources/prose`). The AppImage is bundled
+by Tauri without `resources/prose` and the folder is added afterwards, and the AppDir packed again with
+linuxdeploy's AppImage plugin: linuxdeploy treats every ELF file in the AppDir as its own, and would copy ProSE's
+closure a second time into `usr/lib` and turn its `DT_RPATH` into a `RUNPATH`. With the sysroot, the script also
+answers the GTK plugin's `pkg-config --variable` queries with `/usr` paths and puts WebKit's helper processes
+into the AppDir with the relative helper path the GTK plugin writes on a normal system (details in the script).
+
+## AppImage smoke test
+
+```bash
+native/scripts/smoke-appimage.sh src-tauri/target/release/bundle/appimage/ProSE_0.1.0_amd64.AppImage \
+  --hide-openms /scratch/sachsenb/openms-desktop/build
+```
+
+The AppImage runs with `--appimage-extract-and-run` under `xvfb-run` and is driven through WebDriver
+(`e2e/appimage.smoke.ts`): the example with PeptDeep gives 1,790 PSMs and the PeptDeep mirror. tauri-driver and
+WebKitWebDriver are not in the AppImage; they run from the toolchain (here `in-env.sh`, in CI the runner's
+packages) and drive the AppImage's own webview over WebKit's automation protocol, which release builds allow when
+`TAURI_WEBVIEW_AUTOMATION=true` (tauri-driver sets it). The application tauri-driver starts is
+`e2e/appimage-app.sh`, which runs the AppImage from an empty environment (display, user basics, the automation
+variables, a plain PATH; nothing of the sysroot, no `PROSE_BIN`). The test then reads `/proc/<pid>/maps`: ProSE
+(polled while it searches) maps its whole closure from the bundle, one OpenMP runtime, and from the system only
+glibc; the app, WebKitWebProcess and WebKitNetworkProcess map libwebkit2gtk from the AppImage; no process maps a
+file of the sysroot or the OpenMS build (`SMOKE_FORBIDDEN`). `--hide-openms` renames the OpenMS build's
+`share/OpenMS`, models and tool registry for the duration of the test, so ProSE has to use the bundle's.
+
+The one thing a host must have that the AppImage does not bring is the GL driver stack, as for every AppImage:
+libEGL, libGL and libGLESv2 (`libgles2`, on every Ubuntu desktop). ibminode06 is a server without `libgles2`, so
+the script supplies the sysroot's `libGLESv2.so.2`, alone in a folder of its own, and reports it.
+
+## CI
+
+`.github/workflows/desktop.yml` (branch `prose-desktop` of timosachsenberg/prose-web) runs on `ubuntu-22.04`:
+it checks out OpenMS at `OPENMS_COMMIT`, builds libOpenMS and ProSE with GCC 13 (toolchain PPA) through
+`build-openms.sh`, bundles ProSE, runs svelte-check, vitest and `cargo test` (with the bundled ProSE, so the
+`real_prose` tests run too), builds the packages with `package-linux.sh`, runs the smoke test and uploads the
+AppImage and the `.deb`. The bundled ProSE is cached (key: the pin, the triplet and the two scripts), so OpenMS
+is only built when one of them changes; vcpkg's binary cache is cached by the pin and the triplet (and restored
+from an earlier pin's when the pin moves). A tag `desktop-native-v*` adds a draft release of the two packages.

@@ -4,7 +4,8 @@ A desktop app for the ProSE search engine of OpenMS: [Tauri 2](https://tauri.app
 native `ProSE` command-line tool as the only native code, and the screens of the ProSE web app (same theme,
 shadcn-svelte components and colours). Design and plan: `docs/superpowers/`.
 
-Status: the shell (top bar with the web app's theme) only.
+Linux packages (AppImage and `.deb`, Ubuntu 22.04 or later) come from CI (`.github/workflows/desktop.yml`);
+they bundle ProSE with its libraries and the PeptDeep models (`native/README.md`).
 
 ## Develop (ibminode06, no root)
 
@@ -19,10 +20,20 @@ native/scripts/in-env.sh e2e/run.sh [e2e/smoke.spec.ts] # WebdriverIO via tauri-
 native/scripts/in-env.sh e2e/run.sh e2e/screens.shot.ts # screenshots into docs/screens
 ```
 
+Packages and their smoke test (needs the OpenMS build of `native/scripts/build-openms.sh`):
+
+```bash
+native/scripts/bundle-prose.sh /scratch/sachsenb/openms-desktop/build src-tauri/resources/prose
+native/scripts/package-linux.sh                                    # .deb and AppImage
+native/scripts/smoke-appimage.sh src-tauri/target/release/bundle/appimage/ProSE_0.1.0_amd64.AppImage \
+  --hide-openms /scratch/sachsenb/openms-desktop/build
+```
+
 `e2e/run.sh` builds the debug binary first (`E2E_SKIP_BUILD=1` skips that) and enters `in-env.sh` itself if it
 is not in it.
 
-The specs that run searches need the tool: `PROSE_BIN=/path/to/ProSE` (without it they skip). Each spec file
+The specs that run searches need the tool: `PROSE_BIN=/path/to/ProSE` (without it they skip); the bundled one,
+`src-tauri/resources/prose/bin/ProSE`, is the one with PeptDeep (its build manifest says so, see `native/README.md`). Each spec file
 gets an app of its own with its own data folder (`XDG_DATA_HOME`, made per run, removed at its end), and
 `tauri-driver` runs for the whole run in a process group of its own; port 4444 must be free (a leftover
 `tauri-driver` stops the run with a message). Debug builds read `PROSE_TEST_DIALOG_PATH` in place of the

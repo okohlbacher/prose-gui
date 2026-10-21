@@ -1,7 +1,9 @@
 //! The shim against the real ProSE tool, on the web app's example.
 //!
-//! Gated: set `PROSE_BIN` to the tool (the pin built by `native/scripts/build-openms.sh`, for example
-//! `/scratch/sachsenb/openms-desktop/build/bin/ProSE`) to run these tests; without it each test prints
+//! Gated: set `PROSE_BIN` to the tool to run these tests: the bundled pin
+//! (`src-tauri/resources/prose/bin/ProSE`, made by `native/scripts/bundle-prose.sh`; with PeptDeep) or the
+//! pin in its build tree (for example `/scratch/sachsenb/openms-desktop/build/bin/ProSE`; it has no build
+//! manifest, so it counts as without ONNX and the searches run without PeptDeep); without it each test prints
 //! a skip message (shown with `--nocapture`) and passes. `PROSE_EXAMPLE_DIR` names the folder with
 //! `DatabaseSuitability_in_spec.mzML` and `DatabaseSuitability_database.fasta` (default: the web app's
 //! `app/public/example` on the development machine); a missing folder skips as well.
@@ -107,7 +109,14 @@ fn the_real_tool_reports_its_version() {
     let info = tool::probe(&real.bin).unwrap();
     assert!(!info.version.is_empty());
     assert_eq!(info.path, real.bin.to_string_lossy());
-    assert!(info.onnx, "the pin is built with ONNX Runtime");
+    // ONNX support is read from the bundle's manifest (bundle-prose.sh): the bundled pin has it, the
+    // same tool in its build tree has no manifest and counts as without
+    let bundled = real
+        .bin
+        .parent()
+        .and_then(Path::parent)
+        .is_some_and(|root| root.join(tool::MANIFEST).is_file());
+    assert_eq!(info.onnx, bundled, "onnx follows the bundle's manifest");
 }
 
 #[test]

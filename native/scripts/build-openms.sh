@@ -6,7 +6,9 @@
 # <openms-src> is any OpenMS checkout; <build-dir> is created if needed (an existing configured
 # directory is reconfigured in place, so the script is safe to re-run). It runs on the host
 # toolchain, outside native/scripts/in-env.sh. Environment overrides: JOBS (default 100),
-# VCPKG_BINARY_CACHE, VCPKG_MAX_CONCURRENCY (default 32).
+# VCPKG_BINARY_CACHE, VCPKG_MAX_CONCURRENCY (default 32), OPENMS_TARGETS (default: the library, ProSE
+# and the tests below; CI builds "OpenMS ProSE" only), VCPKG_INSTALL_OPTIONS (for example
+# --clean-after-build, which CI uses to save disk space), CC and CXX (CI: gcc-13).
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then
@@ -45,13 +47,15 @@ cmake -G Ninja -S "$SRC" -B "$BUILD" \
   -DENABLE_DOCS=OFF \
   -DPYOPENMS=OFF \
   -DENABLE_CLASS_TESTING=ON \
-  -DENABLE_TOPP_TESTING=ON
+  -DENABLE_TOPP_TESTING=ON \
+  ${VCPKG_INSTALL_OPTIONS:+"-DVCPKG_INSTALL_OPTIONS=$VCPKG_INSTALL_OPTIONS"}
 
 # FileInfo, ParquetDiff and FuzzyDiff are what the TOPP_ProSE tests run to inspect and compare outputs;
 # without them those tests report "Not Run". PeptDeepLibraryPredictor_test is part of the PeptDeep set, the
 # QPX tests check the QPX Parquet output the app reads.
-cmake --build "$BUILD" -j "$JOBS" --target \
-  OpenMS ProSE FileInfo ParquetDiff FuzzyDiff \
+TARGETS=${OPENMS_TARGETS:-OpenMS ProSE FileInfo ParquetDiff FuzzyDiff \
   ProSEAlgorithm_test PeptDeepInference_test PeptDeepRescoring_test PeptDeepLibraryPredictor_test \
   OpenSearchModificationAnalysis_test Percolator_test \
-  QPXFile_test QPXCollectionExport_test QPXValueValidation_test QPXIdentity_test ArrowIOHelpers_test
+  QPXFile_test QPXCollectionExport_test QPXValueValidation_test QPXIdentity_test ArrowIOHelpers_test}
+# shellcheck disable=SC2086 # a list of targets
+cmake --build "$BUILD" -j "$JOBS" --target $TARGETS

@@ -1,8 +1,8 @@
 //! Finding the ProSE tool, asking it for its version, and building the command that runs it.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::ffi::{OsStr, OsString};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 
 /// What the front end learns of the tool (`tool_info`).
@@ -11,7 +11,7 @@ use std::process::{Command, Stdio};
 pub struct ToolInfo {
     pub version: String,
     pub path: String,
-    /// Whether the tool was built with ONNX Runtime (PeptDeep needs it).
+    /// Whether the tool was built with ONNX Runtime and has the PeptDeep models (see `has_onnx`).
     pub onnx: bool,
 }
 
@@ -97,42 +97,44 @@ pub fn parse_version(help: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Whether the tool uses ONNX Runtime. ProSE reports it nowhere, so this looks at what the binary
-/// loads: on Linux the dynamic loader lists the libraries (`LD_TRACE_LOADED_OBJECTS`, what `ldd`
-/// does; the program is not run), and on every system a library named `*onnxruntime*` next to the
-/// binary or in the `lib` folder beside its folder counts.
-fn has_onnx(path: &Path) -> bool {
-    let traced = cfg!(target_os = "linux")
-        && Command::new(path)
-            .env("LD_TRACE_LOADED_OBJECTS", "1")
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .output()
-            .map(|o| {
-                String::from_utf8_lossy(&o.stdout)
-                    .to_lowercase()
-                    .contains("onnxruntime")
-            })
-            .unwrap_or(false);
-    traced || {
-        let dir = path.parent();
-        let candidates = [
-            dir.map(Path::to_path_buf),
-            dir.and_then(Path::parent).map(|p| p.join("lib")),
-        ];
-        candidates.into_iter().flatten().any(|d| {
-            std::fs::read_dir(d)
-                .map(|entries| {
-                    entries.flatten().any(|e| {
-                        e.file_name()
-                            .to_string_lossy()
-                            .to_lowercase()
-                            .contains("onnxruntime")
-                    })
-                })
-                .unwrap_or(false)
-        })
-    }
+/// The build manifest that `native/scripts/bundle-prose.sh` writes into the bundle, beside `bin/`.
+pub const MANIFEST: &str = "build.json";
+
+/// The part of the manifest the app reads.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Manifest {
+    /// `WITH_ONNX` of the OpenMS build (its CMakeCache), read at packaging time.
+    with_onnx: bool,
+    /// The PeptDeep models ProSE uses, relative to the manifest's folder.
+    #[serde(default)]
+    models: Vec<String>,
+}
+
+/// Whether the tool can run PeptDeep: its bundle's manifest (`<tool>/../../build.json`) says the build
+/// has ONNX Runtime, and the models it names are there (inside the bundle). ProSE reports neither, so a
+/// tool without a manifest (a build tree's, one on the PATH) counts as without ONNX.
+pub fn has_onnx(path: &Path) -> bool {
+    let Some(root) = path.parent().and_then(Path::parent) else {
+        return false;
+    };
+    let Some(manifest) = std::fs::read(root.join(MANIFEST))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Manifest>(&bytes).ok())
+    else {
+        return false;
+    };
+    let inside = |model: &str| {
+        Path::new(model)
+            .components()
+            .all(|c| matches!(c, Component::Normal(_)))
+    };
+    manifest.with_onnx
+        && !manifest.models.is_empty()
+        && manifest
+            .models
+            .iter()
+            .all(|m| inside(m) && root.join(m).is_file())
 }
 
 /// Runs `path --help` and reads the version; fails if the tool does not run or does not say.

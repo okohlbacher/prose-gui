@@ -871,8 +871,54 @@ fn probing_a_tool_reports_its_version_path_and_onnx_support() {
     let info = tool::probe(&script).unwrap();
     assert_eq!(info.version, "9.9.9");
     assert_eq!(info.path, script.to_string_lossy());
-    assert!(!info.onnx, "a shell script links no ONNX Runtime");
+    assert!(!info.onnx, "a tool without a build manifest has no ONNX");
     assert!(tool::probe(&dir.path().join("none")).is_err());
+}
+
+#[test]
+fn onnx_support_comes_from_the_bundles_manifest_and_its_models() {
+    let dir = TempDir::new("onnx");
+    let bin = executable(&dir, "prose/bin/ProSE");
+    let models = [
+        "share/OpenMS/models/peptdeep_ms2_dynamic.onnx",
+        "share/OpenMS/models/peptdeep_rt_dynamic.onnx",
+    ];
+    let manifest = |with_onnx: bool| {
+        dir.write(
+            "prose/build.json",
+            &serde_json::json!({ "tool": "ProSE", "withOnnx": with_onnx, "models": models })
+                .to_string(),
+        );
+    };
+
+    // no manifest (a tool from a build tree or the PATH): no ONNX, whatever it links
+    assert!(!tool::has_onnx(&bin));
+    // a build with ONNX, but the models are missing
+    manifest(true);
+    assert!(!tool::has_onnx(&bin));
+    for model in models {
+        dir.write(&format!("prose/{model}"), "onnx");
+    }
+    assert!(tool::has_onnx(&bin));
+    // one model gone
+    fs::remove_file(dir.path().join("prose").join(models[1])).unwrap();
+    assert!(!tool::has_onnx(&bin));
+    dir.write(&format!("prose/{}", models[1]), "onnx");
+    // a build without ONNX, models or not
+    manifest(false);
+    assert!(!tool::has_onnx(&bin));
+    // a manifest that names no models, or cannot be read
+    dir.write("prose/build.json", r#"{"withOnnx": true, "models": []}"#);
+    assert!(!tool::has_onnx(&bin));
+    dir.write("prose/build.json", "not json");
+    assert!(!tool::has_onnx(&bin));
+    // a model path that leaves the bundle does not count
+    dir.write("outside.onnx", "onnx");
+    dir.write(
+        "prose/build.json",
+        r#"{"withOnnx": true, "models": ["../outside.onnx"]}"#,
+    );
+    assert!(!tool::has_onnx(&bin));
 }
 
 #[test]

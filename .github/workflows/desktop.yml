@@ -1,0 +1,222 @@
+# The ProSE desktop app on Linux: the pinned OpenMS (native/OPENMS_COMMIT) built and bundled, the app's unit
+# tests, the .deb and the AppImage, and the AppImage's smoke test (the example with PeptDeep through WebDriver).
+# A tag desktop-native-v* also makes a draft release with the two packages.
+#
+# Caches (actions/cache): the bundled ProSE (src-tauri/resources/prose), keyed by the pin and the two scripts
+# that make it, so OpenMS is built only when one of them changes; and vcpkg's binary cache, keyed by the pin
+# and the triplet, so a rebuild of OpenMS does not rebuild its dependencies. Both are saved right after the
+# step that fills them, so a later failure (tests, packaging) does not lose hours of building.
+name: desktop
+
+on:
+  push:
+    branches: [prose-desktop]
+    tags: ['desktop-native-v*']
+  pull_request:
+    branches: [prose-desktop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  # an OpenMS build can take hours; a newer push waits instead of cancelling it
+  cancel-in-progress: false
+
+env:
+  TRIPLET: x64-linux-dynamic
+
+jobs:
+  linux:
+    name: Linux (ubuntu-22.04)
+    runs-on: ubuntu-22.04
+    # the first run builds vcpkg's dependencies (Arrow, the AWS SDK, ONNX Runtime, ...) and OpenMS
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: The OpenMS pin
+        id: pin
+        run: |
+          commit=$(tr -d '[:space:]' < native/OPENMS_COMMIT)
+          [[ $commit =~ ^[0-9a-f]{40}$ ]] || { echo "native/OPENMS_COMMIT holds no commit hash" >&2; exit 1; }
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the bundled ProSE
+        id: bundle
+        uses: actions/cache/restore@v6
+        with:
+          path: src-tauri/resources/prose
+          key: prose-bundle-v1-ubuntu-22.04-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-${{ hashFiles('native/scripts/build-openms.sh', 'native/scripts/bundle-prose.sh') }}
+
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev \
+            webkit2gtk-driver xvfb xauth file patchelf
+
+      # --- OpenMS (only without a bundle in the cache) ------------------------------------------------
+      - name: Disk space and build tools for OpenMS
+        if: steps.bundle.outputs.cache-hit != 'true'
+        run: |
+          # the runner image's SDKs the build does not need; vcpkg's build trees and OpenMS need the room
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+          df -h /
+          # OpenMS needs GCC 13 (C++23); Ubuntu 22.04 has GCC 11 and 12
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-13 g++-13 \
+            autoconf autoconf-archive automake libtool ninja-build pkg-config bison flex curl zip unzip tar
+          cmake --version
+          gcc-13 --version
+          as --version | head -n 1
+
+      - name: Check out OpenMS at the pin
+        if: steps.bundle.outputs.cache-hit != 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: OpenMS/OpenMS
+          ref: ${{ steps.pin.outputs.commit }}
+          path: openms
+          persist-credentials: false
+
+      - name: vcpkg (the OpenMS submodule)
+        if: steps.bundle.outputs.cache-hit != 'true'
+        run: git -C openms submodule update --init --depth 1 vcpkg
+
+      - name: Restore vcpkg's binary cache
+        if: steps.bundle.outputs.cache-hit != 'true'
+        id: vcpkg
+        uses: actions/cache/restore@v6
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-v1-ubuntu-22.04-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}
+          restore-keys: vcpkg-v1-ubuntu-22.04-${{ env.TRIPLET }}-
+
+      - name: Build OpenMS (libOpenMS and ProSE)
+        if: steps.bundle.outputs.cache-hit != 'true'
+        id: openms
+        env:
+          CC: gcc-13
+          CXX: g++-13
+          JOBS: 4
+          VCPKG_MAX_CONCURRENCY: 4
+          VCPKG_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
+          VCPKG_INSTALL_OPTIONS: --clean-after-build
+          OPENMS_TARGETS: OpenMS ProSE
+        run: |
+          native/scripts/build-openms.sh openms openms/build
+          df -h /
+
+      # saved once the dependencies are complete (the configure step ran through), even if OpenMS failed
+      - name: Save vcpkg's binary cache
+        if: always() && steps.bundle.outputs.cache-hit != 'true' && steps.vcpkg.outputs.cache-hit != 'true' && hashFiles('openms/build/build.ninja') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: vcpkg-bincache
+          key: ${{ steps.vcpkg.outputs.cache-primary-key }}
+
+      - name: Bundle ProSE
+        if: steps.bundle.outputs.cache-hit != 'true'
+        run: native/scripts/bundle-prose.sh openms/build src-tauri/resources/prose
+
+      - name: Save the bundled ProSE
+        if: steps.bundle.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: src-tauri/resources/prose
+          key: ${{ steps.bundle.outputs.cache-primary-key }}
+
+      # --- the app ----------------------------------------------------------------------------------------
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: npm ci, tauri-driver
+        run: |
+          npm ci
+          command -v tauri-driver || cargo install tauri-driver --locked
+
+      - name: The bundled ProSE
+        run: |
+          cat src-tauri/resources/prose/build.json
+          src-tauri/resources/prose/bin/ProSE --help 2>&1 | grep -m1 'Version:'
+          du -sh src-tauri/resources/prose src-tauri/resources/prose/lib src-tauri/resources/prose/share
+
+      - name: Unit tests (svelte-check, vitest)
+        run: |
+          npm run check
+          npm test
+
+      - name: Unit tests (cargo test, with the bundled ProSE)
+        working-directory: src-tauri
+        env:
+          PROSE_BIN: ${{ github.workspace }}/src-tauri/resources/prose/bin/ProSE
+          PROSE_EXAMPLE_DIR: ${{ github.workspace }}/src-tauri/resources/example
+        run: cargo test --locked
+
+      - name: Packages (.deb, AppImage)
+        run: native/scripts/package-linux.sh
+
+      - name: Smoke test of the AppImage
+        run: |
+          hide=()
+          [ -d openms/build ] && hide=(--hide-openms openms/build)
+          native/scripts/smoke-appimage.sh src-tauri/target/release/bundle/appimage/*.AppImage "${hide[@]}"
+
+      - name: Package sizes
+        if: always()
+        run: |
+          {
+            echo '### Packages'
+            echo
+            echo '| file | size |'
+            echo '| --- | --- |'
+            for f in src-tauri/target/release/bundle/appimage/*.AppImage src-tauri/target/release/bundle/deb/*.deb; do
+              [ -f "$f" ] && echo "| $(basename "$f") | $(du -h "$f" | cut -f1) |"
+            done
+            [ -d src-tauri/resources/prose ] && echo "| (bundled ProSE, unpacked) | $(du -sh src-tauri/resources/prose | cut -f1) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prose-desktop-linux
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+          retention-days: 14
+
+  # A draft release of the two packages, for a tag desktop-native-v* only; publishing it is a person's step.
+  release:
+    name: Draft release
+    if: startsWith(github.ref, 'refs/tags/desktop-native-v')
+    needs: linux
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: prose-desktop-linux
+          path: packages
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" --draft --verify-tag --title "ProSE desktop ${TAG#desktop-native-v}" \
+            --notes "ProSE desktop for Linux x64 (Ubuntu 22.04 or later): the AppImage runs as is, the .deb installs with apt." \
+            $(find packages -type f \( -name '*.AppImage' -o -name '*.deb' \))
