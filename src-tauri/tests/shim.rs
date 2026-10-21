@@ -1521,11 +1521,62 @@ fn a_crash_becomes_search_failed_with_the_last_stage() {
         ),
         "the message names the user's file, not the link; noise lines are skipped"
     );
+    // how ProSE ended leads the message; the stderr tail is the detail, the log is kept
+    assert_eq!(f.ended.as_deref(), Some("ProSE ended with exit code 3"));
+    assert_eq!(
+        f.detail.as_deref(),
+        Some(
+            format!(
+                "Error: Unable to read file (the input broke {})",
+                crash.display()
+            )
+            .as_str()
+        )
+    );
+    let log = PathBuf::from(f.log.as_deref().expect("the log is kept"));
+    assert_eq!(log, run.work.path().join("logs").join("last-failure.log"));
+    let text = fs::read_to_string(&log).unwrap();
+    assert!(text.starts_with("$ "), "the command line first: {text}");
+    assert!(text.contains("Error: Unable to read file"), "{text}");
     assert!(
         run.listing().is_empty(),
         "the partial folder is removed: {:?}",
         run.listing()
     );
+}
+
+#[test]
+fn a_crash_by_a_signal_says_so_and_keeps_the_log_of_the_last_failure() {
+    let run = Run::new();
+    let i = inputs();
+    // a failure before: its log is replaced
+    let crash = i.dir.write("in/crash.mzML", "<mzML/>");
+    let (_, rx) = run.start(request(&[&crash], &i.fasta, false, json!({})), None);
+    until_terminal(&rx, WAIT);
+    let segv = i.dir.write("in/segv.mzML", "<mzML/>");
+    let (_, rx) = run.start(request(&[&segv], &i.fasta, false, json!({})), None);
+    let events = until_terminal(&rx, WAIT);
+    let Some(SearchEvent::Failed(f)) = events.last() else {
+        panic!("{events:?}")
+    };
+    let expected = if cfg!(windows) {
+        "ProSE crashed (exception 0xC0000005)"
+    } else {
+        "ProSE crashed (signal 11, SIGSEGV)"
+    };
+    assert_eq!(f.ended.as_deref(), Some(expected));
+    assert_eq!(
+        f.message,
+        format!("Reading {} ...", segv.display()),
+        "the last line"
+    );
+    assert_eq!(f.detail.as_deref(), Some(f.message.as_str()));
+    let text = fs::read_to_string(f.log.as_deref().unwrap()).unwrap();
+    assert!(text.contains("segv.mzML"), "{text}");
+    assert!(!text.contains("crash.mzML"), "the last failure's: {text}");
+    let v = serde_json::to_value(f).unwrap();
+    assert_eq!(v["ended"], expected);
+    assert!(v["detail"].is_string() && v["log"].is_string());
 }
 
 #[test]

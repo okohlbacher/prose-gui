@@ -56,10 +56,15 @@
       {#if retryError}
         <p class="mt-1 text-foreground" data-testid="search-error-retry">Opening it again failed: {retryError}</p>
       {/if}
-      {#if failure.detail}
-        <details class="mt-1 text-muted-foreground">
-          <summary class="cursor-pointer text-xs select-none hover:text-foreground">ProSE message</summary>
-          <p class="mt-1 font-mono text-[11.5px] break-all whitespace-pre-line">{failure.detail}</p>
+      {#if failure.detail || failure.log}
+        <details class="mt-1 text-muted-foreground" data-testid="search-error-detail">
+          <summary class="cursor-pointer text-xs select-none hover:text-foreground">ProSE's output</summary>
+          {#if failure.detail}
+            <p class="mt-1 font-mono text-[11.5px] break-all whitespace-pre-line">{failure.detail}</p>
+          {/if}
+          {#if failure.log}
+            <p class="mt-1 text-xs break-all">The whole log of the search: <span class="font-mono">{failure.log}</span></p>
+          {/if}
         </details>
       {/if}
       <div class="mt-2 flex gap-2">

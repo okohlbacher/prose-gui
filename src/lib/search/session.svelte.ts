@@ -339,6 +339,7 @@ export async function runSearch(
         describeFailure(
           { label: e.stage || searchRun.label, file, files: searchRun.files, silentMs: performance.now() - reportedAt },
           e.message,
+          e.details,
         ),
       )
     } else {

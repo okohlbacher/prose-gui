@@ -6,7 +6,7 @@
 //! - `tool_info` -> `{ version, path, onnx }`
 //! - `start_search(request)` -> `{ searchId }`; `cancel_search(searchId)`
 //! - events `search://progress` `{ searchId, label, file, fraction }`, `search://done`
-//!   `{ searchId, folder }` and `search://failed` `{ searchId, message, stage, file? }`
+//!   `{ searchId, folder }` and `search://failed` `{ searchId, message, stage, file?, ended?, detail?, log? }`
 //! - `read_search_file(searchId, name)` -> the bytes of a file of the search's folder, or of the
 //!   database its summary records (`files`; rejects `{ notFound, message }`)
 //! - `inspect_files(paths)` -> `[{ path, name, size, spectra?, proteins?, residues?, error? }]`

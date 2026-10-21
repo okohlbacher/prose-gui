@@ -49,12 +49,23 @@ export type SearchRequest = {
 /** A step of a running search (`search://progress`). */
 export type SearchProgress = { label: string; file: number; fraction: number }
 
-/** How a search ended badly (`search://failed`): ProSE's message, the step and the file. */
+/** What `search://failed` says beyond the message (src-tauri/src/run.rs `FailedEvent`). */
+export type FailureDetails = {
+  /** How ProSE ended: "ProSE crashed (signal 11, SIGSEGV)", "ProSE ended with exit code 3". */
+  ended?: string
+  /** ProSE's last lines on stderr. */
+  detail?: string
+  /** Where the search's whole log was kept (`logs/last-failure.log` of the app's data). */
+  log?: string
+}
+
+/** How a search ended badly (`search://failed`): ProSE's message, the step and the file, and how it ended. */
 export class SearchFailed extends Error {
   constructor(
     message: string,
     readonly stage: string,
     readonly file: number,
+    readonly details: FailureDetails = {},
   ) {
     super(message)
     this.name = 'SearchFailed'
@@ -78,7 +89,7 @@ export function toolInfo(): Promise<ToolInfo> {
 
 type ProgressPayload = SearchProgress & { searchId: string }
 type DonePayload = { searchId: string; folder: string }
-type FailedPayload = { searchId: string; message: string; stage: string; file?: number }
+type FailedPayload = { searchId: string; message: string; stage: string; file?: number } & FailureDetails
 
 /**
  * Starts a search. The events of the search go to `onProgress` until it ends; `done` resolves with
@@ -110,7 +121,7 @@ export async function startSearch(request: SearchRequest, onProgress: (p: Search
     } else {
       const f = payload as FailedPayload
       stop()
-      settle!.reject(new SearchFailed(f.message, f.stage, f.file ?? -1))
+      settle!.reject(new SearchFailed(f.message, f.stage, f.file ?? -1, { ended: f.ended, detail: f.detail, log: f.log }))
     }
   }
 

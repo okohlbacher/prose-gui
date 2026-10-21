@@ -1,5 +1,6 @@
 // An error of a search for people: where it happened (the stage and file of the last progress report)
-// and what happened, with OpenMS' own text as a secondary detail.
+// and what happened, led by how ProSE ended (a crash's signal, an exit code), with ProSE's last lines on
+// stderr (or OpenMS' own text) as a secondary detail and the path of the kept log.
 
 export type FailureStage = {
   /** The last progress label ("Searching broken.mzML (2 of 2)..."). */
@@ -17,8 +18,10 @@ export type Failure = {
   context: string
   /** What happened, in one or two sentences. */
   summary: string
-  /** OpenMS' raw text, when the summary shortens it. */
+  /** ProSE's last lines on stderr; else OpenMS' raw text, when the summary shortens it. */
   detail: string | null
+  /** Where the search's whole log was kept. */
+  log?: string
   /**
    * The search, when ProSE finished it but its results could not be read: it is kept in History and can be
    * opened again from there.
@@ -77,12 +80,30 @@ function exceptionText(message: string): string | null {
   return location ? message.slice(0, location.index) : null
 }
 
-export function describeFailure(stage: FailureStage, message: string): Failure {
+/** How ProSE ended, its last lines and its kept log (`search://failed`); all optional. */
+export type FailureOutput = { ended?: string | null; detail?: string | null; log?: string | null }
+
+export function describeFailure(stage: FailureStage, message: string, output: FailureOutput = {}): Failure {
   const context = stageOf(stage, message)
   const raw = exceptionText(message)
-  if (raw === null) return { context, summary: message, detail: null }
-  let text = raw.trim().replace(/:$/, '')
-  if (!/[.!?]$/.test(text)) text += '.'
-  const hint = /parse error/i.test(text) && !/fasta/i.test(text) ? ' The file may be incomplete or not valid mzML.' : ''
-  return { context, summary: `${text}${hint}`, detail: message }
+  let summary = message
+  let detail: string | null = null
+  if (raw !== null) {
+    let text = raw.trim().replace(/:$/, '')
+    if (!/[.!?]$/.test(text)) text += '.'
+    const hint = /parse error/i.test(text) && !/fasta/i.test(text) ? ' The file may be incomplete or not valid mzML.' : ''
+    summary = `${text}${hint}`
+    detail = message
+  }
+  // how ProSE ended leads: "ProSE crashed (signal 11, SIGSEGV): <its last words>"
+  if (output.ended) {
+    const words = summary.trim().replace(/^Error:\s*/, '')
+    summary = words === '' ? `${output.ended}.` : `${output.ended}: ${words}`
+  }
+  return {
+    context,
+    summary,
+    detail: output.detail || detail,
+    ...(output.log ? { log: output.log } : {}),
+  }
 }

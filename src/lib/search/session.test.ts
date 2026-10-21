@@ -17,6 +17,7 @@ vi.mock('../desktop', async () => {
       message: string,
       readonly stage: string,
       readonly file: number,
+      readonly details: object = {},
     ) {
       super(message)
     }
@@ -119,6 +120,26 @@ describe('runSearch', () => {
     expect(searchRun.status).toBe('failed')
     expect(searchRun.failure?.context).toBe('While searching file 2 of 2 (b.mzML.gz)')
     expect(searchRun.failure?.summary).toBe('Error: Unable to read file (broken)')
+  })
+
+  it('a crash leads with how ProSE ended, with its last lines and the kept log', async () => {
+    const search = started()
+    const run = runSearch(request, meta)
+    await settle()
+    search.done.reject(
+      new (SearchFailed as unknown as new (...a: unknown[]) => Error)('Reading b.mzML.gz ...', 'Searching b.mzML.gz (2 of 2)...', 1, {
+        ended: 'ProSE crashed (signal 11, SIGSEGV)',
+        detail: 'Reading b.mzML.gz ...',
+        log: '/data/logs/last-failure.log',
+      }),
+    )
+    expect(await run).toBeNull()
+    expect(searchRun.failure).toEqual({
+      context: 'While searching file 2 of 2 (b.mzML.gz)',
+      summary: 'ProSE crashed (signal 11, SIGSEGV): Reading b.mzML.gz ...',
+      detail: 'Reading b.mzML.gz ...',
+      log: '/data/logs/last-failure.log',
+    })
   })
 
   it('a request the shim refuses fails before the search', async () => {

@@ -1,7 +1,9 @@
 // A search that is cancelled, and one whose ProSE is killed from outside: neither leaves anything in
 // History or in the searches folder, the failure names its stage, and the next search runs.
 // Gated: runs only with PROSE_BIN set (the app inherits it).
-import { appReady, clearSearches, freshForm, goTo, proseProcesses, resultsId, searchFolders, textOf, waitForResults } from './lib.ts'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { appReady, clearSearches, freshForm, goTo, proseProcesses, resultsId, searchesDir, searchFolders, textOf, waitForResults } from './lib.ts'
 
 const enabled = Boolean(process.env.PROSE_BIN)
 
@@ -89,7 +91,13 @@ describe('a search that does not finish', () => {
     // the stage and the file it was searching, and what happened to ProSE
     expect(text).toContain('While searching')
     expect(text).toMatch(/DatabaseSuitability_[12]\.mzML/)
-    expect(text).toMatch(/signal 9|killed|stopped/i)
+    // how ProSE ended leads the message
+    expect(text).toContain('ProSE crashed (signal 9, SIGKILL')
+    // its log is kept in the app's data (and named in the details)
+    const log = join(dirname(searchesDir()), 'logs', 'last-failure.log')
+    expect(existsSync(log)).toBe(true)
+    expect(readFileSync(log, 'utf8')).toMatch(/^\$ .*ProSE/)
+    expect(text).toContain(log)
     expect(await resultsId()).toBeNull()
     await expect($('button*=Start search')).toBeDisplayed()
     expect(proseProcesses()).toEqual([])

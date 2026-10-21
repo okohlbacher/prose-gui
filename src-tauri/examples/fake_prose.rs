@@ -8,6 +8,8 @@
 //!   hang      prints the first step, starts two child processes and waits for them
 //!   stubborn  as hang, but ignores SIGTERM (children too; Unix): only SIGKILL ends it
 //!   crash     prints two steps, writes a message to stderr and exits with code 3
+//!   segv      prints a step and a line to stderr, then crashes: SIGSEGV (Unix), an access violation's
+//!             status 0xC0000005 (Windows)
 //!   <other>   searches every input and exits 0
 //!
 //! Next to -summary_out it leaves argv.txt (one argument per line), inputs.txt (every -in path with the
@@ -34,6 +36,30 @@ fn ignore_sigterm() {
 
 #[cfg(not(unix))]
 fn ignore_sigterm() {}
+
+/// Ends the process as a crash does: SIGSEGV.
+#[cfg(unix)]
+fn crash() -> ! {
+    extern "C" {
+        fn signal(signum: std::os::raw::c_int, handler: usize) -> usize;
+        fn raise(signum: std::os::raw::c_int) -> std::os::raw::c_int;
+    }
+    const SIGSEGV: std::os::raw::c_int = 11;
+    const SIG_DFL: usize = 0;
+    // SAFETY: the default action (Rust's runtime has a handler of its own for SIGSEGV), then raise(3): the
+    // signal ends the process; neither call has memory effects.
+    unsafe {
+        signal(SIGSEGV, SIG_DFL);
+        raise(SIGSEGV);
+    }
+    exit(139);
+}
+
+/// Ends the process with the status of an access violation, as Windows ends a crashed process.
+#[cfg(not(unix))]
+fn crash() -> ! {
+    exit(0xC000_0005_u32 as i32);
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -134,6 +160,11 @@ fn main() {
             eprintln!("Schema error: Trying to register schema with name Abs");
             eprintln!("Error: Unable to read file (the input broke {})", inputs[0]);
             exit(3);
+        }
+        "segv" => {
+            say(format!("[ProSE] [1/{count}] Searching {}", inputs[0]));
+            eprintln!("Reading {} ...", inputs[0]);
+            crash();
         }
         _ => {}
     }

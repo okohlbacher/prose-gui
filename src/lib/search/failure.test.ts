@@ -8,6 +8,33 @@ const parseError =
   'void OpenMS::Internal::XMLHandler::fatalError(ActionMode, const std::string &, UInt, UInt) const'
 
 describe('describeFailure', () => {
+  it('leads with how ProSE ended, and keeps its last lines and log as the detail', () => {
+    const stage = { label: 'Searching broken.mzML (2 of 2)...', file: 1, files, silentMs: 0 }
+    const crashed = describeFailure(stage, 'Reading /data/broken.mzML ...', {
+      ended: 'ProSE crashed (signal 11, SIGSEGV)',
+      detail: 'Loading /data/broken.mzML\nReading /data/broken.mzML ...',
+      log: '/home/me/.local/share/org.openms.prose.desktop/logs/last-failure.log',
+    })
+    expect(crashed).toEqual({
+      context: 'While searching file 2 of 2 (broken.mzML)',
+      summary: 'ProSE crashed (signal 11, SIGSEGV): Reading /data/broken.mzML ...',
+      detail: 'Loading /data/broken.mzML\nReading /data/broken.mzML ...',
+      log: '/home/me/.local/share/org.openms.prose.desktop/logs/last-failure.log',
+    })
+    // an exit code, with an OpenMS exception shortened (its "Error:" left out after the lead)
+    const exited = describeFailure(stage, `Error: ${parseError}`, { ended: 'ProSE ended with exit code 3', detail: `x\nError: ${parseError}` })
+    expect(exited.summary).toBe('ProSE ended with exit code 3: Parse Error. The file may be incomplete or not valid mzML.')
+    expect(exited.detail).toBe(`x\nError: ${parseError}`)
+    // nothing said: the lead alone
+    expect(describeFailure(stage, '', { ended: 'ProSE crashed (signal 9, SIGKILL)' }).summary).toBe('ProSE crashed (signal 9, SIGKILL).')
+    // without how it ended (the shim's own failures), as before
+    expect(describeFailure(stage, 'The search folder cannot be finished (busy).')).toEqual({
+      context: 'While searching file 2 of 2 (broken.mzML)',
+      summary: 'The search folder cannot be finished (busy).',
+      detail: null,
+    })
+  })
+
   it('names the file and stage of the last progress report and keeps the raw text as detail', () => {
     const f = describeFailure({ label: 'Filtering spectra...', file: 1, files, silentMs: 10 }, parseError)
     expect(f.context).toBe('While searching file 2 of 2 (broken.mzML)')

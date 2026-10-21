@@ -14,7 +14,9 @@
 //! lives, so that the startup sweep of any app instance can tell a live folder from a stale one.
 //!
 //! On success the folder is renamed to `<searches>/<id>/` and `done` is sent; on failure or cancel it is
-//! removed (a failure sends `failed`, a cancel nothing: `cancel` returns when the process is gone).
+//! removed (a failure sends `failed`, a cancel nothing: `cancel` returns when the process is gone). The
+//! log of a failed search is kept, as `<app data>/logs/last-failure.log` ([`LAST_FAILURE_LOG`]; the
+//! searches folder's sibling), replacing the one before.
 //!
 //! The tool runs in a process group of its own, started from a thread of its own that waits for it.
 //! Cancel signals the group (SIGTERM, then SIGKILL after a grace period), and the group is swept with
@@ -51,6 +53,8 @@ const GRACE: Duration = Duration::from_secs(3);
 const KILL_WAIT: Duration = Duration::from_secs(10);
 /// How many of the tool's last stderr lines are kept for a failure message.
 const STDERR_TAIL: usize = 60;
+/// The log of the last failed search, in the folder `logs` beside the searches folder.
+pub const LAST_FAILURE_LOG: &str = "last-failure.log";
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -74,12 +78,24 @@ pub struct DoneEvent {
 #[serde(rename_all = "camelCase")]
 pub struct FailedEvent {
     pub search_id: String,
+    /// What went wrong: the tool's last "Error…" line (else its last line), or the shim's own message;
+    /// empty when the tool said nothing.
     pub message: String,
     /// The last progress label.
     pub stage: String,
     /// The input of the last progress report; absent outside the files.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<i32>,
+    /// How the tool ended, when it ended badly: "ProSE crashed (signal 11, SIGSEGV)", "ProSE ended with
+    /// exit code 3" ([`how_it_ended`]); the message leads with it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ended: Option<String>,
+    /// The last lines the tool wrote to stderr (the user's names for the inputs), for the details.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    /// Where the search's whole log was kept ([`LAST_FAILURE_LOG`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -134,6 +150,59 @@ pub struct Searches {
 impl Default for Searches {
     fn default() -> Searches {
         Searches::with_links(InputLinks::PLATFORM)
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::how_it_ended;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::ExitStatus;
+
+    /// (wait statuses: a signal in the low seven bits, an exit code in the next byte)
+    #[test]
+    fn how_a_tool_ended_leads_its_failure() {
+        assert_eq!(how_it_ended(&ExitStatus::from_raw(0)), None);
+        assert_eq!(
+            how_it_ended(&ExitStatus::from_raw(3 << 8)).as_deref(),
+            Some("ProSE ended with exit code 3")
+        );
+        assert_eq!(
+            how_it_ended(&ExitStatus::from_raw(11)).as_deref(),
+            Some("ProSE crashed (signal 11, SIGSEGV)")
+        );
+        assert_eq!(
+            how_it_ended(&ExitStatus::from_raw(6)).as_deref(),
+            Some("ProSE crashed (signal 6, SIGABRT)")
+        );
+        assert_eq!(
+            how_it_ended(&ExitStatus::from_raw(9)).as_deref(),
+            Some("ProSE crashed (signal 9, SIGKILL; the system may have ended it for lack of memory)")
+        );
+        assert_eq!(
+            how_it_ended(&ExitStatus::from_raw(31)).as_deref(),
+            Some("ProSE crashed (signal 31)")
+        );
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests_windows {
+    use super::how_it_ended;
+    use std::os::windows::process::ExitStatusExt;
+    use std::process::ExitStatus;
+
+    #[test]
+    fn how_a_tool_ended_leads_its_failure() {
+        assert_eq!(how_it_ended(&ExitStatus::from_raw(0)), None);
+        assert_eq!(
+            how_it_ended(&ExitStatus::from_raw(3)).as_deref(),
+            Some("ProSE ended with exit code 3")
+        );
+        assert_eq!(
+            how_it_ended(&ExitStatus::from_raw(0xC000_0005)).as_deref(),
+            Some("ProSE crashed (exception 0xC0000005)")
+        );
     }
 }
 
@@ -409,20 +478,69 @@ fn is_noise(line: &str) -> bool {
     line.trim().is_empty() || line.starts_with("Schema error") || line.starts_with("Warning:")
 }
 
-/// The message of a failure: the last "Error…" line of the tool's stderr, else its last line, else
-/// how the process ended.
-fn failure_message(tail: &VecDeque<String>, status: &ExitStatus) -> String {
-    let line = tail
-        .iter()
+/// The message of a failure: the last "Error…" line of the tool's stderr, else its last line; empty
+/// when it wrote none.
+fn failure_message(tail: &VecDeque<String>) -> String {
+    tail.iter()
         .rev()
         .find(|l| l.starts_with("Error"))
-        .or_else(|| tail.back());
-    match (line, status.code(), sys::exit_signal(status)) {
-        (Some(line), _, _) => line.trim().to_string(),
-        (None, _, Some(signal)) => format!("ProSE was stopped by signal {signal}."),
-        (None, Some(code), _) => format!("ProSE ended with exit code {code}."),
-        (None, None, None) => "ProSE ended unexpectedly.".to_string(),
+        .or_else(|| tail.back())
+        .map(|l| l.trim().to_string())
+        .unwrap_or_default()
+}
+
+/// The name of a signal that ends a process (Linux and macOS agree on these numbers).
+fn signal_name(signal: i32) -> Option<&'static str> {
+    Some(match signal {
+        1 => "SIGHUP",
+        2 => "SIGINT",
+        4 => "SIGILL",
+        6 => "SIGABRT",
+        8 => "SIGFPE",
+        9 => "SIGKILL",
+        11 => "SIGSEGV",
+        13 => "SIGPIPE",
+        15 => "SIGTERM",
+        _ => return None,
+    })
+}
+
+/// How a tool that did not succeed ended, the lead of its failure: "ProSE crashed (signal 11, SIGSEGV)"
+/// (SIGKILL: the system may have ended it for lack of memory), on Windows "ProSE crashed (exception
+/// 0xC0000005)" for an exception's status, else "ProSE ended with exit code 3"; None for success.
+pub fn how_it_ended(status: &ExitStatus) -> Option<String> {
+    if status.success() {
+        return None;
     }
+    if let Some(signal) = sys::exit_signal(status) {
+        let name = signal_name(signal)
+            .map(|n| format!(", {n}"))
+            .unwrap_or_default();
+        let oom = if signal == 9 {
+            "; the system may have ended it for lack of memory"
+        } else {
+            ""
+        };
+        return Some(format!("ProSE crashed (signal {signal}{name}{oom})"));
+    }
+    Some(match status.code() {
+        // an NTSTATUS error (0xC…): an access violation, a stack overflow, ...
+        Some(code) if cfg!(windows) && (code as u32) >= 0xC000_0000 => {
+            format!("ProSE crashed (exception 0x{:08X})", code as u32)
+        }
+        Some(code) => format!("ProSE ended with exit code {code}"),
+        None => "ProSE ended unexpectedly".to_string(),
+    })
+}
+
+/// Keeps the log of a failed search (`prose.log` of its partial folder) as `<app data>/logs/`
+/// [`LAST_FAILURE_LOG`], replacing the one before; the path, or None if there is none.
+fn keep_failure_log(partial: &Path) -> Option<PathBuf> {
+    let logs = partial.parent()?.parent()?.join("logs");
+    fs::create_dir_all(&logs).ok()?;
+    let kept = logs.join(LAST_FAILURE_LOG);
+    fs::copy(partial.join("prose.log"), &kept).ok()?;
+    Some(kept)
 }
 
 /// Everything the supervising thread needs.
@@ -787,26 +905,50 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
                         folder: done_dir.to_string_lossy().into_owned(),
                     })),
                     Err(e) => {
+                        let log = keep_failure_log(&partial);
                         let _ = remove_partial(None, &partial);
                         Some(failed(
                             &id,
                             format!("The search folder cannot be finished ({e})."),
                             &tracker,
+                            Failure {
+                                log,
+                                ..Failure::default()
+                            },
                         ))
                     }
                 }
             }
             Ok(status) => {
-                let message = humanize(&failure_message(&tail, &status), &partial, &records);
+                let message = humanize(&failure_message(&tail), &partial, &records);
+                let detail = (!tail.is_empty()).then(|| {
+                    let lines: Vec<&str> = tail.iter().map(String::as_str).collect();
+                    humanize(&lines.join("\n"), &partial, &records)
+                });
+                let log = keep_failure_log(&partial);
                 let _ = remove_partial(lock.take(), &partial);
-                Some(failed(&id, message, &tracker))
+                Some(failed(
+                    &id,
+                    message,
+                    &tracker,
+                    Failure {
+                        ended: how_it_ended(&status),
+                        detail,
+                        log,
+                    },
+                ))
             }
             Err(e) => {
+                let log = keep_failure_log(&partial);
                 let _ = remove_partial(lock.take(), &partial);
                 Some(failed(
                     &id,
                     format!("Waiting for ProSE failed ({e})."),
                     &tracker,
+                    Failure {
+                        log,
+                        ..Failure::default()
+                    },
                 ))
             }
         }
@@ -823,11 +965,22 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
     handle.finish();
 }
 
-fn failed(id: &str, message: String, tracker: &ProgressTracker) -> SearchEvent {
+/// What a failure says beyond its message (see [`FailedEvent`]).
+#[derive(Default)]
+struct Failure {
+    ended: Option<String>,
+    detail: Option<String>,
+    log: Option<PathBuf>,
+}
+
+fn failed(id: &str, message: String, tracker: &ProgressTracker, more: Failure) -> SearchEvent {
     SearchEvent::Failed(FailedEvent {
         search_id: id.to_string(),
         message,
         stage: tracker.label().to_string(),
         file: tracker.file(),
+        ended: more.ended,
+        detail: more.detail,
+        log: more.log.map(|p| p.to_string_lossy().into_owned()),
     })
 }
