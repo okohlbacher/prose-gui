@@ -342,14 +342,19 @@ fn frames_have_a_fixed_layout() {
 }
 
 #[test]
-fn read_chosen_project_serves_prose_files_only() {
+fn read_chosen_project_serves_any_regular_file() {
     let tmp = TempDir::new("project");
     let good = tmp.write("a.prose", "zip");
     assert_eq!(read_chosen_project(&good).unwrap(), b"zip");
     let upper = tmp.write("B.PROSE", "zip");
     assert!(read_chosen_project(&upper).is_ok());
-    let other = tmp.write("a.txt", "zip");
-    assert!(read_chosen_project(&other).unwrap_err().contains(".prose"));
+    // any name: the front end checks what the file holds
+    for name in ["a.zip", "project", "a.prose.zip", "Ergebnis ü.txt"] {
+        assert_eq!(
+            read_chosen_project(&tmp.write(name, "zip")).unwrap(),
+            b"zip"
+        );
+    }
     assert!(
         read_chosen_project(Path::new("a.prose")).is_err(),
         "absolute paths only"

@@ -358,16 +358,14 @@ pub fn folder_files(dir: &Path, id: &str) -> Result<Vec<FolderFile>, String> {
     Ok(files)
 }
 
-/// The bytes of the `.prose` file that the user chose in the open dialog (`open_project_file`; the page
-/// never names a path). Refused unless it is an absolute path with the extension `.prose` that is a
-/// regular file itself: a link is not followed.
+/// The bytes of the project file that the user chose in the open dialog (`open_project_file`; the page
+/// never names a path). Any name will do (a project renamed, or sent without its `.prose`): the front end
+/// checks the content. Refused unless it is an absolute path that is a regular file itself: a link is not
+/// followed.
 pub fn read_chosen_project(path: &Path) -> Result<Vec<u8>, String> {
     let shown = path.display();
-    let is_prose = path
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("prose"));
-    if !path.is_absolute() || !is_prose {
-        return Err(format!("{shown} is not a project file (.prose)."));
+    if !path.is_absolute() {
+        return Err(format!("{shown} is not an absolute path."));
     }
     let meta = fs::symlink_metadata(path).map_err(|e| format!("{shown} cannot be read ({e})."))?;
     if !meta.is_file() {

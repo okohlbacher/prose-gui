@@ -297,7 +297,8 @@ async fn history_import(
 }
 
 /// A project file: the open dialog (in Rust: the page never names a path) and the bytes of the file the
-/// user chose, as raw bytes. Cancelled: an empty body (a project file is never empty; it is refused).
+/// user chose, as raw bytes. Cancelled: an empty body (a project file is never empty; it is refused). The
+/// dialog offers `.prose` files first and any file second (the page checks what the file holds).
 #[tauri::command]
 async fn open_project_file(app: AppHandle) -> Result<Response, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -308,6 +309,7 @@ async fn open_project_file(app: AppHandle) -> Result<Response, String> {
             .dialog()
             .file()
             .add_filter("ProSE project", &["prose"])
+            .add_filter("All files", &["*"])
             .set_title("Open a project file")
             .blocking_pick_file();
         match chosen {
