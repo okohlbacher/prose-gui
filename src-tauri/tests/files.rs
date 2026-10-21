@@ -323,3 +323,23 @@ fn the_bundled_example_is_the_web_apps() {
     );
     assert_eq!(fasta.proteins, Some(49));
 }
+
+#[test]
+fn only_spectrum_and_fasta_files_are_inspected() {
+    let tmp = TempDir::new("inspect");
+    let secret = tmp.write("id_rsa", "-----BEGIN PRIVATE KEY-----");
+    let notes = tmp.write("notes.txt", "secret");
+    for path in [&secret, &notes] {
+        let facts = inspect(path.to_str().unwrap());
+        assert!(facts.error.is_some(), "{} was inspected", path.display());
+        // nothing about the file: not its size
+        assert_eq!(facts.size, 0);
+    }
+    // a missing file of another kind says nothing about its existence either
+    let missing = inspect(tmp.path().join("missing.key").to_str().unwrap());
+    let other = inspect(secret.to_str().unwrap());
+    assert_eq!(
+        missing.error.unwrap().replace("missing.key", "X"),
+        other.error.unwrap().replace("id_rsa", "X")
+    );
+}

@@ -37,6 +37,47 @@ describe('the example search', () => {
     expect(outcome).toBe('ok')
   })
 
+  it('the monospace fonts are the bundled ones (Liberation Mono, Inconsolata), not a wider system one', async () => {
+    await $('header').waitForDisplayed({ timeout: 20000 })
+    // In the web app's headless Chromium, 'NDSVIVADQTPTPTR' at 12.5px is 93.75 px in the peptide stack
+    // (a 0.5 em font there) and 112.53 px in font-mono (Liberation Mono, 0.6 em). The app bundles
+    // Inconsolata (0.5 em) for sequences and Liberation Mono. WebKitGTK sets text at whole pixel sizes
+    // (12.5px as 13px) and Inconsolata's and Liberation Mono's hinted advances fall on whole pixels, so here
+    // they measure 90 and 120 px; the system's DejaVu Sans Mono 120.
+    const widths = await browser.execute(async () => {
+      await document.fonts.load('12.5px "Inconsolata"')
+      await document.fonts.load('12.5px "Liberation Mono"')
+      const width = (font: string, className = '') => {
+        const s = document.createElement('span')
+        s.className = className
+        if (font) s.style.font = font
+        s.style.fontSize = '12.5px'
+        s.textContent = 'NDSVIVADQTPTPTR'
+        document.body.append(s)
+        const w = s.getBoundingClientRect().width
+        s.remove()
+        return w
+      }
+      return {
+        // as the components use them: the peptide stack, and Tailwind's font-mono class
+        sequence: width('12.5px var(--font-sequence)'),
+        mono: width('', 'font-mono'),
+        inconsolata: width('12.5px "Inconsolata"'),
+        liberation: width('12.5px "Liberation Mono"'),
+        dejavu: width('12.5px "DejaVu Sans Mono"'),
+      }
+    })
+    console.log('monospace widths', JSON.stringify(widths))
+    expect(widths.sequence).toBe(widths.inconsolata)
+    expect(widths.mono).toBe(widths.liberation)
+    // 0.5 em and 0.6 em per character (at 12.5 or 13 px; hinted advances rounded to whole pixels)
+    expect(widths.sequence / 15).toBeGreaterThanOrEqual(6)
+    expect(widths.sequence / 15).toBeLessThanOrEqual(6.5)
+    expect(widths.mono / 15).toBeGreaterThanOrEqual(7.5)
+    expect(widths.mono / 15).toBeLessThanOrEqual(8)
+    expect(widths.sequence).toBeLessThan(widths.dejavu - 10)
+  })
+
   it('the example search shows 1,790 PSMs', async () => {
     await $('header').waitForDisplayed({ timeout: 20000 })
     await $('button=Try the example').click()

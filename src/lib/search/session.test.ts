@@ -32,7 +32,8 @@ vi.mock('../desktop', async () => {
 vi.mock('../results/read', () => ({ readSearch: fake.read }))
 
 const { SearchFailed } = await import('../desktop')
-const { cancelSearch, openResult, runSearch, searchProgress, searchRun } = await import('./session.svelte')
+const { cancelSearch, finishedWhileCancelled, forgetFinishedWhileCancelled, openResult, runSearch, searchProgress, searchRun } =
+  await import('./session.svelte')
 
 const request: SearchRequest = {
   files: [
@@ -125,12 +126,41 @@ describe('runSearch', () => {
     started('18-0')
     const run = runSearch(request, meta)
     await settle()
+    vi.useFakeTimers()
+    try {
+      cancelSearch()
+      expect(searchRun.status).toBe('cancelled')
+      expect(fake.cancel).toHaveBeenCalledWith('18-0')
+      expect(await run).toBeNull()
+      // its events are listened to until the shim has ended it, and a moment more (a done on its way)
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(fake.stop).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a cancel goes to the running search, not to an earlier one cancelled while it was starting', async () => {
+    // B: cancelled while start_search is still on its way
+    const startB = deferred<{ searchId: string; done: Promise<{ folder: string }>; stop: () => void }>()
+    fake.start.mockImplementationOnce(() => startB.promise)
+    const runB = runSearch(request, meta)
+    await settle()
     cancelSearch()
-    expect(searchRun.status).toBe('cancelled')
-    expect(fake.cancel).toHaveBeenCalledWith('18-0')
-    // no longer listening to its events
-    expect(fake.stop).toHaveBeenCalled()
-    expect(await Promise.race([run, settle().then(() => 'pending')])).toBeNull()
+    expect(fake.cancel).not.toHaveBeenCalled()
+    // C: started next, and running
+    started('21-0')
+    const runC = runSearch(request, meta)
+    await settle()
+    // B's start_search answers late: B is ended in the shim at once
+    startB.resolve({ searchId: '20-0', done: new Promise(() => {}), stop: fake.stop })
+    expect(await runB).toBeNull()
+    expect(fake.cancel).toHaveBeenLastCalledWith('20-0')
+    expect(searchRun.status).toBe('running')
+    // Cancel now is C's
+    cancelSearch()
+    expect(fake.cancel).toHaveBeenLastCalledWith('21-0')
+    expect(await runC).toBeNull()
   })
 
   it('a search that finishes as it is cancelled stays cancelled: its done is not opened', async () => {
@@ -145,6 +175,21 @@ describe('runSearch', () => {
     expect(fake.read).not.toHaveBeenCalled()
     expect(searchRun.status).toBe('cancelled')
     expect(openResult.current).toBe(before)
+    // its folder exists: kept, so that History can remove it
+    await settle()
+    expect(finishedWhileCancelled()).toContain('19-0')
+    forgetFinishedWhileCancelled('19-0')
+    expect(finishedWhileCancelled()).not.toContain('19-0')
+  })
+
+  it('a cancelled search that ends without done is not recorded as finished', async () => {
+    started('22-0')
+    const run = runSearch(request, meta)
+    await settle()
+    cancelSearch()
+    await run
+    await settle()
+    expect(finishedWhileCancelled()).not.toContain('22-0')
   })
 
   it('results that cannot be read fail the run, saying so', async () => {

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The main window: the app's commands, events and drag and drop (core), the open dialog for inputs",
+  "description": "The main window: the app's commands, events and drag and drop (core), the open dialog for inputs (the save dialog runs in Rust)",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open", "opener:default"]
+  "permissions": ["core:default", "dialog:allow-open"]
 }

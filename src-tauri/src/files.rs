@@ -7,7 +7,9 @@
 //!   user's files) are not readable through this. A file that does not exist rejects with
 //!   `{ notFound: true, message }`, which the results reader takes for a missing output.
 //! - [`inspect`]: what the New search page shows of an input it was given by path (size, the spectrum
-//!   count of an mzML's header, the proteins and residues of a FASTA): numbers, never contents.
+//!   count of an mzML's header, the proteins and residues of a FASTA): numbers, never contents, and
+//!   only of absolute paths with the suffixes the shim searches (`.mzML`, `.mzML.gz`, `.fasta`, `.fa`,
+//!   `.faa`); any other path is refused before the disk is asked.
 //! - [`example_files`]: the bundled example, as the two named runs the web app searches.
 
 use crate::args::{is_fasta_file, is_spectrum_file};
@@ -296,6 +298,14 @@ pub fn inspect(path: &str) -> FileFacts {
         facts.error = Some(format!("{path} is not an absolute path."));
         return facts;
     }
+    // only what a search takes, before anything is asked of the disk: other files (a key, a document)
+    // are not even looked up, so the page learns nothing of them
+    if !is_spectrum_file(&name) && !is_fasta_file(&name) {
+        facts.error = Some(format!(
+            "{path} is not an mzML file (.mzML, .mzML.gz) or a FASTA file (.fasta, .fa, .faa)."
+        ));
+        return facts;
+    }
     let meta = match fs::metadata(path) {
         Ok(meta) if meta.is_file() => meta,
         Ok(_) => {
@@ -309,13 +319,13 @@ pub fn inspect(path: &str) -> FileFacts {
     };
     facts.size = meta.len();
     let lower = name.to_lowercase();
-    let counted = if is_spectrum_file(&name) && !lower.ends_with(".gz") {
-        spectrum_count(Path::new(path)).map(|n| facts.spectra = n)
-    } else if is_fasta_file(&name) {
+    let counted = if is_fasta_file(&name) {
         fasta_counts(Path::new(path)).map(|(p, r)| {
             facts.proteins = Some(p);
             facts.residues = Some(r);
         })
+    } else if !lower.ends_with(".gz") {
+        spectrum_count(Path::new(path)).map(|n| facts.spectra = n)
     } else {
         Ok(())
     };

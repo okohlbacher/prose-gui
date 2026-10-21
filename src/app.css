@@ -5,7 +5,43 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* The monospace fonts (src/assets/fonts/README.txt), bundled so that WebKitGTK does not fall back to a
+   wider system monospace: Liberation Mono for font-mono, as the web app's screenshots rendered it, and
+   the 0.5 em wide Inconsolata for peptide sequences (--font-sequence), as wide as the screenshots'
+   sequences. SIL OFL: Liberation Mono as released upstream (unmodified), Inconsolata as fontsource's
+   Latin subset. */
+@font-face {
+	font-family: 'Liberation Mono';
+	font-style: normal;
+	font-weight: 400;
+	font-display: block;
+	src: url('./assets/fonts/LiberationMono-Regular.ttf') format('truetype');
+}
+@font-face {
+	font-family: 'Liberation Mono';
+	font-style: normal;
+	font-weight: 700;
+	font-display: block;
+	src: url('./assets/fonts/LiberationMono-Bold.ttf') format('truetype');
+}
+@font-face {
+	font-family: 'Inconsolata';
+	font-style: normal;
+	font-weight: 400;
+	font-display: block;
+	src: url('./assets/fonts/Inconsolata-Regular-latin.woff') format('woff');
+}
+@font-face {
+	font-family: 'Inconsolata';
+	font-style: normal;
+	font-weight: 700;
+	font-display: block;
+	src: url('./assets/fonts/Inconsolata-Bold-latin.woff') format('woff');
+}
+
 :root {
+	/* peptide sequences (PeptideSequence, the fragment ladder, the ion table, the coverage map) */
+	--font-sequence: 'Inconsolata', ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.141 0.005 285.823);
 	--card: oklch(1 0 0);
@@ -76,6 +112,7 @@
 
 @theme inline {
 	--font-sans: 'Inter Variable', sans-serif;
+	--font-mono: 'Liberation Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace;
 	/* the mockups' body text is 13px/1.45: text-sm (inputs, buttons, menus) follows it */
 	--text-sm: 0.8125rem;
 	--text-sm--line-height: 1.45;

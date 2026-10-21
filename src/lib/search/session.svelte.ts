@@ -4,7 +4,16 @@
 // (desktop.ts); when it is done, its folder is read into the web app's result types (results/read.ts).
 
 import type { DesignResolution } from '../design/model'
-import { cancelSearch as cancelInShim, errorText, SearchFailed, searchFiles, startSearch, type SearchProgress, type SearchRequest } from '../desktop'
+import {
+  cancelSearch as cancelInShim,
+  errorText,
+  SearchFailed,
+  searchFiles,
+  startSearch,
+  type RunningSearch,
+  type SearchProgress,
+  type SearchRequest,
+} from '../desktop'
 import { readSearch, type SearchResult } from '../results/read'
 import { releaseResultsView } from '../results/view.svelte'
 import { describeFailure, type Failure } from './failure'
@@ -140,10 +149,50 @@ export function onSearchFinished(listener: FinishedListener): () => void {
 
 /** The run in flight: a cancelled or replaced run ignores what its promises bring later. */
 let runId = 0
-/** The search id of the run, once the shim has started it (cancelling then goes through the shim). */
-let searchId: string | null = null
+/**
+ * The search of the run in flight, once the shim has started it and the run is still the current one
+ * (cancelling then goes through the shim). Never a search of an earlier, cancelled run.
+ */
+let current: RunningSearch | null = null
 /** Ends the wait for the running search's end (a cancelled search sends neither done nor failed). */
 let abandon: (() => void) | null = null
+
+/** How long the events of a cancelled search are still listened to after the shim has ended it. */
+const LATE_DONE_MS = 2000
+
+/** Searches that finished as they were cancelled: their folders exist (History removes them). */
+const finishedCancelled: string[] = []
+
+/**
+ * The ids of the searches that finished while they were being cancelled (the shim had already moved
+ * their folder into place). Their results are not opened; History (Task 7) removes their folders.
+ */
+export function finishedWhileCancelled(): readonly string[] {
+  return finishedCancelled
+}
+
+/** Forgets a search of `finishedWhileCancelled` (its folder has been dealt with). */
+export function forgetFinishedWhileCancelled(searchId: string): void {
+  const at = finishedCancelled.indexOf(searchId)
+  if (at >= 0) finishedCancelled.splice(at, 1)
+}
+
+/**
+ * Ends a search the user cancelled, in the shim. Its events are listened to until the shim has ended
+ * it and a moment more: a done that comes then (the search had finished as the cancel came) is
+ * recorded in `finishedWhileCancelled`.
+ */
+function endCancelled(search: RunningSearch): void {
+  search.done.then(
+    () => {
+      if (!finishedCancelled.includes(search.searchId)) finishedCancelled.push(search.searchId)
+    },
+    () => {},
+  )
+  void cancelInShim(search.searchId)
+    .catch(() => {})
+    .finally(() => setTimeout(search.stop, LATE_DONE_MS))
+}
 let clock: ReturnType<typeof setInterval> | undefined
 
 function startClock() {
@@ -170,7 +219,7 @@ export async function runSearch(
 ): Promise<string | null> {
   if (searchRun.status === 'running') return null
   const id = ++runId
-  searchId = null
+  current = null
   const now = performance.now()
   Object.assign(searchRun, {
     status: 'running',
@@ -199,19 +248,13 @@ export async function runSearch(
   const fail = (failure: Failure) => Object.assign(searchRun, { status: 'failed', failure })
   try {
     const started = await startSearch(request, onProgress)
-    searchId = started.searchId
     if (id !== runId) {
-      // cancelled while the shim was starting it
-      started.stop()
-      void cancelInShim(started.searchId).catch(() => {})
+      // cancelled while the shim was starting it (another run may be the current one by now)
+      endCancelled(started)
       return null
     }
-    const abandoned = new Promise<null>((resolve) => {
-      abandon = () => {
-        started.stop()
-        resolve(null)
-      }
-    })
+    current = started
+    const abandoned = new Promise<null>((resolve) => (abandon = () => resolve(null)))
     if ((await Promise.race([started.done, abandoned])) === null) return null
     const seconds = (performance.now() - now) / 1000
     // a cancel that came too late (the search had finished): the user asked to stop, so it stays cancelled
@@ -257,6 +300,7 @@ export async function runSearch(
     if (id === runId) {
       stopClock()
       abandon = null
+      current = null
     }
   }
 }
@@ -272,7 +316,8 @@ export function cancelSearch(): void {
   searchRun.status = 'cancelled'
   abandon?.()
   abandon = null
-  if (searchId !== null) void cancelInShim(searchId).catch(() => {})
+  if (current !== null) endCancelled(current)
+  current = null
 }
 
 /** Forgets a finished search's error or cancellation (e.g. when the form changes). */

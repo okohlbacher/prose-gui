@@ -65,7 +65,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+    font-family: var(--font-sequence);
     font-size: calc(22px * var(--s));
     white-space: nowrap;
   }

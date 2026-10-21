@@ -24,6 +24,17 @@
   chip in the top bar, no memory estimate, file paths instead of uploads, "Advanced" instead of "All 72 parameters".
   The other differences are listed under each pair.
 </p>
+<p>
+  Fonts: monospace fonts are bundled, so that WebKitGTK does not fall back to the wider system DejaVu Sans Mono
+  (<code>src/assets/fonts/README.txt</code>, all SIL OFL). <code>font-mono</code> (accessions, file names) is Liberation
+  Mono, the font the web screenshots rendered it with. Peptide sequences (the PSM list, the protein panel's peptides,
+  the fragment ladder, the ion table, the coverage map) are Inconsolata: 0.5 em wide like the font headless
+  Chromium fell back to for them on this node (WenQuanYi Zen Hei Mono, not bundled: GPL), so sequences take about the
+  same width, but <b>the glyph shapes differ slightly from the reference</b> (Inconsolata's letters look a little
+  smaller and lighter). WebKitGTK sets the 12.5 px text at 13 px with whole-pixel advances: Liberation Mono runs
+  8 px per character (7.5 px in the web app), Inconsolata 6 px (6.25 px), so a cut-off sequence shows one character
+  more than in the web app (PSM view: "IEEPSVVETTHQDSPLP…" here, "IEEPSVVETTHQDSPL…" there).
+</p>
 
 <h2>New search, empty</h2>
 <div class="pair">
@@ -66,9 +77,11 @@
   <figure><img src="web/04-results-proteins.png" alt="web"><figcaption>Web</figcaption></figure>
 </div>
 <ul>
-  <li>No engine chip (intended) and no "Saved to History" (History comes later).</li>
-  <li>Proteins of equal PSM counts in another order (row 17: TFB1M here, MYG1 there): the order of ties comes from
-    hashed containers on both sides.</li>
+  <li>No engine chip (intended) and no "Saved to History" (History comes later). Without the chip the Export button
+    sits at the far right of the top bar (in the web app the chip is right of it).</li>
+  <li>Proteins of equal PSM counts in another order: rows 8 and 9 swapped (GFM2 then FOXK1 here, FOXK1 then GFM2
+    there; 31 PSMs each), and row 17 (TFB1M here, MYG1 there). The order of ties comes from hashed containers on both
+    sides.</li>
   <li>The table's own scrollbar is drawn by WebKitGTK.</li>
 </ul>
 
@@ -78,7 +91,8 @@
   <figure><img src="web/05-protein-panel.png" alt="web"><figcaption>Web</figcaption></figure>
 </div>
 <ul>
-  <li>Same as Proteins (chip, save state, tie order); scrollbars in the table and the panel (WebKitGTK).</li>
+  <li>Same as Proteins (chip, Export at the far right, save state, the tie order of rows 8, 9 and 17); scrollbars
+    in the table and the panel (WebKitGTK).</li>
 </ul>
 
 <h2>The PSM view</h2>
@@ -87,6 +101,11 @@
   <figure><img src="web/06-psm-mirror.png" alt="web"><figcaption>Web</figcaption></figure>
 </div>
 <ul>
+  <li>The Export button at the far right of the top bar (no engine chip).</li>
+  <li>The sequences are Inconsolata (see Fonts above): slightly different glyph shapes, and the cut-off ones in the
+    PSM list show one character more ("IEEPSVVETTHQDSPLP…", "TQSEESRPQSLQQPATS…", "DDSSEDISVPSSPHTEA…" against
+    "…DSPL…", "…QPAT…", "…PHTE…"); those that fit read in full in both. The same font in the fragment ladder and the
+    ion table.</li>
   <li>PEP 1 in place of 6.3e-16: the native Percolator gives every PSM of the example PEP 1 (two decoys; accepted
     in Task 4's rulings).</li>
   <li>The mirror, the prediction (PeptDeep, NCE 36 calibrated, QE), the ion table, the mass errors and the features
@@ -94,13 +113,15 @@
 </ul>
 
 <h2>Overview</h2>
+<p>(Also on Overview and QC: the Export button at the far right of the top bar.)</p>
 <div class="pair">
   <figure><img src="07-overview.png" alt="desktop"><figcaption>Desktop</figcaption></figure>
   <figure><img src="web/07-overview.png" alt="web"><figcaption>Web</figcaption></figure>
 </div>
 <ul>
   <li>An "Engine" fact, "ProSE 3.7" (the web app's later build shows "OpenMS 3.7 · 32-bit" there).</li>
-  <li>Times differ (13.9 s against 16.4 s; per file 4.2/3.9 s against 4.5/4.0 s).</li>
+  <li>Times differ (13.7 s against 16.4 s; per file 4.2/3.6 s against 4.5/4.0 s; the top bar's chip 14 s against
+    16 s).</li>
 </ul>
 
 <h2>QC</h2>

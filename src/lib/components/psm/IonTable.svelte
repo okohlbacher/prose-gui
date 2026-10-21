@@ -77,7 +77,7 @@
   .ions .aa {
     text-align: center;
     font-weight: 600;
-    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+    font-family: var(--font-sequence);
   }
   .matched {
     font-weight: 600;

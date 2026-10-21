@@ -37,7 +37,7 @@
     --mod: #1baf7a;
     --mod-bg: #d7f5ea;
     --mod-fg: #065f46;
-    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+    font-family: var(--font-sequence);
     font-size: 12.5px;
     white-space: nowrap;
   }

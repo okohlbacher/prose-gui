@@ -241,7 +241,7 @@
 
 <style>
   .legend-mod {
-    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+    font-family: var(--font-sequence);
     background: #d7f5ea;
     color: #065f46;
     border-radius: 3px;

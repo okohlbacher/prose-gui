@@ -48,7 +48,7 @@
 
 <style>
   .map {
-    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+    font-family: var(--font-sequence);
     font-size: 12px;
   }
   .row {
