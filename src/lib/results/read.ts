@@ -358,6 +358,19 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
     optional(proteinsName),
     optional(groupsName),
   ])
+  // an input without PSM files whose summary reports PSMs: its results are not under its stem (a stem
+  // the shim got wrong, a file removed), and its PSMs would be left out without a word
+  const perFile: unknown[] = Array.isArray(yaml.per_file) ? yaml.per_file : []
+  inputs.forEach((input, k) => {
+    if (perInput[k]) return
+    const own = perFile.find((f) => (f as { input_file?: unknown } | null)?.input_file === input.link) ?? perFile[k]
+    const psms = (own as { target_psms?: unknown } | undefined)?.target_psms
+    if (typeof psms === 'number' && psms > 0) {
+      warnings.push(
+        `${input.name}: ProSE reports ${psms} target PSMs for it, but its results (qpx/${input.stem}.psm.parquet) are not in the search folder, so its PSMs are not shown.`,
+      )
+    }
+  })
   const run = params.find((p) => p !== null) ?? null
   const decoyString = run?.decoyString ?? 'DECOY_'
   const decoyIsPrefix = run?.decoyIsPrefix ?? true

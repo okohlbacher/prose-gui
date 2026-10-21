@@ -12,7 +12,7 @@
 //!   `.faa`); any other path is refused before the disk is asked.
 //! - [`example_files`]: the bundled example, as the two named runs the web app searches.
 
-use crate::args::{is_fasta_file, is_input_link, is_spectrum_file};
+use crate::args::{is_fasta_file, is_input_link, is_spectrum_file, suffix_start};
 use serde::Serialize;
 use std::fs;
 use std::io::{self, Read};
@@ -354,13 +354,12 @@ pub fn inspect(path: &str) -> FileFacts {
         }
     };
     facts.size = meta.len();
-    let lower = name.to_lowercase();
     let counted = if is_fasta_file(&name) {
         fasta_counts(Path::new(path)).map(|(p, r)| {
             facts.proteins = Some(p);
             facts.residues = Some(r);
         })
-    } else if !lower.ends_with(".gz") {
+    } else if suffix_start(&name, ".gz").is_none() {
         spectrum_count(Path::new(path)).map(|n| facts.spectra = n)
     } else {
         Ok(())

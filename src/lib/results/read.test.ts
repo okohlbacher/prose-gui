@@ -405,9 +405,27 @@ describe('missing and broken files', () => {
   test('an input without PSM files (a failed search) has no PSMs', async () => {
     await withCopy('example', async (dir) => {
       for (const f of [`qpx/${example[1]}.psm.parquet`, `oms/${example[1]}.psm.parquet`, `spectra/${example[1]}.psm_spectra.parquet`]) rmSync(join(dir, f))
-      const { tables } = await readSearch(folder(dir).files)
+      // the summary of a failed input reports no PSMs for it
+      const summary = join(dir, 'summary.yaml')
+      const yaml = readFileSync(summary, 'utf8')
+      const second = yaml.indexOf('input_file: "2__DatabaseSuitability_2.mzML"')
+      writeFileSync(summary, yaml.slice(0, second) + yaml.slice(second).replace('target_psms: 895', 'target_psms: 0'))
+      const { tables, warnings } = await readSearch(folder(dir).files)
       expect(tables.psms.count).toBe(896)
       expect(Array.from(tables.psms.file).every((f) => f === 0)).toBe(true)
+      expect(warnings).toEqual([])
+    })
+  })
+
+  test('an input whose summary reports PSMs but whose PSM files are missing is named in a warning', async () => {
+    // (e.g. a stem the shim got wrong: the reader looks for <stem>.psm.parquet and finds nothing)
+    await withCopy('example', async (dir) => {
+      for (const f of [`qpx/${example[1]}.psm.parquet`, `oms/${example[1]}.psm.parquet`, `spectra/${example[1]}.psm_spectra.parquet`]) rmSync(join(dir, f))
+      const { tables, warnings } = await readSearch(folder(dir).files)
+      expect(tables.psms.count).toBe(896)
+      expect(warnings).toEqual([
+        `DatabaseSuitability_2.mzML: ProSE reports 895 target PSMs for it, but its results (qpx/${example[1]}.psm.parquet) are not in the search folder, so its PSMs are not shown.`,
+      ])
     })
   })
 

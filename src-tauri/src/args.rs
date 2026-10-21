@@ -152,10 +152,18 @@ pub const DATABASE_FILE: &str = "database.fasta";
 /// leaves a search without q-values, which the results need.
 pub const DEFAULT_PSM_FDR: f64 = 0.01;
 
-/// Lower-case extension check: `name` ends with one of `suffixes` (given in lower case, with the dot).
+/// Where `suffix` (ASCII, with the dot) begins at the end of `name`, compared ignoring ASCII case as
+/// OpenMS compares extensions (`FileNameUtils`); None if `name` does not end with it. The original's own
+/// bytes are compared: a lower-cased copy can be longer or shorter (`İ`, `Ⱥ`, `ẞ`, the Kelvin sign), and
+/// its byte offsets do not fit the original.
+pub fn suffix_start(name: &str, suffix: &str) -> Option<usize> {
+    let start = name.len().checked_sub(suffix.len())?;
+    (name.is_char_boundary(start) && name[start..].eq_ignore_ascii_case(suffix)).then_some(start)
+}
+
+/// Extension check: `name` ends with one of `suffixes` (with the dot), ignoring ASCII case.
 fn has_suffix(name: &str, suffixes: &[&str]) -> bool {
-    let lower = name.to_lowercase();
-    suffixes.iter().any(|s| lower.ends_with(s))
+    suffixes.iter().any(|s| suffix_start(name, s).is_some())
 }
 
 pub fn is_spectrum_file(name: &str) -> bool {
@@ -275,17 +283,16 @@ fn seen_name(index: usize, path: &str, placement: Placement) -> String {
 }
 
 /// What ProSE calls an input in its outputs (`<stem>.psm.parquet`): the link's name without `.gz`
-/// and `.mzML`.
+/// and `.mzML`, ignoring ASCII case (OpenMS's `File::stemName`).
 pub fn input_stem(link: &str) -> String {
-    let lower = link.to_lowercase();
-    let mut end = link.len();
-    if lower.ends_with(".gz") {
-        end -= 3;
+    let mut stem = link;
+    if let Some(end) = suffix_start(stem, ".gz") {
+        stem = &stem[..end];
     }
-    if lower[..end].ends_with(".mzml") {
-        end -= 5;
+    if let Some(end) = suffix_start(stem, ".mzml") {
+        stem = &stem[..end];
     }
-    link[..end].to_string()
+    stem.to_string()
 }
 
 fn check_file(

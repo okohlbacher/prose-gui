@@ -598,6 +598,61 @@ fn link_names_keep_the_name_and_the_gz_suffix() {
     assert_eq!(input_stem("2__a.b.MZML.GZ"), "2__a.b");
 }
 
+/// Names whose lower-cased form has another length in bytes: `İ` (2 bytes, lower case 3), `Ⱥ` (2 -> 3),
+/// `ẞ` (3 -> 2) and the Kelvin sign (3 -> 1). The stem is ProSE's (`File::stemName`: ASCII suffixes,
+/// ignoring their case), and no name makes the shim panic.
+#[test]
+fn input_stems_of_names_whose_lower_case_has_another_length() {
+    for (link, stem) in [
+        ("1__İstanbul_run.mzML", "1__İstanbul_run"),
+        ("1__İstanbul_run.mzML.gz", "1__İstanbul_run"),
+        ("1__Ⱥ.mzML.gz", "1__Ⱥ"),
+        ("1__Ⱥ.mzML", "1__Ⱥ"),
+        ("2__ẞ.mzML", "2__ẞ"),
+        ("2__ẞẞ.MzMl.gZ", "2__ẞẞ"),
+        ("3__\u{212A}.mzML", "3__\u{212A}"),
+        ("3__\u{212A}\u{212A}.mzML.GZ", "3__\u{212A}\u{212A}"),
+        ("4__İ.mZmL", "4__İ"),
+        ("5__a.mzML.mzML", "5__a.mzML"),
+        ("6__Ⱥ.gz", "6__Ⱥ"),
+        (".mzML", ""),
+        ("İ", "İ"),
+        ("", ""),
+    ] {
+        assert_eq!(input_stem(link), stem, "{link}");
+    }
+    for name in ["İstanbul.mzML", "Ⱥ.MZML.GZ", "ẞ.mzml", "\u{212A}.mZmL.Gz"] {
+        assert!(
+            prose_desktop_lib::args::is_spectrum_file(name),
+            "{name}"
+        );
+    }
+    for name in ["Ⱥ.mzM", "x.mzml.gzip", "x.gz", "ẞ"] {
+        assert!(!prose_desktop_lib::args::is_spectrum_file(name), "{name}");
+    }
+    // the records of a search with such inputs carry these stems (the reader looks for <stem>.psm.parquet)
+    let req = request(
+        &[
+            Path::new("/data/İstanbul_run.mzML"),
+            Path::new("/data/Ⱥ.mzML.gz"),
+            Path::new("/data/ẞ.MZML"),
+        ],
+        Path::new("/db/x.fasta"),
+        false,
+        json!({}),
+    );
+    let stems: Vec<String> = input_records_with(&req, InputLinks::Symlinks)
+        .into_iter()
+        .map(|r| r.stem)
+        .collect();
+    assert_eq!(stems, ["1__İstanbul_run", "2__Ⱥ", "3__ẞ"]);
+    let own: Vec<String> = input_records_with(&req, InputLinks::PathsOrHardLinks)
+        .into_iter()
+        .map(|r| r.stem)
+        .collect();
+    assert_eq!(own, ["İstanbul_run", "Ⱥ", "ẞ"]);
+}
+
 // ---- progress -------------------------------------------------------------------------------
 
 type Step = (String, i32, f64);
