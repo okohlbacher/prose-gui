@@ -24,7 +24,7 @@ export type SearchOutcome = SearchResult & {
   seconds: number
 }
 
-/** A finished search, open in this session (History keeps it: Task 7). */
+/** A finished search, open in this session (History keeps it: history/history.svelte.ts). */
 export type OpenResult = {
   /** The search's id (its folder in the app's searches). */
   id: string
@@ -127,7 +127,7 @@ export const openResult = {
 }
 
 /**
- * Opens a result that did not come from this session's search (History, a project file: Task 7) in
+ * Opens a result that did not come from this session's search (History, a project file) in
  * place of the open one, whose view and caches are released. A stored search keeps its `id` and
  * `createdAt` (`origin`), so that its address stays the same. Returns the id.
  */
@@ -162,10 +162,20 @@ const LATE_DONE_MS = 2000
 
 /** Searches that finished as they were cancelled: their folders exist (History removes them). */
 const finishedCancelled: string[] = []
+const cancelledListeners = new Set<(searchId: string) => void>()
+
+/**
+ * Registers `listener` for the searches that finish while they are cancelled (History removes their
+ * folders at once); returns the way to remove it.
+ */
+export function onFinishedWhileCancelled(listener: (searchId: string) => void): () => void {
+  cancelledListeners.add(listener)
+  return () => cancelledListeners.delete(listener)
+}
 
 /**
  * The ids of the searches that finished while they were being cancelled (the shim had already moved
- * their folder into place). Their results are not opened; History (Task 7) removes their folders.
+ * their folder into place). Their results are not opened; History removes their folders at once (history.svelte.ts `removeCancelled`).
  */
 export function finishedWhileCancelled(): readonly string[] {
   return finishedCancelled
@@ -186,6 +196,13 @@ function endCancelled(search: RunningSearch): void {
   search.done.then(
     () => {
       if (!finishedCancelled.includes(search.searchId)) finishedCancelled.push(search.searchId)
+      for (const listener of cancelledListeners) {
+        try {
+          listener(search.searchId)
+        } catch {
+          // (a listener must not break the cancel)
+        }
+      }
     },
     () => {},
   )

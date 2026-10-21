@@ -32,7 +32,7 @@ vi.mock('../desktop', async () => {
 vi.mock('../results/read', () => ({ readSearch: fake.read }))
 
 const { SearchFailed } = await import('../desktop')
-const { cancelSearch, finishedWhileCancelled, forgetFinishedWhileCancelled, openResult, runSearch, searchProgress, searchRun } =
+const { cancelSearch, finishedWhileCancelled, forgetFinishedWhileCancelled, onFinishedWhileCancelled, openResult, runSearch, searchProgress, searchRun } =
   await import('./session.svelte')
 
 const request: SearchRequest = {
@@ -180,6 +180,24 @@ describe('runSearch', () => {
     expect(finishedWhileCancelled()).toContain('19-0')
     forgetFinishedWhileCancelled('19-0')
     expect(finishedWhileCancelled()).not.toContain('19-0')
+  })
+
+  it('tells History at once of a search that finished as it was cancelled', async () => {
+    const told: string[] = []
+    const remove = onFinishedWhileCancelled((id) => told.push(id))
+    onFinishedWhileCancelled(() => {
+      throw new Error('a listener that fails does not stop the others or the cancel')
+    })
+    const search = started('23-0')
+    const run = runSearch(request, meta)
+    await settle()
+    cancelSearch()
+    search.done.resolve({ folder: '/data/searches/23-0' })
+    await run
+    await settle()
+    expect(told).toEqual(['23-0'])
+    remove()
+    forgetFinishedWhileCancelled('23-0')
   })
 
   it('a cancelled search that ends without done is not recorded as finished', async () => {

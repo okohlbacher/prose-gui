@@ -3,13 +3,15 @@
 // plain types below, so that the screens stay the web app's and the tests need no Tauri.
 //
 // Commands (src-tauri/src/lib.rs): tool_info, start_search, cancel_search, read_search_file,
-// inspect_files, example_files, save_text, save_search_file. Events: search://progress, search://done,
-// search://failed.
+// inspect_files, example_files, save_text, save_search_file, history_list, history_save, history_rename,
+// history_delete, history_files, history_import, read_project_file, save_project_file. Events:
+// search://progress, search://done, search://failed.
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { open } from '@tauri-apps/plugin-dialog'
+import type { HistoryBackend, HistoryEntry } from './history/history'
 import type { SearchFiles } from './results/read'
 
 /** The ProSE tool the app runs: its version, where it is, and whether it has ONNX Runtime (PeptDeep). */
@@ -191,6 +193,26 @@ export function saveText(name: string, contents: string): Promise<string | null>
 /** Copies a file of a search (e.g. `merged.idXML`) to where the user chooses, suggesting `suggested`. */
 export function saveSearchFile(searchId: string, name: string, suggested: string): Promise<string | null> {
   return invoke('save_search_file', { searchId, name, suggested })
+}
+
+/**
+ * History's disk: the Rust commands (src-tauri/src/history.rs). Project files go as raw bodies (the
+ * name of a project in a header), not as JSON numbers.
+ */
+export const desktopBackend: HistoryBackend = {
+  list: () => invoke<HistoryEntry[]>('history_list'),
+  read: async (searchId, name) => new Uint8Array(await invoke<ArrayBuffer>('read_search_file', { searchId, name })),
+  save: (searchId, record, proteins) => invoke('history_save', { searchId, record, proteins }),
+  rename: (searchId, name) => invoke('history_rename', { searchId, name }),
+  delete: (searchId) => invoke('history_delete', { searchId }),
+  files: (searchId) => invoke('history_files', { searchId }),
+  saveProject: (name, bytes) => invoke('save_project_file', bytes, { headers: { name: encodeURIComponent(name) } }),
+  chooseProject: async () => {
+    const chosen = await open({ multiple: false, title: 'Open a project file', filters: [{ name: 'ProSE project', extensions: ['prose'] }] })
+    return Array.isArray(chosen) ? (chosen[0] ?? null) : chosen
+  },
+  readProject: async (path) => new Uint8Array(await invoke<ArrayBuffer>('read_project_file', { path })),
+  importEntries: (body) => invoke<string>('history_import', body),
 }
 
 /** The text of a rejection of a command (a string, or an object with a message). */

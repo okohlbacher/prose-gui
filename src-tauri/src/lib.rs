@@ -13,9 +13,17 @@
 //! - `example_files()` -> `{ spectra: [path, path], database }`
 //! - `save_text(name, contents)` and `save_search_file(searchId, name, suggested)`: a save dialog of
 //!   the system, then the file written where the user chose (-> the path, or null if cancelled)
+//! - History (`history`): `history_list()` -> entries (a folder with a broken record has `error`),
+//!   `history_save(searchId, record, proteins)` (a finished search gets its `search.json`),
+//!   `history_rename(searchId, name)`, `history_delete(searchId)`, `history_files(searchId)` (the
+//!   regular files of the folder, for a project file), `save_project_file(body, header name)` (a
+//!   save dialog, then the zip written where the user chose), `read_project_file(path)` (the bytes of
+//!   a `.prose` file chosen in the open dialog) and `history_import(body)` (the entries of a project
+//!   in a fresh folder -> the new id). At startup the searches folder is swept (`history::sweep`).
 
 pub mod args;
 pub mod files;
+pub mod history;
 pub mod progress;
 pub mod run;
 pub mod tool;
@@ -197,11 +205,149 @@ async fn save_search_file(
     .map_err(|e| e.to_string())?
 }
 
+/// The searches folder and the blocking work on it, off the async runtime's threads.
+async fn on_searches<T: Send + 'static>(
+    app: &AppHandle,
+    work: impl FnOnce(PathBuf) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let dir = searches_dir(app)?;
+    tauri::async_runtime::spawn_blocking(move || work(dir))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn history_list(app: AppHandle) -> Result<Vec<history::HistoryEntry>, String> {
+    on_searches(&app, |dir| Ok(history::list(&dir))).await
+}
+
+#[tauri::command]
+async fn history_save(
+    app: AppHandle,
+    search_id: String,
+    record: String,
+    proteins: String,
+) -> Result<(), String> {
+    on_searches(&app, move |dir| {
+        history::save(&dir, &search_id, &record, &proteins)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn history_rename(app: AppHandle, search_id: String, name: String) -> Result<(), String> {
+    on_searches(&app, move |dir| history::rename(&dir, &search_id, &name)).await
+}
+
+#[tauri::command]
+async fn history_delete(app: AppHandle, search_id: String) -> Result<(), String> {
+    on_searches(&app, move |dir| history::delete(&dir, &search_id)).await
+}
+
+#[tauri::command]
+async fn history_files(
+    app: AppHandle,
+    search_id: String,
+) -> Result<Vec<history::FolderFile>, String> {
+    on_searches(&app, move |dir| history::folder_files(&dir, &search_id)).await
+}
+
+/// The entries of a project file (see `history::frame`; the raw body of the call) as a new search.
+#[tauri::command]
+async fn history_import(
+    app: AppHandle,
+    request: tauri::ipc::Request<'_>,
+) -> Result<String, String> {
+    let tauri::ipc::InvokeBody::Raw(body) = request.body() else {
+        return Err("The project's entries are missing.".to_string());
+    };
+    let body = body.clone();
+    on_searches(&app, move |dir| history::import(&dir, &body)).await
+}
+
+/// The bytes of a `.prose` file that the user chose in the open dialog.
+#[tauri::command]
+async fn read_project_file(path: String) -> Result<Response, String> {
+    tauri::async_runtime::spawn_blocking(move || history::read_project_file(&path))
+        .await
+        .map_err(|e| e.to_string())?
+        .map(Response::new)
+}
+
+/// `text` with `%XX` escapes decoded (a header carries the name of the project, escaped by the page).
+fn unescape(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            let hex = std::str::from_utf8(bytes.get(i + 1..i + 3)?).ok()?;
+            out.push(u8::from_str_radix(hex, 16).ok()?);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
+/// A project file: the zip (the raw body; the suggested name in the header `name`) written where
+/// the user chooses in the system's save dialog, as `.prose`. -> the path, or null if cancelled.
+#[tauri::command]
+async fn save_project_file(
+    app: AppHandle,
+    request: tauri::ipc::Request<'_>,
+) -> Result<Option<String>, String> {
+    let tauri::ipc::InvokeBody::Raw(body) = request.body() else {
+        return Err("The project's bytes are missing.".to_string());
+    };
+    let name = request
+        .headers()
+        .get("name")
+        .and_then(|v| v.to_str().ok())
+        .and_then(unescape)
+        .unwrap_or_else(|| "prose.prose".to_string());
+    // (only a file name is suggested)
+    let name = Path::new(&name)
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "prose.prose".to_string());
+    let body = body.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(mut path) = ask_save_path(&app, &name)? else {
+            return Ok(None);
+        };
+        if !path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("prose"))
+        {
+            let mut named = path.into_os_string();
+            named.push(".prose");
+            path = PathBuf::from(named);
+        }
+        std::fs::write(&path, body)
+            .map_err(|e| format!("{} cannot be written ({e}).", path.display()))?;
+        Ok(Some(path.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
+        .setup(|app| {
+            // what interrupted searches left (no search runs yet); a failure to sweep is no failure to start
+            if let Ok(dir) = searches_dir(app.handle()) {
+                std::thread::spawn(move || {
+                    history::sweep(&dir, std::time::SystemTime::now(), history::SWEEP_GRACE);
+                });
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             tool_info,
             start_search,
@@ -210,7 +356,15 @@ pub fn run() {
             inspect_files,
             example_files,
             save_text,
-            save_search_file
+            save_search_file,
+            history_list,
+            history_save,
+            history_rename,
+            history_delete,
+            history_files,
+            history_import,
+            read_project_file,
+            save_project_file
         ])
         .build(tauri::generate_context!())
         .expect("error while building the ProSE desktop app");
@@ -220,4 +374,19 @@ pub fn run() {
             handle.state::<AppState>().searches.cancel_all();
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unescape;
+
+    #[test]
+    fn unescape_decodes_the_pages_encodeuricomponent() {
+        assert_eq!(unescape("a%20b.prose").as_deref(), Some("a b.prose"));
+        assert_eq!(unescape("na%C3%AFve").as_deref(), Some("naïve"));
+        assert_eq!(unescape("plain").as_deref(), Some("plain"));
+        assert_eq!(unescape("bad%2"), None);
+        assert_eq!(unescape("bad%zz"), None);
+        assert_eq!(unescape("%FF"), None, "not UTF-8");
+    }
 }

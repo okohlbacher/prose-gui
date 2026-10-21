@@ -52,7 +52,7 @@ impl ReadError {
 
 /// A search id as the shim makes them (`<millis>-<n>`): letters, digits, `-` and `_` only, so that it
 /// names one folder of the searches folder and nothing else.
-fn valid_id(id: &str) -> bool {
+pub fn valid_id(id: &str) -> bool {
     !id.is_empty()
         && id
             .chars()
@@ -61,7 +61,7 @@ fn valid_id(id: &str) -> bool {
 
 /// A name relative to the folder: parts separated by `/`, none of them empty, `.` or `..`, no `\`
 /// (a separator on Windows) and no absolute path.
-fn valid_relative(name: &str) -> bool {
+pub fn valid_relative(name: &str) -> bool {
     !name.is_empty()
         && !Path::new(name).is_absolute()
         && !name.contains('\\')

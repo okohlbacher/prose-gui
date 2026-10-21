@@ -2,6 +2,7 @@
   // The header's Export menu of the open result.
   import { buttonVariants } from '$lib/components/ui/button'
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu'
+  import { saveProjectFile } from '$lib/history/history.svelte'
   import { exportCsv, exportDesign, exportIdXML, idXMLAvailable } from '$lib/results/exports'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { cn } from '$lib/utils'
@@ -16,6 +17,7 @@
   let canIdXML = $state(false)
   let canSpectrum = $state(false)
   let busy = $state(false)
+  let projecting = $state(false)
   let error = $state<string | null>(null)
 
   function openChange(next: boolean) {
@@ -32,6 +34,21 @@
       await action()
     } catch (e) {
       error = String((e as Error)?.message ?? e)
+    }
+  }
+
+  /** The search's folder as a project file (a zip; large for a large search), written where the user chooses. */
+  async function project() {
+    busy = true
+    projecting = true
+    error = null
+    try {
+      await saveProjectFile(view.result)
+    } catch (e) {
+      error = `Project: ${String((e as Error)?.message ?? e)}`
+    } finally {
+      busy = false
+      projecting = false
     }
   }
 
@@ -53,7 +70,7 @@
 {/if}
 <DropdownMenu.Root {open} onOpenChange={openChange}>
   <DropdownMenu.Trigger class={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 gap-1 px-2.5 text-xs')} disabled={busy}>
-    {#if busy || view.exporting}Exporting…{:else}Export{/if}<ChevronDown class="size-3.5" aria-hidden="true" />
+    {#if projecting}Saving project…{:else if busy || view.exporting}Exporting…{:else}Export{/if}<ChevronDown class="size-3.5" aria-hidden="true" />
   </DropdownMenu.Trigger>
   <DropdownMenu.Content class="w-auto min-w-52" align="end">
     <DropdownMenu.Item disabled={view.level === null || view.exporting} onSelect={() => guard(() => exportCsv(view))}
@@ -64,6 +81,7 @@
       title={canSpectrum ? undefined : 'Open a PSM whose spectrum is stored'}
       class={explained}
       onSelect={() => guard(() => view.spectrumExporter?.())}>Spectrum (SVG)</DropdownMenu.Item>
+    <DropdownMenu.Item disabled={view.exporting} onSelect={project}>Project (.prose)</DropdownMenu.Item>
     <DropdownMenu.Separator />
     {#if canIdXML}
       <DropdownMenu.Item onSelect={idXML}>idXML (merged)</DropdownMenu.Item>

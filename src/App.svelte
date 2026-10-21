@@ -1,6 +1,7 @@
 <script lang="ts">
   import TopBar from '$lib/components/TopBar.svelte'
   import * as Tooltip from '$lib/components/ui/tooltip'
+  import { initHistory } from '$lib/history/history.svelte'
   import { readHash, router } from '$lib/route.svelte'
   import { loadTool } from '$lib/search/tool.svelte'
   import History from './views/History.svelte'
@@ -10,6 +11,8 @@
   readHash()
   // the ProSE tool: its version and whether it has ONNX Runtime (the search form needs it)
   void loadTool()
+  // finished searches are saved to History; the list is read
+  initHistory()
 </script>
 
 <svelte:window onhashchange={readHash} />

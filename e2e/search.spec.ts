@@ -1,7 +1,7 @@
 // The example searched through the app's screens: New search with the example, Start, Results.
 // Gated: runs only with PROSE_BIN set (the app inherits it). The search's folder (in the app's data
 // folder) is removed at the end.
-import { rmSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -100,5 +100,36 @@ describe('the example search', () => {
     await count.waitForDisplayed({ timeout: 20000 })
     await expect(count).toHaveText(expect.stringContaining('1,790'))
     expect(await $('[data-testid="result-chip"]').getProperty('textContent')).toContain('DatabaseSuitability · 2 files')
+  })
+
+  it('the search is in History, can be renamed, and is still there after the app restarts', async () => {
+    expect(searchId).not.toBeNull()
+    const row = () => $(`[data-testid="history-row"][data-id="${searchId}"]`)
+    await $('nav[aria-label="Main"]').$('a=History').click()
+    await row().waitForDisplayed({ timeout: 20000 })
+    // (textContent: WebKit's visible text leaves out the cells that the table cuts to its width)
+    expect(await row().getProperty('textContent')).toContain('DatabaseSuitability_1.mzML, DatabaseSuitability_2.mzML')
+    // the folder has its record: the shim's outputs, proteins.fasta and search.json
+    expect(existsSync(join(searches, searchId!, 'search.json'))).toBe(true)
+    expect(existsSync(join(searches, searchId!, 'proteins.fasta'))).toBe(true)
+
+    await row().$('button=Rename').click()
+    await row().$('input').waitForDisplayed()
+    // (typed into the field, which has the focus and the name selected; WebDriver's clear would blur it and end the
+    // rename; a name with a space came out garbled through WebKitWebDriver)
+    await browser.keys([...'Renamed_search', 'Enter'])
+    await browser.waitUntil(async () => String(await row().getProperty('textContent')).includes('Renamed_search'))
+
+    // the app starts again (a new process): History lists the search, and it opens with its results
+    await browser.reloadSession()
+    await $('header').waitForDisplayed({ timeout: 30000 })
+    await $('nav[aria-label="Main"]').$('a=History').click()
+    await row().waitForDisplayed({ timeout: 20000 })
+    expect(await row().getProperty('textContent')).toContain('Renamed_search')
+    await row().$('button=Open').click()
+    await browser.waitUntil(async () => (await browser.getUrl()).endsWith(`#/results/${searchId}`), { timeout: 30000 })
+    const count = $('[data-testid="psm-count"]')
+    await count.waitForDisplayed({ timeout: 30000 })
+    await expect(count).toHaveText(expect.stringContaining('1,790'))
   })
 })

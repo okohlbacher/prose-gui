@@ -42,9 +42,14 @@ only). The FASTA is the folder's `database.fasta` with contaminants; without the
 path is summary.yaml's `shared.database_file` (absolute, outside the search folder).
 
 **Protein sequences and descriptions** come, in this order, from `proteins.fasta` in the search folder (the identified
-proteins, decoys as searched; Task 7 writes it), from the database (`database.fasta`, else `shared.database_file`), or
+proteins of the table, decoys as searched; the app writes it when it saves the search to History), from the database (`database.fasta`, else `shared.database_file`), or
 not at all: then the sequences are '' (no coverage), the descriptions the OMS ones, and the reader returns a warning
 (`SearchResult.warnings`); it does not fail.
+
+**History** adds two files to the folder when a search is saved (after `search://done`): `proteins.fasta` and, last,
+`search.json` (schema 1: `schema, id, name, createdAt, appVersion, toolVersion, files, database, design, settings,
+psms, psmFdr, proteinFdr, seconds`, see `src/lib/history/history.ts`). A folder with `search.json` is a saved search; a
+project file (`.prose`) is a zip of the folder's regular files (not the links to the inputs).
 
 **Missing files**: the reader's `files` callback rejects with `FileNotFound` (anything with `notFound: true`) for a file
 that does not exist; only that counts as missing (a failed input's PSM files, the sidecar, search params, proteins,
