@@ -367,9 +367,10 @@ async fn save_project_file(
 }
 
 /// The flag of the packaged app's start test (CI: `native/scripts/start-test.sh`). The app starts as
-/// usual; once its page has loaded it prints one line of JSON, `{"page": <url>, "tool": <tool_info>}`
-/// (or `"error"` in place of `"tool"`), and exits: 0, or 1 when the tool cannot be used. A page that has
-/// not loaded after [`SMOKE_TIMEOUT`] ends the app with 2. It reads nothing and writes nothing else.
+/// usual; once its page has loaded it prints one line of JSON, `{"page": <url>, "resources": <the
+/// resource folder, or why there is none>, "tool": <tool_info>}` (or `"error"` in place of `"tool"`),
+/// and exits: 0, or 1 when the tool cannot be used. A page that has not loaded after [`SMOKE_TIMEOUT`]
+/// ends the app with 2. It reads nothing and writes nothing else.
 pub const SMOKE_TEST: &str = "--smoke-test";
 const SMOKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
@@ -380,7 +381,11 @@ fn smoke_report(app: &AppHandle, page: &str) -> (i32, String) {
         Ok(info) => (0, "tool", serde_json::to_value(info).unwrap_or_default()),
         Err(e) => (1, "error", serde_json::Value::String(e)),
     };
-    let line = serde_json::json!({ "page": page, key: value }).to_string();
+    let resources = match app.path().resource_dir() {
+        Ok(dir) => dir.to_string_lossy().into_owned(),
+        Err(e) => format!("(none: {e})"),
+    };
+    let line = serde_json::json!({ "page": page, "resources": resources, key: value }).to_string();
     (code, line)
 }
 

@@ -31,7 +31,9 @@ PY=python3
 "$PY" -c '' 2>/dev/null || PY=python
 die() { echo "error: $*" >&2; exit 1; }
 summary() { if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then printf '%s\n' "$*" >> "$GITHUB_STEP_SUMMARY"; fi; }
-work=$(mktemp -d)
+# (canonical: on macOS mktemp's /var/folders/... goes through the link /var, and Tauri refuses an app
+# path with a link in it, StartingBinary, so its resource folder would not be found)
+work=$(cd "$(mktemp -d)" && pwd -P)
 trap 'rm -rf "$work"' EXIT
 
 case "$(uname -s)" in
