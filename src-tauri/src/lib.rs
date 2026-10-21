@@ -411,7 +411,6 @@ pub fn run() {
     let reported = std::sync::atomic::AtomicBool::new(false);
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
         .on_page_load(move |webview, payload| {
             use std::sync::atomic::Ordering;

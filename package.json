@@ -44,7 +44,6 @@
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2",
-    "@tauri-apps/plugin-opener": "^2",
     "fflate": "^0.8.3",
     "fzstd": "^0.1.1",
     "hyparquet": "1.31.5",
