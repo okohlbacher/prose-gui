@@ -154,7 +154,7 @@ native/scripts/build-openms.sh /scratch/sachsenb/openms-desktop /scratch/sachsen
 ```
 
 and check it with `ctest --test-dir /scratch/sachsenb/openms-desktop/build -R "ProSE|PeptDeep|QPX|Percolator_test|ArrowIOHelpers_test"`
-(164 tests). Update the file whenever the pin branch moves.
+(158 tests). Update the file whenever the pin branch moves.
 
 ## Bundling ProSE
 
