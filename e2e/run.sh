@@ -23,4 +23,4 @@ fi
 
 args=()
 for s in "$@"; do args+=(--spec "$(realpath "$s")"); done
-exec xvfb-run -a -s "-screen 0 1280x800x24" npx wdio run e2e/wdio.conf.ts "${args[@]}"
+exec xvfb-run -a -s "-screen 0 1920x1080x24" npx wdio run e2e/wdio.conf.ts "${args[@]}"

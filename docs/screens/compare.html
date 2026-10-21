@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ProSE desktop next to the web app</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 3000px; padding: 0 1rem; color: #18181b; }
+  h1 { font-size: 1.3rem; }
+  h2 { font-size: 1.05rem; margin: 2.5rem 0 0.4rem; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  figure { margin: 0; }
+  img { width: 100%; border: 1px solid #e4e4e7; }
+  figcaption { margin: 0.3rem 0; color: #3f3f46; font-size: 13px; }
+  ul { margin: 0.4rem 0 0; color: #3f3f46; }
+  code { font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>ProSE desktop (left) next to the web app (right)</h1>
+<p>
+  Both at 1440×900. Desktop: the debug build in WebKitGTK under Xvfb (<code>e2e/screens.shot.ts</code>), the pinned
+  ProSE tool, the bundled example with PeptDeep on. Web: the C12 build in headless Chromium
+  (<code>/scratch/sachsenb/prose-app-screenshots/</code>, copied to <code>web/</code>). Intended differences: no engine
+  chip in the top bar, no memory estimate, file paths instead of uploads, "Advanced" instead of "All 72 parameters".
+  The other differences are listed under each pair.
+</p>
+
+<h2>New search, empty</h2>
+<div class="pair">
+  <figure><img src="01-new-search-empty.png" alt="desktop"><figcaption>Desktop</figcaption></figure>
+  <figure><img src="web/01-new-search-empty.png" alt="web"><figcaption>Web</figcaption></figure>
+</div>
+<ul>
+  <li>No engine chip at the top right (intended).</li>
+  <li>No line of desktop downloads under the example note (it offered this app).</li>
+  <li>"Advanced ›" in place of "All 72 parameters ›" (intended).</li>
+  <li>WebKitGTK draws the page's scrollbar at the right edge; headless Chromium draws none.</li>
+</ul>
+
+<h2>New search with the example</h2>
+<div class="pair">
+  <figure><img src="02-new-search-files.png" alt="desktop"><figcaption>Desktop</figcaption></figure>
+  <figure><img src="web/02-new-search-files.png" alt="web"><figcaption>Web</figcaption></figure>
+</div>
+<ul>
+  <li>The File column shows each file's folder after its name, muted (intended: paths, not uploads; the example's two
+    names are links in the app's data folder).</li>
+  <li>The footer has no "estimated memory 1.3 GB of 4 GB" (intended).</li>
+  <li>"Advanced ›" in place of "All 72 parameters ›" (intended); the page's scrollbar (WebKitGTK).</li>
+  <li>The arrow of "2 files → 2 samples" is drawn larger by WebKitGTK.</li>
+</ul>
+
+<h2>The search running</h2>
+<div class="pair">
+  <figure><img src="03-search-running.png" alt="desktop"><figcaption>Desktop</figcaption></figure>
+  <figure><img src="web/03-search-running.png" alt="web"><figcaption>Web</figcaption></figure>
+</div>
+<ul>
+  <li>"all threads" in place of "16 threads": ProSE runs with <code>-threads 0</code> unless Advanced sets a number.</li>
+  <li>The step labels are the shim's (from ProSE's output), taken at another moment of the search.</li>
+</ul>
+
+<h2>Results › Proteins</h2>
+<div class="pair">
+  <figure><img src="04-results-proteins.png" alt="desktop"><figcaption>Desktop</figcaption></figure>
+  <figure><img src="web/04-results-proteins.png" alt="web"><figcaption>Web</figcaption></figure>
+</div>
+<ul>
+  <li>No engine chip (intended) and no "Saved to History" (History comes later).</li>
+  <li>Proteins of equal PSM counts in another order (row 17: TFB1M here, MYG1 there): the order of ties comes from
+    hashed containers on both sides.</li>
+  <li>The table's own scrollbar is drawn by WebKitGTK.</li>
+</ul>
+
+<h2>The protein panel</h2>
+<div class="pair">
+  <figure><img src="05-protein-panel.png" alt="desktop"><figcaption>Desktop</figcaption></figure>
+  <figure><img src="web/05-protein-panel.png" alt="web"><figcaption>Web</figcaption></figure>
+</div>
+<ul>
+  <li>Same as Proteins (chip, save state, tie order); scrollbars in the table and the panel (WebKitGTK).</li>
+</ul>
+
+<h2>The PSM view</h2>
+<div class="pair">
+  <figure><img src="06-psm-mirror.png" alt="desktop"><figcaption>Desktop</figcaption></figure>
+  <figure><img src="web/06-psm-mirror.png" alt="web"><figcaption>Web</figcaption></figure>
+</div>
+<ul>
+  <li>PEP 1 in place of 6.3e-16: the native Percolator gives every PSM of the example PEP 1 (two decoys; accepted
+    in Task 4's rulings).</li>
+  <li>The mirror, the prediction (PeptDeep, NCE 36 calibrated, QE), the ion table, the mass errors and the features
+    are otherwise the same; the disclosure triangle of "All 35 features" is WebKitGTK's.</li>
+</ul>
+
+<h2>Overview</h2>
+<div class="pair">
+  <figure><img src="07-overview.png" alt="desktop"><figcaption>Desktop</figcaption></figure>
+  <figure><img src="web/07-overview.png" alt="web"><figcaption>Web</figcaption></figure>
+</div>
+<ul>
+  <li>An "Engine" fact, "ProSE 3.7" (the web app's later build shows "OpenMS 3.7 · 32-bit" there).</li>
+  <li>Times differ (13.9 s against 16.4 s; per file 4.2/3.9 s against 4.5/4.0 s).</li>
+</ul>
+
+<h2>QC</h2>
+<div class="pair">
+  <figure><img src="08-qc.png" alt="desktop"><figcaption>Desktop</figcaption></figure>
+  <figure><img src="web/08-qc.png" alt="web"><figcaption>Web</figcaption></figure>
+</div>
+<ul>
+  <li>The same charts and numbers; the disclosure triangles of "Table" are WebKitGTK's.</li>
+</ul>
+
+<h2>History</h2>
+<div class="pair">
+  <figure><img src="10-history.png" alt="desktop"><figcaption>Desktop</figcaption></figure>
+  <figure><img src="web/10-history.png" alt="web"><figcaption>Web</figcaption></figure>
+</div>
+<ul>
+  <li>A stub until History is built: it points to the search of this session in Results; no table, no "Open
+    project…".</li>
+</ul>
+</body>
+</html>
