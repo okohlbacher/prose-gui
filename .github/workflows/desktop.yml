@@ -589,7 +589,8 @@ jobs:
           VCPKG_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
           VCPKG_INSTALL_OPTIONS: --clean-after-build;--x-buildtrees-root=D:/vb;--x-packages-root=D:/vp
           VCPKG_TRIPLET: ${{ env.TRIPLET }}
-          OPENMS_CMAKE_ARGS: -DMT_REQUIRE_OPENMP=ON
+          # (the static ONNX Runtime's CMake config imports nlohmann_json: OpenMS takes vcpkg's too, as its CI)
+          OPENMS_CMAKE_ARGS: -DMT_REQUIRE_OPENMP=ON -DUSE_EXTERNAL_JSON=ON -DVCPKG_MANIFEST_FEATURES=onnxruntime;nlohmann-json
           OPENMS_CONFIGURE_ONLY: 1
         run: |
           native/scripts/build-openms.sh openms openms/build
@@ -613,7 +614,8 @@ jobs:
           VCPKG_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
           VCPKG_INSTALL_OPTIONS: --clean-after-build;--x-buildtrees-root=D:/vb;--x-packages-root=D:/vp
           VCPKG_TRIPLET: ${{ env.TRIPLET }}
-          OPENMS_CMAKE_ARGS: -DMT_REQUIRE_OPENMP=ON
+          # (the static ONNX Runtime's CMake config imports nlohmann_json: OpenMS takes vcpkg's too, as its CI)
+          OPENMS_CMAKE_ARGS: -DMT_REQUIRE_OPENMP=ON -DUSE_EXTERNAL_JSON=ON -DVCPKG_MANIFEST_FEATURES=onnxruntime;nlohmann-json
           OPENMS_TARGETS: OpenMS ProSE
           CMAKE_C_COMPILER_LAUNCHER: ccache
           CMAKE_CXX_COMPILER_LAUNCHER: ccache
