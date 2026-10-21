@@ -85,19 +85,19 @@ fn history_lists_renames_and_deletes() {
     assert!(dir.join("2-0/qpx").exists());
 }
 
+/// (symbolic links: Unix; Windows makes none without a privilege)
+#[cfg(unix)]
 #[test]
 fn delete_does_not_follow_a_link() {
     let (tmp, dir) = searches();
     let outside = tmp.path().join("outside");
     fs::create_dir_all(&outside).unwrap();
     fs::write(outside.join("keep"), "x").unwrap();
-    #[cfg(unix)]
     std::os::unix::fs::symlink(&outside, dir.join("3-0")).unwrap();
     assert!(delete(&dir, "3-0").is_err());
     assert!(outside.join("keep").exists());
     // a link inside a search folder is removed as a link
     saved(&dir, "4-0", "x");
-    #[cfg(unix)]
     std::os::unix::fs::symlink(&outside, dir.join("4-0/0__input")).unwrap();
     delete(&dir, "4-0").unwrap();
     assert!(outside.join("keep").exists());
