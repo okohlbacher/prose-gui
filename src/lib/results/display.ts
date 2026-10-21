@@ -93,7 +93,7 @@ const fallbackName = 'prose-results'
 /**
  * A name for the files of a result (exports are called `<name>-proteins.csv`, `<name>.idXML`): the
  * one file's stem, or what the stems of several files start with ("EGF_time" for EGF_time_1 and
- * EGF_time_2), reduced to letters, digits, "-", "_" and ".". Otherwise "prose-results".
+ * EGF_time_2), reduced to letters (of any script), digits, "-", "_" and "." (`fileSafe`). Otherwise "prose-results".
  */
 export function resultName(files: string[]): string {
   if (files.length === 0) return fallbackName
@@ -104,8 +104,19 @@ export function resultName(files: string[]): string {
     while (i < prefix.length && i < stem.length && prefix[i] === stem[i]) i++
     prefix = prefix.slice(0, i)
   }
-  const name = prefix
-    .replace(/[^\w.-]+/g, '_')
-    .replace(/^[_.-]+|[_.-]+$/g, '')
+  const name = fileSafe(prefix)
   return name.length >= 3 ? name : fallbackName
+}
+
+/**
+ * `text` as a piece of a file name: letters (of any script), digits, combining marks, "_", "-" and "."
+ * are kept, every run of anything else (spaces, separators, characters that are invalid on Windows, control
+ * characters) becomes one "_", and "_", "-" and "." at the ends are dropped. "Probe Größe (1)" is
+ * "Probe_Größe_1". May be empty.
+ */
+export function fileSafe(text: string): string {
+  return text
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{N}\p{M}_.-]+/gu, '_')
+    .replace(/^[_.-]+|[_.-]+$/g, '')
 }

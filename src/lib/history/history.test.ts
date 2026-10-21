@@ -368,6 +368,8 @@ describe('project files', () => {
     expect(projectFileName('My search #1')).toBe('My_search_1.prose')
     expect(projectFileName('../etc/passwd')).toBe('etc_passwd.prose')
     expect(projectFileName('???')).toBe('prose-results.prose')
+    expect(projectFileName('Probe Größe ä ö ü')).toBe('Probe_Größe_ä_ö_ü.prose')
+    expect(projectFileName('蛋白质组 a:b')).toBe('蛋白质组_a_b.prose')
     expect(projectFileName('DatabaseSuitability.v2')).toBe('DatabaseSuitability.v2.prose')
   })
 

@@ -20,7 +20,7 @@ import type { DesignResolution } from '../design/model'
 import { readSearch, type SearchFiles } from '../results/read'
 import type { ResultTables } from '../results/types'
 import { formatBytes } from '../format/bytes'
-import { resultName } from '../results/display'
+import { fileSafe, resultName } from '../results/display'
 import type { OpenResult } from '../search/session.svelte'
 // (only the version: a named import of a JSON module leaves the rest of package.json out of the bundle)
 import { version } from '../../../package.json'
@@ -276,9 +276,9 @@ export async function openSearch(
 //------------------------------------------------------------------------------------------------
 // Project files
 
-/** `<name>.prose`, the name reduced to letters, digits, `-`, `_` and `.`. */
+/** `<name>.prose`, the name reduced to letters (of any script), digits, `-`, `_` and `.` (`fileSafe`). */
 export function projectFileName(name: string): string {
-  const safe = name.replace(/[^\w.-]+/g, '_').replace(/^[_.-]+|[_.-]+$/g, '')
+  const safe = fileSafe(name)
   return `${safe.length >= 1 ? safe : 'prose-results'}.prose`
 }
 

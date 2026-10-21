@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  fileSafe,
   formatCount,
   formatQValue,
   formatScore,
@@ -88,6 +89,21 @@ describe('resultName', () => {
     expect(resultName(['/input/0/a b (1).mzML'])).toBe('a_b_1')
     expect(resultName(['control_1.mzML', 'EGF_1.mzML'])).toBe('prose-results')
     expect(resultName([])).toBe('prose-results')
+  })
+
+  it('keeps the letters of any script', () => {
+    expect(resultName(['Probe Größe ä ö ü.mzML'])).toBe('Probe_Größe_ä_ö_ü')
+    expect(resultName(['Müller_1.mzML', 'Müller_2.mzML'])).toBe('Müller')
+    expect(resultName(['蛋白质组_1.mzML'])).toBe('蛋白质组_1')
+    expect(resultName(['Ångström Łódź.mzML'])).toBe('Ångström_Łódź')
+    // a decomposed "ü" (u and a combining diaeresis) is the same name as the composed one
+    expect(resultName(['Gru\u0308n_1.mzML', 'Gru\u0308n_2.mzML'])).toBe('Grün')
+  })
+
+  it('still replaces what a file name cannot hold', () => {
+    expect(fileSafe('a<b>c:d"e/f\\g|h?i*j')).toBe('a_b_c_d_e_f_g_h_i_j')
+    expect(fileSafe('tab\there\u0000nul')).toBe('tab_here_nul')
+    expect(fileSafe('../ü')).toBe('ü')
   })
 })
 
