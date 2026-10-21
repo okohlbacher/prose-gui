@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CloseGuard from '$lib/components/CloseGuard.svelte'
   import TopBar from '$lib/components/TopBar.svelte'
   import * as Tooltip from '$lib/components/ui/tooltip'
   import { initHistory } from '$lib/history/history.svelte'
@@ -37,3 +38,5 @@
     {/if}
   </div>
 </Tooltip.Provider>
+
+<CloseGuard />

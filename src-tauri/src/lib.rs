@@ -23,6 +23,9 @@
 //!   cancelled) and `history_import(body)` (the entries of a project in a fresh folder -> the new id). At
 //!   startup the partial folders of interrupted searches are swept (`history::sweep`).
 //!
+//! - closing the window while a search runs: the window stays and `app://close-requested` asks the page,
+//!   which answers with `answer_close(close)` ([`close_requested`])
+//!
 //! `--smoke-test` on the command line is the packaged app's start test ([`SMOKE_TEST`]).
 
 pub mod args;
@@ -45,6 +48,28 @@ use tauri_plugin_dialog::DialogExt;
 #[derive(Default)]
 struct AppState {
     searches: Arc<Searches>,
+    closing: std::sync::Mutex<Closing>,
+}
+
+/// The window's close while a search runs ([`close_requested`]).
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct Closing {
+    /// The page has been asked to confirm, and has not answered yet.
+    asked: bool,
+    /// The user confirmed: the next close request closes.
+    confirmed: bool,
+}
+
+/// What a close request of the window does: `true` lets the window close; `false` keeps it and asks the
+/// page to confirm (`app://close-requested`). Without a running search it closes as always. While the
+/// page has not answered, a second request closes too: the user insists (or the page cannot answer).
+pub fn close_requested(closing: &mut Closing, search_running: bool) -> bool {
+    if closing.confirmed || !search_running || closing.asked {
+        closing.confirmed = true;
+        return true;
+    }
+    closing.asked = true;
+    false
 }
 
 #[derive(Serialize)]
@@ -391,6 +416,25 @@ async fn save_project_file(
     .map_err(|e| e.to_string())?
 }
 
+/// The page's answer to `app://close-requested`: close (the running search ends, as with any close), or
+/// keep the window.
+#[tauri::command]
+fn answer_close(
+    window: tauri::Window,
+    state: State<'_, AppState>,
+    close: bool,
+) -> Result<(), String> {
+    {
+        let mut closing = state.closing.lock().unwrap();
+        closing.asked = false;
+        closing.confirmed = close;
+    }
+    if close {
+        window.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// The flag of the packaged app's start test (CI: `native/scripts/start-test.sh`). The app starts as
 /// usual; once its page has loaded it prints one line of JSON, `{"page": <url>, "resources": <the
 /// resource folder the app uses>, "tauriResources": <Tauri's, or why there is none>, "tool":
@@ -427,6 +471,18 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        // closing the window during a search: the page asks first (CloseGuard.svelte, `answer_close`)
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let state = window.state::<AppState>();
+                let running = state.searches.any_running();
+                let close = close_requested(&mut state.closing.lock().unwrap(), running);
+                if !close {
+                    api.prevent_close();
+                    let _ = window.emit("app://close-requested", ());
+                }
+            }
+        })
         .on_page_load(move |webview, payload| {
             use std::sync::atomic::Ordering;
             if !smoke
@@ -478,7 +534,8 @@ pub fn run() {
             history_files,
             history_import,
             open_project_file,
-            save_project_file
+            save_project_file,
+            answer_close
         ])
         .build(tauri::generate_context!())
         .expect("error while building the ProSE desktop app");
@@ -492,7 +549,34 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::unescape;
+    use super::{close_requested, unescape, Closing};
+
+    #[test]
+    fn closing_the_window_asks_first_while_a_search_runs() {
+        // no search: closes
+        let mut closing = Closing::default();
+        assert!(close_requested(&mut closing, false));
+        // a search runs: kept, the page asked
+        let mut closing = Closing::default();
+        assert!(!close_requested(&mut closing, true));
+        assert!(closing.asked && !closing.confirmed);
+        // asked again before an answer: closes (the user insists, or the page cannot answer)
+        assert!(close_requested(&mut closing, true));
+        // the page said "keep searching": the next request asks again
+        let mut closing = Closing::default();
+        assert!(!close_requested(&mut closing, true));
+        closing = Closing {
+            asked: false,
+            confirmed: false,
+        };
+        assert!(!close_requested(&mut closing, true));
+        // confirmed: closes, also while the search still runs
+        let mut closing = Closing {
+            asked: false,
+            confirmed: true,
+        };
+        assert!(close_requested(&mut closing, true));
+    }
 
     #[test]
     fn unescape_decodes_the_pages_encodeuricomponent() {

@@ -5,7 +5,8 @@
 // Commands (src-tauri/src/lib.rs): tool_info, start_search, cancel_search, read_search_file,
 // inspect_files, example_files, save_text, save_search_file, history_list, history_save_record,
 // history_save_proteins, history_rename, history_delete, history_files, history_import, open_project_file,
-// save_project_file. Events: search://progress, search://done, search://failed.
+// save_project_file, answer_close. Events: search://progress, search://done, search://failed,
+// app://close-requested.
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
@@ -225,6 +226,20 @@ export const desktopBackend: HistoryBackend = {
     return bytes.length === 0 ? null : bytes
   },
   importEntries: (body) => invoke<string>('history_import', body),
+}
+
+/**
+ * The window's close button while a search runs: the app keeps the window and asks (`app://close-requested`);
+ * `handler` shows the question. Returns the way to stop listening.
+ */
+export async function onCloseRequested(handler: () => void): Promise<() => void> {
+  if (!isDesktop()) return () => {}
+  return listen('app://close-requested', () => handler())
+}
+
+/** The answer to a close request: close (the running search ends), or keep the window. */
+export function answerClose(close: boolean): Promise<void> {
+  return invoke('answer_close', { close })
 }
 
 /** The text of a rejection of a command (a string, or an object with a message). */

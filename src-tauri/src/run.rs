@@ -700,6 +700,11 @@ impl Searches {
         }
     }
 
+    /// Whether a search is running (its tool has not ended yet).
+    pub fn any_running(&self) -> bool {
+        !self.running.lock().unwrap().is_empty()
+    }
+
     /// Cancels every running search (the app is closing).
     pub fn cancel_all(&self) {
         let handles: Vec<Arc<Handle>> = self.running.lock().unwrap().values().cloned().collect();
