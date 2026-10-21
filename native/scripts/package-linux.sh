@@ -7,7 +7,11 @@
 # sysroot of in-env.sh, which this script enters by itself when the sysroot exists) use the same script.
 # PACKAGE_SKIP_BUILD=1 skips `tauri build --no-bundle` (the release binary is up to date).
 #
-# The .deb is Tauri's as is. The AppImage is not: linuxdeploy, which Tauri's AppImage step runs, treats
+# Both get the third-party notices (scripts/third-party-notices.mjs, into resources/notices) and the font
+# licences (dist/assets, vite.config.ts). The .deb is Tauri's, with two changes: its package name is
+# `prose` (Tauri derives `pro-se` from the product name and has no setting for it), and its
+# /usr/share/doc/prose/copyright is the notices' (tauri.conf.json). The AppImage is not Tauri's: linuxdeploy,
+# which Tauri's AppImage step runs, treats
 # every ELF file in the AppDir as its own, so it would copy ProSE's whole library closure a second time
 # into usr/lib and rewrite the bundle's DT_RPATH into a RUNPATH, which the AppImage's LD_LIBRARY_PATH
 # (usr/lib, with the libraries of WebKit) overrides. So the AppImage is bundled without
@@ -44,13 +48,25 @@ case "$(pkg-config --variable=libdir webkit2gtk-4.1 2>/dev/null)" in
 esac
 
 cd "$ROOT"
+node scripts/third-party-notices.mjs
 if [ -z "${PACKAGE_SKIP_BUILD:-}" ]; then
   npx tauri build --no-bundle
 fi
+for font in Inter Inconsolata LiberationMono; do
+  [ -f "dist/assets/$font-LICENSE.txt" ] || die "dist/assets/$font-LICENSE.txt is missing (vite.config.ts, fontLicences)"
+done
 rm -rf "$BUNDLE_DIR/appimage" "$BUNDLE_DIR/deb"
 
 # --- the .deb ----------------------------------------------------------------------------------------
 npx tauri bundle --bundles deb
+deb=$(find "$BUNDLE_DIR/deb" -maxdepth 1 -name '*.deb' -type f | head -n 1)
+[ -n "$deb" ] || die "no .deb in $BUNDLE_DIR/deb"
+# the package name: prose (packed again as it was, files owned by root)
+debroot=$(mktemp -d)
+dpkg-deb -R "$deb" "$debroot/pkg"
+sed -i 's/^Package: .*/Package: prose/' "$debroot/pkg/DEBIAN/control"
+dpkg-deb --root-owner-group -b "$debroot/pkg" "$deb" >/dev/null
+rm -rf "$debroot"
 
 # --- the AppImage, without resources/prose ------------------------------------------------------------
 work=$(mktemp -d)
@@ -124,10 +140,15 @@ rm -f "$appimage"
 chmod +x "$appimage"
 
 # --- checks -------------------------------------------------------------------------------------------
-deb=$(find "$BUNDLE_DIR/deb" -maxdepth 1 -name '*.deb' -type f | head -n 1)
-[ -n "$deb" ] || die "no .deb in $BUNDLE_DIR/deb"
 mkdir "$work/deb"
 dpkg-deb -x "$deb" "$work/deb"
+[ "$(dpkg-deb -f "$deb" Package)" = prose ] || die "the .deb's package name is $(dpkg-deb -f "$deb" Package), not prose"
+grep -q '^License: BSD-3-Clause' "$work/deb/usr/share/doc/prose/copyright" \
+  || die "the .deb has no /usr/share/doc/prose/copyright with the app's licence"
+for notices in "$resources/notices/THIRD-PARTY-NOTICES.txt" "$work/deb/usr/lib/$product/resources/notices/THIRD-PARTY-NOTICES.txt"; do
+  [ -s "$notices" ] || die "$notices is missing"
+done
+[ -f "$resources/prose/share/OpenMS/models/LICENSE-AlphaPeptDeep.txt" ] || die "the PeptDeep models' licence is missing"
 for exe in "$resources/prose/bin/ProSE" "$work/deb/usr/lib/$product/resources/prose/bin/ProSE"; do
   [ -x "$exe" ] || die "$exe is missing or not executable"
   readelf -d "$exe" | grep -q 'RPATH.*\[\$ORIGIN/\.\./lib\]' || die "$exe lost its RPATH \$ORIGIN/../lib"
@@ -142,4 +163,4 @@ for f in "$appimage" "$deb"; do
   echo "  $(du -h "$f" | cut -f1)	$(basename "$f")"
 done
 echo "  $(du -sh "$appdir" | cut -f1)	AppDir (unpacked AppImage), of which $(du -sh "$resources/prose" | cut -f1) ProSE"
-echo "  $(dpkg-deb -f "$deb" Installed-Size) KiB	installed size of the .deb ($(dpkg-deb -f "$deb" Depends))"
+echo "  $(dpkg-deb -f "$deb" Installed-Size) KiB	installed size of the .deb $(dpkg-deb -f "$deb" Package) ($(dpkg-deb -f "$deb" Depends))"

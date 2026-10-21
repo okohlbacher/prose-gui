@@ -6,7 +6,8 @@
 #
 # The installer puts ProSE.exe and its DLLs into <install folder>/resources/prose/bin, as bundle-prose.sh
 # laid them out (Windows has no RPATH: the folder of the exe is where its DLLs are looked for first). The
-# installer is unsigned (SmartScreen asks the user once). start-test.sh installs it and runs it.
+# installer is unsigned (SmartScreen asks the user once), shows the app's licence (LICENSE) and installs the
+# third-party notices (resources/notices). start-test.sh installs it and runs it.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -17,8 +18,12 @@ die() { echo "error: $*" >&2; exit 1; }
   || die "src-tauri/resources/prose holds no bundled ProSE: run native/scripts/bundle-prose.sh <openms-build> src-tauri/resources/prose"
 
 cd "$ROOT"
+node scripts/third-party-notices.mjs
 rm -rf "$BUNDLE_DIR/nsis"
 npx tauri build --bundles nsis
+for font in Inter Inconsolata LiberationMono; do
+  [ -f "dist/assets/$font-LICENSE.txt" ] || die "dist/assets/$font-LICENSE.txt is missing (vite.config.ts, fontLicences)"
+done
 
 setup=$(find "$BUNDLE_DIR/nsis" -maxdepth 1 -name '*-setup.exe' | head -n 1)
 [ -n "$setup" ] || die "no installer in $BUNDLE_DIR/nsis"

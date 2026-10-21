@@ -84,6 +84,9 @@ case "$(uname -s)" in
   *) die "start-test.sh is for the macOS and Windows packages (Linux: smoke-appimage.sh)" ;;
 esac
 [ -x "$TOOL" ] || [ -f "$TOOL" ] || die "the package has no bundled ProSE at $TOOL"
+# the licences that go with it: the app's third-party notices, the PeptDeep models'
+[ -s "$BUNDLE/../notices/THIRD-PARTY-NOTICES.txt" ] || die "the package has no resources/notices/THIRD-PARTY-NOTICES.txt"
+[ -f "$BUNDLE/share/OpenMS/models/LICENSE-AlphaPeptDeep.txt" ] || die "the package has no licence of the PeptDeep models"
 echo "package: $PACKAGE"
 echo "app: $APP_BIN"
 echo "bundled ProSE: $TOOL"

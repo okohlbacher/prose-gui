@@ -5,3 +5,4 @@ src-tauri/gen/
 *.log
 .superpowers/
 src-tauri/resources/prose/
+src-tauri/resources/notices/

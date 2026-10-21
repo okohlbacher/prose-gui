@@ -33,8 +33,12 @@
       "resources/fasta/crap.fasta",
       "resources/example/DatabaseSuitability_in_spec.mzML",
       "resources/example/DatabaseSuitability_database.fasta",
+      "resources/notices/",
       "resources/prose/"
     ],
+    "license": "BSD-3-Clause",
+    "licenseFile": "../LICENSE",
+    "copyright": "Copyright OpenMS Inc. -- Eberhard Karls University Tuebingen, ETH Zurich, and Freie Universitaet Berlin 2002-present",
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",
@@ -54,7 +58,10 @@
         "files": {}
       },
       "deb": {
-        "section": "science"
+        "section": "science",
+        "files": {
+          "/usr/share/doc/prose/copyright": "resources/notices/copyright"
+        }
       }
     }
   }
