@@ -171,7 +171,7 @@ native/scripts/bundle-prose.sh /scratch/sachsenb/openms-desktop/build src-tauri/
 | `bin/ProSE` | stripped, `DT_RPATH` `$ORIGIN/../lib` |
 | `lib/` | the whole closure that `ldd` lists, under its sonames, stripped, `DT_RPATH` `$ORIGIN`: libOpenMS, ONNX Runtime, Arrow/Parquet, the AWS SDK Arrow links, Xerces, HiGHS, ..., libgomp (the one OpenMP runtime; the script fails on any other) and the GCC runtime (libstdc++, libgcc_s: OpenMS needs GCC 13, newer than Ubuntu 22.04's). Left out: glibc only. |
 | `share/OpenMS/` | `CHEMISTRY` (without the 49 MB of HMDB tables), `CV`, `MAPPING`, `SCHEMAS`, the `TOOLS` registry: what ProSE reads (checked with strace) |
-| `share/OpenMS/models/` | `peptdeep_ms2_dynamic.onnx`, `peptdeep_rt_dynamic.onnx` (builds with ONNX) |
+| `share/OpenMS/models/` | `peptdeep_ms2_dynamic.onnx`, `peptdeep_rt_dynamic.onnx` (builds with ONNX), AlphaPeptDeep's models under the Apache License 2.0: `LICENSE-AlphaPeptDeep.txt` (`native/licenses/`) and `NOTICE.txt` |
 | `share/OpenMS/LICENSES/` | OpenMS, its vendored code, every vcpkg port, the bundled system packages (GCC runtime) |
 | `build.json` | the manifest: OpenMS commit, `withOnnx` (from `WITH_ONNX` in the CMakeCache), triplet, the models |
 

@@ -17,7 +17,8 @@
 #                                     is searched first), with the Visual C++ runtime and vcomp140 (the one
 #                                     OpenMP runtime); the DLLs of Windows left out
 #   share/OpenMS/{CHEMISTRY,CV,MAPPING,SCHEMAS,TOOLS}
-#   share/OpenMS/models/peptdeep_{ms2,rt}_dynamic.onnx    (builds with ONNX only)
+#   share/OpenMS/models/peptdeep_{ms2,rt}_dynamic.onnx    (builds with ONNX only), with AlphaPeptDeep's
+#                                     licence (Apache-2.0, native/licenses) and a NOTICE
 #   share/OpenMS/LICENSES/...         OpenMS, its vendored code, the vcpkg ports, the bundled system libraries
 #   build.json                        the manifest the app reads (tool.rs): withOnnx, the OpenMS commit
 #
@@ -225,6 +226,14 @@ if [ "$WITH_ONNX" = true ]; then
     cp "$model_dir/$model" "$share/models/"
     models+=("share/OpenMS/models/$model")
   done
+  # the models are AlphaPeptDeep's (Apache-2.0): its licence goes with them
+  cp "$HERE/../licenses/AlphaPeptDeep-LICENSE.txt" "$share/models/LICENSE-AlphaPeptDeep.txt"
+  cat > "$share/models/NOTICE.txt" <<'NOTICE'
+peptdeep_ms2_dynamic.onnx and peptdeep_rt_dynamic.onnx are the pretrained MS2 and retention time models of
+AlphaPeptDeep (https://github.com/MannLabs/alphapeptdeep), Copyright 2020 MannLabs, as ONNX models
+(OpenMS, http://archive.openms.de/openms/models). They are licensed under the Apache License 2.0:
+LICENSE-AlphaPeptDeep.txt.
+NOTICE
 fi
 
 # --- Licences -------------------------------------------------------------------------------------

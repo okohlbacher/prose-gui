@@ -11,7 +11,7 @@
 # them, so it would build OpenMS and its dependencies from scratch).
 #
 # Caches (actions/cache), per platform: the bundled ProSE (src-tauri/resources/prose), keyed by the pin and
-# the scripts that make it, so OpenMS is built only when one of them changes; vcpkg's binary cache, keyed by
+# the scripts and licence files that make it, so OpenMS is built only when one of them changes; vcpkg's binary cache, keyed by
 # the pin and the triplet (plus the hash of its content when saved), so a rebuild of OpenMS does not rebuild
 # its dependencies; on macOS and Windows ccache's objects of OpenMS, so a rebuild after a change of the
 # bundling scripts (or a build cut short) compiles little. They are saved right after the step that fills
@@ -64,7 +64,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: src-tauri/resources/prose
-          key: prose-bundle-v1-ubuntu-22.04-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-${{ hashFiles('native/scripts/build-openms.sh', 'native/scripts/bundle-prose.sh') }}
+          key: prose-bundle-v1-ubuntu-22.04-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-${{ hashFiles('native/scripts/build-openms.sh', 'native/scripts/bundle-prose.sh', 'native/licenses/**') }}
 
       - name: System packages
         run: |
@@ -314,7 +314,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: src-tauri/resources/prose
-          key: prose-bundle-v1-macos-15-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-${{ hashFiles('native/scripts/build-openms.sh', 'native/scripts/bundle-prose.sh', 'native/scripts/bundle_closure.py') }}
+          key: prose-bundle-v1-macos-15-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-${{ hashFiles('native/scripts/build-openms.sh', 'native/scripts/bundle-prose.sh', 'native/scripts/bundle_closure.py', 'native/licenses/**') }}
 
       # --- OpenMS (only without a bundle in the cache) ------------------------------------------------
       - name: Build tools for OpenMS
@@ -525,7 +525,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: src-tauri/resources/prose
-          key: prose-bundle-v1-windows-2025-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-${{ hashFiles('native/scripts/build-openms.sh', 'native/scripts/bundle-prose.sh', 'native/scripts/bundle_closure.py') }}
+          key: prose-bundle-v1-windows-2025-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-${{ hashFiles('native/scripts/build-openms.sh', 'native/scripts/bundle-prose.sh', 'native/scripts/bundle_closure.py', 'native/licenses/**') }}
 
       # cl, the Windows SDK and VCToolsRedistDir (the Visual C++ runtime the bundle takes) for every step below
       - uses: ilammy/msvc-dev-cmd@v1
