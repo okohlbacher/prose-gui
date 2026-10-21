@@ -98,14 +98,13 @@ version=$(clean "$TOOL" --help 2>&1 | sed -n 's/^ *Version: *\([^ ]*\).*/\1/p' |
 echo "ProSE version: $version"
 
 # --- 3. the example from the command line, with PeptDeep -------------------------------------------
-search() { # <folder>: copies the example there and searches it; leaves out.txt and summary.yaml
+search() { # <folder>: copies the example there and searches it as the app does (QPX only); leaves out.txt
   local dir=$1
   mkdir -p "$dir"
   cp "$EXAMPLE/DatabaseSuitability_in_spec.mzML" "$EXAMPLE/DatabaseSuitability_database.fasta" "$dir/"
   clean "$TOOL" -in "$(native "$dir/DatabaseSuitability_in_spec.mzML")" \
     -database "$(native "$dir/DatabaseSuitability_database.fasta")" \
-    -out_qpx "$(native "$dir/qpx")" -out_psm_spectra "$(native "$dir/spectra")" \
-    -out_parquet "$(native "$dir/oms")" -summary_out "$(native "$dir/summary.yaml")" \
+    -out_qpx "$(native "$dir/qpx")" -qpx_extended -qpx_peak_window 100 -qpx_peak_top 300 -keep_decoys \
     -threads 3 -Search:rescore true -Search:peptdeep:enable -Search:peptdeep:instrument QE \
     -Search:FDR:PSM 0.01 -Search:modifications:fixed "Carbamidomethyl (C)" \
     -Search:modifications:variable "Oxidation (M)" >"$dir/out.txt" 2>&1
@@ -119,11 +118,12 @@ fi
 seconds=$(( $(date +%s) - started ))
 grep -E '^\[PeptDeepRescoring\] Predicted features added' "$data/out.txt" \
   || die "the search did not rescore with PeptDeep: $(grep -i peptdeep "$data/out.txt" | tail -n 5)"
-for f in qpx/DatabaseSuitability_in_spec.psm.parquet spectra/DatabaseSuitability_in_spec.psm_spectra.parquet \
-  oms/DatabaseSuitability_in_spec.psm.parquet summary.yaml; do
+for f in qpx/DatabaseSuitability_in_spec.psm.parquet qpx/quantms.psm.parquet qpx/quantms.pg.parquet; do
   [ -s "$data/$f" ] || die "the search wrote no $f"
 done
-psms=$(sed -n 's/^ *target_psms: *\([0-9]*\).*/\1/p' "$data/summary.yaml" | head -n 1)
+# the target PSMs of the end-of-search report ("[ProSE] Target/decoy : 892 target / 1 decoy PSMs")
+target_psms() { sed -n 's/^\[ProSE\] Target\/decoy *: *\([0-9]*\) target.*/\1/p' "$1" | head -n 1; }
+psms=$(target_psms "$data/out.txt")
 [ -n "$psms" ] && [ "$psms" -gt 500 ] || die "the search found ${psms:-no} target PSMs, expected more than 500"
 echo "command-line search: $psms target PSMs at 1 % FDR, with PeptDeep, in ${seconds} s"
 
@@ -135,7 +135,7 @@ if ! search "$wide"; then
   grep -vE '^(Warning: |Schema error)' "$wide/out.txt" | grep -v '^\s*$' | tail -n 30
   die "the command-line search in a folder named 'Größe ü' failed"
 fi
-wide_psms=$(sed -n 's/^ *target_psms: *\([0-9]*\).*/\1/p' "$wide/summary.yaml" | head -n 1)
+wide_psms=$(target_psms "$wide/out.txt")
 [ "${wide_psms:-0}" = "$psms" ] || die "in 'Größe ü' the search found ${wide_psms:-no} target PSMs, not $psms"
 unset SEARCH_TEMP
 wide_result="searched ($wide_psms target PSMs; the package installed below it)"

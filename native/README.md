@@ -141,20 +141,20 @@ ctest --test-dir /scratch/sachsenb/openms-pr10564/build/native-release \
 
 `OPENMS_COMMIT` holds the full hash of the OpenMS commit the app's ProSE is built from: the local
 integration branch `claude/prose-desktop-pin` of the worktree `/scratch/sachsenb/openms-desktop`
-(a worktree of the clone `/scratch/sachsenb/openms-pr10564`), which is `develop` (8d0afe11a5) with
-three merges: #10641 (`claude/peptdeep-onnx-memory`, PeptDeep memory and NCE selection), #10676
-(`claude/prose-qpx-spectra`: `-out_psm_spectra` sidecar of peaks and PeptDeep predictions, `-keep_decoys`, the
-pooled proteins in Parquet and the summary additions; see `docs/parity.md`) and #10677
-(`claude/prose-empty-result`: a search in which no PSM passes the FDR ends with empty outputs instead of "Graph
-empty. Build it first."). The pin branch is pushed to OpenMS/OpenMS (a branch, no pull request), so CI can
+(a worktree of the clone `/scratch/sachsenb/openms-pr10564`), which is `develop` (with #10677, a search in
+which no PSM passes the FDR ends with empty outputs) and two merges: #10641 (`claude/peptdeep-onnx-memory`,
+PeptDeep memory and NCE selection) and #10676 (`claude/prose-qpx-spectra`: `-qpx_extended`, the optional columns
+and footer metadata of the QPX psm view the app reads (all scores, native ID, isotope error, protein mappings, the
+filtered peaks and PeptDeep's predictions, the run's statistics), the pooled and singleton protein groups,
+`-keep_decoys`; see `docs/parity.md`). The pin branch is pushed to OpenMS/OpenMS (a branch, no pull request), so CI can
 fetch the commit; CI never builds from local state. Build it with
 
 ```bash
 native/scripts/build-openms.sh /scratch/sachsenb/openms-desktop /scratch/sachsenb/openms-desktop/build
 ```
 
-and check it with `ctest --test-dir /scratch/sachsenb/openms-desktop/build -R "ProSE|PeptDeep|QPX|Percolator_test|ArrowIOHelpers_test"`
-(158 tests). Update the file whenever the pin branch moves.
+and check it with `ctest --test-dir /scratch/sachsenb/openms-desktop/build -R "ProSE|PeptDeep|QPX|Percolator_test|ArrowIOHelpers_test|ArrowSchemaRegistry_test"`
+(153 tests). Update the file whenever the pin branch moves.
 
 ## Bundling ProSE
 
