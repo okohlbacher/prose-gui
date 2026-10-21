@@ -121,6 +121,10 @@ if search "$work/Größe ü"; then
   wide_result="searched (${wide:-?} target PSMs)"
 else
   wide_result="FAILED: $(grep -E 'Error|error' "$work/Größe ü/out.txt" | tail -n 2 | tr '\n' ' ')"
+  echo "--- ProSE's output in 'Größe ü' (only reported) ---"
+  grep -vE '^(Warning: |Schema error)' "$work/Größe ü/out.txt" | head -n 80
+  ls -la "$work/Größe ü" "$work/Größe ü"/* 2>&1 | head -n 30
+  echo "---"
 fi
 echo "a folder named 'Größe ü': $wide_result"
 
