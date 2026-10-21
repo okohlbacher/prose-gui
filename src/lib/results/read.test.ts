@@ -12,6 +12,7 @@ import { zstdCompressSync } from 'node:zlib'
 import { parquetMetadata, parquetReadObjects } from 'hyparquet'
 import { parquetWriteBuffer } from 'hyparquet-writer'
 import { describe, expect, test } from 'vitest'
+import { resolveDesign } from '../design/model'
 import { FileNotFound, readSearch, ZSTD } from './read'
 import type { ProSEMultiSummary, ResultTables, StoredSpectra } from './types'
 
@@ -547,50 +548,58 @@ describe('protein sequences', () => {
   })
 })
 
+/**
+ * A search folder of one input with `n` PSMs: the rows of the example's first file, repeated, each with its
+ * own psm_id, in the schemas of the tool's files (QPX psm, OMS psm, PSM spectra sidecar).
+ */
+async function writeLargeFolder(dir: string, n: number): Promise<void> {
+  const source = join(fixtures, 'example')
+  const stem = '1__DatabaseSuitability_1'
+  const read = (p: string) => new Uint8Array(readFileSync(join(source, p)))
+  const qpx = await rowsOf(read(`qpx/${stem}.psm.parquet`))
+  const oms = await rowsOf(read(`oms/${stem}.psm.parquet`))
+  const sidecar = await rowsOf(read(`spectra/${stem}.psm_spectra.parquet`))
+  const id = (i: number) => BigInt(i + 1) * 7919n
+  const many = <T extends Record<string, unknown>>(rows: T[], each: (row: T, i: number) => T) =>
+    Array.from({ length: n }, (_, i) => each(rows[i % rows.length], i))
+  for (const sub of ['qpx', 'oms', 'spectra']) mkdirSync(join(dir, sub), { recursive: true })
+  writeFileSync(join(dir, `qpx/${stem}.psm.parquet`), rewrite(read(`qpx/${stem}.psm.parquet`), many(qpx, (r, i) => ({ ...r, psm_id: id(i) }))))
+  // the meta values of every row its own (as in a real search, where they are hardly ever repeated:
+  // Arrow writes them without a dictionary)
+  type Meta = { name: string; value: string; value_type: string }
+  const distinct = (r: Record<string, unknown>, i: number) => ({
+    ...r,
+    psm_metavalues: (r.psm_metavalues as Meta[]).map((m) =>
+      m.value_type === 'double' ? { ...m, value: String(Number(m.value) + i * 1e-9) } : m,
+    ),
+  })
+  writeFileSync(join(dir, `oms/${stem}.psm.parquet`), rewrite(read(`oms/${stem}.psm.parquet`), many(oms, distinct)))
+  writeFileSync(
+    join(dir, `spectra/${stem}.psm_spectra.parquet`),
+    rewrite(read(`spectra/${stem}.psm_spectra.parquet`), many(sidecar, (r, i) => ({ ...r, psm_id: id(i) }))),
+  )
+  for (const f of [`oms/${stem}.search_params.parquet`, `oms/${stem}.proteins.parquet`, `oms/${stem}.pg.parquet`, 'database.fasta']) {
+    cpSync(join(source, f), join(dir, f))
+  }
+  const inputs = JSON.parse(readFileSync(join(source, 'inputs.json'), 'utf8')).slice(0, 1)
+  writeFileSync(join(dir, 'inputs.json'), JSON.stringify(inputs))
+  // the summary of one file
+  const yaml = readFileSync(join(source, 'summary.yaml'), 'utf8')
+  const [head, rest] = yaml.split('per_file:\n')
+  const second = rest.indexOf('  - input_file: "2__')
+  const tail = rest.slice(rest.indexOf('outputs:'))
+  writeFileSync(
+    join(dir, 'summary.yaml'),
+    `${head}per_file:\n${rest.slice(0, second)}${tail}`.replace('protein_fdr_applied: true', 'protein_fdr_applied: false').replace(/target_psms: \d+/, `target_psms: ${n}`),
+  )
+}
+
 describe('performance', () => {
   test('reads a 150k-PSM fixture in under 3 s', async () => {
-    // One input of 150,000 PSMs: the rows of the example's first file, repeated, each with its own
-    // psm_id, in the schemas of the tool's files (QPX psm, OMS psm, PSM spectra sidecar).
     const N = 150_000
-    const source = join(fixtures, 'example')
     const dir = mkdtempSync(join(tmpdir(), 'prose-reader-150k-'))
     try {
-      const stem = '1__DatabaseSuitability_1'
-      const read = (p: string) => new Uint8Array(readFileSync(join(source, p)))
-      const qpx = await rowsOf(read(`qpx/${stem}.psm.parquet`))
-      const oms = await rowsOf(read(`oms/${stem}.psm.parquet`))
-      const sidecar = await rowsOf(read(`spectra/${stem}.psm_spectra.parquet`))
-      const id = (i: number) => BigInt(i + 1) * 7919n
-      const many = <T extends Record<string, unknown>>(rows: T[], each: (row: T, i: number) => T) =>
-        Array.from({ length: N }, (_, i) => each(rows[i % rows.length], i))
-      for (const sub of ['qpx', 'oms', 'spectra']) mkdirSync(join(dir, sub))
-      writeFileSync(join(dir, `qpx/${stem}.psm.parquet`), rewrite(read(`qpx/${stem}.psm.parquet`), many(qpx, (r, i) => ({ ...r, psm_id: id(i) }))))
-      // the meta values of every row its own (as in a real search, where they are hardly ever repeated:
-      // Arrow writes them without a dictionary)
-      type Meta = { name: string; value: string; value_type: string }
-      const distinct = (r: Record<string, unknown>, i: number) => ({
-        ...r,
-        psm_metavalues: (r.psm_metavalues as Meta[]).map((m) =>
-          m.value_type === 'double' ? { ...m, value: String(Number(m.value) + i * 1e-9) } : m,
-        ),
-      })
-      writeFileSync(join(dir, `oms/${stem}.psm.parquet`), rewrite(read(`oms/${stem}.psm.parquet`), many(oms, distinct)))
-      writeFileSync(
-        join(dir, `spectra/${stem}.psm_spectra.parquet`),
-        rewrite(read(`spectra/${stem}.psm_spectra.parquet`), many(sidecar, (r, i) => ({ ...r, psm_id: id(i) }))),
-      )
-      for (const f of [`oms/${stem}.search_params.parquet`, `oms/${stem}.proteins.parquet`, `oms/${stem}.pg.parquet`, 'database.fasta']) {
-        cpSync(join(source, f), join(dir, f))
-      }
-      const inputs = JSON.parse(readFileSync(join(source, 'inputs.json'), 'utf8')).slice(0, 1)
-      writeFileSync(join(dir, 'inputs.json'), JSON.stringify(inputs))
-      // the summary of one file
-      const yaml = readFileSync(join(source, 'summary.yaml'), 'utf8')
-      const [head, rest] = yaml.split('per_file:\n')
-      const second = rest.indexOf('  - input_file: "2__')
-      const tail = rest.slice(rest.indexOf('outputs:'))
-      writeFileSync(join(dir, 'summary.yaml'), `${head}per_file:\n${rest.slice(0, second)}${tail}`.replace('protein_fdr_applied: true', 'protein_fdr_applied: false'))
-
+      await writeLargeFolder(dir, N)
       const files = folder(dir).files
       const started = performance.now()
       const { tables, spectra, predicted } = await readSearch(files)
@@ -605,4 +614,39 @@ describe('performance', () => {
       rmSync(dir, { recursive: true, force: true })
     }
   }, 300_000)
+
+  // On demand: search folders of PROSE_LARGE_PSMS PSMs (default 500k, 1M, 2M, 4M) in PROSE_LARGE_DIR/<id>/,
+  // saved searches (with search.json) that e2e/large.spec.ts opens in the app to measure the largest result
+  // that opens in WebKit. Each is read here too, in Node, with its time.
+  //   PROSE_LARGE_DIR=/scratch/x NODE_OPTIONS=--max-old-space-size=60000 npx vitest run src/lib/results/read.test.ts -t 'large search folders'
+  test.runIf(Boolean(process.env.PROSE_LARGE_DIR))('writes large search folders for the measurement in the app', async () => {
+    const counts = (process.env.PROSE_LARGE_PSMS ?? '500000,1000000,2000000,4000000').split(',').map(Number)
+    for (const n of counts) {
+      const id = `9000-${n}`
+      const dir = join(process.env.PROSE_LARGE_DIR!, id)
+      rmSync(dir, { recursive: true, force: true })
+      await writeLargeFolder(dir, n)
+      const record = {
+        schema: 1,
+        id,
+        name: `Synthetic ${n.toLocaleString('en')} PSMs`,
+        createdAt: '2026-10-21T12:00:00.000Z',
+        appVersion: '0.1.0',
+        toolVersion: 'synthetic',
+        files: ['DatabaseSuitability_1.mzML'],
+        database: 'DatabaseSuitability_database.fasta',
+        design: resolveDesign([{ id: 'f0', fileName: 'DatabaseSuitability_1.mzML', fileSize: 6_518_159 }]),
+        settings: { parameters: {}, fixedMods: [], rescore: false, peptdeep: false, contaminants: false },
+        psms: n,
+        psmFdr: 1,
+        proteinFdr: 0.05,
+        seconds: 0,
+      }
+      writeFileSync(join(dir, 'search.json'), JSON.stringify(record))
+      const started = performance.now()
+      const { tables } = await readSearch(folder(dir).files)
+      console.log(`LARGE ${n} PSMs: read in Node in ${((performance.now() - started) / 1000).toFixed(1)} s`)
+      expect(tables.psms.count).toBe(n)
+    }
+  }, 4 * 3600_000)
 })
