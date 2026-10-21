@@ -213,10 +213,12 @@ describe('project files', () => {
 
   test('a project does not carry the database copy or the paths of this computer', async () => {
     const backend = await savedBackend()
+    backend.folders.get('100-0')!.set('prose.log', strToU8('$ /home/me/ProSE -in /home/me/data/a.mzML'))
     expect(backend.folders.get('100-0')!.has('database.fasta')).toBe(true)
     await exportProject(backend, '100-0', 'x')
     const files = Object.fromEntries(unpackProject(backend.saved[0].bytes).map((e) => [e.name, e.data]))
     expect(Object.keys(files)).not.toContain('database.fasta')
+    expect(Object.keys(files)).not.toContain('prose.log')
     expect(Object.keys(files)).toContain('proteins.fasta')
     const inputs = JSON.parse(new TextDecoder().decode(files['inputs.json']))
     expect(inputs.map((r: { path: string; name: string }) => r.path)).toEqual(['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'])

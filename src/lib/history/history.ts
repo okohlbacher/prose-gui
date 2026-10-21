@@ -292,8 +292,11 @@ const STORE = /\.(parquet|gz|zst)$/i
 /** The deflate level of the other files: the quickest (they are small). */
 const LEVEL = 1
 
-/** Files of the folder that a project leaves out: the database copy (`proteins.fasta` has the sequences). */
-const LEFT_OUT = new Set(['database.fasta'])
+/**
+ * Files of the folder that a project leaves out: the database copy (`proteins.fasta` has the sequences)
+ * and the tool's log (its first line is the full command line, with paths of this computer).
+ */
+const LEFT_OUT = new Set(['database.fasta', 'prose.log'])
 
 /**
  * `inputs.json` as a project holds it: the files by name only, not the paths of this computer.

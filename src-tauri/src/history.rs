@@ -14,7 +14,7 @@
 //! live folder of another.
 //!
 //! A project file (`.prose`) is a zip of the search folder's regular files. Zip is handled by the
-//! front end; Rust reads the chosen file ([`read_project_file`]) and writes the entries the front end
+//! front end; Rust reads the chosen file (`open_project_file`, with [`read_chosen_project`]) and writes the entries the front end
 //! sends ([`import`], in the framing of [`frame`]), after checking every path again.
 
 use crate::files::{resolve_search_file, valid_id, valid_relative};
@@ -382,12 +382,13 @@ pub fn lock_partial(folder: &Path) -> io::Result<fs::File> {
 }
 
 /// Makes the finished folder of a partial one: the lock file is removed (it never belongs to a search
-/// or a project), the folder renamed to `target`, and only then the lock released.
+/// or a project), the lock released, and the folder renamed to `target`. (Windows cannot rename a folder
+/// that has an open file, even a deleted one, in it.) Between the release and the rename the folder has
+/// no lock file and has just been written to, which the sweep spares (`claim_partial`).
 pub fn finish_partial(lock: Option<fs::File>, partial: &Path, target: &Path) -> io::Result<()> {
     let _ = fs::remove_file(partial.join(LOCK_FILE));
-    let renamed = fs::rename(partial, target);
     drop(lock);
-    renamed
+    fs::rename(partial, target)
 }
 
 //------------------------------------------------------------------------------------------------
@@ -602,6 +603,11 @@ fn claim_partial(folder: &Path, now: SystemTime, grace: Duration) -> Option<Opti
     {
         Ok(file) => match file.try_lock() {
             Ok(()) => {
+                // an owner that has finished removes the lock file before it releases the lock: a lock
+                // taken on a file that is gone is no sign of a stale folder (it is judged as one without)
+                if fs::symlink_metadata(&lock_path).is_err() {
+                    return older_than(last_written(folder), now, grace).then_some(None);
+                }
                 let made = file.metadata().and_then(|m| m.modified()).ok();
                 // (an owner creates the file, then locks it: a file this young may be about to be)
                 older_than(made, now, LOCK_SETTLE).then_some(Some(file))
@@ -616,7 +622,7 @@ fn claim_partial(folder: &Path, now: SystemTime, grace: Duration) -> Option<Opti
 }
 
 /// The startup sweep of the searches folder: removes `<id>.partial` folders whose owner is gone (see
-/// [`claim_partial`]: a running search or import, of this or another app instance, holds its lock), and
+/// `claim_partial`: a running search or import, of this or another app instance, holds its lock), and
 /// finished `<id>` folders without a record whose last write is more than `grace` before `now` (the app
 /// saves a record within moments of a search's end). The folders are listed first, so none made while
 /// the sweep runs is looked at. Links, files, and anything not named like a search are left alone.

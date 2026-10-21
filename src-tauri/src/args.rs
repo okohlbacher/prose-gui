@@ -2,7 +2,7 @@
 //!
 //! The front end sends a [`SearchRequest`] (camelCase JSON). [`build_args`] checks it and turns it into
 //! arguments for the tool. Nothing here runs a process or touches the search folder; the folder is made
-//! by [`crate::run`], which also creates the links and the database that these arguments name.
+//! by [`mod@crate::run`], which also creates the links and the database that these arguments name.
 //!
 //! Parameters are ProSE's `Search:` parameters by their name without the prefix, as in the web app
 //! (`peptide:missed_cleavages`, `FDR:PSM`). Only the names in [`PARAMETERS`] pass, each with the type
