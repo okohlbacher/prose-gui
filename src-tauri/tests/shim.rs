@@ -622,10 +622,7 @@ fn input_stems_of_names_whose_lower_case_has_another_length() {
         assert_eq!(input_stem(link), stem, "{link}");
     }
     for name in ["İstanbul.mzML", "Ⱥ.MZML.GZ", "ẞ.mzml", "\u{212A}.mZmL.Gz"] {
-        assert!(
-            prose_desktop_lib::args::is_spectrum_file(name),
-            "{name}"
-        );
+        assert!(prose_desktop_lib::args::is_spectrum_file(name), "{name}");
     }
     for name in ["Ⱥ.mzM", "x.mzml.gzip", "x.gz", "ẞ"] {
         assert!(!prose_desktop_lib::args::is_spectrum_file(name), "{name}");
