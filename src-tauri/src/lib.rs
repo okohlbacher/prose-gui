@@ -17,8 +17,8 @@
 //!   `history_save(searchId, record, proteins)` (a finished search gets its `search.json`),
 //!   `history_rename(searchId, name)`, `history_delete(searchId)`, `history_files(searchId)` (the
 //!   regular files of the folder, for a project file), `save_project_file(body, header name)` (a
-//!   save dialog, then the zip written where the user chose), `read_project_file(path)` (the bytes of
-//!   a `.prose` file chosen in the open dialog) and `history_import(body)` (the entries of a project
+//!   save dialog, then the zip written where the user chose), `open_project_file()` (the open dialog, then the
+//!   bytes of the `.prose` file chosen; empty if cancelled) and `history_import(body)` (the entries of a project
 //!   in a fresh folder -> the new id). At startup the searches folder is swept (`history::sweep`).
 
 pub mod args;
@@ -265,13 +265,28 @@ async fn history_import(
     on_searches(&app, move |dir| history::import(&dir, &body)).await
 }
 
-/// The bytes of a `.prose` file that the user chose in the open dialog.
+/// A project file: the open dialog (in Rust: the page never names a path) and the bytes of the file the
+/// user chose, as raw bytes. Cancelled: an empty body (a project file is never empty; it is refused).
 #[tauri::command]
-async fn read_project_file(path: String) -> Result<Response, String> {
-    tauri::async_runtime::spawn_blocking(move || history::read_project_file(&path))
-        .await
-        .map_err(|e| e.to_string())?
-        .map(Response::new)
+async fn open_project_file(app: AppHandle) -> Result<Response, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let chosen = app
+            .dialog()
+            .file()
+            .add_filter("ProSE project", &["prose"])
+            .set_title("Open a project file")
+            .blocking_pick_file();
+        match chosen {
+            None => Ok(Vec::new()),
+            Some(path) => {
+                let path = path.into_path().map_err(|e| e.to_string())?;
+                history::read_chosen_project(&path)
+            }
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map(Response::new)
 }
 
 /// `text` with `%XX` escapes decoded (a header carries the name of the project, escaped by the page).
@@ -315,17 +330,10 @@ async fn save_project_file(
         .unwrap_or_else(|| "prose.prose".to_string());
     let body = body.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let Some(mut path) = ask_save_path(&app, &name)? else {
+        // (the path as chosen: the dialog's filter and the suggested name carry the extension)
+        let Some(path) = ask_save_path(&app, &name)? else {
             return Ok(None);
         };
-        if !path
-            .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("prose"))
-        {
-            let mut named = path.into_os_string();
-            named.push(".prose");
-            path = PathBuf::from(named);
-        }
         std::fs::write(&path, body)
             .map_err(|e| format!("{} cannot be written ({e}).", path.display()))?;
         Ok(Some(path.to_string_lossy().into_owned()))
@@ -363,7 +371,7 @@ pub fn run() {
             history_delete,
             history_files,
             history_import,
-            read_project_file,
+            open_project_file,
             save_project_file
         ])
         .build(tauri::generate_context!())

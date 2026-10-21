@@ -25,7 +25,7 @@ export function unframe(body: Uint8Array): { name: string; data: Uint8Array }[] 
 
 export class MemoryBackend implements HistoryBackend {
   folders = new Map<string, Map<string, Uint8Array>>()
-  /** The `.prose` files "on disk", by path, and the one the open dialog gives. */
+  /** The `.prose` files "on disk", by path, and the one the open dialog gives (null: cancelled). */
   projects = new Map<string, Uint8Array>()
   chosen: string | null = null
   /** What the save dialog got, and whether the user cancels it. */
@@ -78,6 +78,14 @@ export class MemoryBackend implements HistoryBackend {
   }
 
   async read(id: string, name: string): Promise<Uint8Array> {
+    // (as `files::resolve_search_file`: an imported search reads only its own folder; a path names no file of it)
+    if (name.startsWith('/')) {
+      const record = this.folder(id).get('search.json')
+      if (record && JSON.parse(new TextDecoder().decode(record)).imported === true) {
+        throw new Error(`${name} is not a file of the search ${id}: an imported search reads only its own folder.`)
+      }
+      throw new NotFound(`${name} does not exist.`)
+    }
     const data = this.folder(id).get(name)
     if (!data) throw new NotFound(`${name} does not exist.`)
     return data
@@ -114,13 +122,10 @@ export class MemoryBackend implements HistoryBackend {
     return `/saved/${name}`
   }
 
-  async chooseProject(): Promise<string | null> {
-    return this.chosen
-  }
-
-  async readProject(path: string): Promise<Uint8Array> {
-    const bytes = this.projects.get(path)
-    if (!bytes) throw new Error(`${path} cannot be read.`)
+  async openProject(): Promise<Uint8Array | null> {
+    if (this.chosen === null) return null
+    const bytes = this.projects.get(this.chosen)
+    if (!bytes) throw new Error(`${this.chosen} cannot be read.`)
     return bytes
   }
 
@@ -131,6 +136,7 @@ export class MemoryBackend implements HistoryBackend {
     if (!record) throw new Error('The project has no search.json.')
     const json = JSON.parse(new TextDecoder().decode(record))
     json.id = id
+    json.imported = true
     files.set('search.json', new TextEncoder().encode(JSON.stringify(json)))
     this.folders.set(id, files)
     return id

@@ -4,7 +4,7 @@
 //
 // Commands (src-tauri/src/lib.rs): tool_info, start_search, cancel_search, read_search_file,
 // inspect_files, example_files, save_text, save_search_file, history_list, history_save, history_rename,
-// history_delete, history_files, history_import, read_project_file, save_project_file. Events:
+// history_delete, history_files, history_import, open_project_file, save_project_file. Events:
 // search://progress, search://done, search://failed.
 
 import { invoke } from '@tauri-apps/api/core'
@@ -207,11 +207,11 @@ export const desktopBackend: HistoryBackend = {
   delete: (searchId) => invoke('history_delete', { searchId }),
   files: (searchId) => invoke('history_files', { searchId }),
   saveProject: (name, bytes) => invoke('save_project_file', bytes, { headers: { name: encodeURIComponent(name) } }),
-  chooseProject: async () => {
-    const chosen = await open({ multiple: false, title: 'Open a project file', filters: [{ name: 'ProSE project', extensions: ['prose'] }] })
-    return Array.isArray(chosen) ? (chosen[0] ?? null) : chosen
+  // the dialog and the read are one command: the page never names a path (cancelled: an empty body)
+  openProject: async () => {
+    const bytes = new Uint8Array(await invoke<ArrayBuffer>('open_project_file'))
+    return bytes.length === 0 ? null : bytes
   },
-  readProject: async (path) => new Uint8Array(await invoke<ArrayBuffer>('read_project_file', { path })),
   importEntries: (body) => invoke<string>('history_import', body),
 }
 

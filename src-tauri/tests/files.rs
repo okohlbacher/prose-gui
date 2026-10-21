@@ -176,6 +176,36 @@ fn the_database_that_summary_yaml_records_is_served_and_no_other_absolute_path()
 }
 
 #[test]
+fn an_imported_search_never_reads_the_database_path_of_its_summary() {
+    let tmp0 = TempDir::new("db");
+    let db = tmp0.write("db.fasta", ">P1\nPEPTIDE\n");
+    let name = db.to_str().unwrap();
+    let (_tmp, searches) = search_with(name);
+    let record = searches.join("1-0/search.json");
+    // a search of this app (a record without the mark, or none yet): served
+    assert!(read_search_file(&searches, "1-0", name).is_ok());
+    fs::write(&record, r#"{"schema":1,"id":"1-0"}"#).unwrap();
+    assert!(read_search_file(&searches, "1-0", name).is_ok());
+    fs::write(&record, r#"{"schema":1,"id":"1-0","imported":false}"#).unwrap();
+    assert!(read_search_file(&searches, "1-0", name).is_ok());
+    // an imported one: refused, with a message that is no not-found (the reader goes on to its own files)
+    fs::write(&record, r#"{"schema":1,"id":"1-0","imported":true}"#).unwrap();
+    let err = read_search_file(&searches, "1-0", name).unwrap_err();
+    assert!(
+        !err.not_found && err.message.contains("imported"),
+        "{err:?}"
+    );
+    // its own files are served as before
+    assert!(read_search_file(&searches, "1-0", "qpx/1__a.psm.parquet").is_ok());
+    // a record that cannot be read is not trusted either
+    fs::write(&record, "{ broken").unwrap();
+    assert!(refused(read_search_file(&searches, "1-0", name)));
+    fs::remove_file(&record).unwrap();
+    fs::create_dir(&record).unwrap();
+    assert!(refused(read_search_file(&searches, "1-0", name)));
+}
+
+#[test]
 fn a_recorded_database_that_is_not_a_fasta_file_is_not_served() {
     let tmp0 = TempDir::new("db");
     let secret = tmp0.write("notes.txt", "secret");

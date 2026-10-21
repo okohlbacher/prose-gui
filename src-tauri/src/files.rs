@@ -97,6 +97,29 @@ fn search_folder(searches_dir: &Path, search_id: &str) -> Result<PathBuf, ReadEr
     Ok(canonical)
 }
 
+/// Whether the search counts as imported from a project file: its `search.json` says so, or is there
+/// and cannot be read as a record (then it is not trusted). A folder without a `search.json` (one just
+/// finished, not saved yet) is not imported.
+fn is_imported(folder: &Path) -> bool {
+    const MAX: u64 = 64 << 20;
+    let canonical = match fs::canonicalize(folder.join("search.json")) {
+        Ok(canonical) => canonical,
+        Err(e) => return e.kind() != io::ErrorKind::NotFound,
+    };
+    if !canonical.starts_with(folder)
+        || fs::metadata(&canonical).map_or(true, |m| !m.is_file() || m.len() > MAX)
+    {
+        return true;
+    }
+    match fs::read(&canonical)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+    {
+        Some(record) => record.get("imported").and_then(|i| i.as_bool()) == Some(true),
+        None => true,
+    }
+}
+
 /// The path of `name` for [`read_search_file`], checked.
 pub fn resolve_search_file(
     searches_dir: &Path,
@@ -105,6 +128,13 @@ pub fn resolve_search_file(
 ) -> Result<PathBuf, ReadError> {
     let folder = search_folder(searches_dir, search_id)?;
     if Path::new(name).is_absolute() {
+        // an imported search (a project from elsewhere) never reads outside its folder: the path its
+        // summary records is that of another computer, or an attempt to name one of this
+        if is_imported(&folder) {
+            return Err(ReadError::refused(format!(
+                "{name} is not a file of the search {search_id}: an imported search reads only its own folder."
+            )));
+        }
         // only the database this search was run with
         let recorded = fs::read_to_string(folder.join("summary.yaml"))
             .ok()

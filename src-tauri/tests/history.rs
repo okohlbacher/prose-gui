@@ -5,7 +5,8 @@ mod common;
 
 use common::TempDir;
 use prose_desktop_lib::history::{
-    delete, folder_files, frame, import, list, read_project_file, rename, save, sweep, SWEEP_GRACE,
+    delete, finish_partial, folder_files, frame, import, list, lock_partial, read_chosen_project,
+    rename, save, sweep, LOCK_FILE, SWEEP_GRACE,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -336,27 +337,42 @@ fn frames_have_a_fixed_layout() {
 }
 
 #[test]
-fn read_project_file_serves_prose_files_only() {
+fn read_chosen_project_serves_prose_files_only() {
     let tmp = TempDir::new("project");
     let good = tmp.write("a.prose", "zip");
-    assert_eq!(read_project_file(good.to_str().unwrap()).unwrap(), b"zip");
+    assert_eq!(read_chosen_project(&good).unwrap(), b"zip");
     let upper = tmp.write("B.PROSE", "zip");
-    assert!(read_project_file(upper.to_str().unwrap()).is_ok());
+    assert!(read_chosen_project(&upper).is_ok());
     let other = tmp.write("a.txt", "zip");
-    assert!(read_project_file(other.to_str().unwrap())
-        .unwrap_err()
-        .contains(".prose"));
-    assert!(read_project_file("a.prose").is_err(), "absolute paths only");
-    assert!(read_project_file(tmp.path().join("absent.prose").to_str().unwrap()).is_err());
+    assert!(read_chosen_project(&other).unwrap_err().contains(".prose"));
+    assert!(
+        read_chosen_project(Path::new("a.prose")).is_err(),
+        "absolute paths only"
+    );
+    assert!(read_chosen_project(&tmp.path().join("absent.prose")).is_err());
     fs::create_dir_all(tmp.path().join("dir.prose")).unwrap();
-    assert!(read_project_file(tmp.path().join("dir.prose").to_str().unwrap()).is_err());
+    assert!(read_chosen_project(&tmp.path().join("dir.prose")).is_err());
+    assert!(read_chosen_project(&tmp.write("empty.prose", ""))
+        .unwrap_err()
+        .contains("empty"));
+}
+
+#[cfg(unix)]
+#[test]
+fn read_chosen_project_does_not_follow_a_link() {
+    let tmp = TempDir::new("project-link");
+    let secret = tmp.write("secret.txt", "not a project");
+    let link = tmp.path().join("x.prose");
+    std::os::unix::fs::symlink(&secret, &link).unwrap();
+    let err = read_chosen_project(&link).unwrap_err();
+    assert!(err.contains("not a regular file"), "{err}");
 }
 
 #[test]
 fn the_sweep_removes_what_a_search_left() {
     let (_tmp, dir) = searches();
     saved(&dir, "1-0", "kept");
-    // a partial folder of an interrupted search, at any age
+    // a partial folder of an interrupted search of an older version (no lock file)
     fs::create_dir_all(dir.join("2-0.partial/qpx")).unwrap();
     fs::write(dir.join("2-0.partial/prose.log"), "x").unwrap();
     // a finished folder that never got its record
@@ -366,22 +382,81 @@ fn the_sweep_removes_what_a_search_left() {
     fs::write(dir.join("loose.txt"), "x").unwrap();
     fs::create_dir_all(dir.join("not an id")).unwrap();
     fs::create_dir_all(dir.join("x.partial.keep")).unwrap();
+    fs::create_dir_all(dir.join("not an id.partial")).unwrap();
 
-    // now: the finished folder without record is younger than the grace, and stays; the partial goes
-    let removed = sweep(&dir, SystemTime::now(), SWEEP_GRACE);
-    assert_eq!(removed, ["2-0.partial"]);
-    assert!(dir.join("3-0").exists());
+    // now: both are younger than the grace and stay
+    assert!(sweep(&dir, SystemTime::now(), SWEEP_GRACE).is_empty());
     // later than the grace
     let later = SystemTime::now() + SWEEP_GRACE + Duration::from_secs(60);
-    let removed = sweep(&dir, later, SWEEP_GRACE);
-    assert_eq!(removed, ["3-0"]);
+    assert_eq!(sweep(&dir, later, SWEEP_GRACE), ["2-0.partial", "3-0"]);
     // a saved search, a loose file and odd names are never touched
     assert!(dir.join("1-0/search.json").exists());
     assert!(dir.join("loose.txt").exists());
     assert!(dir.join("not an id").exists());
     assert!(dir.join("x.partial.keep").exists());
+    assert!(dir.join("not an id.partial").exists());
     // a missing searches folder is fine
     assert!(sweep(&dir.join("absent"), later, SWEEP_GRACE).is_empty());
+}
+
+#[test]
+fn a_live_partial_folder_survives_the_sweep() {
+    let (_tmp, dir) = searches();
+    let live = dir.join("4-0.partial");
+    fs::create_dir_all(&live).unwrap();
+    // the owner (a search or import of this or another app instance) holds the lock
+    let lock = lock_partial(&live).unwrap();
+    fs::write(live.join("prose.log"), "x").unwrap();
+    // however long ago it was written
+    let much_later = SystemTime::now() + SWEEP_GRACE * 1000;
+    assert!(sweep(&dir, much_later, SWEEP_GRACE).is_empty());
+    assert!(live.join("prose.log").exists());
+    drop(lock);
+}
+
+#[test]
+fn a_partial_folder_whose_owner_is_gone_is_removed() {
+    let (_tmp, dir) = searches();
+    let stale = dir.join("5-0.partial");
+    fs::create_dir_all(&stale).unwrap();
+    // locked, then released (the owner ended; the system releases the lock of a process that died)
+    drop(lock_partial(&stale).unwrap());
+    fs::write(stale.join("prose.log"), "x").unwrap();
+    // a lock file that is brand new is not taken for a stale one (the owner may be about to lock it)
+    assert!(sweep(&dir, SystemTime::now(), SWEEP_GRACE).is_empty());
+    assert!(stale.exists());
+    // a few seconds later it is, whatever the grace for finished folders
+    let later = SystemTime::now() + Duration::from_secs(30);
+    assert_eq!(sweep(&dir, later, SWEEP_GRACE), ["5-0.partial"]);
+    assert!(!stale.exists());
+}
+
+#[test]
+fn the_lock_file_never_belongs_to_a_search_or_a_project() {
+    let (_tmp, dir) = searches();
+    // finishing a partial folder removes the lock file, then renames
+    let partial = dir.join("8-0.partial");
+    fs::create_dir_all(&partial).unwrap();
+    let lock = lock_partial(&partial).unwrap();
+    assert!(partial.join(LOCK_FILE).exists());
+    fs::write(partial.join("a.txt"), "x").unwrap();
+    finish_partial(Some(lock), &partial, &dir.join("8-0")).unwrap();
+    assert!(!dir.join("8-0").join(LOCK_FILE).exists());
+    assert!(dir.join("8-0/a.txt").exists());
+    // a lock file in a folder is not one of its project's files
+    fs::write(dir.join("8-0").join(LOCK_FILE), "").unwrap();
+    let names: Vec<String> = folder_files(&dir, "8-0")
+        .unwrap()
+        .into_iter()
+        .map(|f| f.name)
+        .collect();
+    assert_eq!(names, ["a.txt"]);
+    // an import leaves none, and a project that names one is refused
+    let id = import(&dir, &project("x", &[("a.txt", b"x")])).unwrap();
+    assert!(!dir.join(&id).join(LOCK_FILE).exists());
+    assert!(import(&dir, &project("x", &[(".lock", b"")]))
+        .unwrap_err()
+        .contains("not a plain"));
 }
 
 #[test]
@@ -406,6 +481,16 @@ fn the_sweep_spares_a_folder_that_was_just_written() {
     assert_eq!(sweep(&dir, SystemTime::now(), SWEEP_GRACE), ["3-0"]);
 }
 
+#[test]
+fn an_import_in_progress_holds_its_lock() {
+    // (the import's partial folder is locked from its creation to its rename: see import's code; here
+    // the outcome: nothing of a finished import is locked or left)
+    let (_tmp, dir) = searches();
+    let id = import(&dir, &project("x", &[("a.txt", b"x")])).unwrap();
+    assert!(sweep(&dir, SystemTime::now() + SWEEP_GRACE * 10, SWEEP_GRACE).is_empty());
+    assert!(dir.join(&id).join("search.json").exists());
+}
+
 #[cfg(unix)]
 #[test]
 fn the_sweep_does_not_follow_links() {
@@ -418,4 +503,60 @@ fn the_sweep_does_not_follow_links() {
     let later = SystemTime::now() + SWEEP_GRACE * 2;
     sweep(&dir, later, SWEEP_GRACE);
     assert!(outside.join("keep").exists());
+}
+
+#[test]
+fn names_are_checked_on_save_and_import() {
+    let (_tmp, dir) = searches();
+    fs::create_dir_all(dir.join("1-0")).unwrap();
+    let long = "x".repeat(201);
+    assert!(save(&dir, "1-0", &record("1-0", &long), "")
+        .unwrap_err()
+        .contains("at most 200"));
+    assert!(save(&dir, "1-0", &record("1-0", "a\\u0007b"), "")
+        .unwrap_err()
+        .contains("one line"));
+    assert!(save(&dir, "1-0", &record("1-0", "   "), "").is_err());
+    assert!(!dir.join("1-0/search.json").exists());
+    // a name with spaces around is kept trimmed
+    save(&dir, "1-0", &record("1-0", "  padded  "), "").unwrap();
+    assert_eq!(json(&dir.join("1-0/search.json"))["name"], "padded");
+
+    // a project's record with such a name is refused, nothing written
+    let json_with = |name: &str| {
+        format!(
+            r#"{{"schema":1,"id":"x","name":{}}}"#,
+            serde_json::to_string(name).unwrap()
+        )
+    };
+    for name in [long.as_str(), "two\nlines", ""] {
+        let body = frame(&[("search.json", json_with(name).as_bytes())]);
+        assert!(import(&dir, &body).is_err(), "{name:?}");
+    }
+    let body = frame(&[("search.json", json_with("  ok  ").as_bytes())]);
+    let id = import(&dir, &body).unwrap();
+    assert_eq!(json(&dir.join(&id).join("search.json"))["name"], "ok");
+    assert_eq!(
+        fs::read_dir(&dir).unwrap().count(),
+        2,
+        "no partial folder is left"
+    );
+}
+
+#[test]
+fn an_imported_search_is_marked() {
+    let (_tmp, dir) = searches();
+    // whatever the project says
+    let body = frame(&[(
+        "search.json",
+        br#"{"schema":1,"id":"x","name":"n","imported":false}"#,
+    )]);
+    let id = import(&dir, &body).unwrap();
+    assert_eq!(json(&dir.join(&id).join("search.json"))["imported"], true);
+    // a rename keeps the mark
+    rename(&dir, &id, "renamed").unwrap();
+    assert_eq!(json(&dir.join(&id).join("search.json"))["imported"], true);
+    // a search of this app is not marked
+    saved(&dir, "1-0", "mine");
+    assert!(json(&dir.join("1-0/search.json")).get("imported").is_none());
 }

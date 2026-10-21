@@ -7,6 +7,9 @@
 //! - `database.fasta`, the user's FASTA with the contaminants, if they were asked for;
 //! - `prose.log`, the tool's output.
 //!
+//! The folder holds `.lock`, locked exclusively (`history::lock_partial`) for as long as the search
+//! lives, so that the startup sweep of any app instance can tell a live folder from a stale one.
+//!
 //! On success the folder is renamed to `<searches>/<id>/` and `done` is sent; on failure or cancel it is
 //! removed (a failure sends `failed`, a cancel nothing: `cancel` returns when the process is gone).
 //!
@@ -19,6 +22,7 @@ use crate::args::{
     build_args, humanize, input_records, with_contaminants, InputRecord, SearchRequest,
     DATABASE_FILE,
 };
+use crate::history::{finish_partial, lock_partial};
 use crate::progress::{ProgressTracker, STARTING};
 use crate::tool;
 use serde::Serialize;
@@ -245,6 +249,9 @@ struct Job {
     records: Vec<InputRecord>,
     sink: Sink,
     handle: Arc<Handle>,
+    /// The lock of the partial folder (see `history::lock_partial`), held until the folder is renamed
+    /// or removed.
+    lock: Option<fs::File>,
 }
 
 impl Searches {
@@ -296,6 +303,13 @@ impl Searches {
                 partial.display()
             )
         })?;
+        let lock = match lock_partial(&partial) {
+            Ok(lock) => lock,
+            Err(e) => {
+                let _ = fs::remove_dir_all(&partial);
+                return Err(format!("The search folder cannot be locked ({e})."));
+            }
+        };
         let records = input_records(&request);
         if let Err(e) = prepare_folder(&partial, &request, &records, crap) {
             let _ = fs::remove_dir_all(&partial);
@@ -321,6 +335,7 @@ impl Searches {
             records,
             sink,
             handle,
+            lock: Some(lock),
         };
         let (started_tx, started_rx) = mpsc::channel();
         let searches = self.clone();
@@ -423,6 +438,7 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
         records,
         sink,
         handle,
+        mut lock,
     } = job;
     let mut command = tool::command(&tool_path);
     command
@@ -530,20 +546,22 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
         None
     } else {
         match status {
-            Ok(status) if status.success() => match fs::rename(&partial, &done_dir) {
-                Ok(()) => Some(SearchEvent::Done(DoneEvent {
-                    search_id: id.clone(),
-                    folder: done_dir.to_string_lossy().into_owned(),
-                })),
-                Err(e) => {
-                    let _ = fs::remove_dir_all(&partial);
-                    Some(failed(
-                        &id,
-                        format!("The search folder cannot be finished ({e})."),
-                        &tracker,
-                    ))
+            Ok(status) if status.success() => {
+                match finish_partial(lock.take(), &partial, &done_dir) {
+                    Ok(()) => Some(SearchEvent::Done(DoneEvent {
+                        search_id: id.clone(),
+                        folder: done_dir.to_string_lossy().into_owned(),
+                    })),
+                    Err(e) => {
+                        let _ = fs::remove_dir_all(&partial);
+                        Some(failed(
+                            &id,
+                            format!("The search folder cannot be finished ({e})."),
+                            &tracker,
+                        ))
+                    }
                 }
-            },
+            }
             Ok(status) => {
                 let message = humanize(&failure_message(&tail, &status), &partial, &records);
                 let _ = fs::remove_dir_all(&partial);

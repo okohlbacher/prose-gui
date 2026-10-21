@@ -149,7 +149,11 @@ describe('History', () => {
     const copy = history.entries.find((e) => e.id !== '1-0')!
     expect(openResult.current?.id).toBe(copy.id)
     expect(router.route).toEqual({ view: 'results', id: copy.id })
-    expect(openResult.current?.outcome.tables).toEqual(result.outcome.tables)
+    // (the project names the searched files, it does not place them)
+    expect(openResult.current?.outcome.tables).toEqual({
+      ...result.outcome.tables,
+      files: result.outcome.tables.files.map((f) => f.split('/').pop()),
+    })
     // a cancelled dialog opens nothing
     disk.chosen = null
     expect(await openProjectFile()).toBe(false)

@@ -49,7 +49,10 @@ not at all: then the sequences are '' (no coverage), the descriptions the OMS on
 **History** adds two files to the folder when a search is saved (after `search://done`): `proteins.fasta` and, last,
 `search.json` (schema 1: `schema, id, name, createdAt, appVersion, toolVersion, files, database, design, settings,
 psms, psmFdr, proteinFdr, seconds`, see `src/lib/history/history.ts`). A folder with `search.json` is a saved search; a
-project file (`.prose`) is a zip of the folder's regular files (not the links to the inputs).
+project file (`.prose`) is a zip of the folder's regular files (not the links to the inputs, not `database.fasta`; `inputs.json`
+with the file names only). An imported search has `imported: true` in `search.json`: it reads only the files of its
+folder (the database path of its `summary.yaml` is not served). A running search or import holds an exclusive lock on
+`<id>.partial/.lock`, which the startup sweep honours.
 
 **Missing files**: the reader's `files` callback rejects with `FileNotFound` (anything with `notFound: true`) for a file
 that does not exist; only that counts as missing (a failed input's PSM files, the sidecar, search params, proteins,

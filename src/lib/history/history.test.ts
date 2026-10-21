@@ -161,16 +161,27 @@ describe('a saved search', () => {
   })
 })
 
+/** A copy of a zip with the bytes of one name replaced by another of the same length. */
+function renamed(zip: Uint8Array, from: string, to: string): Uint8Array {
+  const a = strToU8(from)
+  const b = strToU8(to)
+  const out = zip.slice()
+  for (let i = 0; i + a.length <= out.length; i++) {
+    if (a.every((byte, k) => out[i + k] === byte)) out.set(b, i)
+  }
+  return out
+}
+
 describe('project files', () => {
   test('a project round-trips (export, import, same tables)', async () => {
     const backend = await savedBackend('100-0', 'My search')
     expect(await exportProject(backend, '100-0', 'My search')).toBe('/saved/My_search.prose')
     const [{ name, bytes }] = backend.saved
     expect(name).toBe('My_search.prose')
-    // a zip of the folder's files, search.json first, no links
+    // a zip of the folder's files, search.json first, no links, no database copy
     const zipped = unpackProject(bytes)
     expect(zipped[0].name).toBe('search.json')
-    expect(zipped.map((e) => e.name).sort()).toEqual(Object.keys(Object.fromEntries(backend.folders.get('100-0')!)).sort())
+    expect(zipped.map((e) => e.name).sort()).toEqual([...backend.folders.get('100-0')!.keys()].filter((n) => n !== 'database.fasta').sort())
 
     // another computer: a fresh backend, the file chosen in the open dialog
     const other = new MemoryBackend()
@@ -181,14 +192,44 @@ describe('project files', () => {
     expect(id).not.toBe('100-0')
     const [entry] = await other.list()
     expect(entry).toMatchObject({ id, name: 'My search', files: ['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'], database: 'human.fasta', error: null })
-    // the FASTA is not on this computer
-    other.folders.get(id!)!.delete('database.fasta')
+    // the FASTA was not exported: the sequences come from proteins.fasta
+    expect(other.folders.get(id!)!.has('database.fasta')).toBe(false)
     const opened = await openSearch(other, id!)
-    expect(opened.result.outcome.tables).toEqual(result.outcome.tables)
+    // the same tables; the searched files are named, not placed (the paths of the other computer are not in the project)
+    const named = (files: string[]) => files.map((f) => f.split('/').pop())
+    expect(opened.result.outcome.tables).toEqual({ ...result.outcome.tables, files: named(result.outcome.tables.files) })
+    expect(opened.result.outcome.tables.files).toEqual(['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'])
     expect(opened.result.outcome.spectra).toEqual(result.outcome.spectra)
-    expect(opened.result.outcome.summary).toEqual(result.outcome.summary)
+    expect(opened.result.outcome.summary.files.map((f) => f.path)).toEqual(['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'])
+    expect({ ...opened.result.outcome.summary, files: [] }).toEqual({ ...result.outcome.summary, files: [] })
     expect(opened.origin.id).toBe(id)
     expect(opened.result.stored?.name).toBe('My search')
+    // the imported search is marked, and the database path of its summary is refused (not "not found"):
+    // the reader goes on with proteins.fasta and has no warning
+    expect(JSON.parse(new TextDecoder().decode(other.folders.get(id!)!.get('search.json')!)).imported).toBe(true)
+    await expect(other.read(id!, '/tmp/prose-fixture-rouhIU/search/database.fasta')).rejects.toThrow(/imported search reads only its own folder/)
+    expect(opened.result.outcome.warnings).toEqual(result.outcome.warnings)
+  })
+
+  test('a project does not carry the database copy or the paths of this computer', async () => {
+    const backend = await savedBackend()
+    expect(backend.folders.get('100-0')!.has('database.fasta')).toBe(true)
+    await exportProject(backend, '100-0', 'x')
+    const files = Object.fromEntries(unpackProject(backend.saved[0].bytes).map((e) => [e.name, e.data]))
+    expect(Object.keys(files)).not.toContain('database.fasta')
+    expect(Object.keys(files)).toContain('proteins.fasta')
+    const inputs = JSON.parse(new TextDecoder().decode(files['inputs.json']))
+    expect(inputs.map((r: { path: string; name: string }) => r.path)).toEqual(['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'])
+    expect(JSON.stringify(inputs)).not.toContain('/data/')
+    // the other fields of the records stay (the reader uses them)
+    expect(inputs[0]).toMatchObject({ id: 'f1', index: 0, link: '1__DatabaseSuitability_1.mzML', stem: '1__DatabaseSuitability_1' })
+    // the folder itself is untouched
+    expect(new TextDecoder().decode(backend.folders.get('100-0')!.get('inputs.json'))).toContain('/data/DatabaseSuitability_1.mzML')
+    // an inputs.json that is not a list stops the export
+    backend.folders.get('100-0')!.set('inputs.json', strToU8('{"a":1}'))
+    await expect(exportProject(backend, '100-0', 'x')).rejects.toThrow(/inputs.json/)
+    backend.folders.get('100-0')!.set('inputs.json', strToU8('nope'))
+    await expect(exportProject(backend, '100-0', 'x')).rejects.toThrow(/inputs.json/)
   })
 
   test('the project of a search that is not saved is refused', async () => {
@@ -270,6 +311,43 @@ describe('project files', () => {
     // a regular file made on Unix is fine
     const fine = zipSync({ 'search.json': [strToU8(record()), { os: 3, attrs: 0o100644 << 16 }] })
     expect(unpackProject(fine).length).toBe(1)
+  })
+
+  test('a name twice in the zip is refused', () => {
+    const zip = zipSync({ 'search.json': strToU8(record()), 'a1.txt': strToU8('one'), 'a2.txt': strToU8('two') })
+    // the second entry renamed to the first's name, in its local and its central header
+    const twice = renamed(zip, 'a2.txt', 'a1.txt')
+    expect(() => unpackProject(twice)).toThrow(/twice/)
+    expect(() => unpackProject(zip)).not.toThrow()
+  })
+
+  test('a zip64 locator is refused: the two readers could take different directories', () => {
+    const zip = zipSync({ 'search.json': strToU8(record()) })
+    const eocd = zip.length - 22
+    const locator = new Uint8Array(20)
+    new DataView(locator.buffer).setUint32(0, 0x07064b50, true)
+    const withLocator = new Uint8Array(zip.length + 20)
+    withLocator.set(zip.subarray(0, eocd))
+    withLocator.set(locator, eocd)
+    withLocator.set(zip.subarray(eocd), eocd + 20)
+    expect(() => unpackProject(withLocator)).toThrow(/zip64/)
+    // the counts of an end record that points to zip64 data likewise
+    const big = zip.slice()
+    new DataView(big.buffer).setUint16(eocd + 10, 0xffff, true)
+    expect(() => unpackProject(big)).toThrow(/zip64/)
+  })
+
+  test('the size limit counts what the zip declares, entry by entry, and what comes out', () => {
+    const zip = zipSync({ 'search.json': strToU8(record()), 'a.bin': new Uint8Array(5000), 'b.bin': new Uint8Array(5000) })
+    expect(unpackProject(zip, 20000).length).toBe(3)
+    expect(() => unpackProject(zip, 9000)).toThrow(/more than/)
+    // one entry alone is within it, the sum is not
+    expect(() => unpackProject(zip, record().length + 5000 + 100)).toThrow(/more than/)
+  })
+
+  test('non-ASCII names (UTF-8 flagged, as the app writes them) read the same in both readers', () => {
+    const zip = zipSync({ 'search.json': strToU8(record()), 'qpx/ü ö.parquet': strToU8('x') })
+    expect(unpackProject(zip).map((e) => e.name).sort()).toEqual(['qpx/ü ö.parquet', 'search.json'])
   })
 
   test('folders in the zip are skipped, not written', () => {

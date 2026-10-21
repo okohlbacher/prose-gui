@@ -960,6 +960,10 @@ fn a_search_ends_with_done_and_the_partial_folder_becomes_the_search_folder() {
     );
     assert!(folder.join("qpx/quantms.psm.parquet").is_file());
     assert!(folder.join("summary.yaml").is_file());
+    assert!(
+        !folder.join(".lock").exists(),
+        "the lock file does not belong to the search"
+    );
     assert!(fs::read_to_string(folder.join("database.fasta"))
         .unwrap()
         .contains(">CON__ALBU"));
@@ -1185,6 +1189,29 @@ fn start_hanging(
     assert!(wait_for(WAIT, || partial.join("children.pid").is_file()
         && read_pids(&partial.join("children.pid")).len() == 2));
     (id, rx, partial)
+}
+
+#[test]
+fn a_running_search_holds_the_lock_of_its_partial_folder_and_the_sweep_leaves_it() {
+    use prose_desktop_lib::history::{sweep, SWEEP_GRACE};
+    let run = Run::new();
+    let i = inputs();
+    let (id, _rx, partial) = start_hanging(&run, &i, "hang");
+    // another app instance's startup sweep, however late: the partial folder is live
+    let much_later = std::time::SystemTime::now() + SWEEP_GRACE * 1000;
+    assert!(sweep(&run.dir(), much_later, SWEEP_GRACE).is_empty());
+    assert!(partial.join("prose.log").exists() || partial.join("prose.pid").exists());
+    // the lock is taken, by the search
+    let file = fs::File::options()
+        .read(true)
+        .write(true)
+        .open(partial.join(".lock"))
+        .unwrap();
+    assert!(file.try_lock().is_err(), "the search holds the lock");
+    drop(file);
+    // cancelled: the folder is removed, and the lock goes with it
+    run.searches.cancel(&id).unwrap();
+    assert!(!partial.exists());
 }
 
 #[test]

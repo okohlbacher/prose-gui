@@ -19,6 +19,7 @@ import { strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
 import type { DesignResolution } from '../design/model'
 import { readSearch, type SearchFiles } from '../results/read'
 import type { ResultTables } from '../results/types'
+import { formatBytes } from '../format/bytes'
 import { resultName } from '../results/display'
 import type { OpenResult } from '../search/session.svelte'
 // (only the version: a named import of a JSON module leaves the rest of package.json out of the bundle)
@@ -66,6 +67,8 @@ export type SearchRecord = {
   proteinFdr: number
   /** The time of the search proper, in seconds. */
   seconds: number
+  /** Set (by the Rust side) on a search made of a project file: it reads only the files of its folder. */
+  imported?: boolean
 }
 
 /** What History lists of a search (`history_list`); a folder that cannot be opened has `error`. */
@@ -117,9 +120,11 @@ export interface HistoryBackend {
   files(id: string): Promise<{ name: string; size: number }[]>
   /** The save dialog, then the bytes written there: the path, or null if the user cancelled. */
   saveProject(name: string, bytes: Uint8Array): Promise<string | null>
-  /** The open dialog for a `.prose` file: its path, or null if the user cancelled. */
-  chooseProject(): Promise<string | null>
-  readProject(path: string): Promise<Uint8Array>
+  /**
+   * The open dialog for a `.prose` file and the bytes of the file chosen, or null if the user cancelled.
+   * (The dialog and the read are one step in Rust: the page never names a path to read.)
+   */
+  openProject(): Promise<Uint8Array | null>
   /** Makes a search folder of the entries (see `frameEntries`): its new id. */
   importEntries(body: Uint8Array): Promise<string>
 }
@@ -287,19 +292,48 @@ const STORE = /\.(parquet|gz|zst)$/i
 /** The deflate level of the other files: the quickest (they are small). */
 const LEVEL = 1
 
+/** Files of the folder that a project leaves out: the database copy (`proteins.fasta` has the sequences). */
+const LEFT_OUT = new Set(['database.fasta'])
+
 /**
- * Makes a project file of the search folder `id`: its regular files as a zip, `search.json` first.
- * Resolves with the path where the user saved it, or null if the user cancelled.
+ * `inputs.json` as a project holds it: the files by name only, not the paths of this computer.
+ * (The reader takes the names of the searched files from it.)
+ */
+export function withoutPaths(inputs: Uint8Array): Uint8Array {
+  let records: unknown
+  try {
+    records = JSON.parse(new TextDecoder().decode(inputs))
+  } catch {
+    throw new ProjectError('inputs.json cannot be read, so the project cannot be made.')
+  }
+  if (!Array.isArray(records)) throw new ProjectError('inputs.json is not a list of the searched files, so the project cannot be made.')
+  const reduced = records.map((r) => {
+    if (!isObject(r)) throw new ProjectError('inputs.json is not a list of the searched files, so the project cannot be made.')
+    const name = typeof r.name === 'string' ? r.name : String(r.path ?? '').split(/[\\/]/).pop()
+    return { ...r, path: name }
+  })
+  return strToU8(JSON.stringify(reduced, null, 2))
+}
+
+/**
+ * Makes a project file of the search folder `id`: its regular files as a zip, `search.json` first,
+ * without the database copy and with the searched files by name only (what is shared is the results,
+ * not where the files were on this computer). Resolves with the path where the user saved it, or null
+ * if the user cancelled.
  */
 export async function exportProject(backend: HistoryBackend, id: string, name: string): Promise<string | null> {
   const listed = await backend.files(id)
   if (!listed.some((f) => f.name === RECORD_FILE)) {
     throw new ProjectError(`The search is not saved to History (it has no ${RECORD_FILE}), so there is no project to make.`)
   }
-  const names = listed.map((f) => f.name).sort((a, b) => (a === RECORD_FILE ? -1 : b === RECORD_FILE ? 1 : a < b ? -1 : 1))
+  const names = listed
+    .map((f) => f.name)
+    .filter((n) => !LEFT_OUT.has(n))
+    .sort((a, b) => (a === RECORD_FILE ? -1 : b === RECORD_FILE ? 1 : a < b ? -1 : 1))
   const zippable: Zippable = {}
   for (const file of names) {
-    zippable[file] = [await backend.read(id, file), { level: STORE.test(file) ? 0 : LEVEL }]
+    const data = await backend.read(id, file)
+    zippable[file] = [file === 'inputs.json' ? withoutPaths(data) : data, { level: STORE.test(file) ? 0 : LEVEL }]
   }
   return backend.saveProject(projectFileName(name), zipSync(zippable))
 }
@@ -325,9 +359,15 @@ export function isPlainName(name: string): boolean {
 
 type CentralEntry = { name: string; link: boolean; encrypted: boolean; size: number }
 
+/** A name as fflate reads it from the zip: UTF-8 if the entry says so, else Latin-1. */
+function entryName(bytes: Uint8Array, utf8: boolean): string {
+  return utf8 ? new TextDecoder().decode(bytes) : Array.from(bytes, (b) => String.fromCharCode(b)).join('')
+}
+
 /**
  * The entries of the zip's central directory (name, size, whether it is a symbolic link: what fflate does
- * not tell). Throws a ProjectError if the directory cannot be read (zip64 files are not supported).
+ * not tell). Throws a ProjectError if the directory cannot be read, or if the file has a zip64 locator
+ * (such files are not supported: fflate and this reader could then take different directories).
  */
 function centralDirectory(bytes: Uint8Array): CentralEntry[] {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
@@ -339,13 +379,13 @@ function centralDirectory(bytes: Uint8Array): CentralEntry[] {
     }
   }
   const broken = () => new ProjectError('This file is not a project file: its zip directory cannot be read.')
+  const zip64 = () => new ProjectError('This project file uses the zip64 format, which is not supported.')
   if (eocd < 0) throw broken()
+  if (eocd >= 20 && view.getUint32(eocd - 20, true) === 0x07064b50) throw zip64()
   const count = view.getUint16(eocd + 10, true)
   const size = view.getUint32(eocd + 12, true)
   const offset = view.getUint32(eocd + 16, true)
-  if (count === 0xffff || size === 0xffffffff || offset === 0xffffffff) {
-    throw new ProjectError('This project file uses the zip64 format, which is not supported.')
-  }
+  if (count === 0xffff || size === 0xffffffff || offset === 0xffffffff) throw zip64()
   const entries: CentralEntry[] = []
   let at = offset
   for (let i = 0; i < count; i++) {
@@ -359,7 +399,7 @@ function centralDirectory(bytes: Uint8Array): CentralEntry[] {
     const attributes = view.getUint32(at + 38, true)
     if (at + 46 + nameLength > bytes.length) throw broken()
     entries.push({
-      name: new TextDecoder().decode(bytes.subarray(at + 46, at + 46 + nameLength)),
+      name: entryName(bytes.subarray(at + 46, at + 46 + nameLength), (flags & 0x800) !== 0),
       // made on Unix (host 3) with the mode of a symbolic link in the upper half of the attributes
       link: madeBy >> 8 === 3 && ((attributes >>> 16) & 0xf000) === 0xa000,
       encrypted: (flags & 1) !== 0,
@@ -372,28 +412,53 @@ function centralDirectory(bytes: Uint8Array): CentralEntry[] {
 
 /**
  * The files of a project file, checked before anything is written: a zip with `.prose`'s plain names
- * (no `..`, no absolute path, no link, no file that is also a folder), within the size limit, and a
- * `search.json` of this schema. Throws a ProjectError (a ProjectVersionError for a newer schema).
+ * (no `..`, no absolute path, no link, no name twice, no file that is also a folder), within the size
+ * limit (`maxUnpacked`, the sum of the sizes the zip declares, checked again as fflate unpacks it), and a
+ * `search.json` of this schema. The zip's directory is read here and by fflate, and the two must agree
+ * (names and sizes), so that what is checked is what is unpacked. Throws a ProjectError (a
+ * ProjectVersionError for a newer schema).
  */
-export function unpackProject(bytes: Uint8Array): { name: string; data: Uint8Array }[] {
+export function unpackProject(bytes: Uint8Array, maxUnpacked = MAX_UNPACKED): { name: string; data: Uint8Array }[] {
   if (bytes.length < 22 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
     throw new ProjectError('This file is not a project file: it is not a zip file.')
   }
   const directory = centralDirectory(bytes)
   if (directory.some((e) => e.link)) throw new ProjectError('This project file contains a link, which a project never has. It is not opened.')
   if (directory.some((e) => e.encrypted)) throw new ProjectError('This project file is encrypted.')
+  const tooLarge = () => new ProjectError(`This project file unpacks to more than ${formatBytes(maxUnpacked)}, which is too much to open.`)
+  const declared = new Map<string, number>()
+  for (const e of directory) {
+    if (declared.has(e.name)) throw new ProjectError(`The project file has the name ${JSON.stringify(e.name)} twice. It is not opened.`)
+    declared.set(e.name, e.size)
+  }
+  if (directory.reduce((n, e) => n + e.size, 0) > maxUnpacked) throw tooLarge()
+  // what fflate sees, entry by entry, as it unpacks: the same names and sizes, in total within the limit
+  const seen = new Map<string, number>()
   let total = 0
-  for (const e of directory) total += e.size
-  if (total > MAX_UNPACKED) throw new ProjectError('This project file unpacks to more than 3 GB, which is too much to open.')
   let files: Record<string, Uint8Array>
   try {
-    files = unzipSync(bytes, { filter: (f) => !f.name.endsWith('/') })
+    files = unzipSync(bytes, {
+      filter: (f) => {
+        if (seen.has(f.name)) throw new ProjectError(`The project file has the name ${JSON.stringify(f.name)} twice. It is not opened.`)
+        seen.set(f.name, f.originalSize)
+        total += f.originalSize
+        if (total > maxUnpacked) throw tooLarge()
+        return !f.name.endsWith('/')
+      },
+    })
   } catch (e) {
+    if (e instanceof ProjectError) throw e
     throw new ProjectError(`This file is not a project file: it cannot be unzipped (${(e as Error)?.message ?? e}).`)
   }
+  if (seen.size !== declared.size || [...seen].some(([name, size]) => declared.get(name) !== size)) {
+    throw new ProjectError('This project file is damaged: its zip directory is not consistent. It is not opened.')
+  }
   const entries: { name: string; data: Uint8Array }[] = []
+  let actual = 0
   for (const [name, data] of Object.entries(files)) {
     if (!isPlainName(name)) throw new ProjectError(`The project file has a file name that is not a plain name inside the folder (${JSON.stringify(name)}). It is not opened.`)
+    actual += data.length
+    if (actual > maxUnpacked) throw tooLarge()
     entries.push({ name, data })
   }
   const names = new Set(entries.map((e) => e.name))
@@ -432,13 +497,12 @@ export function frameEntries(entries: { name: string; data: Uint8Array }[]): Uin
 }
 
 /**
- * Opens the dialog for a `.prose` file and makes a search of it in History. Resolves with the new
+ * Opens the dialog for a `.prose` file (in Rust, which reads the file) and makes a search of it in History. Resolves with the new
  * search's id, or null if the user cancelled. Throws a ProjectError that says what is wrong.
  */
 export async function importProject(backend: HistoryBackend): Promise<string | null> {
-  const path = await backend.chooseProject()
-  if (path === null) return null
-  return importProjectBytes(backend, await backend.readProject(path))
+  const bytes = await backend.openProject()
+  return bytes === null ? null : importProjectBytes(backend, bytes)
 }
 
 /** As `importProject`, for the bytes of a project file. */

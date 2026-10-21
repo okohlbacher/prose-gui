@@ -8,6 +8,11 @@
 //! folders that never got a record. A folder with an unreadable or unknown record is listed with its
 //! `error`, and never fails the list.
 //!
+//! A `<id>.partial` folder (a running search or import) holds `.lock`, locked exclusively by its owner
+//! ([`lock_partial`]) until the folder is renamed or removed; the sweep removes a partial folder only
+//! when it can take that lock itself (an owner that died has released it), so no app instance sweeps a
+//! live folder of another.
+//!
 //! A project file (`.prose`) is a zip of the search folder's regular files. Zip is handled by the
 //! front end; Rust reads the chosen file ([`read_project_file`]) and writes the entries the front end
 //! sends ([`import`], in the framing of [`frame`]), after checking every path again.
@@ -35,6 +40,10 @@ const MAX_ENTRY_NAME: usize = 1024;
 const MAX_DEPTH: usize = 8;
 
 const RECORD: &str = "search.json";
+/// The lock file of a partial folder.
+pub const LOCK_FILE: &str = ".lock";
+/// A lock file younger than this is not taken for a stale one (its owner may not have locked it yet).
+const LOCK_SETTLE: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -236,9 +245,25 @@ pub fn save(dir: &Path, id: &str, record_json: &str, proteins_fasta: &str) -> Re
     if fs::symlink_metadata(folder.join(RECORD)).is_ok() {
         return Err(format!("The search {id} is already saved."));
     }
+    // (a name that is not a name is refused; the text is kept as the app wrote it unless the name is trimmed)
+    let mut map = map;
+    let rewritten = match map.get("name").and_then(|n| n.as_str()) {
+        Some(name) => {
+            let cleaned = clean_name(name)?;
+            let changed = cleaned != name;
+            map.insert("name".to_string(), serde_json::Value::String(cleaned));
+            changed
+        }
+        None => false,
+    };
+    let record_text = if rewritten {
+        serde_json::to_string_pretty(&map).map_err(|e| e.to_string())?
+    } else {
+        record_json.to_string()
+    };
     write_atomically(&folder.join("proteins.fasta"), proteins_fasta.as_bytes())
         .map_err(|e| format!("proteins.fasta cannot be written ({e})."))?;
-    write_atomically(&folder.join(RECORD), record_json.as_bytes())
+    write_atomically(&folder.join(RECORD), record_text.as_bytes())
         .map_err(|e| format!("{RECORD} cannot be written ({e})."))
 }
 
@@ -293,6 +318,9 @@ fn collect_files(root: &Path, dir: &Path, depth: usize, out: &mut Vec<FolderFile
             continue;
         };
         if meta.is_file() {
+            if depth == 0 && entry.file_name() == LOCK_FILE {
+                continue;
+            }
             if let Ok(relative) = path.strip_prefix(root) {
                 let name = relative
                     .components()
@@ -319,20 +347,47 @@ pub fn folder_files(dir: &Path, id: &str) -> Result<Vec<FolderFile>, String> {
     Ok(files)
 }
 
-/// The bytes of a `.prose` file chosen in the open dialog.
-pub fn read_project_file(path: &str) -> Result<Vec<u8>, String> {
-    let p = Path::new(path);
-    let is_prose = p
+/// The bytes of the `.prose` file that the user chose in the open dialog (`open_project_file`; the page
+/// never names a path). Refused unless it is an absolute path with the extension `.prose` that is a
+/// regular file itself: a link is not followed.
+pub fn read_chosen_project(path: &Path) -> Result<Vec<u8>, String> {
+    let shown = path.display();
+    let is_prose = path
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("prose"));
-    if !p.is_absolute() || !is_prose {
-        return Err(format!("{path} is not a project file (.prose)."));
+    if !path.is_absolute() || !is_prose {
+        return Err(format!("{shown} is not a project file (.prose)."));
     }
-    let meta = fs::metadata(p).map_err(|e| format!("{path} cannot be read ({e})."))?;
+    let meta = fs::symlink_metadata(path).map_err(|e| format!("{shown} cannot be read ({e})."))?;
     if !meta.is_file() {
-        return Err(format!("{path} is not a file."));
+        return Err(format!("{shown} is not a regular file."));
     }
-    fs::read(p).map_err(|e| format!("{path} cannot be read ({e})."))
+    let bytes = fs::read(path).map_err(|e| format!("{shown} cannot be read ({e})."))?;
+    if bytes.is_empty() {
+        return Err(format!("{shown} is empty."));
+    }
+    Ok(bytes)
+}
+
+//------------------------------------------------------------------------------------------------
+// Locks of partial folders
+
+/// Locks a partial folder for its owner: makes `<folder>/.lock` and takes an exclusive lock on it, which
+/// the owner keeps (the returned file) until the folder is renamed ([`finish_partial`]) or removed. The
+/// operating system releases it when the process ends, however it ends.
+pub fn lock_partial(folder: &Path) -> io::Result<fs::File> {
+    let file = fs::File::create(folder.join(LOCK_FILE))?;
+    file.lock()?;
+    Ok(file)
+}
+
+/// Makes the finished folder of a partial one: the lock file is removed (it never belongs to a search
+/// or a project), the folder renamed to `target`, and only then the lock released.
+pub fn finish_partial(lock: Option<fs::File>, partial: &Path, target: &Path) -> io::Result<()> {
+    let _ = fs::remove_file(partial.join(LOCK_FILE));
+    let renamed = fs::rename(partial, target);
+    drop(lock);
+    renamed
 }
 
 //------------------------------------------------------------------------------------------------
@@ -387,9 +442,9 @@ fn plain_name(name: &str) -> bool {
     valid_relative(name) && !name.chars().any(char::is_control)
 }
 
-/// A fresh id for an imported search, with its `.partial` folder made (the id is the shim's `<millis>-`
-/// and an `i` count: no shim id is the same).
-fn reserve_import(dir: &Path) -> Result<(String, PathBuf), String> {
+/// A fresh id for an imported search, with its `.partial` folder made and locked (the id is the shim's
+/// `<millis>-` and an `i` count: no shim id is the same).
+fn reserve_import(dir: &Path) -> Result<(String, PathBuf, fs::File), String> {
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
@@ -401,7 +456,13 @@ fn reserve_import(dir: &Path) -> Result<(String, PathBuf), String> {
         }
         let partial = dir.join(format!("{id}.partial"));
         match fs::create_dir(&partial) {
-            Ok(()) => return Ok((id, partial)),
+            Ok(()) => match lock_partial(&partial) {
+                Ok(lock) => return Ok((id, partial, lock)),
+                Err(e) => {
+                    let _ = fs::remove_dir_all(&partial);
+                    return Err(format!("The search folder cannot be locked ({e})."));
+                }
+            },
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(e) => {
                 return Err(format!(
@@ -426,7 +487,7 @@ pub fn import(dir: &Path, body: &[u8]) -> Result<String, String> {
     let mut names = HashSet::new();
     let mut folders = HashSet::new();
     for (name, _) in &entries {
-        if !plain_name(name) {
+        if !plain_name(name) || name == LOCK_FILE {
             return Err(format!(
                 "{name:?} in the project is not a plain file name inside the folder."
             ));
@@ -452,6 +513,13 @@ pub fn import(dir: &Path, body: &[u8]) -> Result<String, String> {
     };
     let text = std::str::from_utf8(record).map_err(|_| format!("{RECORD} is not text."))?;
     let mut map = parse_record(text)?;
+    // the name is a name (as `rename` and `save` have it); the search is marked as imported, whatever
+    // the project says: its summary's database path is not served (`files::resolve_search_file`)
+    if let Some(name) = map.get("name").and_then(|n| n.as_str()) {
+        let cleaned = clean_name(name)?;
+        map.insert("name".to_string(), serde_json::Value::String(cleaned));
+    }
+    map.insert("imported".to_string(), serde_json::Value::Bool(true));
 
     fs::create_dir_all(dir).map_err(|e| {
         format!(
@@ -459,7 +527,7 @@ pub fn import(dir: &Path, body: &[u8]) -> Result<String, String> {
             dir.display()
         )
     })?;
-    let (id, partial) = reserve_import(dir)?;
+    let (id, partial, lock) = reserve_import(dir)?;
     let written = (|| -> Result<(), String> {
         let root = fs::canonicalize(&partial).map_err(|e| e.to_string())?;
         for (name, data) in &entries {
@@ -487,13 +555,18 @@ pub fn import(dir: &Path, body: &[u8]) -> Result<String, String> {
         let text = serde_json::to_vec_pretty(&map).map_err(|e| e.to_string())?;
         fs::write(root.join(RECORD), text)
             .map_err(|e| format!("{RECORD} cannot be written ({e})."))?;
-        fs::rename(&partial, dir.join(&id))
-            .map_err(|e| format!("The search folder cannot be finished ({e})."))
+        Ok(())
     })();
     match written {
-        Ok(()) => Ok(id),
+        Ok(()) => finish_partial(Some(lock), &partial, &dir.join(&id))
+            .map(|()| id)
+            .map_err(|e| {
+                let _ = fs::remove_dir_all(&partial);
+                format!("The search folder cannot be finished ({e}).")
+            }),
         Err(e) => {
             let _ = fs::remove_dir_all(&partial);
+            drop(lock);
             Err(e)
         }
     }
@@ -502,8 +575,8 @@ pub fn import(dir: &Path, body: &[u8]) -> Result<String, String> {
 //------------------------------------------------------------------------------------------------
 // Sweep
 
-/// The time of the last write into a finished folder: its own and its log's (a long search ends
-/// with the log's last line).
+/// The time of the last write into a folder: its own and its log's (a long search ends with the log's
+/// last line).
 fn last_written(folder: &Path) -> Option<SystemTime> {
     let own = fs::metadata(folder).and_then(|m| m.modified()).ok();
     let log = fs::metadata(folder.join("prose.log"))
@@ -512,33 +585,70 @@ fn last_written(folder: &Path) -> Option<SystemTime> {
     own.max(log)
 }
 
-/// The startup sweep of the searches folder: removes `<id>.partial` folders (an interrupted search or
-/// import; no search runs yet), and finished `<id>` folders without a record whose last write is more
-/// than `grace` before `now` (the app saves a record within moments of a search's end). Links, files,
-/// and anything not named like a search are left alone. Returns the names removed.
+fn older_than(time: Option<SystemTime>, now: SystemTime, grace: Duration) -> bool {
+    time.and_then(|t| now.duration_since(t).ok())
+        .is_some_and(|age| age > grace)
+}
+
+/// Whether the sweep may remove the partial folder: its lock can be taken (its owner is gone) and the
+/// lock file is not brand new; a folder without lock file (one of an older version) only when it has
+/// not been written to for `grace`. The lock taken is returned, to be held while the folder is removed.
+fn claim_partial(folder: &Path, now: SystemTime, grace: Duration) -> Option<Option<fs::File>> {
+    let lock_path = folder.join(LOCK_FILE);
+    match fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+    {
+        Ok(file) => match file.try_lock() {
+            Ok(()) => {
+                let made = file.metadata().and_then(|m| m.modified()).ok();
+                // (an owner creates the file, then locks it: a file this young may be about to be)
+                older_than(made, now, LOCK_SETTLE).then_some(Some(file))
+            }
+            Err(_) => None,
+        },
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            older_than(last_written(folder), now, grace).then_some(None)
+        }
+        Err(_) => None,
+    }
+}
+
+/// The startup sweep of the searches folder: removes `<id>.partial` folders whose owner is gone (see
+/// [`claim_partial`]: a running search or import, of this or another app instance, holds its lock), and
+/// finished `<id>` folders without a record whose last write is more than `grace` before `now` (the app
+/// saves a record within moments of a search's end). The folders are listed first, so none made while
+/// the sweep runs is looked at. Links, files, and anything not named like a search are left alone.
+/// Returns the names removed.
 pub fn sweep(dir: &Path, now: SystemTime, grace: Duration) -> Vec<String> {
     let Ok(read) = fs::read_dir(dir) else {
         return Vec::new();
     };
+    let found: Vec<(String, PathBuf)> = read
+        .flatten()
+        .filter_map(|item| {
+            let name = item.file_name().to_str()?.to_string();
+            let path = item.path();
+            fs::symlink_metadata(&path)
+                .is_ok_and(|m| m.is_dir())
+                .then_some((name, path))
+        })
+        .collect();
     let mut removed = Vec::new();
-    for item in read.flatten() {
-        let Some(name) = item.file_name().to_str().map(str::to_string) else {
-            continue;
-        };
-        let path = item.path();
-        let is_folder = fs::symlink_metadata(&path).is_ok_and(|m| m.is_dir());
-        if !is_folder {
-            continue;
-        }
-        let remove = match name.strip_suffix(".partial") {
-            Some(id) => valid_id(id),
-            None => {
+    for (name, path) in found {
+        let (remove, _guard) = match name.strip_suffix(".partial") {
+            Some(id) if valid_id(id) => match claim_partial(&path, now, grace) {
+                Some(guard) => (true, guard),
+                None => (false, None),
+            },
+            Some(_) => (false, None),
+            None => (
                 valid_id(&name)
                     && fs::symlink_metadata(path.join(RECORD)).is_err()
-                    && last_written(&path)
-                        .and_then(|t| now.duration_since(t).ok())
-                        .is_some_and(|age| age > grace)
-            }
+                    && older_than(last_written(&path), now, grace),
+                None,
+            ),
         };
         if remove && fs::remove_dir_all(&path).is_ok() {
             removed.push(name);
