@@ -1,14 +1,23 @@
-# The ProSE desktop app on Linux: the pinned OpenMS (native/OPENMS_COMMIT) built and bundled, the app's unit
-# tests, the .deb and the AppImage, and the AppImage's smoke test (the example with PeptDeep through WebDriver).
-# A tag desktop-native-v* makes a draft release with the two packages of the tested prose-desktop run of the
+# The ProSE desktop app on Linux, macOS (arm64) and Windows (x64): the pinned OpenMS (native/OPENMS_COMMIT)
+# built and bundled, the app's unit tests and packages.
+# - linux: the .deb and the AppImage, and the AppImage's smoke test (the example with PeptDeep through
+#   WebDriver).
+# - macos, windows: the .dmg and the NSIS installer, and their start test (start-test.sh: the bundled ProSE
+#   searches the example from the command line with PeptDeep, the packaged app starts, finds its ProSE and
+#   exits); the real_prose tests with the bundled tool.
+# - shim: the shim's tests (cargo test) on macOS and Windows, which need no OpenMS, for quick answers.
+# A tag desktop-native-v* makes a draft release with the packages of the tested prose-desktop run of the
 # tagged commit (a tag run builds nothing: the caches below belong to the branch, and a tag run cannot read
 # them, so it would build OpenMS and its dependencies from scratch).
 #
-# Caches (actions/cache): the bundled ProSE (src-tauri/resources/prose), keyed by the pin and the two scripts
-# that make it, so OpenMS is built only when one of them changes; and vcpkg's binary cache, keyed by the pin
-# and the triplet (plus the hash of its content when saved), so a rebuild of OpenMS does not rebuild its
-# dependencies. Both are saved right after the step that fills them, so a later failure (tests, packaging)
-# does not lose hours of building.
+# Caches (actions/cache), per platform: the bundled ProSE (src-tauri/resources/prose), keyed by the pin and
+# the scripts that make it, so OpenMS is built only when one of them changes; vcpkg's binary cache, keyed by
+# the pin and the triplet (plus the hash of its content when saved), so a rebuild of OpenMS does not rebuild
+# its dependencies; on macOS and Windows ccache's objects of OpenMS, so a rebuild after a change of the
+# bundling scripts (or a build cut short) compiles little. They are saved right after the step that fills
+# them, also when it failed, so a later failure (tests, packaging) or a time-out does not lose hours of
+# building. On macOS and Windows the vcpkg dependencies are built in a step of their own (configure), saved,
+# and OpenMS is built after: a first run that runs out of time keeps the dependencies.
 name: desktop
 
 on:
@@ -22,13 +31,8 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: desktop-${{ github.ref }}
-  # an OpenMS build can take hours; a newer push waits instead of cancelling it
-  cancel-in-progress: false
-
-env:
-  TRIPLET: x64-linux-dynamic
+# (per job, below: an OpenMS build can take hours; a newer push waits for the job of its platform instead
+# of cancelling it, and a quick job of another platform does not wait for it)
 
 jobs:
   linux:
@@ -38,6 +42,11 @@ jobs:
     runs-on: ubuntu-22.04
     # the first run builds vcpkg's dependencies (Arrow, the AWS SDK, ONNX Runtime, ...) and OpenMS
     timeout-minutes: 360
+    concurrency:
+      group: desktop-linux-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      TRIPLET: x64-linux-dynamic
     steps:
       - uses: actions/checkout@v7
         with:
@@ -230,9 +239,473 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # A draft release of the two packages, for a tag desktop-native-v* only; publishing it is a person's step. The
+  # The shim's tests on macOS and Windows (cargo test: the fake tool, no OpenMS), minutes after a push.
+  shim:
+    name: Shim tests (${{ matrix.os }})
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    concurrency:
+      group: desktop-shim-${{ matrix.os }}-${{ github.ref }}
+      cancel-in-progress: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # (scripts and fixtures as they are in git, LF; .gitattributes says so too)
+      - run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: desktop
+
+      - name: cargo test (examples/fake_prose.rs stands in for ProSE)
+        working-directory: src-tauri
+        run: cargo test --locked
+
+  # macOS, Apple silicon only (arm64): OpenMS's vcpkg build and its own CI cover arm64-osx only, and the
+  # OpenMP runtime is Homebrew's libomp, which is arm64 on these runners; a universal build would need a
+  # second build on an Intel runner, merged with lipo (native/README.md).
+  macos:
+    name: macOS (arm64, macos-15)
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: macos-15
+    timeout-minutes: 360
+    concurrency:
+      group: desktop-macos-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      # as OpenMS's CI (arm64-osx-dynamic-sysroot), release builds only
+      TRIPLET: arm64-osx-dynamic-sysroot-vcrel
+      # the runner's macOS, as OpenMS's CI: Homebrew's libomp is built for it (tauri.macos.conf.json)
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
+      HOMEBREW_NO_AUTO_UPDATE: 1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: The OpenMS pin
+        id: pin
+        run: |
+          commit=$(tr -d '[:space:]' < native/OPENMS_COMMIT)
+          [[ $commit =~ ^[0-9a-f]{40}$ ]] || { echo "native/OPENMS_COMMIT holds no commit hash" >&2; exit 1; }
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the bundled ProSE
+        id: bundle
+        uses: actions/cache/restore@v6
+        with:
+          path: src-tauri/resources/prose
+          key: prose-bundle-v1-macos-15-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-${{ hashFiles('native/scripts/build-openms.sh', 'native/scripts/bundle-prose.sh', 'native/scripts/bundle_closure.py') }}
+
+      # --- OpenMS (only without a bundle in the cache) ------------------------------------------------
+      - name: Build tools for OpenMS
+        if: steps.bundle.outputs.cache-hit != 'true'
+        run: |
+          brew install autoconf autoconf-archive automake libtool pkg-config ninja bison flex libomp ccache
+          echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix flex)/bin" >> "$GITHUB_PATH"
+          df -h "$GITHUB_WORKSPACE"
+          sysctl -n hw.ncpu hw.memsize
+          clang --version
+
+      - name: Check out OpenMS at the pin
+        if: steps.bundle.outputs.cache-hit != 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: OpenMS/OpenMS
+          ref: ${{ steps.pin.outputs.commit }}
+          path: openms
+          persist-credentials: false
+
+      - name: vcpkg (the OpenMS submodule)
+        if: steps.bundle.outputs.cache-hit != 'true'
+        run: git -C openms submodule update --init --depth 1 vcpkg
+
+      - name: Restore vcpkg's binary cache
+        if: steps.bundle.outputs.cache-hit != 'true'
+        id: vcpkg
+        uses: actions/cache/restore@v6
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-v1-macos-15-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}
+          restore-keys: |
+            vcpkg-v1-macos-15-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-
+            vcpkg-v1-macos-15-${{ env.TRIPLET }}-
+
+      - name: Restore ccache's objects
+        if: steps.bundle.outputs.cache-hit != 'true'
+        id: ccache
+        uses: actions/cache/restore@v6
+        with:
+          path: .ccache
+          key: ccache-v1-macos-15-${{ steps.pin.outputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-v1-macos-15-${{ steps.pin.outputs.commit }}-
+            ccache-v1-macos-15-
+
+      - name: The vcpkg dependencies (OpenMS's configure)
+        if: steps.bundle.outputs.cache-hit != 'true'
+        id: configure
+        timeout-minutes: 300
+        env:
+          JOBS: 3
+          VCPKG_MAX_CONCURRENCY: 3
+          VCPKG_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
+          VCPKG_INSTALL_OPTIONS: --clean-after-build
+          VCPKG_TRIPLET: ${{ env.TRIPLET }}
+          OPENMS_CONFIGURE_ONLY: 1
+        run: |
+          OPENMS_CMAKE_ARGS="-DOpenMP_ROOT=$(brew --prefix libomp) -DMT_REQUIRE_OPENMP=ON" \
+            native/scripts/build-openms.sh openms openms/build
+          df -h "$GITHUB_WORKSPACE"
+
+      - name: Save vcpkg's binary cache
+        if: always() && steps.bundle.outputs.cache-hit != 'true' && hashFiles('vcpkg-bincache/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: vcpkg-bincache
+          key: ${{ steps.vcpkg.outputs.cache-primary-key }}-${{ hashFiles('vcpkg-bincache/**') }}
+
+      - name: Build OpenMS (libOpenMS and ProSE)
+        if: steps.bundle.outputs.cache-hit != 'true' && steps.configure.outcome == 'success'
+        id: openms
+        env:
+          JOBS: 3
+          VCPKG_MAX_CONCURRENCY: 3
+          VCPKG_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
+          VCPKG_INSTALL_OPTIONS: --clean-after-build
+          VCPKG_TRIPLET: ${{ env.TRIPLET }}
+          OPENMS_TARGETS: OpenMS ProSE
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_MAXSIZE: 1500M
+          CCACHE_COMPRESS: 'true'
+        run: |
+          ccache --zero-stats
+          OPENMS_CMAKE_ARGS="-DOpenMP_ROOT=$(brew --prefix libomp) -DMT_REQUIRE_OPENMP=ON" \
+            native/scripts/build-openms.sh openms openms/build
+          ccache --show-stats
+          df -h "$GITHUB_WORKSPACE"
+
+      - name: Save ccache's objects
+        if: always() && steps.bundle.outputs.cache-hit != 'true' && steps.configure.outcome == 'success'
+        uses: actions/cache/save@v6
+        with:
+          path: .ccache
+          key: ${{ steps.ccache.outputs.cache-primary-key }}
+
+      - name: Bundle ProSE
+        if: steps.bundle.outputs.cache-hit != 'true'
+        run: native/scripts/bundle-prose.sh openms/build src-tauri/resources/prose
+
+      - name: Save the bundled ProSE
+        if: steps.bundle.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: src-tauri/resources/prose
+          key: ${{ steps.bundle.outputs.cache-primary-key }}
+
+      # the build machine's OpenMS (its share/OpenMS, models and tool registry are compiled into the bundle
+      # as paths) goes, so that the tests below see the bundle as a user's machine does
+      - name: Remove the OpenMS build
+        if: steps.bundle.outputs.cache-hit != 'true'
+        run: rm -rf openms vcpkg-bincache .ccache
+
+      # --- the app ----------------------------------------------------------------------------------------
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: desktop
+
+      - run: npm ci
+
+      - name: The bundled ProSE
+        run: |
+          cat src-tauri/resources/prose/build.json
+          src-tauri/resources/prose/bin/ProSE --help 2>&1 | grep -m1 'Version:'
+          du -sh src-tauri/resources/prose src-tauri/resources/prose/lib src-tauri/resources/prose/share
+
+      - name: The shim with the bundled ProSE (real_prose)
+        working-directory: src-tauri
+        env:
+          PROSE_BIN: ${{ github.workspace }}/src-tauri/resources/prose/bin/ProSE
+          PROSE_EXAMPLE_DIR: ${{ github.workspace }}/src-tauri/resources/example
+        run: cargo test --locked --test real_prose -- --nocapture --test-threads 1
+
+      - name: Packages (.app, .dmg)
+        run: native/scripts/package-macos.sh
+
+      - name: Start test of the .dmg
+        run: native/scripts/start-test.sh src-tauri/target/release/bundle/dmg/*.dmg src-tauri/resources/example
+
+      - name: Package sizes
+        if: always()
+        run: |
+          {
+            echo '### Packages (macOS)'
+            echo
+            echo '| file | size |'
+            echo '| --- | --- |'
+            for f in src-tauri/target/release/bundle/dmg/*.dmg; do
+              if [ -f "$f" ]; then echo "| $(basename "$f") | $(du -h "$f" | cut -f1) |"; fi
+            done
+            if [ -f src-tauri/resources/prose/build.json ]; then
+              echo "| (bundled ProSE, unpacked) | $(du -sh src-tauri/resources/prose | cut -f1) |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prose-desktop-macos
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  # Windows x64 with MSVC (Visual Studio's developer environment) and vcpkg's x64-windows-static-md-release, as
+  # OpenMS's own CI: the dependencies are static, so ProSE's closure is OpenMS's DLLs and the Visual C++ runtime.
+  windows:
+    name: Windows (x64, windows-2025)
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: windows-2025
+    timeout-minutes: 360
+    concurrency:
+      group: desktop-windows-${{ github.ref }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+    env:
+      TRIPLET: x64-windows-static-md-release
+    steps:
+      # (scripts and fixtures as they are in git, LF; long paths for the OpenMS and vcpkg trees)
+      - run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: The OpenMS pin
+        id: pin
+        run: |
+          commit=$(tr -d '[:space:]' < native/OPENMS_COMMIT)
+          [[ $commit =~ ^[0-9a-f]{40}$ ]] || { echo "native/OPENMS_COMMIT holds no commit hash" >&2; exit 1; }
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the bundled ProSE
+        id: bundle
+        uses: actions/cache/restore@v6
+        with:
+          path: src-tauri/resources/prose
+          key: prose-bundle-v1-windows-2025-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-${{ hashFiles('native/scripts/build-openms.sh', 'native/scripts/bundle-prose.sh', 'native/scripts/bundle_closure.py') }}
+
+      # cl, the Windows SDK and VCToolsRedistDir (the Visual C++ runtime the bundle takes) for every step below
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # --- OpenMS (only without a bundle in the cache) ------------------------------------------------
+      - name: Build tools for OpenMS
+        if: steps.bundle.outputs.cache-hit != 'true'
+        run: |
+          choco install -y --no-progress ccache
+          command -v cl ninja cmake ccache
+          df -h . /c /d 2>/dev/null || true
+          nproc
+
+      - name: Check out OpenMS at the pin
+        if: steps.bundle.outputs.cache-hit != 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: OpenMS/OpenMS
+          ref: ${{ steps.pin.outputs.commit }}
+          path: openms
+          persist-credentials: false
+
+      - name: vcpkg (the OpenMS submodule)
+        if: steps.bundle.outputs.cache-hit != 'true'
+        run: git -C openms submodule update --init --depth 1 vcpkg
+
+      - name: Restore vcpkg's binary cache
+        if: steps.bundle.outputs.cache-hit != 'true'
+        id: vcpkg
+        uses: actions/cache/restore@v6
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-v1-windows-2025-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}
+          restore-keys: |
+            vcpkg-v1-windows-2025-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-
+            vcpkg-v1-windows-2025-${{ env.TRIPLET }}-
+
+      - name: Restore ccache's objects
+        if: steps.bundle.outputs.cache-hit != 'true'
+        id: ccache
+        uses: actions/cache/restore@v6
+        with:
+          path: .ccache
+          key: ccache-v1-windows-2025-${{ steps.pin.outputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-v1-windows-2025-${{ steps.pin.outputs.commit }}-
+            ccache-v1-windows-2025-
+
+      # vcpkg's build trees and packages in short folders: some ports' paths do not fit MAX_PATH below the
+      # checkout
+      - name: The vcpkg dependencies (OpenMS's configure)
+        if: steps.bundle.outputs.cache-hit != 'true'
+        id: configure
+        timeout-minutes: 300
+        env:
+          CC: cl
+          CXX: cl
+          JOBS: 4
+          VCPKG_MAX_CONCURRENCY: 4
+          VCPKG_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
+          VCPKG_INSTALL_OPTIONS: --clean-after-build;--x-buildtrees-root=D:/vb;--x-packages-root=D:/vp
+          VCPKG_TRIPLET: ${{ env.TRIPLET }}
+          OPENMS_CMAKE_ARGS: -DMT_REQUIRE_OPENMP=ON
+          OPENMS_CONFIGURE_ONLY: 1
+        run: |
+          native/scripts/build-openms.sh openms openms/build
+          df -h . /d 2>/dev/null || true
+
+      - name: Save vcpkg's binary cache
+        if: always() && steps.bundle.outputs.cache-hit != 'true' && hashFiles('vcpkg-bincache/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: vcpkg-bincache
+          key: ${{ steps.vcpkg.outputs.cache-primary-key }}-${{ hashFiles('vcpkg-bincache/**') }}
+
+      - name: Build OpenMS (libOpenMS and ProSE)
+        if: steps.bundle.outputs.cache-hit != 'true' && steps.configure.outcome == 'success'
+        id: openms
+        env:
+          CC: cl
+          CXX: cl
+          JOBS: 4
+          VCPKG_MAX_CONCURRENCY: 4
+          VCPKG_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
+          VCPKG_INSTALL_OPTIONS: --clean-after-build;--x-buildtrees-root=D:/vb;--x-packages-root=D:/vp
+          VCPKG_TRIPLET: ${{ env.TRIPLET }}
+          OPENMS_CMAKE_ARGS: -DMT_REQUIRE_OPENMP=ON
+          OPENMS_TARGETS: OpenMS ProSE
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_MAXSIZE: 2G
+          CCACHE_COMPRESS: 'true'
+        run: |
+          ccache --zero-stats
+          native/scripts/build-openms.sh openms openms/build
+          ccache --show-stats
+
+      - name: Save ccache's objects
+        if: always() && steps.bundle.outputs.cache-hit != 'true' && steps.configure.outcome == 'success'
+        uses: actions/cache/save@v6
+        with:
+          path: .ccache
+          key: ${{ steps.ccache.outputs.cache-primary-key }}
+
+      - name: Bundle ProSE
+        if: steps.bundle.outputs.cache-hit != 'true'
+        run: native/scripts/bundle-prose.sh openms/build src-tauri/resources/prose
+
+      - name: Save the bundled ProSE
+        if: steps.bundle.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: src-tauri/resources/prose
+          key: ${{ steps.bundle.outputs.cache-primary-key }}
+
+      - name: Remove the OpenMS build
+        if: steps.bundle.outputs.cache-hit != 'true'
+        run: rm -rf openms vcpkg-bincache .ccache /d/vb /d/vp
+
+      # --- the app ----------------------------------------------------------------------------------------
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: desktop
+
+      - run: npm ci
+
+      - name: The bundled ProSE
+        run: |
+          cat src-tauri/resources/prose/build.json
+          src-tauri/resources/prose/bin/ProSE.exe --help 2>&1 | grep -m1 'Version:'
+          ls src-tauri/resources/prose/bin
+          du -sh src-tauri/resources/prose src-tauri/resources/prose/bin src-tauri/resources/prose/share
+
+      - name: The shim with the bundled ProSE (real_prose)
+        working-directory: src-tauri
+        env:
+          PROSE_BIN: ${{ github.workspace }}\src-tauri\resources\prose\bin\ProSE.exe
+          PROSE_EXAMPLE_DIR: ${{ github.workspace }}\src-tauri\resources\example
+        run: cargo test --locked --test real_prose -- --nocapture --test-threads 1
+
+      - name: Package (NSIS installer)
+        run: native/scripts/package-windows.sh
+
+      - name: Start test of the installer
+        run: native/scripts/start-test.sh src-tauri/target/release/bundle/nsis/*-setup.exe src-tauri/resources/example
+
+      - name: Package sizes
+        if: always()
+        run: |
+          {
+            echo '### Packages (Windows)'
+            echo
+            echo '| file | size |'
+            echo '| --- | --- |'
+            for f in src-tauri/target/release/bundle/nsis/*-setup.exe; do
+              if [ -f "$f" ]; then echo "| $(basename "$f") | $(du -h "$f" | cut -f1) |"; fi
+            done
+            if [ -f src-tauri/resources/prose/build.json ]; then
+              echo "| (bundled ProSE, unpacked) | $(du -sh src-tauri/resources/prose | cut -f1) |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prose-desktop-windows
+          path: src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  # A draft release of the packages, for a tag desktop-native-v* only; publishing it is a person's step. The
   # packages are those of the successful prose-desktop run of the tagged commit, the build that ran the unit
-  # tests and the smoke test (artifacts are kept 14 days; an older run can be re-run with `gh run rerun`).
+  # tests, the smoke test and the start tests (artifacts are kept 14 days; an older run can be re-run with
+  # `gh run rerun`). The Linux packages are required; the macOS and Windows ones are attached when that run
+  # has them.
   release:
     name: Draft release
     if: startsWith(github.ref, 'refs/tags/desktop-native-v')
@@ -258,9 +731,16 @@ jobs:
             echo "::error::Run $run has no artifact prose-desktop-linux (expired after 14 days?): re-run it with 'gh run rerun $run', then this job."
             exit 1
           fi
-          find packages -type f -printf '%s\t%p\n'
           [ -n "$(find packages -type f -name '*.AppImage')" ] && [ -n "$(find packages -type f -name '*.deb')" ] \
             || { echo "::error::run $run's artifact lacks the AppImage or the .deb"; exit 1; }
+          for platform in macos windows; do
+            if gh run download "$run" --name "prose-desktop-$platform" --dir "packages/$platform"; then
+              echo "with the $platform package"
+            else
+              echo "::warning::Run $run has no artifact prose-desktop-$platform: the release has no $platform package."
+            fi
+          done
+          find packages -type f -printf '%s\t%p\n'
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -276,5 +756,23 @@ jobs:
           - Ubuntu, Debian: `sudo apt install libgles2`
           - Fedora: `sudo dnf install libglvnd-gles`
           NOTES
+          if [ -n "$(find packages -type f -name '*.dmg')" ]; then
+            cat >> notes.md <<'NOTES'
+
+          ProSE desktop for macOS 15 or later on Apple silicon (arm64): the .dmg. It is not signed with a
+          Developer ID nor notarized: the first time, macOS refuses to open it; allow it in System Settings >
+          Privacy & Security > "Open Anyway" (or run `xattr -dr com.apple.quarantine /Applications/ProSE.app`).
+          NOTES
+          fi
+          if [ -n "$(find packages -type f -name '*-setup.exe')" ]; then
+            cat >> notes.md <<'NOTES'
+
+          ProSE desktop for Windows 10 and 11 (x64): the installer (-setup.exe), for the current user, without
+          administrator rights. It is not signed: SmartScreen asks once ("More info" > "Run anyway"). Two input
+          files of one name can be searched together only when they are on the drive of the app's data (usually
+          C:); otherwise the app asks to rename one of them.
+          NOTES
+          fi
           gh release create "$TAG" --draft --verify-tag --title "ProSE desktop ${TAG#desktop-native-v}" \
-            --notes-file notes.md $(find packages -type f \( -name '*.AppImage' -o -name '*.deb' \))
+            --notes-file notes.md \
+            $(find packages -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' -o -name '*-setup.exe' \))
