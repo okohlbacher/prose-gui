@@ -5,6 +5,7 @@
   import { loadTool } from '$lib/search/tool.svelte'
   import History from './views/History.svelte'
   import NewSearch from './views/NewSearch.svelte'
+  import Results from './views/Results.svelte'
 
   readHash()
   // the ProSE tool: its version and whether it has ONNX Runtime (the search form needs it)
@@ -20,9 +21,7 @@
     <TopBar route={router.route} resultId={router.resultId} />
     {#if router.route.view === 'results'}
       <main class="relative min-h-[440px] flex-1">
-        <section data-testid="view-results" class="mx-auto max-w-[1120px] px-5 pt-6 pb-24">
-          <h1 class="mb-1 text-xl font-semibold tracking-tight">Results</h1>
-        </section>
+        <Results id={router.route.id} />
       </main>
     {:else}
       <main class="mx-auto max-w-[1120px] px-5 pt-6 pb-24">
