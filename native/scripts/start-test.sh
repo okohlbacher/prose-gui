@@ -12,10 +12,10 @@
 #    DatabaseSuitability_database.fasta, copied into a folder with a space in its name) from the command
 #    line, with Percolator and PeptDeep: it has to end with 0, write the outputs the app reads, rescore
 #    with PeptDeep, and find more than 500 target PSMs (895 with these settings).
+#    The same in a folder named 'Größe ü', which has to give the same number of PSMs.
 # 4. The app starts with --smoke-test (src-tauri/src/lib.rs): once its page has loaded it reports the page
 #    and tool_info, and exits. tool_info has to be the bundled ProSE inside the package, with ONNX, and the
 #    version of step 2.
-#    The same in a folder named 'Größe ü', which has to give the same number of PSMs.
 # The build machine's OpenMS must be gone (CI removes it after bundling), so that ProSE can only use the
 # package's share/OpenMS. Writes a summary to $GITHUB_STEP_SUMMARY when it is set.
 set -euo pipefail
