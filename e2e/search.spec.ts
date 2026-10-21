@@ -1,15 +1,14 @@
 // The example searched through the app's screens: New search with the example, Start, Results.
-// Gated: runs only with PROSE_BIN set (the app inherits it). The search's folder (in the spec's own data
-// folder) is removed at the end.
+// Gated: runs only with PROSE_BIN set (the app inherits it). Every test that needs a result searches the
+// example itself, so each runs alone; the searches' folders (in the spec's own data folder) are removed
+// after each test.
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { clearSearches, jsClick, searchesDir } from './lib.ts'
+import { clearSearches, openFirstPsm, runExample, searchesDir } from './lib.ts'
 
 const enabled = Boolean(process.env.PROSE_BIN)
 
 describe('the example search', () => {
-  let searchId: string | null = null
-
   before(function () {
     if (!enabled) {
       console.log('skipped: set PROSE_BIN to run the example search through the app')
@@ -17,7 +16,7 @@ describe('the example search', () => {
     }
   })
 
-  after(() => clearSearches())
+  afterEach(() => clearSearches())
 
   it('the CSP lets the results reader start its WebAssembly zstd decoder (from a data: URL)', async () => {
     await $('header').waitForDisplayed({ timeout: 20000 })
@@ -92,7 +91,6 @@ describe('the example search', () => {
       interval: 500,
       timeoutMsg: 'the search did not open its result',
     })
-    searchId = /#\/results\/([^/]+)$/.exec(await browser.getUrl())![1]
     const count = $('[data-testid="psm-count"]')
     await count.waitForDisplayed({ timeout: 20000 })
     await expect(count).toHaveText(expect.stringContaining('1,790'))
@@ -100,13 +98,9 @@ describe('the example search', () => {
   })
 
   it('the example without PeptDeep still shows the prediction', async () => {
-    // PeptDeep was off for the search (no rescoring features), yet ProSE writes the prediction of every PSM
-    await jsClick(await $('[role="tablist"]').$('button*=PSMs'))
-    const grid = $('[role="grid"][aria-label="PSMs"]')
-    await grid.waitForDisplayed({ timeout: 10000 })
-    await browser.waitUntil(async () => (await grid.$$('tbody tr[aria-rowindex]')).length > 0)
-    await jsClick((await grid.$$('tbody tr[aria-rowindex]'))[0])
-    await $('[data-testid="psm-view"]').waitForDisplayed({ timeout: 10000 })
+    // PeptDeep is off for the search (no rescoring features), yet ProSE writes the prediction of every PSM
+    await runExample()
+    await openFirstPsm()
     await expect($('[data-testid="bottom-label"]')).toHaveText(expect.stringContaining('PeptDeep'))
     expect((await $$('[data-testid="bottom-peaks"]')).length).toBeGreaterThan(0)
     expect(await $$('[data-testid="bottom-status"]')).toHaveLength(0)
@@ -115,15 +109,15 @@ describe('the example search', () => {
   })
 
   it('History survives a restart: the search is listed, can be renamed, and opens again with its results', async () => {
-    expect(searchId).not.toBeNull()
+    const searchId = await runExample()
     const row = () => $(`[data-testid="history-row"][data-id="${searchId}"]`)
     await $('nav[aria-label="Main"]').$('a=History').click()
     await row().waitForDisplayed({ timeout: 20000 })
     // (textContent: WebKit's visible text leaves out the cells that the table cuts to its width)
     expect(await row().getProperty('textContent')).toContain('DatabaseSuitability_1.mzML, DatabaseSuitability_2.mzML')
     // the folder has its record: the shim's outputs, proteins.fasta and search.json
-    expect(existsSync(join(searchesDir(), searchId!, 'search.json'))).toBe(true)
-    expect(existsSync(join(searchesDir(), searchId!, 'proteins.fasta'))).toBe(true)
+    expect(existsSync(join(searchesDir(), searchId, 'search.json'))).toBe(true)
+    expect(existsSync(join(searchesDir(), searchId, 'proteins.fasta'))).toBe(true)
 
     await row().$('button=Rename').click()
     await row().$('input').waitForDisplayed()

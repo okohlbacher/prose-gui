@@ -1,25 +1,16 @@
 // The example searched with PeptDeep, and what the app does with its result: the PSM view with PeptDeep's
-// mirror, the ion toggles, and a project file that opens again with the same PSMs.
+// mirror, the ion toggles, and a project file that opens again with the same PSMs. Every test searches
+// the example itself (beforeEach), so each runs alone.
 // Gated: runs only with PROSE_BIN set (the app inherits it).
-import { readFileSync } from 'node:fs'
-import { appReady, clearSearches, dataHome, goTo, jsClick, searchFolders, waitForResults } from './lib.ts'
+import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { appReady, clearSearches, dataHome, goTo, jsClick, openFirstPsm, runExample, searchFolders, textOf, waitForResults } from './lib.ts'
 
 const enabled = Boolean(process.env.PROSE_BIN)
 
 /** The labels of the matched peaks in the spectrum. */
 const peakLabels = (): Promise<string[]> =>
   browser.execute(() => [...document.querySelectorAll('[data-testid="peak-label"]')].map((l) => l.textContent ?? ''))
-
-/** Opens the PSM view of the first PSM in the PSMs tab. */
-async function openFirstPsm() {
-  await jsClick(await $('[role="tablist"]').$('button*=PSMs'))
-  const grid = $('[role="grid"][aria-label="PSMs"]')
-  await grid.waitForDisplayed({ timeout: 10000 })
-  await browser.waitUntil(async () => (await grid.$$('tbody tr[aria-rowindex]')).length > 0)
-  await jsClick((await grid.$$('tbody tr[aria-rowindex]'))[0])
-  await $('[data-testid="psm-view"]').waitForDisplayed({ timeout: 10000 })
-}
 
 describe('the example with PeptDeep', () => {
   before(async function () {
@@ -30,18 +21,17 @@ describe('the example with PeptDeep', () => {
     await appReady()
   })
 
-  after(() => clearSearches())
+  beforeEach(async () => {
+    await runExample({ peptdeep: true })
+  })
+
+  afterEach(() => {
+    clearSearches()
+    rmSync(join(dataHome(), 'chosen.prose'), { force: true })
+  })
 
   it('the example with PeptDeep: 1,790 PSMs, a PSM shows the PeptDeep mirror', async () => {
-    await $('button=Try the example').click()
-    await expect($('[data-testid="fasta-proteins"]')).toHaveText('49 proteins')
-    await $('#peptdeep').click()
-    await expect($('#peptdeep')).toHaveAttribute('aria-checked', 'true')
-    await $('button*=Start search').click()
-    await waitForResults()
-    const count = $('[data-testid="psm-count"]')
-    await count.waitForDisplayed({ timeout: 20000 })
-    await expect(count).toHaveText(expect.stringContaining('1,790'))
+    await expect($('[data-testid="psm-count"]')).toHaveText(expect.stringContaining('1,790'))
 
     await openFirstPsm()
     // the lower half is PeptDeep's prediction, with peaks, not the theoretical spectrum or a "no prediction" note
@@ -54,6 +44,7 @@ describe('the example with PeptDeep', () => {
   })
 
   it('ion toggles change the annotation', async () => {
+    await openFirstPsm()
     const before = await peakLabels()
     expect(before.length).toBeGreaterThan(0)
     expect(before.some((l) => l.startsWith('y'))).toBe(true)
@@ -77,11 +68,12 @@ describe('the example with PeptDeep', () => {
 
   it('a project opens again with the same PSMs', async () => {
     // Export > Project (.prose): the app writes it where the specs' dialog seam says (app.sh)
-    await browser.keys('Escape')
-    await $('[data-testid="psm-count"]').waitForDisplayed()
+    const count = await textOf('[data-testid="psm-count"]')
+    expect(count).toContain('1,790')
+    const file = join(dataHome(), 'chosen.prose')
+    rmSync(file, { force: true })
     await $('header').$('button*=Export').click()
     await $('[role="menuitem"]*=Project (.prose)').click()
-    const file = join(dataHome(), 'chosen.prose')
     await browser.waitUntil(() => {
       try {
         return readFileSync(file).length > 0
@@ -103,9 +95,8 @@ describe('the example with PeptDeep', () => {
 
     await $('[data-testid="open-project"]').click()
     await waitForResults(30000)
-    const count = $('[data-testid="psm-count"]')
-    await count.waitForDisplayed({ timeout: 30000 })
-    await expect(count).toHaveText(expect.stringContaining('1,790'))
+    await $('[data-testid="psm-count"]').waitForDisplayed({ timeout: 30000 })
+    expect(await textOf('[data-testid="psm-count"]')).toBe(count)
     // the PSM view opens as before: the spectrum and the prediction are in the project
     await openFirstPsm()
     await expect($('[data-testid="bottom-label"]')).toHaveText(expect.stringContaining('PeptDeep'))

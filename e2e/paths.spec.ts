@@ -2,9 +2,9 @@
 // of the same name from different folders, and an mzML.gz. The example's run and FASTA are copied into
 // folders made for the spec; the app reads them where they are.
 // Gated: runs only with PROSE_BIN set (the app inherits it).
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
 import { appReady, clearSearches, dropFiles, freshForm, goTo, searchFolders, textOf, waitForResults } from './lib.ts'
@@ -34,9 +34,10 @@ describe('inputs by path', () => {
     await appReady()
   })
 
+  afterEach(() => clearSearches())
+
   after(() => {
     if (work) rmSync(work, { recursive: true, force: true })
-    clearSearches()
   })
 
   /** Drops the paths on New search, starts the search and returns the text of the PSM count. */
@@ -55,22 +56,25 @@ describe('inputs by path', () => {
     return textOf('[data-testid="psm-count"]')
   }
 
-  let plainCount = ''
-
   it('paths with spaces and umlauts', async () => {
-    plainCount = await search([umlautRun, umlautFasta], 'Probe Größe ä ö ü.mzML')
-    expect(plainCount).toMatch(/\d/)
-    // the file keeps its name (the result's own name is the common start of the file names, cut down to
-    // letters, digits and "_.-" for file names: "Probe_Gr_e")
+    const count = await search([umlautRun, umlautFasta], 'Probe Größe ä ö ü.mzML')
+    expect(count).toMatch(/\d/)
+    // the result's name keeps the letters: spaces become "_" and the umlauts stay
+    expect(await textOf('[data-testid="result-chip"]')).toContain('Probe_Größe_ä_ö_ü · 1 file')
     await goTo('History')
-    await $('[data-testid="history-row"]').waitForDisplayed()
+    const row = $('[data-testid="history-row"]')
+    await row.waitForDisplayed()
+    expect(await textOf('[data-testid="history-row"] [data-column="name"]')).toBe('Probe_Größe_ä_ö_ü')
+    // the file keeps its name as it is
     expect(await textOf('[data-testid="history-row"] [data-column="files"]')).toBe('Probe Größe ä ö ü.mzML')
     // nothing was written next to the inputs
     expect(readFileSync(umlautRun).length).toBe(readFileSync(MZML).length)
+    expect(readdirSync(dirname(umlautRun)).sort()).toEqual(['Datenbank (Süß).fasta', 'Probe Größe ä ö ü.mzML'])
     expect(searchFolders().partial).toEqual([])
   })
 
   it('an mzML.gz searches like its mzML', async () => {
+    const plainCount = await search([umlautRun, umlautFasta], 'Probe Größe ä ö ü.mzML')
     const gz = join(work, 'Probe Größe ä ö ü.mzML.gz')
     writeFileSync(gz, gzipSync(readFileSync(MZML)))
     const count = await search([gz, umlautFasta], 'Probe Größe ä ö ü.mzML.gz')

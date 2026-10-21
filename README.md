@@ -28,3 +28,8 @@ gets an app of its own with its own data folder (`XDG_DATA_HOME`, made per run, 
 `tauri-driver` stops the run with a message). Debug builds read `PROSE_TEST_DIALOG_PATH` in place of the
 system's save and open dialogs (`e2e/app.sh` sets it), since WebDriver cannot reach a dialog. The large search
 (`e2e/big.spec.ts`) runs only with `PROSE_BIG=1`; it logs its time and ProSE's peak memory.
+
+Host tools of the e2e specs: `xvfb-run`, and for `closing the window ends ProSE` (a window-manager close request
+sent to the app's window) `xwininfo`, `xprop` and `python3` with libX11 (`e2e/close-window.py`); without them that
+test skips with a message. Run one test of a spec with
+`native/scripts/in-env.sh e2e/run.sh e2e/paths.spec.ts --mochaOpts.grep 'mzML.gz'`.

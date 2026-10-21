@@ -28,17 +28,33 @@ function listening(port: number): Promise<boolean> {
   })
 }
 
-/** Ends tauri-driver with everything it started (the group: WebKitWebDriver, the app, a search). */
+/** Waits (synchronously: this runs in exit handlers) for `ms`. */
+const wait = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+
+/**
+ * Ends tauri-driver with everything it started (the group: WebKitWebDriver, the app, a search): SIGTERM,
+ * then SIGKILL for what is still there after a few seconds.
+ */
 function stopDriver() {
   const pid = driver?.pid
   driver = undefined
   if (pid === undefined) return
-  for (const signal of ['SIGTERM', 'SIGKILL'] as const) {
+  try {
+    process.kill(-pid, 'SIGTERM')
+  } catch {
+    return // the group is gone
+  }
+  for (const deadline = Date.now() + 3000; Date.now() < deadline; wait(50)) {
     try {
-      process.kill(-pid, signal)
+      process.kill(-pid, 0)
     } catch {
-      // the group is gone
+      return // every process of the group has ended
     }
+  }
+  try {
+    process.kill(-pid, 'SIGKILL')
+  } catch {
+    // gone meanwhile
   }
 }
 

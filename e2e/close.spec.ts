@@ -1,7 +1,17 @@
 // The window closes during a search: the app ends, and no ProSE of its data folder outlives it.
 // Gated: runs only with PROSE_BIN set (the app inherits it). These tests end the app, so they have a file
-// of their own.
-import { appProcesses, appReady, clearSearches, closeWindowLikeAUser, freshForm, proseProcesses, searchFolders, textOf } from './lib.ts'
+// of their own. Each test starts its own search and ends the app, so each runs alone.
+import {
+  appProcesses,
+  appReady,
+  clearSearches,
+  closeWindowLikeAUser,
+  freshForm,
+  proseProcesses,
+  searchFolders,
+  textOf,
+  windowCloseToolsMissing,
+} from './lib.ts'
 
 const enabled = Boolean(process.env.PROSE_BIN)
 
@@ -31,7 +41,12 @@ describe('closing the window', () => {
 
   afterEach(() => clearSearches())
 
-  it('closing the window ends ProSE', async () => {
+  it('closing the window ends ProSE', async function () {
+    const missing = windowCloseToolsMissing()
+    if (missing) {
+      console.log(`skipped: the window-manager close ${missing} (see the README)`)
+      return this.skip()
+    }
     await searchRunning()
     // the close button: the window gets the request of a window manager
     closeWindowLikeAUser(appProcesses()[0].pid)

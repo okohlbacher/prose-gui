@@ -149,16 +149,18 @@ async fn example_files(app: AppHandle) -> Result<files::ExampleFiles, String> {
 }
 
 /// The file that the end-to-end specs choose in place of the system's dialogs (`PROSE_TEST_DIALOG_PATH`):
-/// WebDriver cannot reach a dialog of the system. Debug builds only; a release build has no such way, and
-/// the page never names a path in either.
+/// WebDriver cannot reach a dialog of the system. Debug builds only; a release build has no such way
+/// (this is `None` there), and the page never names a path in either.
+#[cfg(debug_assertions)]
 fn test_dialog_path() -> Option<PathBuf> {
-    if cfg!(debug_assertions) {
-        std::env::var_os("PROSE_TEST_DIALOG_PATH")
-            .filter(|p| !p.is_empty())
-            .map(PathBuf::from)
-    } else {
-        None
-    }
+    std::env::var_os("PROSE_TEST_DIALOG_PATH")
+        .filter(|p| !p.is_empty())
+        .map(PathBuf::from)
+}
+
+#[cfg(not(debug_assertions))]
+fn test_dialog_path() -> Option<PathBuf> {
+    None
 }
 
 /// The system's save dialog for `name`; None if the user cancelled.

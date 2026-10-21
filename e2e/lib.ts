@@ -160,3 +160,49 @@ export function closeWindowLikeAUser(appPid: number) {
   if (!window) throw new Error(`no window of process ${appPid} (windows: ${ids.join(', ') || 'none'})`)
   execFileSync(resolve(fileURLToPath(new URL('.', import.meta.url)), 'close-window.py'), [window])
 }
+
+/**
+ * A finished search of the example, through the screens, for a test that needs a result: a fresh New
+ * search form, "Try the example", Start, and the results open. Returns the search's id.
+ */
+export async function runExample(options: { peptdeep?: boolean } = {}): Promise<string> {
+  await freshForm()
+  await $('button=Try the example').click()
+  await expect($('[data-testid="fasta-proteins"]')).toHaveText('49 proteins')
+  if (options.peptdeep) {
+    await $('#peptdeep').click()
+    await expect($('#peptdeep')).toHaveAttribute('aria-checked', 'true')
+  }
+  await $('button*=Start search').click()
+  const id = await waitForResults()
+  await $('[data-testid="psm-count"]').waitForDisplayed({ timeout: 30000 })
+  return id
+}
+
+/** Opens the PSM view of the first PSM in the PSMs tab of the results. */
+export async function openFirstPsm() {
+  await jsClick(await $('[role="tablist"]').$('button*=PSMs'))
+  const grid = $('[role="grid"][aria-label="PSMs"]')
+  await grid.waitForDisplayed({ timeout: 10000 })
+  await browser.waitUntil(async () => (await grid.$$('tbody tr[aria-rowindex]')).length > 0)
+  await jsClick((await grid.$$('tbody tr[aria-rowindex]'))[0])
+  await $('[data-testid="psm-view"]').waitForDisplayed({ timeout: 10000 })
+}
+
+/** What `closeWindowLikeAUser` needs and the host lacks (xwininfo, xprop, python3 with libX11), or null. */
+export function windowCloseToolsMissing(): string | null {
+  const probes: [string, string[]][] = [
+    ['xwininfo', ['-version']],
+    ['xprop', ['-version']],
+    ['python3', ['-c', 'import ctypes.util, sys; sys.exit(0 if ctypes.util.find_library("X11") else 1)']],
+  ]
+  const missing = probes.filter(([tool, args]) => {
+    try {
+      execFileSync(tool, args, { stdio: 'ignore' })
+      return false
+    } catch {
+      return true
+    }
+  })
+  return missing.length === 0 ? null : `needs ${missing.map(([t]) => (t === 'python3' ? 'python3 with libX11' : t)).join(', ')} on the host`
+}
