@@ -43,23 +43,7 @@ done
 forbidden=()
 [ -d "$SYSROOT" ] && forbidden+=("$SYSROOT" "$(dirname "$SYSROOT")/webkit2gtk-4.1")
 
-# --- the host's GLES library ------------------------------------------------------------------------
-# WebKit's libepoxy (in the AppImage) dlopens libGLESv2.so.2. No AppImage bundles it: it is the GL driver
-# stack's, like libEGL and libGL on linuxdeploy's exclude list, and every Ubuntu desktop has it (package
-# libgles2; WebKitGTK and mutter depend on it). A host without it (ibminode06 is a server) gets the
-# sysroot's copy of that one library, in a folder of its own that appimage-app.sh appends to the library
-# path; the test reports it.
-work=$(mktemp -d)
-if ! /sbin/ldconfig -p | grep -q 'libGLESv2\.so\.2 '; then
-  gles=$SYSROOT/usr/lib/x86_64-linux-gnu/libGLESv2.so.2
-  [ -f "$gles" ] || die "the host has no libGLESv2.so.2 (install libgles2)"
-  mkdir "$work/gles"
-  cp -L "$gles" "$work/gles/"
-  export SMOKE_HOST_GLES=$work/gles
-  echo "the host has no libGLESv2.so.2 (libgles2): the test supplies the sysroot's copy from $SMOKE_HOST_GLES"
-fi
-
-# --- hide the OpenMS build's data -------------------------------------------------------------------
+# --- the paths hidden for the test and the test's own temporary folder, restored and removed on exit ---
 hidden=()
 restore() {
   local path
@@ -71,7 +55,25 @@ restore() {
     fi
   done
 }
+work=$(mktemp -d)
 trap 'restore; rm -rf "$work"' EXIT
+
+# --- the host's GLES library ------------------------------------------------------------------------
+# WebKit's libepoxy (in the AppImage) dlopens libGLESv2.so.2. No AppImage bundles it: it is the GL driver
+# stack's, like libEGL and libGL on linuxdeploy's exclude list, and every Ubuntu desktop has it (package
+# libgles2; WebKitGTK and mutter depend on it). A host without it (ibminode06 is a server) gets the
+# sysroot's copy of that one library, in a folder of its own that appimage-app.sh appends to the library
+# path; the test reports it.
+if ! /sbin/ldconfig -p | grep -q 'libGLESv2\.so\.2 '; then
+  gles=$SYSROOT/usr/lib/x86_64-linux-gnu/libGLESv2.so.2
+  [ -f "$gles" ] || die "the host has no libGLESv2.so.2 (install libgles2)"
+  mkdir "$work/gles"
+  cp -L "$gles" "$work/gles/"
+  export SMOKE_HOST_GLES=$work/gles
+  echo "the host has no libGLESv2.so.2 (libgles2): the test supplies the sysroot's copy from $SMOKE_HOST_GLES"
+fi
+
+# --- hide the OpenMS build's data -------------------------------------------------------------------
 if [ -n "$OPENMS_BUILD" ]; then
   cache=$OPENMS_BUILD/CMakeCache.txt
   header=$OPENMS_BUILD/src/openms/include/OpenMS/openms_data_path.h

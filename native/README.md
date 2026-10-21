@@ -235,8 +235,9 @@ the script supplies the sysroot's `libGLESv2.so.2`, alone in a folder of its own
 
 `.github/workflows/desktop.yml` (branch `prose-desktop` of timosachsenberg/prose-web) runs on `ubuntu-22.04`:
 it checks out OpenMS at `OPENMS_COMMIT`, builds libOpenMS and ProSE with GCC 13 (toolchain PPA) through
-`build-openms.sh`, bundles ProSE, runs svelte-check, vitest and `cargo test` (with the bundled ProSE, so the
+`build-openms.sh`, with GNU as 2.42 built from source for it (ONNX Runtime's AVX-NE-CONVERT code needs as >= 2.40,
+Ubuntu 22.04 has 2.38; GCC gets it through `COMPILER_PATH`), bundles ProSE, runs svelte-check, vitest and `cargo test` (with the bundled ProSE, so the
 `real_prose` tests run too), builds the packages with `package-linux.sh`, runs the smoke test and uploads the
 AppImage and the `.deb`. The bundled ProSE is cached (key: the pin, the triplet and the two scripts), so OpenMS
-is only built when one of them changes; vcpkg's binary cache is cached by the pin and the triplet (and restored
-from an earlier pin's when the pin moves). A tag `desktop-native-v*` adds a draft release of the two packages.
+is only built when one of them changes; vcpkg's binary cache is cached by the pin and the triplet, plus the hash of
+its content (so the packages built before a failure are kept; restored from an earlier pin's when the pin moves). A tag `desktop-native-v*` adds a draft release of the two packages.

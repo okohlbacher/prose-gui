@@ -4,8 +4,9 @@
 #
 # Caches (actions/cache): the bundled ProSE (src-tauri/resources/prose), keyed by the pin and the two scripts
 # that make it, so OpenMS is built only when one of them changes; and vcpkg's binary cache, keyed by the pin
-# and the triplet, so a rebuild of OpenMS does not rebuild its dependencies. Both are saved right after the
-# step that fills them, so a later failure (tests, packaging) does not lose hours of building.
+# and the triplet (plus the hash of its content when saved), so a rebuild of OpenMS does not rebuild its
+# dependencies. Both are saved right after the step that fills them, so a later failure (tests, packaging)
+# does not lose hours of building.
 name: desktop
 
 on:
@@ -73,7 +74,27 @@ jobs:
             autoconf autoconf-archive automake libtool ninja-build pkg-config bison flex curl zip unzip tar
           cmake --version
           gcc-13 --version
-          as --version | head -n 1
+
+      # ONNX Runtime's MLAS has AVX-NE-CONVERT code (cvtfp16Avx.S) that needs GNU as >= 2.40; Ubuntu 22.04
+      # has binutils 2.38. Only the assembler is built (2.42, as on Ubuntu 24.04) and given to GCC through
+      # COMPILER_PATH; the linker stays the system's.
+      - name: GNU as 2.42
+        if: steps.bundle.outputs.cache-hit != 'true'
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -sSfLO https://ftpmirror.gnu.org/binutils/binutils-2.42.tar.xz
+          echo "f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800  binutils-2.42.tar.xz" | sha256sum -c -
+          tar xf binutils-2.42.tar.xz
+          mkdir gas-build
+          cd gas-build
+          ../binutils-2.42/configure --disable-nls --disable-werror --disable-gprofng --disable-gold --disable-gdb --disable-sim > configure.log
+          make -j4 MAKEINFO=true all-gas > make.log
+          mkdir -p "$RUNNER_TEMP/gas"
+          cp gas/as-new "$RUNNER_TEMP/gas/as"
+          printf 'vcvtneeph2ps (%%rdi), %%ymm0\n' > avxneconvert.s
+          "$RUNNER_TEMP/gas/as" avxneconvert.s -o avxneconvert.o
+          echo 'int main(void) { return 0; }' > main.c
+          COMPILER_PATH="$RUNNER_TEMP/gas" gcc-13 -v -c main.c -o main.o 2>&1 | grep -F "$RUNNER_TEMP/gas/as"
 
       - name: Check out OpenMS at the pin
         if: steps.bundle.outputs.cache-hit != 'true'
@@ -94,8 +115,11 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: vcpkg-bincache
+          # saved below as <this key>-<hash of the content>: the newest cache of the pin, else of an earlier pin
           key: vcpkg-v1-ubuntu-22.04-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}
-          restore-keys: vcpkg-v1-ubuntu-22.04-${{ env.TRIPLET }}-
+          restore-keys: |
+            vcpkg-v1-ubuntu-22.04-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-
+            vcpkg-v1-ubuntu-22.04-${{ env.TRIPLET }}-
 
       - name: Build OpenMS (libOpenMS and ProSE)
         if: steps.bundle.outputs.cache-hit != 'true'
@@ -109,16 +133,18 @@ jobs:
           VCPKG_INSTALL_OPTIONS: --clean-after-build
           OPENMS_TARGETS: OpenMS ProSE
         run: |
+          export COMPILER_PATH=$RUNNER_TEMP/gas PATH=$RUNNER_TEMP/gas:$PATH
           native/scripts/build-openms.sh openms openms/build
           df -h /
 
-      # saved once the dependencies are complete (the configure step ran through), even if OpenMS failed
+      # saved whatever happened to OpenMS, with the hash of its content in the key: the packages vcpkg built
+      # are kept even if a later one or OpenMS failed, and an unchanged cache is not saved again
       - name: Save vcpkg's binary cache
-        if: always() && steps.bundle.outputs.cache-hit != 'true' && steps.vcpkg.outputs.cache-hit != 'true' && hashFiles('openms/build/build.ninja') != ''
+        if: always() && steps.bundle.outputs.cache-hit != 'true' && hashFiles('vcpkg-bincache/**') != ''
         uses: actions/cache/save@v6
         with:
           path: vcpkg-bincache
-          key: ${{ steps.vcpkg.outputs.cache-primary-key }}
+          key: ${{ steps.vcpkg.outputs.cache-primary-key }}-${{ hashFiles('vcpkg-bincache/**') }}
 
       - name: Bundle ProSE
         if: steps.bundle.outputs.cache-hit != 'true'
@@ -184,9 +210,11 @@ jobs:
             echo '| file | size |'
             echo '| --- | --- |'
             for f in src-tauri/target/release/bundle/appimage/*.AppImage src-tauri/target/release/bundle/deb/*.deb; do
-              [ -f "$f" ] && echo "| $(basename "$f") | $(du -h "$f" | cut -f1) |"
+              if [ -f "$f" ]; then echo "| $(basename "$f") | $(du -h "$f" | cut -f1) |"; fi
             done
-            [ -d src-tauri/resources/prose ] && echo "| (bundled ProSE, unpacked) | $(du -sh src-tauri/resources/prose | cut -f1) |"
+            if [ -f src-tauri/resources/prose/build.json ]; then
+              echo "| (bundled ProSE, unpacked) | $(du -sh src-tauri/resources/prose | cut -f1) |"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
