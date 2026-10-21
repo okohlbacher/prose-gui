@@ -156,10 +156,43 @@ fn the_input_links_and_other_symlinks_cannot_lead_out_of_the_folder() {
         read_search_file(&searches, "1-0", "again.json").unwrap(),
         b"[]"
     );
-    // the folder itself a link to elsewhere: its files are still the search's
+}
+
+/// One rule for a search folder that is a link, in the reader and in History: refused (a link in the
+/// searches folder could lead anywhere).
+#[cfg(unix)]
+#[test]
+fn a_search_folder_that_is_a_link_is_refused_by_the_reader_and_by_history() {
+    use prose_desktop_lib::history;
+    let (tmp, searches) = search_with("/nowhere/db.fasta");
+    let folder = searches.join("1-0");
+    fs::write(
+        folder.join("search.json"),
+        r#"{"schema":1,"id":"1-0","name":"x"}"#,
+    )
+    .unwrap();
     let elsewhere = tmp.path().join("elsewhere");
     fs::rename(&folder, &elsewhere).unwrap();
     link(&elsewhere, &folder);
+    for name in ["inputs.json", "search.json", "qpx/1__a.psm.parquet"] {
+        let result = read_search_file(&searches, "1-0", name);
+        assert!(refused(result.clone()), "{name}: {result:?}");
+        assert!(result.unwrap_err().message.contains("not a folder"));
+    }
+    assert!(history::rename(&searches, "1-0", "y").is_err());
+    assert!(history::folder_files(&searches, "1-0").is_err());
+    assert!(
+        history::save_record(&searches, "1-0", r#"{"schema":1,"id":"1-0","name":"x"}"#).is_err()
+    );
+    assert!(history::save_proteins(&searches, "1-0", ">A\nB\n").is_err());
+    assert!(history::delete(&searches, "1-0").is_err());
+    // the list leaves it out, and nothing behind the link was touched
+    assert!(history::list(&searches).is_empty());
+    assert!(elsewhere.join("inputs.json").exists());
+    assert!(!elsewhere.join("proteins.fasta").exists());
+    // the same folder, not a link, is served
+    fs::remove_file(&folder).unwrap();
+    fs::rename(&elsewhere, &folder).unwrap();
     assert_eq!(
         read_search_file(&searches, "1-0", "inputs.json").unwrap(),
         b"[]"

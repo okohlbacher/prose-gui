@@ -71,7 +71,8 @@ pub fn valid_relative(name: &str) -> bool {
             .all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
-/// The search's folder, canonical.
+/// The search's folder, canonical. The folder itself has to be a folder, not a link to one (as History
+/// has it: `history::existing_folder`): a link in the searches folder could lead anywhere.
 fn search_folder(searches_dir: &Path, search_id: &str) -> Result<PathBuf, ReadError> {
     if !valid_id(search_id) {
         return Err(ReadError::refused(format!(
@@ -79,6 +80,11 @@ fn search_folder(searches_dir: &Path, search_id: &str) -> Result<PathBuf, ReadEr
         )));
     }
     let folder = searches_dir.join(search_id);
+    if fs::symlink_metadata(&folder).is_ok_and(|m| !m.is_dir()) {
+        return Err(ReadError::refused(format!(
+            "The search {search_id} is not a folder."
+        )));
+    }
     let canonical = fs::canonicalize(&folder).map_err(|e| {
         if e.kind() == io::ErrorKind::NotFound {
             ReadError {
