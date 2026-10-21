@@ -344,9 +344,49 @@ def pe_bundle(args):
             patch_install_path(openms, args.install_path, "<no-install-path>")
         else:
             print(f"  the install path {args.install_path} is not in OpenMS.dll (not probed on Windows)")
+    utf8_code_page(out / exe.name)
     print(f"  {len(bundled) - 1} DLLs: {', '.join(sorted(f.name for k, f in bundled.items() if k != exe.name.lower()))}")
     print(f"  OpenMP runtime: {omp[0]}")
     pe_check(Path(args.out), [])
+
+
+UTF8_MANIFEST = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+    </windowsSettings>
+  </application>
+</assembly>
+"""
+
+
+def utf8_code_page(exe):
+    """Merges activeCodePage UTF-8 into the exe's manifest (mt.exe, Windows SDK): OpenMS takes its narrow
+    strings, paths among them, for UTF-8, but a Windows process gets its arguments and narrow file APIs
+    in the ANSI code page, so a path such as C:\\Users\\Jörg\\... would reach it as other bytes. With
+    the UTF-8 code page (Windows 10 1903 and later) both agree."""
+    exe = Path(exe)
+    manifest = exe.with_name("utf8.manifest")
+    manifest.write_text(UTF8_MANIFEST, encoding="utf-8")
+    base = ["mt.exe", "-nologo", "-manifest", str(manifest)]
+    try:
+        try:
+            run(*base, f"-inputresource:{exe};#1", f"-outputresource:{exe};#1")
+        except subprocess.CalledProcessError:
+            # (no manifest in the exe yet)
+            run(*base, f"-outputresource:{exe};#1")
+        extracted = exe.with_name("extracted.manifest")
+        run("mt.exe", "-nologo", f"-inputresource:{exe};#1", f"-out:{extracted}")
+        text = extracted.read_text(encoding="utf-8", errors="replace")
+        extracted.unlink()
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        die(f"mt.exe could not set the UTF-8 code page of {exe.name}: {getattr(e, 'stderr', e)}")
+    finally:
+        manifest.unlink()
+    if "activeCodePage" not in text or "UTF-8" not in text:
+        die(f"{exe.name}'s manifest has no UTF-8 activeCodePage:\n{text}")
+    print(f"  {exe.name}: activeCodePage UTF-8 in its manifest")
 
 
 def pe_check(out, extra_system):

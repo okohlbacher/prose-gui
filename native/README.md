@@ -241,7 +241,10 @@ import and delay-import tables of each PE file itself, takes the DLLs from the b
 for the runtime, from the redistributable folders of the Visual Studio that built it (`VCToolsRedistDir`:
 Microsoft's app-local deployment), and leaves out API sets and the DLLs of Windows. Everything goes beside
 `ProSE.exe`: Windows has no RPATH, and the folder of the exe is searched first. `pe-verify` checks that every
-import is bundled or Windows' own.
+import is bundled or Windows' own. `ProSE.exe`'s manifest gets `activeCodePage` UTF-8 (`mt.exe`): OpenMS takes
+narrow strings, paths among them, for UTF-8, but a Windows process otherwise gets its arguments and narrow file
+APIs in the ANSI code page, and a search in a folder named `Größe ü` (or under a user `Jörg`) read its inputs
+wrongly and ended in Percolator's "median decoy score <= score at 1% FDR".
 
 **The install prefix** is overwritten in the bundled `libOpenMS.dylib` as on Linux, with `/dev/null///...`. On
 Windows OpenMS does not probe its install prefix at all (`File.cpp`: CMake's default prefix is the wrong
