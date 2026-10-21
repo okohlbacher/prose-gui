@@ -304,8 +304,8 @@ macOS, and on Windows it needs msedgedriver of the runner's WebView2 version.
   (`tests/watchdog.rs`, and a watched search in `tests/shim.rs`).
 - **Folders**: `finish_partial` retries the rename with back-off (another instance's sweep may hold the
   deleted `.lock` open), and partial folders are removed lock file first, also with back-off (`history.rs`).
-- **File names** the app suggests never are device names (`CON`, `NUL.txt`, ...: a `_` in front) and have at
-  most 100 characters (`fileSafe`).
+- **File names** the app suggests never are device names (`CON`, `NUL.txt`, ...: a `_` in front), and their
+  name part has at most 200 bytes in UTF-8 (`fileSafe`), so that a suffix still fits ext4's and NTFS's 255.
 - The shim's tests run on Windows with `examples/fake_prose.rs`, the shell fake as a program
   (`PROSE_FAKE_EXE=1` uses it on Linux and macOS too).
 
