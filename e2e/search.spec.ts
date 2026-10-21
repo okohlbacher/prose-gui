@@ -1,12 +1,11 @@
 // The example searched through the app's screens: New search with the example, Start, Results.
-// Gated: runs only with PROSE_BIN set (the app inherits it). The search's folder (in the app's data
+// Gated: runs only with PROSE_BIN set (the app inherits it). The search's folder (in the spec's own data
 // folder) is removed at the end.
-import { existsSync, rmSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { clearSearches, jsClick, searchesDir } from './lib.ts'
 
 const enabled = Boolean(process.env.PROSE_BIN)
-const searches = join(process.env.XDG_DATA_HOME ?? join(homedir(), '.local/share'), 'org.openms.prose.desktop', 'searches')
 
 describe('the example search', () => {
   let searchId: string | null = null
@@ -18,9 +17,7 @@ describe('the example search', () => {
     }
   })
 
-  after(() => {
-    if (searchId) rmSync(join(searches, searchId), { recursive: true, force: true })
-  })
+  after(() => clearSearches())
 
   it('the CSP lets the results reader start its WebAssembly zstd decoder (from a data: URL)', async () => {
     await $('header').waitForDisplayed({ timeout: 20000 })
@@ -102,7 +99,22 @@ describe('the example search', () => {
     expect(await $('[data-testid="result-chip"]').getProperty('textContent')).toContain('DatabaseSuitability · 2 files')
   })
 
-  it('the search is in History, can be renamed, and is still there after the app restarts', async () => {
+  it('the example without PeptDeep still shows the prediction', async () => {
+    // PeptDeep was off for the search (no rescoring features), yet ProSE writes the prediction of every PSM
+    await jsClick(await $('[role="tablist"]').$('button*=PSMs'))
+    const grid = $('[role="grid"][aria-label="PSMs"]')
+    await grid.waitForDisplayed({ timeout: 10000 })
+    await browser.waitUntil(async () => (await grid.$$('tbody tr[aria-rowindex]')).length > 0)
+    await jsClick((await grid.$$('tbody tr[aria-rowindex]'))[0])
+    await $('[data-testid="psm-view"]').waitForDisplayed({ timeout: 10000 })
+    await expect($('[data-testid="bottom-label"]')).toHaveText(expect.stringContaining('PeptDeep'))
+    expect((await $$('[data-testid="bottom-peaks"]')).length).toBeGreaterThan(0)
+    expect(await $$('[data-testid="bottom-status"]')).toHaveLength(0)
+    expect(await $('input[type="radio"][value="peptdeep"]').isSelected()).toBe(true)
+    expect(await $('input[type="radio"][value="peptdeep"]').isEnabled()).toBe(true)
+  })
+
+  it('History survives a restart: the search is listed, can be renamed, and opens again with its results', async () => {
     expect(searchId).not.toBeNull()
     const row = () => $(`[data-testid="history-row"][data-id="${searchId}"]`)
     await $('nav[aria-label="Main"]').$('a=History').click()
@@ -110,8 +122,8 @@ describe('the example search', () => {
     // (textContent: WebKit's visible text leaves out the cells that the table cuts to its width)
     expect(await row().getProperty('textContent')).toContain('DatabaseSuitability_1.mzML, DatabaseSuitability_2.mzML')
     // the folder has its record: the shim's outputs, proteins.fasta and search.json
-    expect(existsSync(join(searches, searchId!, 'search.json'))).toBe(true)
-    expect(existsSync(join(searches, searchId!, 'proteins.fasta'))).toBe(true)
+    expect(existsSync(join(searchesDir(), searchId!, 'search.json'))).toBe(true)
+    expect(existsSync(join(searchesDir(), searchId!, 'proteins.fasta'))).toBe(true)
 
     await row().$('button=Rename').click()
     await row().$('input').waitForDisplayed()

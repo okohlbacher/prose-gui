@@ -3,13 +3,12 @@
 //   PROSE_BIN=… e2e/run.sh e2e/screens.shot.ts
 // Runs the example as the web app's screenshots did (PeptDeep on), then the views; removes its search
 // folder at the end.
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
+import { clearSearches, jsClick } from './lib.ts'
 
 const dir = resolve(fileURLToPath(new URL('../docs/screens', import.meta.url)))
-const searches = join(process.env.XDG_DATA_HOME ?? join(homedir(), '.local/share'), 'org.openms.prose.desktop', 'searches')
 
 async function shot(name: string) {
   // the pointer away from buttons and rows (no hover), and a moment for the paint
@@ -18,16 +17,10 @@ async function shot(name: string) {
   writeFileSync(resolve(dir, `${name}.png`), Buffer.from(await browser.takeScreenshot(), 'base64'))
 }
 
-/** A click in the page (WebKitWebDriver does not take table rows as interactable). */
-const jsClick = (el: WebdriverIO.Element) => browser.execute((e: HTMLElement) => e.click(), el as unknown as HTMLElement)
-
 const text = async (selector: string) => String(await $(selector).getProperty('textContent'))
 
 describe('screens', () => {
-  let searchId: string | null = null
-  after(() => {
-    if (searchId) rmSync(join(searches, searchId), { recursive: true, force: true })
-  })
+  after(() => clearSearches())
 
   it('takes the screenshots', async () => {
     await $('header').waitForDisplayed({ timeout: 20000 })
@@ -49,7 +42,6 @@ describe('screens', () => {
     await shot('03-search-running')
 
     await browser.waitUntil(async () => /#\/results\/[^/]+$/.test(await browser.getUrl()), { timeout: 180000, interval: 500 })
-    searchId = /#\/results\/([^/]+)$/.exec(await browser.getUrl())![1]
     await $('[data-testid="psm-count"]').waitForDisplayed({ timeout: 20000 })
     await shot('04-results-proteins')
 

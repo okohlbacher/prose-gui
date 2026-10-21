@@ -21,3 +21,10 @@ native/scripts/in-env.sh e2e/run.sh e2e/screens.shot.ts # screenshots into docs/
 
 `e2e/run.sh` builds the debug binary first (`E2E_SKIP_BUILD=1` skips that) and enters `in-env.sh` itself if it
 is not in it.
+
+The specs that run searches need the tool: `PROSE_BIN=/path/to/ProSE` (without it they skip). Each spec file
+gets an app of its own with its own data folder (`XDG_DATA_HOME`, made per run, removed at its end), and
+`tauri-driver` runs for the whole run in a process group of its own; port 4444 must be free (a leftover
+`tauri-driver` stops the run with a message). Debug builds read `PROSE_TEST_DIALOG_PATH` in place of the
+system's save and open dialogs (`e2e/app.sh` sets it), since WebDriver cannot reach a dialog. The large search
+(`e2e/big.spec.ts`) runs only with `PROSE_BIG=1`; it logs its time and ProSE's peak memory.
