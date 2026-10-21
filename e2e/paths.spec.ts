@@ -2,12 +2,12 @@
 // of the same name from different folders, and an mzML.gz. The example's run and FASTA are copied into
 // folders made for the spec; the app reads them where they are.
 // Gated: runs only with PROSE_BIN set (the app inherits it).
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
-import { appReady, clearSearches, dropFiles, freshForm, goTo, searchFolders, textOf, waitForResults } from './lib.ts'
+import { appReady, clearSearches, dataHome, dropFiles, freshForm, goTo, searchFolders, textOf, waitForResults } from './lib.ts'
 
 const enabled = Boolean(process.env.PROSE_BIN)
 const example = resolve(fileURLToPath(new URL('../src-tauri/resources/example', import.meta.url)))
@@ -79,6 +79,26 @@ describe('inputs by path', () => {
     writeFileSync(gz, gzipSync(readFileSync(MZML)))
     const count = await search([gz, umlautFasta], 'Probe Größe ä ö ü.mzML.gz')
     expect(count).toBe(plainCount)
+  })
+
+  it('names whose lower case is longer (İ, Ⱥ) keep their PSMs, and one file exports its idXML', async () => {
+    // the stem of such a name was cut at the lower-cased copy's offsets, and the reader found no PSMs
+    const plainCount = await search([umlautRun, umlautFasta], 'Probe Größe ä ö ü.mzML')
+    const odd = join(work, 'İstanbul Ⱥ run.mzML.gz')
+    writeFileSync(odd, gzipSync(readFileSync(MZML)))
+    const count = await search([odd, umlautFasta], 'İstanbul Ⱥ run.mzML.gz')
+    expect(count).toBe(plainCount)
+    expect(count).not.toMatch(/^\s*0\b/)
+    // Export > idXML: the file's own idXML (ProSE writes the merged one only for several files)
+    const chosen = join(dataHome(), 'chosen.prose')
+    rmSync(chosen, { force: true })
+    await $('header').$('button*=Export').click()
+    await $('[role="menuitem"]*=idXML').click()
+    await browser.waitUntil(() => existsSync(chosen) && readFileSync(chosen).length > 0, { timeoutMsg: 'no idXML was written' })
+    const idxml = readFileSync(chosen, 'utf8')
+    expect(idxml).toContain('<IdXML')
+    expect(idxml).toContain('<PeptideHit')
+    rmSync(chosen, { force: true })
   })
 
   it('two inputs of the same name are searched and kept apart', async () => {

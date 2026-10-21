@@ -148,6 +148,11 @@ pub const PARAMETERS: &[(&str, Kind)] = &[
 /// The name of the database in the search folder when contaminants are appended.
 pub const DATABASE_FILE: &str = "database.fasta";
 
+/// The idXML of a search of several inputs (`-out_merged`), and of one input (`-out_idxml`), in the search
+/// folder (the Export menu's idXML: `src/lib/results/exports.ts`).
+pub const MERGED_IDXML: &str = "merged.idXML";
+pub const SINGLE_IDXML: &str = "search.idXML";
+
 /// The FDR the shim uses when the request has no `FDR:PSM`: ProSE's default (0) filters nothing and
 /// leaves a search without q-values, which the results need.
 pub const DEFAULT_PSM_FDR: f64 = 0.01;
@@ -513,9 +518,13 @@ pub fn build_args_with(
         args.push(out_dir.join(name).into_os_string());
     }
     args.push("-keep_decoys".into());
+    // the idXML of the Export menu: the merged one of several inputs, the one input's own
     if req.files.len() > 1 {
         args.push("-out_merged".into());
-        args.push(out_dir.join("merged.idXML").into_os_string());
+        args.push(out_dir.join(MERGED_IDXML).into_os_string());
+    } else {
+        args.push("-out_idxml".into());
+        args.push(out_dir.join(SINGLE_IDXML).into_os_string());
     }
     if is_open_search(&params) {
         args.push("-out_mod_analysis_dir".into());

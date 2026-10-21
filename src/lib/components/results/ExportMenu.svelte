@@ -3,7 +3,7 @@
   import { buttonVariants } from '$lib/components/ui/button'
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu'
   import { saveProjectFile } from '$lib/history/history.svelte'
-  import { exportCsv, exportDesign, exportIdXML, idXMLAvailable } from '$lib/results/exports'
+  import { exportCsv, exportDesign, exportIdXML, idXMLFile } from '$lib/results/exports'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { cn } from '$lib/utils'
   import ChevronDown from '@lucide/svelte/icons/chevron-down'
@@ -14,7 +14,6 @@
   const explained = 'data-disabled:pointer-events-auto data-disabled:cursor-not-allowed'
 
   let open = $state(false)
-  let canIdXML = $state(false)
   let canSpectrum = $state(false)
   let busy = $state(false)
   let projecting = $state(false)
@@ -23,7 +22,6 @@
   function openChange(next: boolean) {
     open = next
     if (next) {
-      canIdXML = idXMLAvailable(view.result)
       canSpectrum = view.psm !== null && view.spectrumExporter !== null
     }
   }
@@ -83,11 +81,6 @@
       onSelect={() => guard(() => view.spectrumExporter?.())}>Spectrum (SVG)</DropdownMenu.Item>
     <DropdownMenu.Item disabled={view.exporting} onSelect={project}>Project (.prose)</DropdownMenu.Item>
     <DropdownMenu.Separator />
-    {#if canIdXML}
-      <DropdownMenu.Item onSelect={idXML}>idXML (merged)</DropdownMenu.Item>
-    {:else}
-      <DropdownMenu.Item disabled title="ProSE writes a merged idXML for searches of several files" class={explained}
-        >idXML (merged)</DropdownMenu.Item>
-    {/if}
+    <DropdownMenu.Item onSelect={idXML}>{idXMLFile(view.result).label}</DropdownMenu.Item>
   </DropdownMenu.Content>
 </DropdownMenu.Root>

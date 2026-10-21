@@ -1,4 +1,4 @@
-// The exports of the Export menu: the current view as CSV, the design, the merged idXML; each saved
+// The exports of the Export menu: the current view as CSV, the design, the search's idXML; each saved
 // where the user chooses (the system's save dialog).
 
 import { writeDesignTsv } from '../design/design-tsv'
@@ -38,12 +38,16 @@ export async function exportDesign(result: OpenResult): Promise<void> {
   await download(`${exportName(result)}_design.tsv`, writeDesignTsv(result.design), 'text/tab-separated-values')
 }
 
-/** ProSE writes the merged idXML (`-out_merged`) for searches of several files. */
-export function idXMLAvailable(result: OpenResult): boolean {
-  return result.design.rows.length > 1
+/**
+ * The idXML of a search in its folder (src-tauri/src/args.rs): the merged one of several files
+ * (`-out_merged`), the file's own of one (`-out_idxml`; a search of one file saved by an earlier build has
+ * none, and the export says so).
+ */
+export function idXMLFile(result: OpenResult): { name: string; label: string } {
+  return result.design.rows.length > 1 ? { name: 'merged.idXML', label: 'idXML (merged)' } : { name: 'search.idXML', label: 'idXML' }
 }
 
-/** The merged idXML of the search folder, saved as `<name>.idXML`. */
+/** The search's idXML, saved as `<name>.idXML`. */
 export async function exportIdXML(result: OpenResult): Promise<void> {
-  await saveSearchFile(result.id, 'merged.idXML', `${exportName(result)}.idXML`)
+  await saveSearchFile(result.id, idXMLFile(result).name, `${exportName(result)}.idXML`)
 }

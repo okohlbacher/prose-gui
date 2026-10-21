@@ -22,6 +22,7 @@ ProSE -in <files…> -database <fasta (+ cRAP)> -threads <n> -Search:… (form)
       -out_qpx <dir>/qpx -out_psm_spectra <dir>/spectra -out_parquet <dir>/oms -summary_out <dir>/summary.yaml
       -keep_decoys
       [-out_merged <dir>/merged.idXML]                  (two or more inputs)
+      [-out_idxml <dir>/search.idXML]                   (one input: the Export menu's idXML)
       [-out_mod_analysis_dir <dir>/mods]                 (open search)
 ```
 
