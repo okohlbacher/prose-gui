@@ -561,6 +561,12 @@ fn on_windows_inputs_go_by_their_own_paths_unless_their_names_clash() {
             .collect::<Vec<_>>(),
         ["1__a.mzML", "2__A.MZML", "3__1__a.mzML"]
     );
+    // an input of stem `quantms`, which ProSE refuses (its merged QPX views are quantms.*): as a link
+    let quantms = dir.write("five/QuantMS.mzML", "<mzML/>");
+    let (placements, ins, records) = plan(&[&b, &quantms]);
+    assert_eq!(placements, [OwnPath, HardLink]);
+    assert_eq!(ins[1], out.join("2__QuantMS.mzML").into_os_string());
+    assert_eq!(records[1].1, "2__QuantMS");
     // elsewhere every input is a symbolic link
     let req = request(&[&a, &b], &fasta, false, json!({}));
     assert_eq!(

@@ -569,6 +569,12 @@
     {:else}
       <div class="my-2 rounded-md border border-dashed px-4 py-8 text-center" data-testid="spectrum-missing">
         <p class="font-medium">Spectrum not stored</p>
+        {#if ps.nativeId[row] === ''}
+          <!-- (ProSE leaves the native ID out for a second spectrum of an ID: the run's IDs are not unique) -->
+          <p class="mx-auto mt-1 max-w-[44rem] text-xs text-muted-foreground" data-testid="spectrum-shared-id">
+            Another spectrum of this run has the same native ID, so ProSE could not store this one.
+          </p>
+        {/if}
         <p class="mx-auto mt-1 max-w-[44rem] text-xs text-muted-foreground">
           The result has no peaks for this PSM, so its spectrum cannot be shown, annotated or exported. A search saves the spectra of
           its PSMs within its PSM FDR. Results opened without them, such as the debug results, have none. The fragment ladder

@@ -248,6 +248,9 @@ pub enum Placement {
     OwnPath,
 }
 
+/// The stem ProSE refuses for an input with `-out_qpx` (the merged views are `quantms.*.parquet`).
+const RESERVED_STEM: &str = "quantms";
+
 /// The stem ProSE gives an input of this name, compared as NTFS compares names.
 fn stem_key(name: &str) -> String {
     input_stem(name).to_lowercase()
@@ -271,7 +274,9 @@ pub fn input_placements(req: &SearchRequest, links: InputLinks) -> Vec<Placement
             let placements: Vec<Placement> = keys
                 .iter()
                 .map(|k| {
-                    if keys.iter().filter(|other| *other == k).count() > 1 {
+                    // ProSE refuses an input of stem `quantms` (its QPX outputs would clash with the merged
+                    // `quantms.*` views): such an input goes as a link `<n>__<name>` too
+                    if keys.iter().filter(|other| *other == k).count() > 1 || k == RESERVED_STEM {
                         Placement::HardLink
                     } else {
                         Placement::OwnPath
