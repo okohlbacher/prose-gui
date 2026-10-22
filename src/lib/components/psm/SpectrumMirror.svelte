@@ -28,7 +28,7 @@
   // It is part of the SVG, so "Export spectrum (SVG)" has it too.
   import { signedNumber } from '$lib/format/number'
   import type { PeakMatch } from '$lib/results/types'
-  import { errorStats, fragmentError, ionColor, ionLabel, COLORS, type PeakGroup, type Tolerance } from '$lib/psm/psm'
+  import { errorStats, errorTickDigits, fragmentError, ionColor, ionLabel, COLORS, type PeakGroup, type Tolerance } from '$lib/psm/psm'
   import { clipMarks, mzDomain, nearest, niceTicks, placeLabels, px, scale, stickGroups, stickPath, stripFits, textWidth } from '$lib/psm/plot'
 
   let {
@@ -68,11 +68,6 @@
   const plotTop = 24
   const plotBottom = plotHeight - 42
   const mid = (plotTop + plotBottom) / 2
-  /** The error strip: its header line, then its plot (errorTop to errorBottom). */
-  const errorTop = plotBottom + 30
-  const errorBottom = errorTop + 84
-  /** The m/z labels sit below the lowest part: the lower half, or the error strip. */
-  const axisBase = $derived(errors ? errorBottom : plotBottom)
   const font = "'Inter Variable', ui-sans-serif, system-ui, sans-serif"
   const ink = '#3f3f46'
   const muted = '#71717a'
@@ -80,7 +75,17 @@
   let width = $state(800)
   /** The similarity moves to a line of its own when the label and it would meet (a narrow view). */
   const stacked = $derived(!stripFits(bottom.label, similarity, width - M.left - M.right))
-  const H = $derived(axisBase + 42 + (stacked ? 15 : 0))
+  /**
+   * The lower half's label (and the similarity, on its own line when narrow): with the error strip right under the
+   * lower half, else under the m/z labels.
+   */
+  const bottomLabelY = $derived(errors ? plotBottom + 16 : plotBottom + 36)
+  /** The error strip: its header line, then its plot (errorTop to errorBottom). */
+  const errorTop = $derived(bottomLabelY + (stacked ? 15 : 0) + 30)
+  const errorBottom = $derived(errorTop + 84)
+  /** The m/z labels sit below the lowest part: the lower half, or the error strip. */
+  const axisBase = $derived(errors ? errorBottom : plotBottom)
+  const H = $derived(errors ? axisBase + 24 : axisBase + 42 + (stacked ? 15 : 0))
   let svg = $state<SVGSVGElement | null>(null)
 
   /** The SVG (for "Export spectrum (SVG)"). */
@@ -167,7 +172,9 @@
   const stats = $derived(errors ? errorStats(errors.matches, errorOf) : { mean: NaN, sd: NaN, n: 0 })
   /** An error with its unit: ppm with one decimal, Da with three. */
   const errorText = (v: number) => `${signedNumber(v, unit === 'Da' ? 3 : 1)} ${unit}`
-  const errorTick = (v: number) => signedNumber(v, unit === 'Da' ? 2 : 1, { plus: false, trim: true })
+  /** Enough decimals that the ticks ±tolerance read as the tolerance (0.005 Da: three). */
+  const tickDigits = $derived(errors ? errorTickDigits(errors.tolerance) : 1)
+  const errorTick = (v: number) => signedNumber(v, tickDigits, { plus: false, trim: true })
   const errorHeader = $derived(
     !errors
       ? ''
@@ -229,7 +236,8 @@
       const g = groupOf.get(i)
       const share = (intensity[i] / ref) * 100
       const lines = [`m/z ${mz[i].toFixed(4)} · ${share.toFixed(1)} %${share > 100 ? ' (clipped)' : ''}`]
-      if (g) for (const m of g.matches) lines.push(`${ionLabel(m.ion)} · ${signedNumber(m.errorPpm, 2)} ppm`)
+      // (the error in the search's unit, as the strip below gives it)
+      if (g) for (const m of g.matches) lines.push(`${ionLabel(m.ion)} · ${errors ? errorText(errorOf(m)) : `${signedNumber(m.errorPpm, 2)} ppm`}`)
       else lines.push('unmatched')
       tip = { x: x(mz[i]), y: py, lines }
     } else if (bottom.kind === 'ions' && bottomIons.length > 0) {
@@ -265,9 +273,10 @@
     <title id="{uid}-title">{title}</title>
     <desc id="{uid}-desc">{description}{errorDescription}</desc>
 
-    <!-- grid: hairlines at the m/z ticks, through the error strip -->
+    <!-- grid: hairlines at the m/z ticks, in the spectrum and in the error strip -->
     {#each xTicks as t (t)}
-      <line x1={px(x(t))} x2={px(x(t))} y1={plotTop} y2={axisBase} stroke="#f4f4f5" stroke-width="1" />
+      <line x1={px(x(t))} x2={px(x(t))} y1={plotTop} y2={plotBottom} stroke="#f4f4f5" stroke-width="1" />
+      {#if errors}<line x1={px(x(t))} x2={px(x(t))} y1={errorTop} y2={errorBottom} stroke="#f4f4f5" stroke-width="1" />{/if}
     {/each}
 
     <!-- the observed peaks: unmatched light grey and thin, matched in their series' colour -->
@@ -387,7 +396,7 @@
     {/each}
     <text
       x={M.left}
-      y={axisBase + 36}
+      y={bottomLabelY}
       font-size="11"
       fill={muted}
       data-testid="bottom-label"
@@ -395,7 +404,7 @@
     {#if similarity}
       <text
         x={stacked ? M.left : width - M.right}
-        y={H - 6}
+        y={bottomLabelY + (stacked ? 15 : 0)}
         text-anchor={stacked ? 'start' : 'end'}
         font-size="11"
         fill={muted}

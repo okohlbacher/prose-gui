@@ -5,6 +5,7 @@ import { makeTables } from '../results/synthetic'
 import {
   annotationOptions,
   errorStats,
+  errorTickDigits,
   fragmentError,
   featureValue,
   fragmentCharges,
@@ -308,6 +309,13 @@ describe('numbers', () => {
     const da = [match(0, 'b2'), match(1, 'b3'), match(2, 'y2++')]
     expect(da.map((m) => fragmentError(m, mz, 'Da'))).toEqual([0.25, 0, -0.5])
     expect(fragmentError(match(0, 'b2', { errorPpm: 7 }), mz, 'ppm')).toBe(7)
+    // the strip's ticks read as the tolerance
+    expect(errorTickDigits({ value: 20, unit: 'ppm' })).toBe(1)
+    expect(errorTickDigits({ value: 0.5, unit: 'Da' })).toBe(2)
+    expect(errorTickDigits({ value: 0.02, unit: 'Da' })).toBe(3)
+    expect(errorTickDigits({ value: 0.005, unit: 'Da' })).toBe(4)
+    expect(errorTickDigits({ value: 0.0025, unit: 'Da' })).toBe(4)
+    expect(Number((0.0025).toFixed(errorTickDigits({ value: 0.0025, unit: 'Da' })))).not.toBe(0)
     expect(errorStats(da, (m) => fragmentError(m, mz, 'Da')).mean).toBeCloseTo(-0.25 / 3, 6)
     expect(errorStats([]).mean).toBeNaN()
   })

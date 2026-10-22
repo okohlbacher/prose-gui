@@ -222,10 +222,12 @@ describe('the footer', () => {
     // own files added to the example's: the example's settings end
     await form.addFiles(['/runs/mine.mzML'])
     expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit')]).toEqual([20, 'ppm'])
-    // a tolerance the user set after loading the example stays
+    // a tolerance the user set after loading the example stays (and Start over's tooltip does not say otherwise)
     await form.loadExample()
     await settle()
+    expect(form.exampleSettingsActive).toBe(true)
     form.setParam('fragment:mass_tolerance', 0.3)
+    expect(form.exampleSettingsActive).toBe(false)
     form.removeAllFiles()
     expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit')]).toEqual([0.3, 'Da'])
     // another database ends them too

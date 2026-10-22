@@ -408,6 +408,12 @@ export function errorStats(matches: PeakMatch[], error: (m: PeakMatch) => number
   return { mean, sd, n }
 }
 
+/** Decimals of the error strip's ticks, so that ±tolerance reads as the tolerance (ppm: 1; 0.5 Da: 2; 0.005 Da: 4, trimmed). */
+export function errorTickDigits(tolerance: Tolerance): number {
+  if (tolerance.unit === 'ppm' || !(tolerance.value > 0)) return tolerance.unit === 'ppm' ? 1 : 2
+  return Math.max(2, 1 - Math.floor(Math.log10(tolerance.value)))
+}
+
 /**
  * A match's fragment mass error in the unit of the search's fragment tolerance: ppm as the annotation gives it, or
  * Da (observed minus theoretical m/z of the peak; fragments of charge 2 are m/z too, as the tolerance is applied).

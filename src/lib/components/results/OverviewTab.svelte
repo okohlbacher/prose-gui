@@ -53,13 +53,14 @@
   const foot = 'px-2.5 py-1.5 font-medium'
 </script>
 
-<!-- an engine's note in short plain words; the whole text in its tooltip and, opened, below it -->
-{#snippet engineNote(note: EngineNote)}
+<!-- an engine's note in short plain words; the whole text in its tooltip and, opened, below it; a warning says so -->
+{#snippet engineNote(note: EngineNote, warning: boolean)}
+  {#snippet label()}{#if warning}<span class="mr-1 font-medium text-amber-700" data-testid="engine-warning">Warning</span>{/if}{/snippet}
   {#if note.short === note.full}
-    <span class="block max-w-[28rem] font-normal text-muted-foreground">{note.full}</span>
+    <span class="block max-w-[28rem] font-normal text-muted-foreground">{@render label()}{note.full}</span>
   {:else}
     <details class="max-w-[28rem] font-normal text-muted-foreground" data-testid="engine-note">
-      <summary class="cursor-pointer hover:text-foreground" title={note.full}>{note.short}</summary>
+      <summary class="cursor-pointer hover:text-foreground" title={note.full}>{@render label()}{note.short}</summary>
       <p class="mt-0.5 text-xs">{note.full}</p>
     </details>
   {/if}
@@ -106,7 +107,7 @@
               <Table.Cell data-column="targets" class="{cell} text-right">{r.targets === null ? '–' : formatCount(r.targets)}</Table.Cell>
               <Table.Cell data-column="decoys" class="{cell} text-right">{r.decoys === null ? '–' : formatCount(r.decoys)}</Table.Cell>
               <Table.Cell data-column="percolator" class="{cell} text-left whitespace-normal {r.percolator.kind === 'off' ? 'text-muted-foreground' : ''}">
-                {r.percolator.label}{#each [r.percolator.detail, r.percolator.warning] as note, k (k)}{#if note}{@render engineNote(note)}{/if}{/each}
+                {r.percolator.label}{#if r.percolator.detail}{@render engineNote(r.percolator.detail, false)}{/if}{#if r.percolator.warning}{@render engineNote(r.percolator.warning, true)}{/if}
               </Table.Cell>
               {#if showNce}
                 <Table.Cell data-column="nce" class="{cell} text-right">{r.nce === null ? '–' : String(Number(r.nce.toFixed(1)))}</Table.Cell>

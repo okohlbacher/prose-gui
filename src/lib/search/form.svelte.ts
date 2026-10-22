@@ -96,9 +96,12 @@ class SearchForm {
   removed = $state<Removed | null>(null)
   /** The example's settings (EXAMPLE.parameters) are in force: set by loadExample, the example's files still there. */
   #exampleSettings = $state(false)
-  /** The example's own settings are in force (Start over's tooltip says they go back to the preset's). */
+  /**
+   * The example's own settings are in force and unchanged, so that leaving the example gives back the preset's (Start
+   * over's tooltip says so); a tolerance the user set since stays (`#leaveExample`).
+   */
   get exampleSettingsActive(): boolean {
-    return this.#exampleSettings
+    return this.#exampleSettings && Object.entries(EXAMPLE.parameters).every(([name, value]) => sameValue(this.values[name], value))
   }
 
   /** Threads of the search (Advanced); null: all cores. */
