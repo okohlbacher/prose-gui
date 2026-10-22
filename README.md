@@ -39,10 +39,10 @@ libglvnd-gles` (Fedora).
   TMT search of a 78 MB mzML against the human reference proteome (no database chunks) peaked at 7.1 GB. Larger
   searches can split the database (Settings › Advanced, `database:chunk_size`). The results are read into the
   app's page: see "Known limitations".
-- Disk: each search keeps ProSE's QPX outputs, most of it the spectra of the PSMs (the 100 most intense peaks per
-  100 m/z and every annotated peak, in each input's psm file): about 3.5 MB per thousand PSMs of an Orbitrap HCD
-  run with ~1,100 peaks per MS2 spectrum (3.2 MB the input's file, 0.3 MB the merged file of all inputs, which has no
-  spectra), under 1 MB for the example's small spectra.
+- Disk: each search keeps ProSE's QPX outputs, most of it the spectra of the PSMs (the QPX mz view of each input: the
+  100 most intense peaks per 100 m/z and every annotated peak): about 3.6 MB per thousand PSMs of an Orbitrap HCD
+  run with ~1,100 peaks per MS2 spectrum (2.8 MB the input's mz view, 0.5 MB its psm file with PeptDeep's
+  predictions, 0.3 MB the merged psm file of all inputs), under 1 MB for the example's small spectra.
 
 ## Where the data is
 
@@ -72,27 +72,28 @@ most 3 GB (larger searches are refused with a message; they stay in History).
 ## Known limitations
 
 - **Large results.** The page reads a search's PSM rows into memory (`quantms.psm.parquet` through the app's IPC,
-  decoded into the tables); the peaks and predictions of a PSM are read from its input's file when the PSM is
-  opened (one row group of 256 PSMs, the last four kept), so they no longer count. The computer's memory bounds
-  the largest result that opens. Measured with saved searches of one input made of the rows of a real Orbitrap
-  HCD search (iPRG2015, 20,716 PSMs, ~30 scores and features per PSM, the input's file with its real filtered
-  spectra) repeated (`e2e/large.spec.ts`; WebKitGTK 2.52 on Linux, a 128-core machine):
+  decoded into the tables, column by column, without an object per row); the peaks and predictions of a PSM are
+  read from its input's mz view and psm file when the PSM is opened (one row group of 256, the last four kept), so
+  they do not count. The computer's memory bounds the largest result that opens. Measured with saved searches of one
+  input made of the rows of a real Orbitrap HCD search (iPRG2015, 20,716 PSMs, ~30 scores and features per PSM,
+  modifications on most rows) repeated (`e2e/large.spec.ts`; WebKitGTK 2.52 on Linux, a 128-core machine; the files
+  hold the spectra of the original search only, which are not read at open):
 
-  | PSMs | files | opens in | memory of the web process |
-  | --- | --- | --- | --- |
-  | 500,000 | 1.7 GB | 7 s | 2.5 GB |
-  | 1,000,000 | 3.5 GB | 15 s | 5.3 GB |
-  | 2,000,000 | 7.0 GB | 39 s | 10.5 GB |
-  | 4,000,000 | 13.9 GB | 116 s | 18.3 GB |
-  | 8,000,000 | 27.8 GB | – | the page died after 392 s |
+  | PSMs | opens in | memory of the web process |
+  | --- | --- | --- |
+  | 500,000 | 6 s | 1.6 GB |
+  | 1,000,000 | 13 s | 2.8 GB |
+  | 2,000,000 | 34 s | 4.5 GB |
+  | 4,000,000 | 105 s | 8.6 GB |
+  | 8,000,000 | 382 s | 16.7 GB |
 
-  About 5 GB per million PSMs: a computer with 16 GB opens about 2.5 million, with 32 GB about 5 million; 8
-  million did not open even with memory to spare (WebKit's limits). Most of the files is the spectra, which are
-  not read at open (the PSM rows are 0.3 MB per thousand PSMs). On Windows the webview (WebView2) runs Chromium's
-  JavaScript engine, whose arrays are smaller (an earlier measurement in Node.js, the same engine, read 4 million
-  synthetic PSMs but not 8 million), so there the limit is not higher; macOS' webview is WebKit, as on Linux.
-  Project files are made and read in memory too, and hold at most 3 GB (fflate writes no zip64; a larger search
-  is refused with a message). Later, not now: streaming the project zip (with zip64).
+  About 2.1 GB per million PSMs: a computer with 16 GB opens about 5 million, with 32 GB about 10 million (no larger
+  result was tried). The PSM rows take about 0.3 MB of disk per thousand PSMs, the spectra 2.8 MB (not read at open).
+  On Windows the webview (WebView2) runs Chromium's JavaScript engine, whose arrays are smaller (an earlier
+  measurement in Node.js, the same engine, read 4 million synthetic PSMs but not 8 million), so there the limit may
+  be lower; macOS' webview is WebKit, as on Linux. Project files are made and read in memory too, and hold at most
+  3 GB (fflate writes no zip64; a larger search is refused with a message). Later, not now: streaming the project
+  zip (with zip64).
 - macOS: Apple silicon only; not signed with a Developer ID (see Install).
 - Windows: two inputs of one name are searched together only when they are on the drive of the app's data.
 
