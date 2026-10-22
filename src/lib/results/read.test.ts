@@ -385,22 +385,42 @@ describe('peaks and predictions belong to their PSM', () => {
     })
   })
 
-  test('an input\'s psm file or mz view of other rows fails the PSM, not the search', async () => {
+  test('an input\'s psm file of other rows fails the PSM, not the search', async () => {
     await withCopy('example', async (dir) => {
       // the psm files of the two inputs swapped: as many rows, other PSMs (psm_id)
       const [a, b] = ['1__DatabaseSuitability_1', '2__DatabaseSuitability_2'].map((stem) => join(dir, 'qpx', `${stem}.psm.parquet`))
       const bytes = readFileSync(a)
       cpSync(b, a)
       writeFileSync(b, bytes)
-      // the mz view of input 2 in another order
-      await changeRows(dir, 'qpx/2__DatabaseSuitability_2.mz.parquet', (rows) => rows.reverse())
       const { spectra } = await readSearch(folder(dir).files)
       await expect(spectra.load(0)).rejects.toThrow('qpx/1__DatabaseSuitability_1.psm.parquet: its row 0 is another PSM than the search\'s (psm_id)')
-      writeFileSync(b, readFileSync(a))
-      cpSync(join(fixtures, 'example', 'qpx', '2__DatabaseSuitability_2.psm.parquet'), b)
-      cpSync(join(fixtures, 'example', 'qpx', '1__DatabaseSuitability_1.psm.parquet'), a)
-      const again = await readSearch(folder(dir).files)
-      await expect(again.spectra.load(896)).rejects.toThrow(/qpx\/2__DatabaseSuitability_2.mz.parquet: its row 0 is the spectrum .*, not the PSM's/)
+    })
+  })
+
+  test('an mz view whose rows are not in the order of the PSMs is read by its ids', async () => {
+    const { spectra: own, tables } = await readSearch(folder(join(fixtures, 'example')).files)
+    await withCopy('example', async (dir) => {
+      // as many rows as spectra, in another order: the order of the PSMs gives the wrong rows, the ids the right ones
+      await changeRows(dir, 'qpx/2__DatabaseSuitability_2.mz.parquet', (rows) => rows.reverse())
+      const { spectra } = await readSearch(folder(dir).files)
+      for (const row of [896, 897, 1500, tables.psms.count - 1]) {
+        const [a, b] = [await spectra.load(row), await own.load(row)]
+        const peaks = (l: typeof a) => Array.from(l.spectra.mz.subarray(l.spectra.offsets[l.spectrumRow], l.spectra.offsets[l.spectrumRow + 1]))
+        expect(a.spectrumRow).toBeGreaterThanOrEqual(0)
+        expect(peaks(a)).toEqual(peaks(b))
+      }
+    })
+  })
+
+  test('a PSM whose native ID\'s row is another spectrum (at another RT) has no spectrum', async () => {
+    await withCopy('example', async (dir) => {
+      // (as when two spectra share a native ID: the mz view has the first's)
+      await changeRows(dir, 'qpx/quantms.psm.parquet', (rows) => {
+        rows[0].rt = 1234.5
+      })
+      const { spectra } = await readSearch(folder(dir).files)
+      expect((await spectra.load(0)).spectrumRow).toBe(-1)
+      expect((await spectra.load(1)).spectrumRow).toBeGreaterThanOrEqual(0)
     })
   })
 

@@ -818,7 +818,7 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
     files,
     inputs.map((input) => input.stem),
     from,
-    { nativeId, psmId: rows?.psmId ?? new Float64Array(0), precursorMz: mz },
+    { nativeId, psmId: rows?.psmId ?? new Float64Array(0), precursorMz: mz, rt },
     meta.runs.some((r) => r.prediction_nce !== null),
   )
 
@@ -871,6 +871,8 @@ interface RowIdentity {
   psmId: Float64Array
   /** the precursor m/z of each PSM row (the spectrum's, when the mz view has none) */
   precursorMz: Float64Array
+  /** the RT of each PSM row in seconds (NaN: unknown): its spectrum's scan_start_time */
+  rt: Float64Array
 }
 
 /** A file's metadata and where its rows are: row group g has the rows starts[g] .. starts[g + 1]. */
@@ -894,7 +896,9 @@ function groupOf(layout: Layout, row: number): [number, number] {
 function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: RowIdentity, predictions: boolean): PsmSpectra {
   const layouts = new Map<string, Promise<Layout>>()
   const predictionCache = new Map<string, Promise<{ psmId: Float64Array; predicted: PredictedSpectra }>>()
-  const peakCache = new Map<string, Promise<{ id: unknown[]; spectra: StoredSpectra }>>()
+  const peakCache = new Map<string, Promise<{ id: unknown[]; startTime: Float32Array; spectra: StoredSpectra }>>()
+  /** the inputs whose mz rows are found by their ids (the order of the PSMs did not give them) */
+  const byIds = new Set<number>()
   const mzRows = new Map<number, Promise<Int32Array>>()
   const psmName = (k: number) => `qpx/${stems[k]}.psm.parquet`
   const mzName = (k: number) => `qpx/${stems[k]}.mz.parquet`
@@ -963,9 +967,10 @@ function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: R
   const peaksOf = (k: number, layout: Layout, g: number) =>
     once(peakCache, `${k}/${g}`, () =>
       inFile(mzName(k), async () => {
-        const file = await groupFile(mzName(k), layout, g, [...PEAK_COLUMNS, 'precursors'])
+        const file = await groupFile(mzName(k), layout, g, [...PEAK_COLUMNS, 'scan_start_time', 'precursors'])
         const groups = [g]
         const id = readLeaf(file, ['id'], 'values', groups).values as unknown[]
+        const startTime = readLeaf(file, ['scan_start_time'], 'values', groups).values as Float32Array
         const peakMz = listLeaf<Float32Array>(file, 'mz', 'values', groups)
         const peakIntensity = listLeaf<Float32Array>(file, 'intensity', 'values', groups)
         const precursor = readLeaf(file, ['precursors', 'list', 'element', 'selected_ion_mz'], 'values', groups)
@@ -986,13 +991,13 @@ function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: R
           // not read: the web app took it as a fallback NCE for its own predictions; these are ProSE's
           collisionEnergy: new Float32Array(n).fill(NaN),
         }
-        return { id, spectra }
+        return { id, startTime, spectra }
       }),
     )
 
   /**
    * The mz row of each PSM row of input k (−1: none): the order of each spectrum's first PSM; if the mz view has another
-   * number of rows (a PSM's spectrum not found), by the ids of all its rows.
+   * number of rows (a PSM's spectrum not found), or that order turned out wrong (`byIds`), by the ids of all its rows.
    */
   const mzRowsOf = (k: number, layout: Layout) =>
     once(mzRows, k, async () => {
@@ -1009,7 +1014,7 @@ function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: R
         out[r] = m
       }
       const total = layout.starts[layout.starts.length - 1]
-      if (total === first.size) return out
+      if (total === first.size && !byIds.has(k)) return out
       // by the ids
       const rowOf = new Map<string, number>()
       for (let g = 0; g < layout.metadata.row_groups.length; g++) {
@@ -1081,17 +1086,33 @@ function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: R
       let spectra = noSpectra
       let spectrumRow = -1
       let peakFilter: PeakFilter | null = null
-      const m = mzLayout ? (await mzRowsOf(k, mzLayout))[local] : -1
-      if (mzLayout && m >= 0) {
-        const [mg, mat] = groupOf(mzLayout, m)
+      /** The mz row of the PSM and its row group, checked against its native ID (null: none). */
+      const spectrumOf = async (layout: Layout) => {
+        const m = (await mzRowsOf(k, layout))[local]
+        if (m < 0) return null
+        const [mg, mat] = groupOf(layout, m)
         touch(peakCache, `${k}/${mg}`)
-        const peaks = await peaksOf(k, mzLayout, mg)
-        if (String(peaks.id[mat]) !== rows.nativeId[row]) {
-          throw new Error(`${mzName(k)}: its row ${m} is the spectrum ${String(peaks.id[mat])}, not the PSM's ${rows.nativeId[row]}`)
-        }
-        spectra = peaks.spectra
-        spectrumRow = mat
-        if (Number.isNaN(spectra.precursorMz[mat])) spectra.precursorMz[mat] = rows.precursorMz[row]
+        const peaks = await peaksOf(k, layout, mg)
+        return { m, mat, peaks, matches: String(peaks.id[mat]) === rows.nativeId[row] }
+      }
+      let found = mzLayout ? await spectrumOf(mzLayout) : null
+      if (mzLayout && found && !found.matches && !byIds.has(k)) {
+        // the order of the PSMs did not give the rows (spectra missing and others duplicated): by their ids, once
+        byIds.add(k)
+        mzRows.delete(k)
+        found = await spectrumOf(mzLayout)
+      }
+      if (found && !found.matches) {
+        throw new Error(`${mzName(k)}: its row ${found.m} is the spectrum ${String(found.peaks.id[found.mat])}, not the PSM's ${rows.nativeId[row]}`)
+      }
+      // the row of its native ID is another spectrum's (of several spectra of one native ID, the view has the first's):
+      // the PSM has none
+      const own =
+        found !== null && (Number.isNaN(rows.rt[row]) || !(Math.abs(found.peaks.startTime[found.mat] * 60 - rows.rt[row]) > 0.05))
+      if (mzLayout && found && own) {
+        spectra = found.peaks.spectra
+        spectrumRow = found.mat
+        if (Number.isNaN(spectra.precursorMz[found.mat])) spectra.precursorMz[found.mat] = rows.precursorMz[row]
         peakFilter = filterOf(mzLayout)
       }
       trim()
