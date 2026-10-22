@@ -173,6 +173,18 @@ class SearchForm {
     this.files = this.files.filter((r) => r.id !== id)
   }
 
+  /** "Remove all" of the Spectra card: no files, and none of the notices about them. */
+  removeAllFiles() {
+    this.files = []
+    this.notices = []
+  }
+
+  /** "Start over": no files and no database, the settings (preset, parameters, rescoring) as they are. */
+  startOver() {
+    this.removeAllFiles()
+    this.database = null
+  }
+
   setField<K extends keyof DesignFields>(id: string, field: K, value: DesignFields[K]) {
     const row: DesignFields | undefined = this.files.find((r) => r.id === id)
     if (row) row[field] = value

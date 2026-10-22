@@ -8,6 +8,7 @@
   import RescoringCard from '$lib/components/search/RescoringCard.svelte'
   import SearchFooter from '$lib/components/search/SearchFooter.svelte'
   import SettingsCard from '$lib/components/search/SettingsCard.svelte'
+  import { Button } from '$lib/components/ui/button'
   import { onFileDrop } from '$lib/desktop'
   import { searchForm as form } from '$lib/search/form.svelte'
 
@@ -28,9 +29,16 @@
 </script>
 
 <section data-testid="view-search" class="flex flex-col gap-4">
-  <div>
-    <h1 class="mb-1 text-xl font-semibold tracking-tight">New search</h1>
-    <p class="text-muted-foreground">Spectra and database stay on this computer.</p>
+  <div class="flex flex-wrap items-start gap-x-4 gap-y-2">
+    <div class="flex-1">
+      <h1 class="mb-1 text-xl font-semibold tracking-tight">New search</h1>
+      <p class="text-muted-foreground">Spectra and database stay on this computer.</p>
+    </div>
+    {#if form.files.length > 0 || form.database}
+      <!-- the next search from scratch: no files, no database, the settings kept -->
+      <Button variant="outline" size="sm" title="Removes the spectra and the database. The settings stay." onclick={() => form.startOver()}
+        >Start over</Button>
+    {/if}
   </div>
 
   {#if form.files.length === 0}

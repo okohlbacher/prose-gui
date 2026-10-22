@@ -128,6 +128,8 @@
           <Button variant="outline" size="sm" class={headerButton} onclick={saveDesign}>Save design.tsv</Button>
         {/if}
       {/if}
+      <Button variant="ghost" size="sm" class={headerButton + ' text-muted-foreground'} disabled={form.adding > 0} onclick={() => form.removeAllFiles()}
+        >Remove all</Button>
       <Button variant="outline" size="sm" class={headerButton} disabled={form.adding > 0} onclick={add}>Add files</Button>
     </div>
     <input bind:this={designInput} type="file" accept=".tsv,.txt" hidden onchange={(e) => loadDesign(e.currentTarget)} />

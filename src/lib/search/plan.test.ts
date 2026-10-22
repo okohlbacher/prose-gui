@@ -173,6 +173,28 @@ describe('the footer', () => {
     expect(searchPlan.problem).toBe('ProSE cannot be run: PROSE_BIN is set to /x, which is not a file.')
   })
 
+  test('Remove all and Start over: no files (Start over: no database either), the settings as they were', async () => {
+    await form.addFiles(['/r/a.mzML', '/r/b.mzML', '/db/db.fasta'])
+    await settle()
+    form.choosePreset('open-search')
+    form.setParam('fragment:mass_tolerance', 0.5)
+    form.peptdeep = true
+    form.notices.push('a notice about the files')
+    form.removeAllFiles()
+    expect(form.files).toEqual([])
+    expect(form.notices).toEqual([])
+    expect(form.database?.file.name).toBe('db.fasta')
+    await form.addFiles(['/r/a.mzML'])
+    form.startOver()
+    expect(form.files).toEqual([])
+    expect(form.database).toBeNull()
+    expect(searchPlan.line).toBe('No spectra yet')
+    expect(form.presetId).toBe('open-search')
+    expect(form.value('fragment:mass_tolerance')).toBe(0.5)
+    expect(form.peptdeep).toBe(true)
+    form.peptdeep = false
+  })
+
   test('files that are neither mzML nor FASTA are reported, not added', async () => {
     await form.addFiles(['/r/run.raw', '/r/run.mzML'])
     expect(form.files.map((r) => r.file.name)).toEqual(['run.mzML'])
