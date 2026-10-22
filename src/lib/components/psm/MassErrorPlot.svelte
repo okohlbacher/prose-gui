@@ -60,6 +60,12 @@
       .map((m) => ({ m, cx: x(mz[m.peak]), cy: y(m.errorPpm), r: radius(m.peak) })),
   )
   const stats = $derived(errorStats(matches))
+  /** The statistics for screen readers, as sentences. */
+  const statsSentence = $derived(
+    matches.length === 0
+      ? 'No ion is matched.'
+      : `The mean error is ${signedNumber(stats.mean, 1)} ppm${Number.isFinite(stats.sd) ? `, the standard deviation ${stats.sd.toFixed(1)} ppm` : ''}. The size of a dot shows the peak's intensity.`,
+  )
   const statsText = $derived(
     matches.length === 0
       ? 'no matched ions'
@@ -81,8 +87,8 @@
     class="block">
     <title id="{uid}-title">Fragment mass error</title>
     <desc id="{uid}-desc"
-      >{matches.length} matched ions: error in ppm against m/z, within the {toleranceText}; {statsText}. Each dot's title names its
-      ion.</desc>
+      >The mass error in ppm of {matches.length} matched ions, plotted against m/z within the {toleranceText}. {statsSentence}
+      Each dot's title names its ion.</desc>
 
     <path d={band} fill="#f4f4f5" data-testid="tolerance-band" />
     {#each yTicks as t (t)}

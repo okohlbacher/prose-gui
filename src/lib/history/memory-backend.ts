@@ -10,7 +10,7 @@ export class NotFound extends Error {
 
 /** The error `history::list` gives a folder without a record (`history::NO_RECORD`). */
 export const NO_RECORD =
-  'This search was not saved: its folder has no record (search.json), because the app ended, or the record could not be written, as the search finished. Delete it to free its space.'
+  'This search was not saved. Its folder has no record (search.json), because the app ended or the record could not be written when the search finished. Delete it to free the space.'
 
 /** The entries of a `frameEntries` body (the layout of `history::frame`). */
 export function unframe(body: Uint8Array): { name: string; data: Uint8Array }[] {

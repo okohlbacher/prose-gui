@@ -197,7 +197,7 @@
             min={0}
             value={form.value<number>('database:chunk_size')}
             onChange={(v) => form.setParam('database:chunk_size', v)} />
-          <p class="text-xs text-muted-foreground">How many proteins go into each part of the search index. 0 indexes the whole database at once.</p>
+          <p class="text-xs text-muted-foreground">How many proteins go into each part of the fragment index. 0 indexes the whole database at once.</p>
         </div>
       </div>
     {/if}

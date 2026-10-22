@@ -51,7 +51,8 @@
       <Dialog.Title class="text-[15px] font-semibold">All {entries.length} parameters</Dialog.Title>
       <Dialog.Description class="text-xs">
         ProSE's parameters with their defaults and descriptions. Changes apply to this search right away. The common
-        ones are also on the page. Percolator and PeptDeep are set in the Rescoring card.
+        ones are also on the page. The switches for Percolator and PeptDeep, and PeptDeep's instrument, are in the
+        Rescoring card.
       </Dialog.Description>
       <div class="mt-2 flex flex-wrap items-center gap-3">
         <Input

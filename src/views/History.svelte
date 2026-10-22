@@ -147,8 +147,8 @@
     <div class="rounded-lg border border-dashed bg-background px-6 py-10 text-center" data-testid="history-empty">
       <p class="text-sm font-medium">No saved searches yet</p>
       <p class="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-        Finished searches are saved here with their spectra, so you can reopen them later. To open a project file someone
-        sent you, use Open project above.
+        Finished searches are saved here with their spectra, so you can reopen them later. To open a project file
+        (saved with Export › Project, here or on another computer), use Open project above.
       </p>
     </div>
   {:else}

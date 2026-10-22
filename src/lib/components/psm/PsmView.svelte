@@ -86,8 +86,8 @@
   /** The shift as a number on the page (a real minus); `shift` is the ProForma text. */
   const shiftText = $derived(shift === null ? null : signedNumber(ps.deltaMass[row], 4))
   const scan = $derived(scanNumber(ps.nativeId[row]))
-  // (no native ID: ProSE stored no spectrum for the PSM, the reader gives none)
-  const spectrumName = $derived(scan !== null ? `scan ${scan}` : ps.nativeId[row] ? `spectrum ${ps.nativeId[row]}` : 'spectrum without native ID')
+  // (no spectrum reference: ProSE stored no spectrum for the PSM, the reader gives none)
+  const spectrumName = $derived(scan !== null ? `scan ${scan}` : ps.nativeId[row] ? `spectrum ${ps.nativeId[row]}` : 'spectrum not referenced')
 
   // the search's settings: the parameters it changed, else ProSE's defaults
   const parameters = $derived(view.result.settings.parameters)
@@ -167,8 +167,8 @@
   const table = $derived(result ? ionTable(result.theoretical, shown, sequence.length, options) : null)
   const cuts = $derived(ladderCuts(shown, sequence.length))
   const summary = $derived(result && peaks ? matchSummary(shown, theoretical, peaks.intensity) : null)
-  /** Nothing matches with 1+ fragments hidden: a hint with a button that shows them. */
-  const hiddenOnePlus = $derived(result !== null && peaks !== null && onePlusHidden(shown, options))
+  /** Nothing matches with 1+ fragments hidden, and 1+ would: a hint with a button that shows them. */
+  const hiddenOnePlus = $derived(result !== null && peaks !== null && onePlusHidden(result.matches, options))
 
   // PeptDeep's prediction for the lower half, as ProSE wrote it for this PSM (at the NCE of its file)
   const prediction = $derived(spectra?.data ? predictedIons(spectra.data.predicted, spectra.data.row) : [])
@@ -260,13 +260,14 @@
   const spectrumTitle = $derived.by(() => {
     const listed = modificationList(pt, k, fixedMods)
     const below = options.bottom === 'peptdeep' ? `PeptDeep's prediction at ${nce.label}` : 'the theoretical spectrum'
-    return `Annotated spectrum of ${sequence}${listed.length > 0 ? ` (${listed.join(', ')})` : ''}, ${charge}+, ${spectrumName}; below: ${below}`
+    return `Annotated spectrum of ${sequence}${listed.length > 0 ? ` (${listed.join(', ')})` : ''}, ${charge}+, ${spectrumName}. Below it is ${below}.`
   })
   const spectrumDescription = $derived(
     peaks
-      ? `${groups.length} of ${peaks.mz.length} peaks matched: b ions blue, y ions orange, other ions dark grey, unmatched peaks light grey.` +
-          (summary ? ` ${summary.matched} of ${summary.total} ions shown are matched; their peaks carry ${Math.round(summary.intensityFraction * 100)} % of the intensity.` : '') +
-          ` Above, 100 % is the ${reference.text}; below, ${options.bottom === 'peptdeep' ? 'the strongest predicted b or y ion' : 'every ion has one height'}.` +
+      ? `${groups.length} of ${peaks.mz.length} peaks are matched. b ions are blue, y ions orange, other ions dark grey and unmatched peaks light grey.` +
+          (summary ? ` ${summary.matched} of the ${summary.total} ions shown are matched, and their peaks carry ${Math.round(summary.intensityFraction * 100)} % of the intensity.` : '') +
+          ` In the upper half, 100 % is the ${reference.text}.` +
+          (options.bottom === 'peptdeep' ? ' In the lower half, 100 % is the strongest predicted b or y ion.' : ' In the lower half, every ion has the same height.') +
           (similarity ? ` ${similarity.replace(' (search)', '')}, as the search computed it over all ions.` : '')
       : '',
   )
@@ -570,9 +571,11 @@
       <div class="my-2 rounded-md border border-dashed px-4 py-8 text-center" data-testid="spectrum-missing">
         <p class="font-medium">Spectrum not stored</p>
         {#if ps.nativeId[row] === ''}
-          <!-- (ProSE leaves the native ID out for a second spectrum of an ID: the run's IDs are not unique) -->
-          <p class="mx-auto mt-1 max-w-[44rem] text-xs text-muted-foreground" data-testid="spectrum-shared-id">
-            Another spectrum of this run has the same native ID, so ProSE could not store this one.
+          <!-- (ProSE leaves the spectrum reference out when it stored no spectrum for the PSM, e.g. for a second
+               spectrum of a native ID) -->
+          <p class="mx-auto mt-1 max-w-[44rem] text-xs text-muted-foreground" data-testid="spectrum-not-referenced">
+            ProSE did not store a spectrum for this PSM. This happens, for example, when another spectrum of the run has
+            the same native ID.
           </p>
         {/if}
         <p class="mx-auto mt-1 max-w-[44rem] text-xs text-muted-foreground">

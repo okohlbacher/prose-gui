@@ -34,8 +34,8 @@ pub const SCHEMA: u64 = 1;
 /// it has not been written to for this long.
 pub const SWEEP_GRACE: Duration = Duration::from_secs(600);
 /// The `error` of a finished search folder without a record.
-pub const NO_RECORD: &str = "This search was not saved: its folder has no record (search.json), because the app \
-     ended, or the record could not be written, as the search finished. Delete it to free its space.";
+pub const NO_RECORD: &str = "This search was not saved. Its folder has no record (search.json), because the app \
+     ended or the record could not be written when the search finished. Delete it to free the space.";
 /// The largest `search.json` (it holds the design; a few kB to a few MB).
 const MAX_RECORD: u64 = 64 << 20;
 /// The longest name of a search.

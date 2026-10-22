@@ -392,8 +392,8 @@ function tooLargeForAProject(bytes: number, files: number): ProjectError {
   const what = files > MAX_ZIP_ENTRIES ? `${files} files` : formatBytes(bytes)
   return new ProjectError(
     `This search is too large for a project file: its results take ${what}, and a project file holds at most ` +
-      `${formatBytes(MAX_UNPACKED)} (what ProSE opens of one; a zip of more than 4 GB, or of more than 65,535 files, ` +
-      'needs the zip64 format, which ProSE does not write). The search stays in History on this computer.',
+      `${formatBytes(MAX_UNPACKED)}. That is the most ProSE can open. A larger zip, over 4 GB or 65,535 files, needs ` +
+      'the zip64 format, which ProSE does not write. The search stays in History on this computer.',
   )
 }
 

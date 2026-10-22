@@ -295,7 +295,7 @@ export function resolveDesign(inputs: DesignInput[]): DesignResolution {
     }
     notices.push({
       kind: 'unevenFractions',
-      message: `Replicates of ${c} have different numbers of fractions (up to ${most}); fewer in ${short.map(describe).join(', ')}.`,
+      message: `Replicates of ${c} have different numbers of fractions. The most is ${most}, and these have fewer: ${short.map(describe).join(', ')}.`,
       rows: short.flatMap((l) => l.map((i) => inputs[i].id)),
     })
   }

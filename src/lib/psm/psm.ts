@@ -255,10 +255,12 @@ export function visibleMatches(matches: PeakMatch[], o: PsmOptions): PeakMatch[]
 
 /**
  * No fragment peak is matched among the ions shown while 1+ fragments are hidden (the charge choice, which stays for
- * every PSM, left them out): the PSM view says so and offers to show them.
+ * every PSM, left them out), and showing 1+ would match some: the PSM view says so and offers to show them.
  */
-export function onePlusHidden(shown: PeakMatch[], o: PsmOptions): boolean {
-  return !o.charges.includes(1) && !shown.some((m) => m.type !== 'precursor')
+export function onePlusHidden(matches: PeakMatch[], o: PsmOptions): boolean {
+  if (o.charges.includes(1)) return false
+  const fragment = (m: PeakMatch) => m.type !== 'precursor'
+  return !visibleMatches(matches, o).some(fragment) && visibleMatches(matches, { ...o, charges: [...o.charges, 1] }).some(fragment)
 }
 
 export type TheoreticalIon = { ion: string; type: string; ordinal: number; charge: number; mz: number }
