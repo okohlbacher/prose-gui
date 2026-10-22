@@ -10,6 +10,7 @@
 //     tests), and their dependencies, with the licence files each package ships;
 //   - the fonts of the front end: Inter (an npm package, above), Inconsolata and Liberation Mono
 //     (src/assets/fonts, their OFL texts);
+//   - the OpenMS logo of the top bar (src/assets/logo, the OpenMS Assets licence);
 //   identical licence texts are written once, after the list of what they cover.
 // - copyright: the app's licence in Debian's machine-readable format, the .deb's /usr/share/doc/prose/copyright
 //   (tauri.conf.json, bundle.linux.deb.files).
@@ -160,6 +161,22 @@ function fonts() {
 }
 
 //------------------------------------------------------------------------------------------------
+// The OpenMS logo
+
+function logo() {
+  const file = 'OpenMS-Assets-LICENSE.md'
+  return [
+    {
+      name: 'OpenMS logo (OpenMS logo © OpenMS Inc., used with permission)',
+      version: '',
+      license: 'OpenMS Assets License',
+      source: 'https://github.com/OpenMS/Assets logos/180x180_trans.png',
+      files: [{ name: file, text: read(join(ROOT, 'src', 'assets', 'logo', file)) }],
+    },
+  ]
+}
+
+//------------------------------------------------------------------------------------------------
 
 const RULE = '-'.repeat(100)
 
@@ -192,6 +209,7 @@ const licence = read(join(ROOT, 'LICENSE'))
 const rust = crates()
 const js = packages()
 const fontList = fonts()
+const logoList = logo()
 
 // what the bundles must have: a broken lookup must not write a short file that looks complete
 for (const name of ['tauri', 'tauri-plugin-dialog', 'serde', 'serde_json']) {
@@ -210,6 +228,10 @@ const notices = [
   'ProSE desktop is released under the licence below. It bundles the software listed after it, under their licences.',
   'The ProSE tool and its libraries (resources/prose) come with their licences in resources/prose/share/OpenMS/LICENSES,',
   "the PeptDeep models with AlphaPeptDeep's in resources/prose/share/OpenMS/models.",
+  'The example (resources/example) is OpenMS example data under the licence of ProSE desktop below: the run',
+  'Ecoli_MS2_small.mzML of share/OpenMS/examples/ID, and the E. coli K-12 proteins (TaxID 83333) of',
+  'share/OpenMS/examples/TOPPAS/data/Identification/target_decoy_Ecoli_K12_TaxID_83333.proteomes.fasta without its decoys.',
+  'OpenMS logo © OpenMS Inc., used with permission (the OpenMS Assets License, at the end).',
   '',
   RULE,
   'ProSE desktop',
@@ -220,6 +242,7 @@ const notices = [
   section(`Rust crates linked into the app (${rust.length})`, rust),
   section(`JavaScript packages bundled into the app's pages (${js.length})`, js),
   section('Fonts (Inter is the npm package @fontsource-variable/inter, above)', fontList),
+  section('The OpenMS logo', logoList),
 ].join('\n')
 
 const debian = [
@@ -227,7 +250,7 @@ const debian = [
   'Upstream-Name: ProSE',
   'Source: https://github.com/timosachsenberg/prose-web/tree/prose-desktop',
   'Comment: The software bundled with ProSE and its licences: /usr/lib/ProSE/resources/notices/THIRD-PARTY-NOTICES.txt',
-  ' (the Rust crates, JavaScript packages and fonts of the app), /usr/lib/ProSE/resources/prose/share/OpenMS/LICENSES',
+  ' (the Rust crates, JavaScript packages, fonts and OpenMS logo of the app), /usr/lib/ProSE/resources/prose/share/OpenMS/LICENSES',
   ' (the ProSE tool and its libraries) and /usr/lib/ProSE/resources/prose/share/OpenMS/models (the PeptDeep models).',
   '',
   'Files: *',
@@ -241,6 +264,6 @@ mkdirSync(OUT, { recursive: true })
 writeFileSync(join(OUT, 'THIRD-PARTY-NOTICES.txt'), `${notices}\n`)
 writeFileSync(join(OUT, 'copyright'), debian)
 console.log(
-  `third-party notices: ${rust.length} crates, ${js.length} npm packages, ${fontList.length + 1} fonts -> ${relative(ROOT, join(OUT, 'THIRD-PARTY-NOTICES.txt'))} ` +
+  `third-party notices: ${rust.length} crates, ${js.length} npm packages, ${fontList.length + 1} fonts, the OpenMS logo -> ${relative(ROOT, join(OUT, 'THIRD-PARTY-NOTICES.txt'))} ` +
     `(${Math.round(statSync(join(OUT, 'THIRD-PARTY-NOTICES.txt')).size / 1024)} KB), ${relative(ROOT, join(OUT, 'copyright'))}`,
 )
