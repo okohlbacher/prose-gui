@@ -33,14 +33,21 @@
       </div>
       <div class="flex items-center gap-2">
         <Button size="sm" disabled={form.adding > 0} onclick={add}>Add files</Button>
-        <Button variant="outline" size="sm" disabled={form.exampleLoading} onclick={() => form.loadExample()}>
+        <Button variant="outline" size="sm" disabled={form.busy} onclick={() => form.loadExample()}>
           {form.exampleLoading ? 'Loading the example…' : 'Try the example'}
         </Button>
       </div>
     </div>
+    {#if form.removed}
+      {@const n = form.removed.files.length}
+      <p class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" role="status" data-testid="removed-note">
+        {n > 0 ? `Removed ${n} ${n === 1 ? 'file' : 'files'}${form.removed.database ? ' and the database' : ''}.` : 'Removed the database.'}
+        <Button variant="outline" size="sm" class="h-6 px-2 text-xs" disabled={form.busy} onclick={() => form.undoRemove()}>Undo</Button>
+      </p>
+    {/if}
     <p class="text-xs text-muted-foreground">
       The example is a small E. coli run with 139 spectra. It is searched twice, as two replicates, against the E. coli
-      proteome.
+      proteome. It has too few PSMs for Percolator's full model and for a protein FDR, so the results note both.
     </p>
     <NoticeList items={form.notices.map((message, k) => ({ message, onDismiss: () => form.notices.splice(k, 1) }))} />
   </Card.Content>

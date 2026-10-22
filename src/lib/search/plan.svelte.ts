@@ -39,6 +39,8 @@ class SearchPlan {
     }
     if (form.isExample) {
       parts.push(`ion-trap example, ${form.value('fragment:mass_tolerance')} ${form.value('fragment:mass_tolerance_unit')} fragment tolerance`)
+      // (why its results say that Percolator fell back and that no protein FDR was applied)
+      parts.push("too few PSMs for Percolator's full model or a protein FDR")
     }
     return parts.join(' · ')
   })

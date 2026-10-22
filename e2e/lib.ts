@@ -184,13 +184,16 @@ export async function runExample(options: { peptdeep?: boolean } = {}): Promise<
   return id
 }
 
-/** New search with the example's settings and nothing else: "Try the example", then "Start over" (which keeps them). */
+/**
+ * New search with nothing chosen and the example's fragment tolerance, 0.5 Da, set by hand (the example's own setting
+ * ends with its files: Start over gives back the preset's).
+ */
 export async function exampleSettings() {
   await freshForm()
-  await $('button=Try the example').click()
+  await $('button[aria-label^="Fragment tolerance unit: ppm"]').click()
+  await $('#fragment-tolerance').setValue('0.5')
+  await expect($('button[aria-label^="Fragment tolerance unit: Da"]')).toBeExisting()
   await expect($('#fragment-tolerance')).toHaveValue('0.5')
-  await $('button=Start over').click()
-  await expect($('button=Try the example')).toBeDisplayed()
 }
 
 /** The files of `longSearch`: copies of the example's run, Ecoli_1.mzML … Ecoli_<n>.mzML, in the spec's data folder. */

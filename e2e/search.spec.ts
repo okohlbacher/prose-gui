@@ -86,7 +86,7 @@ describe('the example search', () => {
     await expect($('#fragment-tolerance')).toHaveValue('0.5')
     // (textContent: the footer line is cut to the window's width)
     expect(await $('[data-testid="search-plan"]').getProperty('textContent')).toBe(
-      '2 files in 2 samples · 4,136 proteins + 116 cRAP + decoys · ion-trap example, 0.5 Da fragment tolerance',
+"2 files in 2 samples · 4,136 proteins + 116 cRAP + decoys · ion-trap example, 0.5 Da fragment tolerance · too few PSMs for Percolator's full model or a protein FDR",
     )
     await $('button*=Start search').click()
     await expect($('[data-testid="search-progress"]')).toBeDisplayed()
@@ -110,21 +110,26 @@ describe('the example search', () => {
     expect(tops.size).toBeGreaterThan(5)
   })
 
-  it('Remove all empties the Spectra table; Start over drops the database too and keeps the settings', async () => {
+  it('Remove all and Start over empty the form, give back the preset\'s tolerance, and can be undone', async () => {
     await freshForm()
     await $('button=Try the example').click()
     await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
+    await expect($('#fragment-tolerance')).toHaveValue('0.5')
     await $('button=Remove all').click()
     await expect($('button=Try the example')).toBeDisplayed()
     await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
-    await $('button=Try the example').click()
+    // the example's 0.5 Da does not stay for the next files
+    await expect($('#fragment-tolerance')).toHaveValue('20')
+    await expect($('[data-testid="removed-note"]')).toHaveText(expect.stringContaining('Removed 2 files.'))
+    await $('[data-testid="removed-note"]').$('button=Undo').click()
     await expect($('[data-testid="design-summary"]')).toHaveText('2 files → 2 samples · 1 condition')
+    await expect($('#fragment-tolerance')).toHaveValue('0.5')
     await $('button=Start over').click()
     await expect($('button=Try the example')).toBeDisplayed()
     await expect($('#fasta-chosen')).toHaveText('Choose a FASTA file…')
     expect(await $('[data-testid="search-plan"]').getProperty('textContent')).toBe('No spectra yet')
-    // the settings stay (the example's fragment tolerance among them)
-    await expect($('#fragment-tolerance')).toHaveValue('0.5')
+    await expect($('#fragment-tolerance')).toHaveValue('20')
+    await expect($('[data-testid="removed-note"]')).toHaveText(expect.stringContaining('Removed 2 files and the database.'))
     await expect($('button=Start over')).not.toBeExisting()
   })
 

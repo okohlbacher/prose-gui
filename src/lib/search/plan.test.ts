@@ -93,7 +93,7 @@ describe('the search request', () => {
     expect(r.settings).toMatchObject({ rescore: true, peptdeep: false, threads: 0 })
     expect(r.contaminants).toBe(true)
     expect(searchPlan.line).toBe(
-      '2 files in 2 samples · 4,136 proteins + 116 cRAP + decoys · ion-trap example, 0.5 Da fragment tolerance',
+      "2 files in 2 samples · 4,136 proteins + 116 cRAP + decoys · ion-trap example, 0.5 Da fragment tolerance · too few PSMs for Percolator's full model or a protein FDR",
     )
   })
 
@@ -195,6 +195,54 @@ describe('the footer', () => {
     expect(form.value('fragment:mass_tolerance')).toBe(0.5)
     expect(form.peptdeep).toBe(true)
     form.peptdeep = false
+  })
+
+  test("the example's fragment tolerance goes back to the preset's when its files go, and its protein FDR is the preset's", async () => {
+    form.setParam('FDR:protein', 0.05)
+    await form.loadExample()
+    await settle()
+    expect(form.value('FDR:protein')).toBe(0.01)
+    expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit')]).toEqual([0.5, 'Da'])
+    // Start over: the preset's 20 ppm again (the other settings stay)
+    form.peptdeep = true
+    form.startOver()
+    expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit')]).toEqual([20, 'ppm'])
+    expect(form.peptdeep).toBe(true)
+    form.peptdeep = false
+    // Undo brings back the files, the database and the example's tolerance
+    expect(form.removed?.files).toHaveLength(2)
+    form.undoRemove()
+    await settle()
+    expect(form.isExample).toBe(true)
+    expect(form.value('fragment:mass_tolerance')).toBe(0.5)
+    expect(form.removed).toBeNull()
+    // own files added to the example's: the example's settings end
+    await form.addFiles(['/runs/mine.mzML'])
+    expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit')]).toEqual([20, 'ppm'])
+    // a tolerance the user set after loading the example stays
+    await form.loadExample()
+    await settle()
+    form.setParam('fragment:mass_tolerance', 0.3)
+    form.removeAllFiles()
+    expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit')]).toEqual([0.3, 'Da'])
+    // another database ends them too
+    await form.loadExample()
+    await settle()
+    await form.setDatabase('/db/human.fasta')
+    expect(form.value('fragment:mass_tolerance')).toBe(20)
+  })
+
+  test('Remove all and Start over wait while files or the example are loading', async () => {
+    await form.addFiles(['/r/a.mzML', '/db/db.fasta'])
+    await settle()
+    const loading = form.loadExample()
+    expect(form.busy).toBe(true)
+    form.startOver()
+    form.removeAllFiles()
+    await loading
+    await settle()
+    expect(form.isExample).toBe(true)
+    expect(form.removed).toBeNull()
   })
 
   test('files that are neither mzML nor FASTA are reported, not added', async () => {

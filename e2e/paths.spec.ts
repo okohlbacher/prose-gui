@@ -1,7 +1,7 @@
 // Inputs by path, as the file manager would hand them over: names with spaces and umlauts, two inputs
 // of the same name from different folders, and an mzML.gz. The example's run and FASTA are copied into
-// folders made for the spec; the app reads them where they are. They are searched with the example's settings (its
-// fragment tolerance of 0.5 Da: "Try the example", then "Start over", which keeps the settings).
+// folders made for the spec; the app reads them where they are. They are searched with the example's fragment
+// tolerance of 0.5 Da, set by hand (lib.ts exampleSettings).
 // Gated: runs only with PROSE_BIN set (the app inherits it).
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

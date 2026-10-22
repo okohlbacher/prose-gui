@@ -36,8 +36,12 @@
     </div>
     {#if form.files.length > 0 || form.database}
       <!-- the next search from scratch: no files, no database, the settings kept -->
-      <Button variant="outline" size="sm" title="Removes the spectra and the database. The settings stay." onclick={() => form.startOver()}
-        >Start over</Button>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={form.busy}
+        title="Removes the spectra and the database. Your settings stay, but the example's fragment tolerance goes back to the preset's."
+        onclick={() => form.startOver()}>Start over</Button>
     {/if}
   </div>
 

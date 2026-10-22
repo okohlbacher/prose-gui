@@ -42,6 +42,14 @@ export const EXAMPLE = {
   parameters: { 'fragment:mass_tolerance': 0.5, 'fragment:mass_tolerance_unit': 'Da' },
 } as const
 
+/** What "Remove all" or "Start over" removed: the rows, the database (Start over), the notices, the example's settings. */
+export type Removed = {
+  files: FileRow[]
+  database: DatabaseChoice | null
+  notices: string[]
+  parameters: Record<string, unknown>
+}
+
 /** The name of a path's file (either separator). */
 export function fileName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path
@@ -78,6 +86,14 @@ class SearchForm {
   /** What adding, pasting or loading could not use. */
   notices = $state<string[]>([])
   exampleLoading = $state(false)
+  /** Paths being inspected (the rows come when their sizes and counts are known). */
+  adding = $state(0)
+  /** Files are being added or the example is loading: Remove all and Start over wait. */
+  busy = $derived(this.adding > 0 || this.exampleLoading)
+  /** What the last "Remove all" or "Start over" removed, for its Undo (until files or a database are chosen again). */
+  removed = $state<Removed | null>(null)
+  /** The example's settings (EXAMPLE.parameters) are in force: set by loadExample, the example's files still there. */
+  #exampleSettings = false
 
   /** Threads of the search (Advanced); null: all cores. */
   threads = $state<number | null>(null)
@@ -119,12 +135,15 @@ class SearchForm {
   choosePreset(id: string) {
     const preset = this.presets.find((p) => p.id === id)
     if (!preset) return
+    this.#exampleSettings = false
     this.presetId = id
     this.overrides = copyValues(preset.parameters)
   }
 
   /** Saves the settings that differ from ProSE's defaults as a user preset and selects it. */
   saveAsPreset(name: string): Preset {
+    // (the settings become the user's own: the example's no longer go back when its files go)
+    this.#exampleSettings = false
     const preset = savePreset(name, changedParameters($state.snapshot(this.values), this.defaults))
     this.presets = loadPresets()
     this.presetId = preset.id
@@ -132,8 +151,6 @@ class SearchForm {
     return preset
   }
 
-  /** Paths being inspected (the rows come when their sizes and counts are known). */
-  adding = $state(0)
 
   /**
    * Adds mzML files (by path) to the table; a FASTA becomes the database; anything else is reported.
@@ -141,6 +158,8 @@ class SearchForm {
    */
   async addFiles(paths: Iterable<string>) {
     const list = [...paths]
+    if (list.length > 0) this.#leaveExample()
+    this.removed = null
     const skipped = list.filter((p) => !isMzML(fileName(p)) && !isFasta(fileName(p))).map(fileName)
     const spectra = list.filter((p) => isMzML(fileName(p)))
     const database = list.filter((p) => isFasta(fileName(p))).pop()
@@ -172,18 +191,67 @@ class SearchForm {
 
   removeFile(id: string) {
     this.files = this.files.filter((r) => r.id !== id)
+    this.#leaveExample()
   }
 
-  /** "Remove all" of the Spectra card: no files, and none of the notices about them. */
+  /** "Remove all" of the Spectra card: no files, and none of the notices about them (Undo brings them back). */
   removeAllFiles() {
+    if (this.busy) return
+    this.#remove(false)
+  }
+
+  /**
+   * "Start over": no files and no database; the settings (preset, parameters, rescoring) as they are, but for the
+   * example's own (its fragment tolerance), which go back to the preset's. Undo brings everything back.
+   */
+  startOver() {
+    if (this.busy) return
+    this.#remove(true)
+  }
+
+  #remove(database: boolean) {
+    const removed: Removed = {
+      files: this.files,
+      database: database ? this.database : null,
+      notices: this.notices,
+      parameters: this.#leaveExample(),
+    }
+    if (removed.files.length > 0 || removed.database) this.removed = removed
     this.files = []
     this.notices = []
+    if (database) this.database = null
   }
 
-  /** "Start over": no files and no database, the settings (preset, parameters, rescoring) as they are. */
-  startOver() {
-    this.removeAllFiles()
-    this.database = null
+  /** Undo of the last "Remove all" or "Start over". */
+  undoRemove() {
+    const r = this.removed
+    if (!r || this.busy) return
+    this.removed = null
+    this.files = [...r.files, ...this.files]
+    this.notices = r.notices
+    if (r.database) this.database = r.database
+    for (const [name, value] of Object.entries(r.parameters)) this.overrides[name] = copyValue(value)
+    if (Object.keys(r.parameters).length > 0) this.#exampleSettings = true
+  }
+
+  /**
+   * The example's files are gone or joined by others: its own settings go back to the preset's (or ProSE's
+   * defaults), unless the user changed one of them since (then they are the user's: a tolerance and its unit go
+   * together). Returns the example's values it replaced.
+   */
+  #leaveExample(): Record<string, unknown> {
+    if (!this.#exampleSettings) return {}
+    this.#exampleSettings = false
+    const example = Object.entries(EXAMPLE.parameters)
+    if (!example.every(([name, value]) => sameValue(this.values[name], value))) return {}
+    const preset = this.preset?.parameters ?? {}
+    const replaced: Record<string, unknown> = {}
+    for (const [name, value] of example) {
+      replaced[name] = value
+      if (name in preset) this.overrides[name] = copyValue(preset[name])
+      else delete this.overrides[name]
+    }
+    return replaced
   }
 
   setField<K extends keyof DesignFields>(id: string, field: K, value: DesignFields[K]) {
@@ -199,8 +267,13 @@ class SearchForm {
     }
   }
 
-  /** Chooses the FASTA at `path` as the database; its proteins and residues are counted by the shim. */
-  async setDatabase(path: string) {
+  /**
+   * Chooses the FASTA at `path` as the database; its proteins and residues are counted by the shim. Another
+   * database than the example's ends the example's settings.
+   */
+  async setDatabase(path: string, options: { example?: boolean } = {}) {
+    if (!options.example) this.#leaveExample()
+    this.removed = null
     const file: InputFile = { path, name: fileName(path), size: 0 }
     const choice: DatabaseChoice = { file, proteins: null, residues: null, error: null }
     this.database = choice
@@ -230,9 +303,14 @@ class SearchForm {
       if (broken) throw new Error(broken.error!)
       this.files = []
       this.notices = []
+      this.removed = null
       for (const f of facts) this.#addRow(f, { condition: EXAMPLE.condition })
-      void this.setDatabase(example.database)
+      void this.setDatabase(example.database, { example: true })
+      // the example's own settings, and the protein FDR of the preset (or ProSE's default) whatever it was
       for (const [name, value] of Object.entries(EXAMPLE.parameters)) this.setParam(name, value)
+      const preset = this.preset?.parameters ?? {}
+      this.setParam('FDR:protein', 'FDR:protein' in preset ? preset['FDR:protein'] : this.defaults['FDR:protein'])
+      this.#exampleSettings = true
     } catch (e) {
       this.notices.push(`The example could not be loaded (${errorText(e).replace(/\.$/, '')}).`)
     } finally {
