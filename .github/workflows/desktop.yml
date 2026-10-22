@@ -219,6 +219,20 @@ jobs:
           npm run check
           npm test
 
+      # Every QPX view ProSE writes passes bigbio/qpx's own validator: the reader's fixtures (made with the pin) and a
+      # search of the example by the ProSE just built, as the app runs it.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: QPX views pass bigbio/qpx's validator
+        run: |
+          python -m venv "$RUNNER_TEMP/qpx"
+          "$RUNNER_TEMP/qpx/bin/pip" install --quiet "qpx @ git+https://github.com/bigbio/qpx@0dd22d2f2bcba3cd82fee745dc3559b328a95875"
+          # (the example as the app bundles it: src-tauri/resources/{example,fasta})
+          WEB_PUBLIC=src-tauri/resources OUT="$RUNNER_TEMP/qpx-example" \
+            node scripts/results-fixture-native.mjs example src-tauri/resources/prose/bin/ProSE
+          "$RUNNER_TEMP/qpx/bin/python" -I scripts/qpx-validate.py src/lib/results/fixtures/*/qpx "$RUNNER_TEMP/qpx-example/qpx"
+
       - name: Unit tests (cargo test, with the bundled ProSE)
         working-directory: src-tauri
         env:
