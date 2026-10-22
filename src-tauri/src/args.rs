@@ -156,12 +156,12 @@ pub const DATABASE_RECORD: &str = "database.json";
 /// the results reader needs, docs/parity.md).
 pub const QPX_DIR: &str = "qpx";
 
-/// The peak filter of the stored spectra (`-qpx_peak_window`, `-qpx_peak_top`): the 300 most intense peaks
-/// per 100 m/z (and every annotated peak). Measured (task 11 report): on an Orbitrap HCD run (~1,100 peaks
-/// per MS2 spectrum) it keeps ~89 % of the peaks and loses 1.5 % of the peaks the PSM view's annotation
-/// matches (b/y/a/c/x/z, charge 1-2); 10 per 100 m/z lost 26 %.
+/// The peak filter of the stored spectra (`-qpx_peak_window`, `-qpx_peak_top`): the 100 most intense peaks
+/// per 100 m/z (and every peak ProSE annotated), the user's choice (2026-10-22). Measured on an Orbitrap HCD
+/// run (~1,100 peaks per MS2 spectrum; task 11 fix round 1 report): it keeps about half of the peaks; the
+/// loss of the peaks the PSM view's annotation matches (b/y/a/c/x/z, charge 1-2) is in that report.
 pub const PEAK_WINDOW: f64 = 100.0;
-pub const PEAK_TOP: u32 = 300;
+pub const PEAK_TOP: u32 = 100;
 
 /// The idXML of a search of several inputs (`-out_merged`), and of one input (`-out_idxml`), in the search
 /// folder (the Export menu's idXML: `src/lib/results/exports.ts`).

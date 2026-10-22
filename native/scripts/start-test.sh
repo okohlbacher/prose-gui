@@ -104,7 +104,7 @@ search() { # <folder>: copies the example there and searches it as the app does 
   cp "$EXAMPLE/DatabaseSuitability_in_spec.mzML" "$EXAMPLE/DatabaseSuitability_database.fasta" "$dir/"
   clean "$TOOL" -in "$(native "$dir/DatabaseSuitability_in_spec.mzML")" \
     -database "$(native "$dir/DatabaseSuitability_database.fasta")" \
-    -out_qpx "$(native "$dir/qpx")" -qpx_extended -qpx_peak_window 100 -qpx_peak_top 300 -keep_decoys \
+    -out_qpx "$(native "$dir/qpx")" -qpx_extended -qpx_peak_window 100 -qpx_peak_top 100 -keep_decoys \
     -threads 3 -Search:rescore true -Search:peptdeep:enable -Search:peptdeep:instrument QE \
     -Search:FDR:PSM 0.01 -Search:modifications:fixed "Carbamidomethyl (C)" \
     -Search:modifications:variable "Oxidation (M)" >"$dir/out.txt" 2>&1
@@ -118,7 +118,7 @@ fi
 seconds=$(( $(date +%s) - started ))
 grep -E '^\[PeptDeepRescoring\] Predicted features added' "$data/out.txt" \
   || die "the search did not rescore with PeptDeep: $(grep -i peptdeep "$data/out.txt" | tail -n 5)"
-for f in qpx/DatabaseSuitability_in_spec.psm.parquet qpx/quantms.psm.parquet qpx/quantms.pg.parquet; do
+for f in qpx/DatabaseSuitability_in_spec.psm.parquet qpx/quantms.psm.parquet qpx/quantms.pg.parquet qpx/quantms.run.parquet qpx/quantms.provenance.parquet; do
   [ -s "$data/$f" ] || die "the search wrote no $f"
 done
 # the target PSMs of the end-of-search report ("[ProSE] Target/decoy : 892 target / 1 decoy PSMs")

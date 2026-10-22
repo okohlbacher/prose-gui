@@ -121,7 +121,7 @@ fn the_app_outputs_are_always_requested() {
     );
     assert_eq!(
         values_of(&args, "-qpx_peak_top"),
-        vec![OsString::from("300")]
+        vec![OsString::from("100")]
     );
     for flag in ["-out_parquet", "-out_psm_spectra", "-summary_out"] {
         assert!(!has(&args, flag), "{flag}");

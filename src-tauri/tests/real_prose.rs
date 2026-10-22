@@ -146,6 +146,9 @@ fn the_example_is_searched_through_start_search() {
     for file in [
         "qpx/quantms.psm.parquet",
         "qpx/quantms.pg.parquet",
+        "qpx/quantms.run.parquet",
+        "qpx/quantms.provenance.parquet",
+        "qpx/quantms.sample.parquet",
         "qpx/1__DatabaseSuitability_in_spec.psm.parquet",
         "qpx/2__DatabaseSuitability_in_spec.psm.parquet",
     ] {
@@ -161,9 +164,10 @@ fn the_example_is_searched_through_start_search() {
     assert!(fs::read_to_string(folder.join("database.fasta"))
         .unwrap()
         .contains(">CON__sp|ALBU_BOVIN|"));
-    // the footer of the QPX psm files has the statistics of the search (the Parquet footer is not compressed)
+    // the footer of the QPX psm files has the peak filter (the Parquet footer is not compressed); the statistics of
+    // the search are in the run and provenance views
     let psm = fs::read(folder.join("qpx/quantms.psm.parquet")).unwrap();
-    for key in ["prose_files", "prose_protein_fdr_applied", "prose_peak_top"] {
+    for key in ["prose_peak_top", "prose_peak_window"] {
         assert!(
             psm.windows(key.len()).any(|w| w == key.as_bytes()),
             "{key} in the footer"
