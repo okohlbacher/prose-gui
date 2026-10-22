@@ -2,20 +2,21 @@
 // results-fixture-native.mjs with the ProSE tool (in a search folder as the shim makes it) and
 // results-fixture-web.mjs with the web app's WebAssembly module (as the web app's engine calls it).
 //
-// The data: the web app's example (WEB_PUBLIC, default the web app's `app/public` on the development
-// machine) and OpenMS' TOPP test data (OPENMS_TOPP, default the pin's `src/tests/topp`).
+// The data: the app's example and cRAP (RESOURCES, default the app's src-tauri/resources) and OpenMS' TOPP test
+// data (OPENMS_TOPP, default the pin's `src/tests/topp`).
 
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const WEB_PUBLIC = process.env.WEB_PUBLIC ?? '/scratch/sachsenb/prose-pages/app/public'
+const RESOURCES = process.env.RESOURCES ?? resolve(dirname(fileURLToPath(import.meta.url)), '../src-tauri/resources')
 const OPENMS_TOPP = process.env.OPENMS_TOPP ?? '/scratch/sachsenb/openms-desktop/src/tests/topp'
 
 /** The peak filter of the shim (src-tauri/src/args.rs PEAK_WINDOW, PEAK_TOP). */
 export const PEAK_WINDOW = 100
 export const PEAK_TOP = 100
 
-/** The cRAP of the web app, which the shim bundles as well (src-tauri/resources/fasta/crap.fasta). */
-export const CRAP = resolve(WEB_PUBLIC, 'fasta/crap.fasta')
+/** The cRAP the shim bundles (src-tauri/resources/fasta/crap.fasta), the web app's. */
+export const CRAP = resolve(RESOURCES, 'fasta/crap.fasta')
 
 /** The preset `orbitrap-hcd-tryptic` (prose-pages app/src/lib/settings/presets.ts). */
 const ORBITRAP = {
@@ -43,19 +44,33 @@ const ORBITRAP = {
  * parameters, rescore, peptdeep }
  */
 export const CASES = {
-  // The web app's example (app/src/lib/search/form.svelte.ts `EXAMPLE`): one mzML searched as two
-  // replicates, its FASTA with the contaminants (the form's default), the default preset with the
-  // example's protein FDR of 5 %, Percolator and PeptDeep.
+  // The app's example (src/lib/search/form.svelte.ts `EXAMPLE`, src-tauri/src/files.rs): OpenMS' Ecoli_MS2_small.mzML
+  // (LTQ Orbitrap XL, CID) searched as two replicates, the E. coli K-12 proteins with the contaminants (the form's
+  // default), the default preset with the example's fragment tolerance of 0.5 Da, decoys generated (the FASTA has
+  // none), Percolator and PeptDeep.
   example: {
-    mzML: resolve(WEB_PUBLIC, 'example/DatabaseSuitability_in_spec.mzML'),
+    mzML: resolve(RESOURCES, 'example/Ecoli_MS2_small.mzML'),
+    names: ['Ecoli_1.mzML', 'Ecoli_2.mzML'],
+    fasta: resolve(RESOURCES, 'example/Ecoli_K12_proteome.fasta'),
+    contaminants: true,
+    parameters: { ...ORBITRAP, 'fragment:mass_tolerance': 0.5, 'fragment:mass_tolerance_unit': 'Da' },
+    rescore: true,
+    peptdeep: true,
+  },
+  // The web app's example (prose-pages app/src/lib/search/form.svelte.ts `EXAMPLE`), the reader's comparison with the
+  // web app: OpenMS' simulated DatabaseSuitability_in_spec.mzML (the web app's app/public/example has the same files)
+  // searched as two replicates, its FASTA with the contaminants, the default preset with the web example's protein
+  // FDR of 5 % (49 proteins), Percolator and PeptDeep.
+  suitability: {
+    mzML: resolve(OPENMS_TOPP, 'THIRDPARTY/DatabaseSuitability_in_spec.mzML'),
     names: ['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'],
-    fasta: resolve(WEB_PUBLIC, 'example/DatabaseSuitability_database.fasta'),
+    fasta: resolve(OPENMS_TOPP, 'THIRDPARTY/DatabaseSuitability_database.fasta'),
     contaminants: true,
     parameters: { ...ORBITRAP, 'FDR:protein': 0.05 },
     rescore: true,
     peptdeep: true,
   },
-  // Modified peptides (the example has none): ProSE's TOPP test data of ProSE_1 (SimpleSearchEngine_1),
+  // Modified peptides (the web app's example has none): ProSE's TOPP test data of ProSE_1 (SimpleSearchEngine_1),
   // with its settings (Trypsin, 5 ppm, 0.1 Da, Carbamidomethyl (C) fixed, Oxidation (M) variable), the
   // N-terminal acetylation of the preset, generated decoys and the FDR filters off (0 filters nothing:
   // the shim requires FDR:PSM > 0, so 1).
@@ -104,7 +119,7 @@ export const CASES = {
     peptdeep: false,
   },
   // A search in which no PSM passes the FDR (as a search on the wrong database): ProSE's TOPP test database
-  // ProSE_empty.fasta, whose decoys (DECOY_, reused by decoys auto) are the real proteins of the example and its targets
+  // ProSE_empty.fasta, whose decoys (DECOY_, reused by decoys auto) are the real proteins of `suitability` and its targets
   // their reversed sequences, so the spectra match decoys only. Two inputs (the merged files) with the PSM and protein
   // FDR at 1 % and Percolator. No web counterpart: the reader's test checks that it reads as an empty result.
   empty: {

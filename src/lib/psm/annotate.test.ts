@@ -128,7 +128,7 @@ async function expectGolden(golden: Golden) {
 describe('annotatePeaks', () => {
   test("equals the web module's annotatePeaks", { timeout: 60_000 }, async () => {
     expect(golden.cases.length).toBe(236)
-    const psms = new Set(golden.cases.flatMap((c) => ('fixture' in c.spectrum && c.spectrum.fixture === 'example' ? [c.spectrum.row] : [])))
+    const psms = new Set(golden.cases.flatMap((c) => ('fixture' in c.spectrum && c.spectrum.fixture === 'suitability' ? [c.spectrum.row] : [])))
     expect(psms.size).toBeGreaterThanOrEqual(50)
     await expectGolden(golden)
   })
@@ -190,13 +190,24 @@ describe('annotatePeaks', () => {
     })
   })
 
-  test("agrees with ProSE's own annotations for b/y", { timeout: 60_000 }, async () => {
-    // ProSE's annotation of its scoring: b and y ions of charges 1 to min(charge − 1, 2), the first prefix
-    // ion included, no losses, matched with the search's fragment tolerance (20 ppm) by
-    // SpectrumAlignment (ProSEAlgorithm, the PSM annotations), named 'b3+', 'y5++'; QPX mz_array has the
-    // matched peaks' m/z
-    const r = await search('example')
-    const bytes = readFileSync(join(results, 'example/qpx/1__DatabaseSuitability_1.psm.parquet'))
+  // ProSE's annotation of its scoring: b and y ions of charges 1 to min(charge − 1, 2), the first prefix ion
+  // included, no losses, matched with the search's fragment tolerance by SpectrumAlignment (ProSEAlgorithm, the PSM
+  // annotations), named 'b3+', 'y5++'; QPX mz_array has the matched peaks' m/z.
+  // - the web app's example (Orbitrap HCD, 20 ppm): ProSE matches against the deisotoped spectrum (fragment:deisotope
+  //   'auto', on at 20 ppm): a peak one 13C spacing (charge 1, as these fragments) above another, within the
+  //   tolerance, is taken as that peak's isotope and removed. Such a peak can carry one of our ions that ProSE's
+  //   lacks; every other ion is the same, on the same peak.
+  // - the app's example (LTQ Orbitrap CID, ion-trap fragments at 0.5 Da): no deisotoping (above 0.1 Da ProSE skips
+  //   it), but ProSE scores against its peak list, which at 0.5 Da keeps about the 80 most intense peaks and 20 per
+  //   100 Da (peaks:keep_n, peaks:window_top): its ions are ours, on the same peaks or (where the list left out the
+  //   nearest peak) on a peak further from the ion than ours; ours besides are on peaks that list left out. The PSM
+  //   view annotates every stored peak.
+  test.each([
+    { fixture: 'suitability', input: '1__DatabaseSuitability_1', tolerance: 20, unit: 'ppm' as const, minIons: 5000, minRows: 800 },
+    { fixture: 'example', input: '1__Ecoli_1', tolerance: 0.5, unit: 'Da' as const, minIons: 500, minRows: 50 },
+  ])("agrees with ProSE's own annotations for b/y ($fixture, $tolerance $unit)", { timeout: 60_000 }, async ({ fixture, input, tolerance, unit, minIons, minRows }) => {
+    const r = await search(fixture)
+    const bytes = readFileSync(join(results, `${fixture}/qpx/${input}.psm.parquet`))
     const file = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
     const rows = (await parquetReadObjects({
       file,
@@ -204,16 +215,12 @@ describe('annotatePeaks', () => {
       compressors: { ZSTD: (input: Uint8Array) => new Uint8Array(zstdDecompressSync(input)) },
     })) as { sequence: string; charge: number; mz_array: number[] | null; ion_type_array: string[] | null }[]
     // the PSM rows of the first input are its QPX rows, in order
-    expect(rows.length).toBeGreaterThan(800)
+    expect(rows.length).toBeGreaterThan(minRows)
     expect(r.tables.psms.file.filter((f) => f === 0).length).toBe(rows.length)
 
-    // ProSE matches against the deisotoped spectrum (fragment:deisotope 'auto', on at 20 ppm): a peak
-    // one 13C spacing (charge 1, as these fragments) above another, within the tolerance, is taken as
-    // that peak's isotope and removed. Such a peak can carry one of our ions that ProSE's lacks; every
-    // other ion is the same, on the same peak.
     const C13C12_MASSDIFF_U = 1.0033548378
     const isotopeOfAnother = (peaks: Float32Array, at: number) =>
-      Array.from(peaks).some((p) => p < at && Math.abs(p + C13C12_MASSDIFF_U - at) <= 20e-6 * at)
+      Array.from(peaks).some((p) => p < at && Math.abs(p + C13C12_MASSDIFF_U - at) <= tolerance * 1e-6 * at)
 
     let ions = 0
     let same = 0
@@ -225,12 +232,22 @@ describe('annotatePeaks', () => {
       const charge = r.tables.psms.charge[row]
       const { mz, intensity } = await psmPeaks(r, row)
       const maxCharge = charge >= 2 ? Math.min(charge - 1, 2) : 1
-      const ours = annotatePeaks(mz, intensity, peptide, charge, { tolerance: 20, unit: 'ppm', maxCharge, ions: ['b', 'y'] })
+      const ours = annotatePeaks(mz, intensity, peptide, charge, { tolerance, unit, maxCharge, ions: ['b', 'y'] })
       const prose = (q.ion_type_array ?? []).map((name, k) => ({ ion: name.replace(/^([a-z]\d+)\+$/, '$1'), mz: Math.fround(q.mz_array![k]) }))
       const mine = ours.matches.map((m) => ({ ion: m.ion, mz: mz[m.peak] }))
       ions += prose.length
       if (JSON.stringify(mine) === JSON.stringify(prose)) {
         same++
+        continue
+      }
+      if (unit === 'Da') {
+        // each of ProSE's ions is ours, on its peak or on one at least as near to the ion's m/z
+        const missing = prose.filter((p) => {
+          const m = ours.matches.find((o) => o.ion === p.ion)
+          return !m || (mz[m.peak] !== p.mz && Math.abs(mz[m.peak] - m.theoreticalMz) > Math.abs(p.mz - m.theoreticalMz))
+        })
+        if (missing.length > 0) differences.push(`row ${row} ${peptide}/${charge}: ProSE's ${JSON.stringify(missing)} not ours (${JSON.stringify(mine)})`)
+        extra += mine.length - prose.length
         continue
       }
       // ProSE's ions are ours, in order and on the same peaks; ours besides are on isotope peaks
@@ -241,10 +258,10 @@ describe('annotatePeaks', () => {
       }
       extra += rest.length
     }
-    expect(ions).toBeGreaterThan(5000)
+    expect(ions).toBeGreaterThan(minIons)
     expect(differences, `${differences.length} of ${rows.length} PSMs differ:\n${differences.slice(0, 10).join('\n')}`).toEqual([])
-    // nearly all PSMs agree ion for ion
-    expect(same).toBeGreaterThan(0.95 * rows.length)
-    console.info(`ProSE's b/y annotation: ${same} of ${rows.length} PSMs the same, ${ions} ions; ${extra} ions more on isotope peaks of ${rows.length - same} PSMs`)
+    // at 20 ppm nearly all PSMs agree ion for ion
+    if (unit === 'ppm') expect(same).toBeGreaterThan(0.95 * rows.length)
+    console.info(`ProSE's b/y annotation (${fixture}): ${same} of ${rows.length} PSMs the same, ${ions} ions; ${extra} ions more of ${rows.length - same} PSMs`)
   })
 })

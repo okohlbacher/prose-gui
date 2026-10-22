@@ -57,7 +57,7 @@ describe('the record', () => {
       name: 'Example',
       createdAt: '2026-10-20T10:00:00.000Z',
       toolVersion: '3.6.0',
-      files: ['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'],
+      files: ['Ecoli_1.mzML', 'Ecoli_2.mzML'],
       database: 'human.fasta',
       psms: countPsms(result.outcome.tables, 0.01),
       seconds: 12.5,
@@ -97,9 +97,11 @@ describe('the record', () => {
 })
 
 describe('proteins.fasta', () => {
-  test('lists every protein of the table, decoys as searched', () => {
-    const { proteins } = result.outcome.tables
-    const fasta = proteinsFasta(result.outcome.tables)
+  test('lists every protein of the table, decoys as searched', async () => {
+    // (the web app's example: its result has decoy proteins, the app's example none)
+    const { tables } = (await exampleResult(exampleFolder('suitability'))).outcome
+    const { proteins } = tables
+    const fasta = proteinsFasta(tables)
     const lines = fasta.trimEnd().split('\n')
     expect(lines.length).toBe(2 * proteins.count)
     expect(proteins.count).toBeGreaterThan(10)
@@ -142,7 +144,7 @@ describe('a saved search', () => {
     expect(opened.result.stored).toEqual({ name: 'Example', appVersion: recordOf(result, '', '').appVersion, moduleVersion: '3.6.0' })
     expect(opened.result.settings).toEqual(result.settings)
     expect(opened.result.design).toEqual(JSON.parse(JSON.stringify(result.design)))
-    expect([opened.result.psmFdr, opened.result.proteinFdr]).toEqual([0.01, 0.05])
+    expect([opened.result.psmFdr, opened.result.proteinFdr]).toEqual([0.01, 0.01])
   })
 
   test('a search of the earlier layout (summary.yaml, no QPX columns) does not open, with a message that says why', async () => {
@@ -163,8 +165,8 @@ describe('a saved search', () => {
       asked.push(name)
       return read(id, name, range)
     }
-    // 895 target PSMs in each of the example's two files
-    expect(await psmsOfSearch(backend, '7-0')).toBe(1790)
+    // 60 target PSMs in each of the example's two files
+    expect(await psmsOfSearch(backend, '7-0')).toBe(120)
     expect(asked).toEqual([RUNS])
     await expect(psmsOfSearch(backend, 'missing')).rejects.toThrow()
     backend.folders.get('7-0')!.set(RUNS, strToU8('not parquet'))
@@ -221,19 +223,19 @@ describe('project files', () => {
     expect(id).not.toBeNull()
     expect(id).not.toBe('100-0')
     const [entry] = await other.list()
-    expect(entry).toMatchObject({ id, name: 'My search', files: ['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'], database: 'human.fasta', error: null })
+    expect(entry).toMatchObject({ id, name: 'My search', files: ['Ecoli_1.mzML', 'Ecoli_2.mzML'], database: 'human.fasta', error: null })
     // the FASTA was not exported: the sequences come from proteins.fasta
     expect(other.folders.get(id!)!.has('database.fasta')).toBe(false)
     const opened = await openSearch(other, id!)
     // the same tables; the searched files are named, not placed (the paths of the other computer are not in the project)
     const named = (files: string[]) => files.map((f) => f.split('/').pop())
     expect(opened.result.outcome.tables).toEqual({ ...result.outcome.tables, files: named(result.outcome.tables.files) })
-    expect(opened.result.outcome.tables.files).toEqual(['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'])
+    expect(opened.result.outcome.tables.files).toEqual(['Ecoli_1.mzML', 'Ecoli_2.mzML'])
     // the spectra are read when a PSM is opened: the same peaks
     const [a, b] = [await opened.result.outcome.spectra.load(5), await result.outcome.spectra.load(5)]
     expect(a.spectra.mz).toEqual(b.spectra.mz)
     expect(a.predicted).toEqual(b.predicted)
-    expect(opened.result.outcome.summary.files.map((f) => f.path)).toEqual(['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'])
+    expect(opened.result.outcome.summary.files.map((f) => f.path)).toEqual(['Ecoli_1.mzML', 'Ecoli_2.mzML'])
     expect({ ...opened.result.outcome.summary, files: [] }).toEqual({ ...result.outcome.summary, files: [] })
     expect(opened.origin.id).toBe(id)
     expect(opened.result.stored?.name).toBe('My search')
@@ -256,12 +258,12 @@ describe('project files', () => {
     expect(Object.keys(files)).not.toContain('prose.log')
     expect(Object.keys(files)).toContain('proteins.fasta')
     const inputs = JSON.parse(new TextDecoder().decode(files['inputs.json']))
-    expect(inputs.map((r: { path: string; name: string }) => r.path)).toEqual(['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'])
+    expect(inputs.map((r: { path: string; name: string }) => r.path)).toEqual(['Ecoli_1.mzML', 'Ecoli_2.mzML'])
     expect(JSON.stringify(inputs)).not.toContain('/data/')
     // the other fields of the records stay (the reader uses them)
-    expect(inputs[0]).toMatchObject({ id: 'f1', index: 0, link: '1__DatabaseSuitability_1.mzML', stem: '1__DatabaseSuitability_1' })
+    expect(inputs[0]).toMatchObject({ id: 'f1', index: 0, link: '1__Ecoli_1.mzML', stem: '1__Ecoli_1' })
     // the folder itself is untouched
-    expect(new TextDecoder().decode(backend.folders.get('100-0')!.get('inputs.json'))).toContain('/data/DatabaseSuitability_1.mzML')
+    expect(new TextDecoder().decode(backend.folders.get('100-0')!.get('inputs.json'))).toContain('/data/Ecoli_1.mzML')
     // an inputs.json that is not a list stops the export
     backend.folders.get('100-0')!.set('inputs.json', strToU8('{"a":1}'))
     await expect(exportProject(backend, '100-0', 'x')).rejects.toThrow(/inputs.json/)
@@ -318,7 +320,7 @@ describe('project files', () => {
       methods.set(new TextDecoder().decode(bytes.subarray(at + 30, at + 30 + nameLength)), method)
       at += 30 + nameLength + extra + compressed
     }
-    expect(methods.get('qpx/1__DatabaseSuitability_1.psm.parquet')).toBe(0)
+    expect(methods.get('qpx/1__Ecoli_1.psm.parquet')).toBe(0)
     expect(methods.get('inputs.json')).toBe(8)
   })
 

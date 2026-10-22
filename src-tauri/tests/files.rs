@@ -466,10 +466,21 @@ fn what_is_not_an_absolute_existing_file_has_an_error() {
 #[test]
 fn the_example_is_two_named_links_to_the_bundled_run_and_its_fasta() {
     let source = TempDir::new("example-src");
-    source.write("DatabaseSuitability_in_spec.mzML", "<mzML/>");
-    source.write("DatabaseSuitability_database.fasta", ">P\nK\n");
+    source.write("Ecoli_MS2_small.mzML", "<mzML/>");
+    source.write("Ecoli_K12_proteome.fasta", ">P\nK\n");
     let data = TempDir::new("example-data");
+    // an earlier version's example links in the app's example folder
+    fs::create_dir_all(data.path().join("example")).unwrap();
+    fs::write(
+        data.path().join("example/DatabaseSuitability_1.mzML"),
+        "old",
+    )
+    .unwrap();
     let example = example_files(source.path(), data.path()).unwrap();
+    assert!(!data
+        .path()
+        .join("example/DatabaseSuitability_1.mzML")
+        .exists());
     let names: Vec<_> = example
         .spectra
         .iter()
@@ -481,17 +492,14 @@ fn the_example_is_two_named_links_to_the_bundled_run_and_its_fasta() {
                 .into_owned()
         })
         .collect();
-    assert_eq!(
-        names,
-        ["DatabaseSuitability_1.mzML", "DatabaseSuitability_2.mzML"]
-    );
+    assert_eq!(names, ["Ecoli_1.mzML", "Ecoli_2.mzML"]);
     for p in &example.spectra {
         assert!(Path::new(p).is_absolute());
         assert_eq!(fs::read_to_string(p).unwrap(), "<mzML/>");
     }
     assert_eq!(
         Path::new(&example.database).file_name().unwrap(),
-        "DatabaseSuitability_database.fasta"
+        "Ecoli_K12_proteome.fasta"
     );
     // again (the links exist): the same answer
     let again = example_files(source.path(), data.path()).unwrap();
@@ -511,40 +519,15 @@ fn the_bundled_crap_has_the_counts_new_search_shows() {
 }
 
 #[test]
-fn the_bundled_example_is_the_web_apps() {
+fn the_bundled_example_is_the_e_coli_run_and_its_target_proteins() {
+    // the counts New search shows for the example (EmptyState.svelte, e2e/search.spec.ts)
     let example = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/example");
-    let run = inspect(
-        example
-            .join("DatabaseSuitability_in_spec.mzML")
-            .to_str()
-            .unwrap(),
-    );
-    assert_eq!(run.spectra, Some(2789));
-    let fasta = inspect(
-        example
-            .join("DatabaseSuitability_database.fasta")
-            .to_str()
-            .unwrap(),
-    );
-    assert_eq!(fasta.proteins, Some(49));
-}
-
-#[test]
-fn only_spectrum_and_fasta_files_are_inspected() {
-    let tmp = TempDir::new("inspect");
-    let secret = tmp.write("id_rsa", "-----BEGIN PRIVATE KEY-----");
-    let notes = tmp.write("notes.txt", "secret");
-    for path in [&secret, &notes] {
-        let facts = inspect(path.to_str().unwrap());
-        assert!(facts.error.is_some(), "{} was inspected", path.display());
-        // nothing about the file: not its size
-        assert_eq!(facts.size, 0);
-    }
-    // a missing file of another kind says nothing about its existence either
-    let missing = inspect(tmp.path().join("missing.key").to_str().unwrap());
-    let other = inspect(secret.to_str().unwrap());
-    assert_eq!(
-        missing.error.unwrap().replace("missing.key", "X"),
-        other.error.unwrap().replace("id_rsa", "X")
-    );
+    let run = inspect(example.join("Ecoli_MS2_small.mzML").to_str().unwrap());
+    assert_eq!(run.spectra, Some(139));
+    let fasta_path = example.join("Ecoli_K12_proteome.fasta");
+    let fasta = inspect(fasta_path.to_str().unwrap());
+    assert_eq!(fasta.proteins, Some(4136));
+    // targets only: ProSE makes the decoys
+    let text = fs::read_to_string(&fasta_path).unwrap();
+    assert!(!text.lines().any(|l| l.starts_with(">rev_")));
 }

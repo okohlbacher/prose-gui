@@ -1,12 +1,12 @@
-//! The shim against the real ProSE tool, on the web app's example.
+//! The shim against the real ProSE tool, on the app's example.
 //!
 //! Gated: set `PROSE_BIN` to the tool to run these tests: the bundled pin
 //! (`src-tauri/resources/prose/bin/ProSE`, made by `native/scripts/bundle-prose.sh`; with PeptDeep) or the
 //! pin in its build tree (for example `/scratch/sachsenb/openms-desktop/build/bin/ProSE`; it has no build
 //! manifest, so it counts as without ONNX and the searches run without PeptDeep); without it each test prints
 //! a skip message (shown with `--nocapture`) and passes. `PROSE_EXAMPLE_DIR` names the folder with
-//! `DatabaseSuitability_in_spec.mzML` and `DatabaseSuitability_database.fasta` (default: the web app's
-//! `app/public/example` on the development machine); a missing folder skips as well.
+//! `Ecoli_MS2_small.mzML` and `Ecoli_K12_proteome.fasta` (default: the app's `resources/example`); a missing
+//! folder skips as well.
 
 mod common;
 
@@ -32,18 +32,23 @@ fn real() -> Option<Real> {
     };
     let example = std::env::var_os("PROSE_EXAMPLE_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/scratch/sachsenb/prose-pages/app/public/example"));
-    if !example.join("DatabaseSuitability_in_spec.mzML").is_file()
-        || !example.join("DatabaseSuitability_database.fasta").is_file()
-    {
-        eprintln!("skipped: {} has no DatabaseSuitability_in_spec.mzML and DatabaseSuitability_database.fasta (set PROSE_EXAMPLE_DIR)", example.display());
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/example"));
+    if !example.join(MZML).is_file() || !example.join(FASTA).is_file() {
+        eprintln!(
+            "skipped: {} has no {MZML} and {FASTA} (set PROSE_EXAMPLE_DIR)",
+            example.display()
+        );
         return None;
     }
     Some(Real { bin, example })
 }
 
-/// The web app's example: the same mzML twice (here from two folders, under one name), the orbitrap
-/// preset, 5 % protein FDR, contaminants, Percolator and PeptDeep.
+/// The example's run and FASTA (src/lib/search/form.svelte.ts `EXAMPLE`).
+const MZML: &str = "Ecoli_MS2_small.mzML";
+const FASTA: &str = "Ecoli_K12_proteome.fasta";
+
+/// The app's example: the same mzML twice (here from two folders, under one name), the orbitrap preset with
+/// the example's fragment tolerance of 0.5 Da, contaminants, Percolator and PeptDeep.
 fn example_request(real: &Real, work: &TempDir, peptdeep: bool) -> SearchRequest {
     example_request_with(real, work, peptdeep, json!({}))
 }
@@ -55,21 +60,17 @@ fn example_request_with(
     peptdeep: bool,
     extra: serde_json::Value,
 ) -> SearchRequest {
-    let mzml = real.example.join("DatabaseSuitability_in_spec.mzML");
+    let mzml = real.example.join(MZML);
     let mut files = Vec::new();
     for folder in ["replicate-a", "replicate-b"] {
-        let path = work
-            .path()
-            .join("data")
-            .join(folder)
-            .join("DatabaseSuitability_in_spec.mzML");
+        let path = work.path().join("data").join(folder).join(MZML);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::copy(&mzml, &path).unwrap();
         files.push(json!({ "id": folder, "path": path }));
     }
     let mut request = json!({
         "files": files,
-        "database": real.example.join("DatabaseSuitability_database.fasta"),
+        "database": real.example.join(FASTA),
         "contaminants": true,
         "settings": {
             "parameters": {
@@ -79,12 +80,12 @@ fn example_request_with(
                 "modifications:fixed": ["Carbamidomethyl (C)"],
                 "modifications:variable": ["Oxidation (M)", "Acetyl (Protein N-term)"],
                 "FDR:PSM": 0.01,
-                "FDR:protein": 0.05,
+                "FDR:protein": 0.01,
                 "precursor:mass_tolerance_lower": 10,
                 "precursor:mass_tolerance_upper": 10,
                 "precursor:mass_tolerance_unit": "ppm",
-                "fragment:mass_tolerance": 20,
-                "fragment:mass_tolerance_unit": "ppm",
+                "fragment:mass_tolerance": 0.5,
+                "fragment:mass_tolerance_unit": "Da",
                 "peptdeep:instrument": "QE",
             },
             "rescore": true,
@@ -149,10 +150,10 @@ fn the_example_is_searched_through_start_search() {
         "qpx/quantms.run.parquet",
         "qpx/quantms.provenance.parquet",
         "qpx/quantms.sample.parquet",
-        "qpx/1__DatabaseSuitability_in_spec.psm.parquet",
-        "qpx/2__DatabaseSuitability_in_spec.psm.parquet",
-        "qpx/1__DatabaseSuitability_in_spec.mz.parquet",
-        "qpx/2__DatabaseSuitability_in_spec.mz.parquet",
+        "qpx/1__Ecoli_MS2_small.psm.parquet",
+        "qpx/2__Ecoli_MS2_small.psm.parquet",
+        "qpx/1__Ecoli_MS2_small.mz.parquet",
+        "qpx/2__Ecoli_MS2_small.mz.parquet",
     ] {
         assert!(parquet(&folder.join(file)), "{file} is a Parquet file");
     }
@@ -168,7 +169,7 @@ fn the_example_is_searched_through_start_search() {
         .contains(">CON__sp|ALBU_BOVIN|"));
     // the footer of an input's QPX mz view has the peak filter (the Parquet footer is not compressed); the
     // statistics of the search are in the run and provenance views
-    let mz = fs::read(folder.join("qpx/1__DatabaseSuitability_in_spec.mz.parquet")).unwrap();
+    let mz = fs::read(folder.join("qpx/1__Ecoli_MS2_small.mz.parquet")).unwrap();
     for key in ["prose_peak_top", "prose_peak_window"] {
         assert!(
             mz.windows(key.len()).any(|w| w == key.as_bytes()),
@@ -192,11 +193,11 @@ fn the_example_is_searched_through_start_search() {
         );
     }
     assert!(
-        labels.contains(&"Searching DatabaseSuitability_in_spec.mzML (1 of 2)..."),
+        labels.contains(&"Searching Ecoli_MS2_small.mzML (1 of 2)..."),
         "{labels:?}"
     );
     assert!(
-        labels.contains(&"Searching DatabaseSuitability_in_spec.mzML (2 of 2)..."),
+        labels.contains(&"Searching Ecoli_MS2_small.mzML (2 of 2)..."),
         "{labels:?}"
     );
     assert!(
@@ -215,7 +216,7 @@ fn the_example_is_searched_through_start_search() {
     // the inputs are linked, not copied (on Windows hard links, gone once the search is done), and
     // nothing was written next to them
     for (n, original) in originals.iter().enumerate() {
-        let link = folder.join(format!("{}__DatabaseSuitability_in_spec.mzML", n + 1));
+        let link = folder.join(format!("{}__{MZML}", n + 1));
         if cfg!(windows) {
             assert!(!link.exists(), "{link:?} is gone");
         } else {
@@ -230,7 +231,7 @@ fn the_example_is_searched_through_start_search() {
             .map(|e| e.file_name())
             .collect();
         names.sort();
-        assert_eq!(names, ["DatabaseSuitability_in_spec.mzML"]);
+        assert_eq!(names, [MZML]);
     }
 }
 
@@ -239,8 +240,15 @@ fn a_chunked_search_of_two_files_reports_progress() {
     let Some(real) = real() else { return };
     let work = TempDir::new("real-chunked");
     let onnx = tool::probe(&real.bin).unwrap().onnx;
-    // `database:chunk_size` makes ProSE search chunk-major: it prints no "Searching <file>" line
-    let request = example_request_with(&real, &work, onnx, json!({ "database:chunk_size": 20 }));
+    // `database:chunk_size` makes ProSE search chunk-major: it prints no "Searching <file>" line. (At a PSM FDR of
+    // 5 % decoys pass, so ProSE runs the pooled protein FDR and says so: "Pooling the files"; at 1 % the example
+    // has no decoy PSM, and ProSE skips it.)
+    let request = example_request_with(
+        &real,
+        &work,
+        onnx,
+        json!({ "database:chunk_size": 1000, "FDR:PSM": 0.05 }),
+    );
     let searches = Arc::new(Searches::default());
     let (sink, rx) = channel_sink();
     let crap = tool::bundled_crap(None).unwrap();
@@ -268,7 +276,7 @@ fn a_chunked_search_of_two_files_reports_progress() {
             p.fraction, p.file, p.label
         );
     }
-    // 98 target proteins and the same of decoys, plus the 116 cRAP entries: several chunks, each reported
+    // 4,136 target proteins and the same of decoys, plus the 116 cRAP entries: several chunks, each reported
     let chunks = progress
         .iter()
         .filter(|p| p.label.starts_with("Searching database chunk"))
@@ -299,7 +307,8 @@ fn a_chunked_search_of_two_files_reports_progress() {
 fn cancelling_the_real_tool_leaves_no_process_and_no_folder() {
     let Some(real) = real() else { return };
     let work = TempDir::new("real-cancel");
-    let request = example_request(&real, &work, false);
+    // (the example takes a few seconds; in chunks of 20 proteins it runs long enough to be cancelled)
+    let request = example_request_with(&real, &work, false, json!({ "database:chunk_size": 20 }));
     let searches = Arc::new(Searches::default());
     let (sink, rx) = channel_sink();
     let crap = tool::bundled_crap(None).unwrap();

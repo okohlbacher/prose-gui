@@ -34,7 +34,8 @@ const OpenMS = await createOpenMS({ numThreads: 1, print: () => {}, printErr: ()
 const version = JSON.parse(readFileSync(join(resolve(pkg), 'package.json'), 'utf8')).version
 
 const web = (name) => JSON.parse(readFileSync(join(fixtures, `web-${name}.json`), 'utf8'))
-const results = { example: web('example'), mods: web('mods') }
+// (the web app's example: the reader's fixture `suitability`; its cases keep the name "example")
+const results = { suitability: web('suitability'), mods: web('mods') }
 
 /** The stored peaks of PSM `row` of fixture `fixture` (as float32 values), its peptide and charge. */
 function psm(fixture, row) {
@@ -93,11 +94,11 @@ const add = (name, spectrum, peaks, peptide, charge, options) =>
 
 // A: 50 PSMs of the example, evenly over its rows, each with two option sets (in turn) and, every
 // fifth, the PSM view's precursor annotation
-const example = results.example.tables.psms.count
+const example = results.suitability.tables.psms.count
 const rows = Array.from({ length: 50 }, (_, i) => Math.floor((i * example) / 50))
 rows.forEach((row, i) => {
-  const p = psm('example', row)
-  const ref = { fixture: 'example', row, peaks: p.mz.length }
+  const p = psm('suitability', row)
+  const ref = { fixture: 'suitability', row, peaks: p.mz.length }
   for (const k of [(2 * i) % OPTION_SETS.length, (2 * i + 1) % OPTION_SETS.length]) {
     add(`example ${row} options ${k}`, ref, p, p.peptide, p.charge, OPTION_SETS[k])
   }
@@ -133,11 +134,11 @@ for (let v = 0; v < VARIANTS.length; v++) {
   let made = 0
   for (let i = 0; i < rows.length && made < 3; i++) {
     const row = rows[(i * 7 + v * 3) % rows.length]
-    const p = psm('example', row)
+    const p = psm('suitability', row)
     const peptide = VARIANTS[v](p.peptide)
     if (peptide === null) continue
     const options = VARIANT_OPTIONS[(v + made) % VARIANT_OPTIONS.length]
-    add(`example ${row} variant ${v}`, { fixture: 'example', row, peaks: p.mz.length }, p, peptide, p.charge, options)
+    add(`example ${row} variant ${v}`, { fixture: 'suitability', row, peaks: p.mz.length }, p, peptide, p.charge, options)
     made++
     variants++
   }
@@ -186,8 +187,8 @@ const embed = (peaks) => {
   return { embedded: embedded.length - 1, peaks: peaks.mz.length }
 }
 for (const [fixture, row, peptide, seed] of [
-  ['example', rows[3], null, 1],
-  ['example', rows[17], null, 2],
+  ['suitability', rows[3], null, 1],
+  ['suitability', rows[17], null, 2],
   ['mods', 0, null, 3],
   ['mods', 1, null, 4],
 ]) {
@@ -199,7 +200,7 @@ for (const [fixture, row, peptide, seed] of [
 }
 // equal m/z in the arrays as passed: three copies of each peak, the arrays in reverse order
 {
-  const p = psm('example', rows[9])
+  const p = psm('suitability', rows[9])
   const mz = [...p.mz, ...p.mz, ...p.mz].reverse()
   const intensity = [...p.intensity, ...p.intensity.map((x) => x * 2), ...p.intensity.map((x) => x * 3)].reverse()
   const ref = embed({ mz, intensity })
@@ -217,7 +218,7 @@ for (const [fixture, row, peptide, seed] of [
     i[0] += k
     return b[0]
   }
-  const p = psm('example', rows[5])
+  const p = psm('suitability', rows[5])
   const ions = OpenMS.annotatePeaks(new Float32Array(0), new Float32Array(0), p.peptide, p.charge, OPTION_SETS[0]).theoretical
   const mz = []
   for (const ion of ions) {
@@ -274,8 +275,8 @@ for (const [fixture, row, peptide, seed] of [
 
 // E: edge cases
 {
-  const p = psm('example', rows[0])
-  const ref = { fixture: 'example', row: rows[0], peaks: p.mz.length }
+  const p = psm('suitability', rows[0])
+  const ref = { fixture: 'suitability', row: rows[0], peaks: p.mz.length }
   const none = embed({ mz: [], intensity: [] })
   add('no peaks', none, { mz: [], intensity: [] }, p.peptide, p.charge, OPTION_SETS[1])
   add('no peaks, defaults', none, { mz: [], intensity: [] }, p.peptide, 3, null)
@@ -326,8 +327,8 @@ target = massCases
   for (const k of [1, 3, 4, 6]) add(`mods 1 mass-spelled Oxidation options ${k}`, mRef, m, mass(m.peptide), m.charge, OPTION_SETS[k])
   add('mods 1 Oxidation as residue mass', mRef, m, m.peptide.replace('M(Oxidation)', 'M[147.0354]'), m.charge, OPTION_SETS[4])
   add('mods 1 Oxidation as integer mass', mRef, m, m.peptide.replace('M(Oxidation)', 'M[+16]'), m.charge, OPTION_SETS[4])
-  const p = psm('example', rows[2])
-  const ref = { fixture: 'example', row: rows[2], peaks: p.mz.length }
+  const p = psm('suitability', rows[2])
+  const ref = { fixture: 'suitability', row: rows[2], peaks: p.mz.length }
   const seq = p.peptide
   const spelled = [
     ['N-terminal Acetyl by mass, dot notation', `.[+42.0106]${seq}`, true],

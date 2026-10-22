@@ -30,15 +30,16 @@ export const CRAP_PROTEINS = 116
 export const CRAP_RESIDUES = 38459
 
 /**
- * The example: one mzML searched twice as two replicates of condition "example", with its FASTA (the
- * shim gives the bundled run under the two names). Its database is small (49 proteins): with a decoy
- * ranked first, no protein q-value goes below 1/49, so the example is searched at a protein FDR of 5 %.
+ * The example: OpenMS' small E. coli run (Ecoli_MS2_small.mzML: LTQ Orbitrap XL, CID, 139 MS2 spectra) searched
+ * twice as two replicates of condition "example", against the E. coli K-12 proteins (targets only: ProSE makes
+ * the decoys). The shim gives the bundled run under the two names. Its fragments are measured in the ion trap,
+ * so the example sets the fragment tolerance to 0.5 Da; everything else is the preset's.
  */
 export const EXAMPLE = {
-  names: ['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'],
-  fasta: 'DatabaseSuitability_database.fasta',
+  names: ['Ecoli_1.mzML', 'Ecoli_2.mzML'],
+  fasta: 'Ecoli_K12_proteome.fasta',
   condition: 'example',
-  proteinFdr: 0.05,
+  parameters: { 'fragment:mass_tolerance': 0.5, 'fragment:mass_tolerance_unit': 'Da' },
 } as const
 
 /** The name of a path's file (either separator). */
@@ -218,7 +219,7 @@ class SearchForm {
     else this.database = { file: { ...file, size: facts.size }, proteins: facts.proteins, residues: facts.residues, error: null }
   }
 
-  /** Loads the example (two replicates of one file and its FASTA) in place of the current files. */
+  /** Loads the example (two replicates of one file and its FASTA, its fragment tolerance) in place of the current files. */
   async loadExample() {
     if (this.exampleLoading) return
     this.exampleLoading = true
@@ -231,7 +232,7 @@ class SearchForm {
       this.notices = []
       for (const f of facts) this.#addRow(f, { condition: EXAMPLE.condition })
       void this.setDatabase(example.database)
-      this.setParam('FDR:protein', EXAMPLE.proteinFdr)
+      for (const [name, value] of Object.entries(EXAMPLE.parameters)) this.setParam(name, value)
     } catch (e) {
       this.notices.push(`The example could not be loaded (${errorText(e).replace(/\.$/, '')}).`)
     } finally {

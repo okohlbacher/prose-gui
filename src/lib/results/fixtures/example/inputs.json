@@ -2,17 +2,17 @@
   {
     "id": "f1",
     "index": 0,
-    "link": "1__DatabaseSuitability_1.mzML",
-    "stem": "1__DatabaseSuitability_1",
-    "name": "DatabaseSuitability_1.mzML",
-    "path": "/data/DatabaseSuitability_1.mzML"
+    "link": "1__Ecoli_1.mzML",
+    "stem": "1__Ecoli_1",
+    "name": "Ecoli_1.mzML",
+    "path": "/data/Ecoli_1.mzML"
   },
   {
     "id": "f2",
     "index": 1,
-    "link": "2__DatabaseSuitability_2.mzML",
-    "stem": "2__DatabaseSuitability_2",
-    "name": "DatabaseSuitability_2.mzML",
-    "path": "/data/DatabaseSuitability_2.mzML"
+    "link": "2__Ecoli_2.mzML",
+    "stem": "2__Ecoli_2",
+    "name": "Ecoli_2.mzML",
+    "path": "/data/Ecoli_2.mzML"
   }
 ]

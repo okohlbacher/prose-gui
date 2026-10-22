@@ -1,6 +1,7 @@
 /// <reference types="node" />
-// Test support: the example search folder of the pinned tool (results/fixtures/example) and the result
-// the session would hold for it. Not part of the app.
+// Test support: the example search folder of the pinned tool (results/fixtures/example; or another fixture of the
+// reader, as `suitability`, the web app's example, whose result has decoy proteins) and the result the session would
+// hold for it. Not part of the app.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -11,7 +12,7 @@ import type { OpenResult } from '../search/session.svelte'
 import { folderFiles } from './history'
 import { MemoryBackend } from './memory-backend'
 
-const example = new URL('../results/fixtures/example/', import.meta.url).pathname
+const fixtures = new URL('../results/fixtures/', import.meta.url).pathname
 
 /** The files of a directory by relative name. */
 export function readDir(dir: string, prefix = ''): Record<string, Uint8Array> {
@@ -24,8 +25,8 @@ export function readDir(dir: string, prefix = ''): Record<string, Uint8Array> {
   return out
 }
 
-/** The example search folder as the shim leaves it. */
-export const exampleFolder = (): Record<string, Uint8Array> => readDir(example)
+/** The example search folder (or the reader's fixture `name`) as the shim leaves it. */
+export const exampleFolder = (name = 'example'): Record<string, Uint8Array> => readDir(join(fixtures, name))
 
 /** The example as the session holds it after the search `id`. */
 export async function exampleResult(folder: Record<string, Uint8Array>, id = '100-0'): Promise<OpenResult> {
@@ -36,9 +37,9 @@ export async function exampleResult(folder: Record<string, Uint8Array>, id = '10
     id,
     createdAt: '2026-10-20T10:00:00.000Z',
     outcome: { ...read, seconds: 12.5 },
-    design: resolveDesign([input('DatabaseSuitability_1.mzML', { condition: 'a' }), input('DatabaseSuitability_2.mzML', { condition: 'b' })]),
+    design: resolveDesign([input('Ecoli_1.mzML', { condition: 'a' }), input('Ecoli_2.mzML', { condition: 'b' })]),
     psmFdr: 0.01,
-    proteinFdr: 0.05,
+    proteinFdr: 0.01,
     settings: {
       parameters: { precursor_tolerance: 10 },
       fixedMods: ['Carbamidomethyl (C)'],

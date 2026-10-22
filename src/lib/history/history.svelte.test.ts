@@ -61,7 +61,7 @@ describe('History', () => {
       ['2-0', 'second'],
       ['1-0', 'first'],
     ])
-    expect(history.entries[0]).toMatchObject({ files: ['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'], database: 'human.fasta', error: null })
+    expect(history.entries[0]).toMatchObject({ files: ['Ecoli_1.mzML', 'Ecoli_2.mzML'], database: 'human.fasta', error: null })
     expect(history.entries[0].psms).toBeGreaterThan(0)
     expect(history.entries[0].bytes).toBeGreaterThan(1000)
 
@@ -114,7 +114,7 @@ describe('History', () => {
     expect(history.save).toEqual({ id: '1-0', state: 'saved' })
     expect(history.entries.map((e) => e.id)).toEqual(['1-0'])
     // the name of a search is that of the exports until it is renamed
-    expect(history.entries[0].name).toBe('DatabaseSuitability')
+    expect(history.entries[0].name).toBe('Ecoli')
 
     disk.addFolder('2-0', fixture)
     disk.failures.save = 'no space left'
@@ -195,7 +195,7 @@ describe('History', () => {
 
   test('the project of a search that failed to save is saved to History first; if that fails, it says so', async () => {
     disk.addFolder('5-0', fixture)
-    expect(await saveProjectFile({ ...result, id: '5-0' })).toBe('/saved/DatabaseSuitability.prose')
+    expect(await saveProjectFile({ ...result, id: '5-0' })).toBe('/saved/Ecoli.prose')
     expect(history.entries.map((e) => e.id)).toContain('5-0')
     disk.addFolder('6-0', fixture)
     disk.failures.save = 'read-only'

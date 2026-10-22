@@ -15,25 +15,25 @@ vi.mock('./session.svelte', () => ({
 }))
 vi.mock('../route.svelte', () => ({ navigate: vi.fn() }))
 
-/** The shim's file facts: an mzML of 2,789 spectra, a FASTA of 49 proteins, by name. */
+/** The shim's file facts: an mzML of 139 spectra, a FASTA of 4,136 proteins, by name. */
 const facts = (path: string): FileFacts => {
   const name = path.split('/').pop()!
   const fasta = name.endsWith('.fasta')
   return {
     path,
     name,
-    size: fasta ? 29515 : 6518159,
-    spectra: fasta ? null : 2789,
-    proteins: fasta ? 49 : null,
-    residues: fasta ? 23000 : null,
+    size: fasta ? 1686907 : 1152596,
+    spectra: fasta ? null : 139,
+    proteins: fasta ? 4136 : null,
+    residues: fasta ? 1306000 : null,
     error: null,
   }
 }
 vi.mock('../desktop', () => ({
   inspectFiles: vi.fn(async (paths: string[]) => paths.map(facts)),
   exampleFiles: vi.fn(async () => ({
-    spectra: ['/data/example/DatabaseSuitability_1.mzML', '/data/example/DatabaseSuitability_2.mzML'],
-    database: '/app/resources/example/DatabaseSuitability_database.fasta',
+    spectra: ['/data/example/Ecoli_1.mzML', '/data/example/Ecoli_2.mzML'],
+    database: '/app/resources/example/Ecoli_K12_proteome.fasta',
   })),
   errorText: (e: unknown) => String(e),
 }))
@@ -83,15 +83,17 @@ describe('the search request', () => {
       enzyme: 'Trypsin/P',
       'modifications:variable': ['Oxidation (M)', 'Acetyl (Protein N-term)'],
       'FDR:PSM': 0.01,
-      // the example's protein FDR (its database is small)
-      'FDR:protein': 0.05,
+      'FDR:protein': 0.01,
       'peptide:missed_cleavages': 2,
+      // the example's ion-trap fragments
+      'fragment:mass_tolerance': 0.5,
+      'fragment:mass_tolerance_unit': 'Da',
     })
     for (const name of Object.keys(r.settings.parameters)) expect(allowlist.has(name), name).toBe(true)
     expect(r.settings).toMatchObject({ rescore: true, peptdeep: false, threads: 0 })
     expect(r.contaminants).toBe(true)
     expect(searchPlan.line).toBe(
-      '2 files in 2 samples · 49 proteins + 116 cRAP + decoys · example: 5 % protein FDR, small database',
+      '2 files in 2 samples · 4,136 proteins + 116 cRAP + decoys · ion-trap example, 0.5 Da fragment tolerance',
     )
   })
 
@@ -163,7 +165,7 @@ describe('the footer', () => {
     expect(searchPlan.problem).toBe('Choose a FASTA database to start.')
     await form.addFiles(['/db/db.fasta'])
     await settle()
-    expect(searchPlan.line).toBe('1 file · 49 proteins + 116 cRAP + decoys')
+    expect(searchPlan.line).toBe('1 file · 4,136 proteins + 116 cRAP + decoys')
     expect(searchPlan.canStart).toBe(true)
     form.setParam('modifications:variable', ['Oxidation (M)', 'Nonsense (Q)'])
     expect(searchPlan.problem).toMatch(/^Unknown modification: Nonsense \(Q\)\. ProSE does not know this name/)

@@ -35,8 +35,8 @@ const { canRetrySave, dismissSaveStatus, history, initHistory, openAgain, refres
 
 const request: SearchRequest = {
   files: [
-    { id: 'f1', path: '/data/DatabaseSuitability_1.mzML' },
-    { id: 'f2', path: '/data/DatabaseSuitability_2.mzML' },
+    { id: 'f1', path: '/data/Ecoli_1.mzML' },
+    { id: 'f2', path: '/data/Ecoli_2.mzML' },
   ],
   database: '/db/human.fasta',
   contaminants: true,
@@ -93,8 +93,8 @@ describe('a search as it ends', () => {
     // when the results were read, the search was in History already (an app closed meanwhile keeps it)
     expect(atRead).toEqual({ record: true, proteins: false, listed: true })
     const record = JSON.parse(text(disk.folders.get('30-0')!.get('search.json')))
-    // the PSMs of the footer: 895 target PSMs in each of the two files
-    expect(record).toMatchObject({ id: '30-0', name: 'DatabaseSuitability', psms: 1790, files: ['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'], database: 'human.fasta' })
+    // the PSMs of the footer: 60 target PSMs in each of the two files
+    expect(record).toMatchObject({ id: '30-0', name: 'Ecoli', psms: 120, files: ['Ecoli_1.mzML', 'Ecoli_2.mzML'], database: 'human.fasta' })
     expect(record.seconds).toBeGreaterThanOrEqual(0)
     await settle()
     await settle()
@@ -103,7 +103,7 @@ describe('a search as it ends', () => {
     expect(folder.has('proteins.fasta')).toBe(true)
     expect(folder.has('database.fasta')).toBe(false)
     expect(history.save).toEqual({ id: '30-0', state: 'saved' })
-    expect(history.entries.find((e) => e.id === '30-0')).toMatchObject({ psms: 1790, error: null })
+    expect(history.entries.find((e) => e.id === '30-0')).toMatchObject({ psms: 120, error: null })
   })
 
   it('cannot be cancelled once ProSE has ended (the done won): it is saved and opened, its folder kept', async () => {
@@ -127,7 +127,7 @@ describe('a search as it ends', () => {
 
   it('whose results cannot be read stays in History, and opens again', async () => {
     const search = started('32-0')
-    fake.read.mockRejectedValueOnce(new Error('qpx/1__DatabaseSuitability_1.psm.parquet: not a Parquet file'))
+    fake.read.mockRejectedValueOnce(new Error('qpx/1__Ecoli_1.psm.parquet: not a Parquet file'))
     const run = runSearch(request, meta)
     await settle()
     search.finish()
@@ -135,7 +135,7 @@ describe('a search as it ends', () => {
     expect(searchRun.status).toBe('failed')
     expect(searchRun.failure).toMatchObject({ context: 'While reading the results', searchId: '32-0' })
     await refreshHistory()
-    expect(history.entries.find((e) => e.id === '32-0')).toMatchObject({ error: null, psms: 1790 })
+    expect(history.entries.find((e) => e.id === '32-0')).toMatchObject({ error: null, psms: 120 })
     expect(disk.folders.get('32-0')!.has('proteins.fasta')).toBe(false)
     // opened again (from the error, or from History): read, shown, and its proteins.fasta written now
     await openAgain('32-0')

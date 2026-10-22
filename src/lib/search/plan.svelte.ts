@@ -3,7 +3,6 @@
 // shim lets through, the rescoring switches, the threads).
 
 import type { SearchRequest } from '../desktop'
-import { formatPercent } from '../format/fdr'
 import { navigate } from '../route.svelte'
 import { unknownModifications } from '../settings/modifications'
 import { copyValues, requestParameters } from '../settings/parameters'
@@ -38,7 +37,9 @@ class SearchPlan {
     } else {
       parts.push('no database yet')
     }
-    if (form.isExample) parts.push(`example: ${formatPercent(Number(form.value('FDR:protein')))} protein FDR, small database`)
+    if (form.isExample) {
+      parts.push(`ion-trap example, ${form.value('fragment:mass_tolerance')} ${form.value('fragment:mass_tolerance_unit')} fragment tolerance`)
+    }
     return parts.join(' · ')
   })
 

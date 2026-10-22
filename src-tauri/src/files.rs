@@ -388,11 +388,13 @@ pub fn inspect(path: &str) -> FileFacts {
     facts
 }
 
-/// The bundled example: the web app's run and its FASTA.
-pub const EXAMPLE_RUN: &str = "DatabaseSuitability_in_spec.mzML";
-pub const EXAMPLE_FASTA: &str = "DatabaseSuitability_database.fasta";
-/// The run is searched twice, as two replicates, under these names (as in the web app).
-pub const EXAMPLE_NAMES: [&str; 2] = ["DatabaseSuitability_1.mzML", "DatabaseSuitability_2.mzML"];
+/// The bundled example: OpenMS' example run `share/OpenMS/examples/ID/Ecoli_MS2_small.mzML` (LTQ Orbitrap XL, CID,
+/// 139 MS2 spectra) and the E. coli K-12 proteins of OpenMS' `target_decoy_Ecoli_K12_TaxID_83333.proteomes.fasta`
+/// without its decoys (ProSE generates its own).
+pub const EXAMPLE_RUN: &str = "Ecoli_MS2_small.mzML";
+pub const EXAMPLE_FASTA: &str = "Ecoli_K12_proteome.fasta";
+/// The run is searched twice, as two replicates, under these names.
+pub const EXAMPLE_NAMES: [&str; 2] = ["Ecoli_1.mzML", "Ecoli_2.mzML"];
 
 /// Where the bundled example is. In development (no bundle yet) the folder in the source tree.
 pub fn bundled_example(resource_dir: Option<&Path>) -> Option<PathBuf> {
@@ -430,7 +432,7 @@ fn is_example_link(link: &Path, run: &Path) -> bool {
 
 /// The bundled example run under another name. Windows has no symbolic links without a privilege: a
 /// hard link, or, where the app's data is on another drive than the app, a copy of the bundled file (the
-/// app's own example, 6.5 MB; the user's files are never copied).
+/// app's own example, 1.2 MB; the user's files are never copied).
 fn link_example(run: &Path, link: &Path) -> io::Result<()> {
     #[cfg(unix)]
     return std::os::unix::fs::symlink(run, link);
@@ -439,7 +441,8 @@ fn link_example(run: &Path, link: &Path) -> io::Result<()> {
 }
 
 /// The example's inputs: the bundled run under its two names, as links in `<data_dir>/example/`
-/// (the app's own folder; nothing is written beside the bundle), and the bundled FASTA.
+/// (the app's own folder; nothing is written beside the bundle), and the bundled FASTA. Other files there
+/// (the links of an earlier version's example) are removed.
 pub fn example_files(source_dir: &Path, data_dir: &Path) -> Result<ExampleFiles, String> {
     let run = source_dir.join(EXAMPLE_RUN);
     let fasta = source_dir.join(EXAMPLE_FASTA);
@@ -449,6 +452,13 @@ pub fn example_files(source_dir: &Path, data_dir: &Path) -> Result<ExampleFiles,
     let dir = data_dir.join("example");
     fs::create_dir_all(&dir)
         .map_err(|e| format!("The example folder {} cannot be made ({e}).", dir.display()))?;
+    // (the folder is the app's: what is not this example's is an earlier example's link or copy)
+    for entry in fs::read_dir(&dir).into_iter().flatten().flatten() {
+        let stale = !EXAMPLE_NAMES.iter().any(|n| entry.file_name() == *n);
+        if stale && entry.file_type().is_ok_and(|t| !t.is_dir()) {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
     let mut spectra = Vec::new();
     for name in EXAMPLE_NAMES {
         let link = dir.join(name);

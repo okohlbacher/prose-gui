@@ -39,7 +39,8 @@
       </div>
     </div>
     <p class="text-xs text-muted-foreground">
-      The example searches one run (2,789 spectra) twice, as two replicates, against its FASTA.
+      The example is a small E. coli run with 139 spectra. It is searched twice, as two replicates, against the E. coli
+      proteome.
     </p>
     <NoticeList items={form.notices.map((message, k) => ({ message, onDismiss: () => form.notices.splice(k, 1) }))} />
   </Card.Content>
