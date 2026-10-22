@@ -39,9 +39,10 @@ libglvnd-gles` (Fedora).
   TMT search of a 78 MB mzML against the human reference proteome (no database chunks) peaked at 7.1 GB. Larger
   searches can split the database (Settings › Advanced, `database:chunk_size`). The results are read into the
   app's page: see "Known limitations".
-- Disk: each search keeps ProSE's QPX outputs, most of it the spectra of the PSMs (the 300 most intense peaks per
-  100 m/z and every annotated peak): about 9 MB per thousand PSMs of an Orbitrap HCD run with ~1,100 peaks per
-  MS2 spectrum (the file of each input and the merged file of all), under 1 MB for the example's small spectra.
+- Disk: each search keeps ProSE's QPX outputs, most of it the spectra of the PSMs (the 100 most intense peaks per
+  100 m/z and every annotated peak, in each input's psm file): about 3.5 MB per thousand PSMs of an Orbitrap HCD
+  run with ~1,100 peaks per MS2 spectrum (3.2 MB the input's file, 0.3 MB the merged file of all inputs, which has no
+  spectra), under 1 MB for the example's small spectra.
 
 ## Where the data is
 
@@ -62,37 +63,36 @@ Export › Project (`.prose`) writes a search as one zip, which Open project (Hi
 It holds the search's folder as the app keeps it: ProSE's outputs (the QPX Parquet files, the idXML, the
 open-search tables), `search.json`, `proteins.fasta`, and `inputs.json` with the files' names only. Left out are
 ProSE's log, the database copy with the contaminants and `database.json` (the path of a database searched without
-them). **ProSE's outputs name folders of the computer that searched** (e.g. the database's path in the footer of
-the QPX psm files, the input and database paths in the idXML), and the project carries them as they are: share it
+them). **ProSE's outputs name folders of the computer that searched** (e.g. the database's path and all of ProSE's
+parameters in the QPX provenance view, the input and database paths in the idXML), and the project carries them as they are: share it
 where that is fine. A search saved by an earlier version of the app (with `summary.yaml` and OpenMS' own Parquet
-files) does not open in this one: History and Open project say so. A project file holds at
+files, or without the QPX run and provenance views) does not open in this one: History and Open project say so. A project file holds at
 most 3 GB (larger searches are refused with a message; they stay in History).
 
 ## Known limitations
 
-- **Large results.** The page reads a search's outputs into memory (the Parquet files through the app's IPC, then
-  decoded into the tables, the spectra and predictions of every PSM included), so the computer's memory bounds
-  the largest result that opens. Measured with synthetic saved searches of one file (`e2e/large.spec.ts`, the
-  rows of the example repeated; WebKitGTK 2.52 on Linux, a 128-core machine):
+- **Large results.** The page reads a search's PSM rows into memory (`quantms.psm.parquet` through the app's IPC,
+  decoded into the tables); the peaks and predictions of a PSM are read from its input's file when the PSM is
+  opened (one row group of 256 PSMs, the last four kept), so they no longer count. The computer's memory bounds
+  the largest result that opens. Measured with saved searches of one input made of the rows of a real Orbitrap
+  HCD search (iPRG2015, 20,716 PSMs, ~30 scores and features per PSM, the input's file with its real filtered
+  spectra) repeated (`e2e/large.spec.ts`; WebKitGTK 2.52 on Linux, a 128-core machine):
 
   | PSMs | files | opens in | memory of the web process |
   | --- | --- | --- | --- |
-  | 500,000 | 106 MB | 8 s | 1.9 GB |
-  | 1,000,000 | 211 MB | 15 s | 3.5 GB |
-  | 2,000,000 | 421 MB | 33 s | 6.1 GB |
-  | 4,000,000 | 845 MB | 72 s | 11.5 GB |
-  | 8,000,000 | 1.7 GB | 197 s | 22.7 GB |
+  | 500,000 | 1.7 GB | 7 s | 2.5 GB |
+  | 1,000,000 | 3.5 GB | 15 s | 5.3 GB |
+  | 2,000,000 | 7.0 GB | 39 s | 10.5 GB |
+  | 4,000,000 | 13.9 GB | 116 s | 18.3 GB |
+  | 8,000,000 | 27.8 GB | – | the page died after 392 s |
 
-  About 2.8 GB per million PSMs: a computer with 16 GB opens about 4 million, with 32 GB about 8 million (no
-  larger result was tried). These rows have the example's small spectra (about 20 peaks); a PSM of a real
-  Orbitrap HCD run keeps about 950 peaks (the peak filter's 300 per 100 m/z), some 8 kB more in memory, so
-  there the limit is lower (about a million PSMs with 16 GB, not measured). The synthetic files compress better than real ones (their rows repeat); the memory
-  is what decoding them takes. On Windows the webview (WebView2) runs Chromium's JavaScript engine, whose arrays
-  are smaller: the same reader in Node.js (the same engine) reads 4 million PSMs but not 8 million ("Invalid
-  array length": the predicted ions of all PSMs are one array), so there the limit lies between the two; macOS'
-  webview is WebKit, as on Linux. Project files are made and read in memory too, and hold at most 3 GB (fflate
-  writes no zip64; a larger search is refused with a message). Later, not now: streaming the project zip (with
-  zip64), and reading the peaks and predictions of a PSM on demand instead of all of them at once.
+  About 5 GB per million PSMs: a computer with 16 GB opens about 2.5 million, with 32 GB about 5 million; 8
+  million did not open even with memory to spare (WebKit's limits). Most of the files is the spectra, which are
+  not read at open (the PSM rows are 0.3 MB per thousand PSMs). On Windows the webview (WebView2) runs Chromium's
+  JavaScript engine, whose arrays are smaller (an earlier measurement in Node.js, the same engine, read 4 million
+  synthetic PSMs but not 8 million), so there the limit is not higher; macOS' webview is WebKit, as on Linux.
+  Project files are made and read in memory too, and hold at most 3 GB (fflate writes no zip64; a larger search
+  is refused with a message). Later, not now: streaming the project zip (with zip64).
 - macOS: Apple silicon only; not signed with a Developer ID (see Install).
 - Windows: two inputs of one name are searched together only when they are on the drive of the app's data.
 
