@@ -81,7 +81,7 @@
       <a
         href={formatHash({ view: 'search' })}
         class="rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-        title="{searchProgress.label} – back to New search"
+        title="{searchProgress.label}. Click to go back to New search."
         aria-label="Search running{searchProgress.indeterminate ? '' : `, ${searchProgress.percent} %`}: back to New search"
         data-testid="topbar-search-progress">
         <SearchProgress compact />

@@ -14,7 +14,7 @@ import { toolState } from './tool.svelte'
 function unknownMessage(names: string[]): string {
   return (
     `${names.length === 1 ? 'Unknown modification' : 'Unknown modifications'}: ${names.join(', ')}. ` +
-    'ProSE does not know this name; choose one from the list.'
+    `ProSE does not know ${names.length === 1 ? 'this name' : 'these names'}. Choose from the list instead.`
   )
 }
 

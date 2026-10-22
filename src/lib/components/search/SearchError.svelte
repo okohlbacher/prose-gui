@@ -49,7 +49,7 @@
       {#if failure.searchId}
         <p class="mt-1 text-foreground" data-testid="search-error-kept">
           {saved(failure.searchId)
-            ? 'ProSE finished the search, and it is kept in History: it can be opened again from there or here.'
+            ? 'ProSE finished the search, and it is saved in History. You can open it again here or from History.'
             : 'ProSE finished the search, but it could not be saved to History yet.'}
         </p>
       {/if}
@@ -63,7 +63,7 @@
             <p class="mt-1 font-mono text-[11.5px] break-all whitespace-pre-line">{failure.detail}</p>
           {/if}
           {#if failure.log}
-            <p class="mt-1 text-xs break-all">The whole log of the search: <span class="font-mono">{failure.log}</span></p>
+            <p class="mt-1 text-xs break-all">Full log: <span class="font-mono">{failure.log}</span></p>
           {/if}
         </details>
       {/if}

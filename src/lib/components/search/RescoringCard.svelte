@@ -32,7 +32,7 @@
       <div class="min-w-0">
         <Label for="percolator" class="text-[13px] font-semibold">Percolator</Label>
         <p id="percolator-hint" class="mt-0.5 text-xs text-muted-foreground">
-          Learns from targets and decoys which PSM features separate them; typically 10–20 % more PSMs at the same FDR.
+          Learns which PSM features separate targets from decoys. This typically gives 10–20 % more PSMs at the same FDR.
         </p>
       </div>
     </div>
@@ -47,11 +47,11 @@
       <div class="min-w-0 flex-1">
         <Label for="peptdeep" class="text-[13px] font-semibold">PeptDeep predictions</Label>
         <p id="peptdeep-hint" class="mt-0.5 text-xs text-muted-foreground">
-          Adds agreement with predicted fragment intensities and retention times as Percolator features.
+          Percolator also uses how well the fragment intensities and retention times match PeptDeep's predictions.
           {#if peptdeepBlocked === 'percolator'}
-            <span class="text-foreground">Needs Percolator: switch it on to use PeptDeep.</span>
+            <span class="text-foreground">Switch on Percolator to use PeptDeep.</span>
           {:else if peptdeepBlocked === 'onnx'}
-            <span class="text-foreground">This ProSE has no ONNX Runtime.</span>
+            <span class="text-foreground">This ProSE build has no ONNX Runtime, which PeptDeep needs.</span>
           {/if}
         </p>
       </div>

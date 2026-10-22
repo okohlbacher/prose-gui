@@ -33,9 +33,9 @@
     <Dialog.Header>
       <Dialog.Title>Paste from spreadsheet</Dialog.Title>
       <Dialog.Description>
-        Copy the cells in your spreadsheet and paste them here (Ctrl+V). Columns: File, Condition, Replicate, Fraction,
-        optionally Tech. replicate. With a header row, the columns can be in any order; without file names, paste one row
-        per file in table order.
+        Copy the cells in your spreadsheet and paste them here (Ctrl+V). Use the columns File, Condition, Replicate and
+        Fraction, and Tech. replicate if you need it. With a header row, the columns can be in any order. Without file
+        names, paste one row per file in table order.
       </Dialog.Description>
     </Dialog.Header>
     <Textarea

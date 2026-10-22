@@ -103,7 +103,7 @@
         onValue={setPrecursor}
         onUnit={(u) => form.setParam('precursor:mass_tolerance_unit', u)} />
       {#if lower !== upper}
-        <p class="text-xs text-muted-foreground">Asymmetric: −{lower} / +{upper}. Typing sets both sides.</p>
+        <p class="text-xs text-muted-foreground">The tolerance is asymmetric (−{lower} / +{upper}). Typing a value sets both sides.</p>
       {/if}
     </div>
     <div class="grid min-w-0 gap-1">
@@ -187,7 +187,7 @@
             value={form.threads ?? undefined}
             onChange={(v) => (form.threads = v)}
             onClear={() => (form.threads = null)} />
-          <p class="text-xs text-muted-foreground">Empty: all cores.</p>
+          <p class="text-xs text-muted-foreground">Leave empty to use all cores.</p>
         </div>
         <div class="grid min-w-0 content-start gap-1">
           <Label for="chunk-size" class="text-xs">Database chunk size</Label>
@@ -197,7 +197,7 @@
             min={0}
             value={form.value<number>('database:chunk_size')}
             onChange={(v) => form.setParam('database:chunk_size', v)} />
-          <p class="text-xs text-muted-foreground">Proteins per chunk of the fragment index; 0: the whole database at once.</p>
+          <p class="text-xs text-muted-foreground">How many proteins go into each part of the search index. 0 indexes the whole database at once.</p>
         </div>
       </div>
     {/if}

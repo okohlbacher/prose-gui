@@ -42,7 +42,7 @@
   )
   const titles = {
     ok: undefined,
-    unknown: 'ProSE does not know this modification: remove it and choose one from the list.',
+    unknown: 'ProSE does not know this modification. Remove it and choose one from the list.',
   }
 
   /** The typed name expanded to ProSE's names, if they all exist (or anything without the list). */
@@ -127,7 +127,7 @@
               {/each}
             </Command.Group>
             {#if matches.length > LIMIT}
-              <p class="px-2 py-1.5 text-xs text-muted-foreground">{matches.length - LIMIT} more: type to narrow down.</p>
+              <p class="px-2 py-1.5 text-xs text-muted-foreground">{matches.length - LIMIT} more. Type to narrow the list.</p>
             {/if}
           {/if}
         </Command.List>

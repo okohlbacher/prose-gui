@@ -111,8 +111,8 @@
     <div>
       <h1 class="mb-1 text-xl font-semibold tracking-tight">History</h1>
       <p class="text-muted-foreground">
-        Finished searches are kept on this computer with their results and the spectra of their PSMs; the mzML files stay
-        where they are.
+        Finished searches are saved on this computer with their results and the spectra of their PSMs. Your mzML files
+        stay where they are.
       </p>
     </div>
     <div>
@@ -147,8 +147,8 @@
     <div class="rounded-lg border border-dashed bg-background px-6 py-10 text-center" data-testid="history-empty">
       <p class="text-sm font-medium">No saved searches yet</p>
       <p class="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-        Every finished search is kept here, on this computer, so that you can open it again after a restart, spectra
-        included. A project file saved from the Export menu can be opened above.
+        Finished searches are saved here with their spectra, so you can reopen them later. To open a project file someone
+        sent you, use Open project above.
       </p>
     </div>
   {:else}
@@ -159,8 +159,8 @@
             <Table.Head scope="col" class="{head} text-left">Name</Table.Head>
             <Table.Head scope="col" class="{head} text-left">Finished</Table.Head>
             <Table.Head scope="col" class="{head} text-left">Files</Table.Head>
-            <Table.Head scope="col" class="{head} text-right" title="Target PSMs within the search's PSM FDR">PSMs</Table.Head>
-            <Table.Head scope="col" class="{head} text-right" title="What the search's folder takes on this computer">Size</Table.Head>
+            <Table.Head scope="col" class="{head} text-right" title="Target PSMs that pass the search's PSM FDR">PSMs</Table.Head>
+            <Table.Head scope="col" class="{head} text-right" title="Disk space the search takes on this computer">Size</Table.Head>
             <Table.Head scope="col" class="{head} text-right"><span class="sr-only">Actions</span></Table.Head>
           </Table.Row>
         </Table.Header>
@@ -230,8 +230,8 @@
     <Dialog.Header>
       <Dialog.Title>Delete this search?</Dialog.Title>
       <Dialog.Description>
-        “{deleting?.name ?? deleting?.id}” and its results are removed from this computer. The mzML files and a project file
-        you saved from it are not affected.
+        This removes “{deleting?.name ?? deleting?.id}” and its results from this computer. Your mzML files and any project
+        file you saved from it are kept.
       </Dialog.Description>
     </Dialog.Header>
     <Dialog.Footer>

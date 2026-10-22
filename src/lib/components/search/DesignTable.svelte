@@ -142,7 +142,7 @@
           class="inline-flex h-5 items-center rounded-[5px] border bg-muted px-1.5 text-[11.5px] font-medium [font-feature-settings:'case']"
           data-testid="design-summary">{design.summary}</span>
         <span class="text-xs text-muted-foreground">
-          Empty fields: unfractionated, replicates numbered in file order. Greyed values are assumed.
+          An empty Fraction means unfractionated. Empty replicates are numbered in file order. Grey values are assumed.
         </span>
         <div class="flex-1"></div>
         <div class="flex items-center gap-2">
@@ -164,7 +164,7 @@
               <th scope="col" class="{th} w-[96px]">Fraction</th>
               {#if form.advanced}
                 <th scope="col" class="{th} w-[96px]">Tech. replicate</th>
-                <th scope="col" class="{th} w-[80px] text-right" title="OpenMS Fraction_Group: the files of one measurement of one sample"
+                <th scope="col" class="{th} w-[80px] text-right" title="The files of one measurement of one sample. OpenMS calls this Fraction_Group."
                   >Fraction group</th>
                 <th scope="col" class="{th} w-[150px]" title="Condition + Replicate">Sample</th>
               {/if}
@@ -249,7 +249,7 @@
 
     {#if !multi}
       <p class="text-xs text-muted-foreground">
-        One file needs no design. Add more files to describe an experiment: conditions, replicates and fractions.
+        One file needs no design. Add more files to describe an experiment with conditions, replicates and fractions.
       </p>
     {/if}
 

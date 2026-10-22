@@ -28,7 +28,7 @@
     <Dialog.Header>
       <Dialog.Title>Save as preset</Dialog.Title>
       <Dialog.Description>
-        Keeps the settings that differ from ProSE's defaults in the app, on this computer. Percolator and PeptDeep are not
+        The app saves the settings that differ from ProSE's defaults on this computer. Percolator and PeptDeep are not
         part of a preset.
       </Dialog.Description>
     </Dialog.Header>

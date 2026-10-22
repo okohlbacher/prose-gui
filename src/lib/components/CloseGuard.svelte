@@ -43,7 +43,7 @@
     <Dialog.Header>
       <Dialog.Title>A search is running</Dialog.Title>
       <Dialog.Description>
-        Closing ProSE now ends the search, and nothing of it is kept.
+        If you close ProSE now, the search stops and nothing from it is kept.
       </Dialog.Description>
     </Dialog.Header>
     <Dialog.Footer>

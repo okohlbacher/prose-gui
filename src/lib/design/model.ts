@@ -239,7 +239,7 @@ export function resolveDesign(inputs: DesignInput[]): DesignResolution {
     if (list.length < 2) continue
     notices.push({
       kind: 'duplicateFile',
-      message: `${name} is listed ${list.length} times. Rename or remove one of them: every file needs its own name.`,
+      message: `${name} is listed ${list.length} times. Every file needs its own name, so rename or remove one of them.`,
       rows: list.map((i) => inputs[i].id),
     })
   }
