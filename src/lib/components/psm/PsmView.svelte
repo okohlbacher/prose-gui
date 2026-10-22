@@ -27,6 +27,7 @@
     matchSummary,
     modificationList,
     nceFor,
+    onePlusHidden,
     precursorOptions,
     predictedIons,
     resolveOptions,
@@ -85,7 +86,8 @@
   /** The shift as a number on the page (a real minus); `shift` is the ProForma text. */
   const shiftText = $derived(shift === null ? null : signedNumber(ps.deltaMass[row], 4))
   const scan = $derived(scanNumber(ps.nativeId[row]))
-  const spectrumName = $derived(scan === null ? `spectrum ${ps.nativeId[row]}` : `scan ${scan}`)
+  // (no native ID: ProSE stored no spectrum for the PSM, the reader gives none)
+  const spectrumName = $derived(scan !== null ? `scan ${scan}` : ps.nativeId[row] ? `spectrum ${ps.nativeId[row]}` : 'spectrum without native ID')
 
   // the search's settings: the parameters it changed, else ProSE's defaults
   const parameters = $derived(view.result.settings.parameters)
@@ -165,6 +167,8 @@
   const table = $derived(result ? ionTable(result.theoretical, shown, sequence.length, options) : null)
   const cuts = $derived(ladderCuts(shown, sequence.length))
   const summary = $derived(result && peaks ? matchSummary(shown, theoretical, peaks.intensity) : null)
+  /** Nothing matches with 1+ fragments hidden: a hint with a button that shows them. */
+  const hiddenOnePlus = $derived(result !== null && peaks !== null && onePlusHidden(shown, options))
 
   // PeptDeep's prediction for the lower half, as ProSE wrote it for this PSM (at the NCE of its file)
   const prediction = $derived(spectra?.data ? predictedIons(spectra.data.predicted, spectra.data.row) : [])
@@ -534,6 +538,12 @@
         title={spectrumTitle}
         description={spectrumDescription}
         onTheoretical={() => (view.psmOptions.bottom = 'theoretical')} />
+      {#if hiddenOnePlus}
+        <p class="flex flex-wrap items-center gap-2 pb-1 text-xs text-muted-foreground" role="status" data-testid="oneplus-hint">
+          No fragment peaks match. 1+ fragments are hidden.
+          <Button variant="outline" size="sm" class="h-6 px-2 text-xs" onclick={() => setCharge(1, true)}>Show 1+</Button>
+        </p>
+      {/if}
       {#if peakFilter}
         <p class="pb-1 text-xs text-muted-foreground" data-testid="peak-filter-note">
           Top {peakFilter.top} peaks per {peakFilter.window} m/z shown, and every peak ProSE annotated.

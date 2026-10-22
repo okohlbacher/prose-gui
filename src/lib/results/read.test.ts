@@ -412,6 +412,48 @@ describe('peaks and predictions belong to their PSM', () => {
     })
   })
 
+  test('two loads at once of an input whose mz rows are not in the PSMs\' order both find their spectra', async () => {
+    const { spectra: own } = await readSearch(folder(join(fixtures, 'example')).files)
+    await withCopy('example', async (dir) => {
+      await changeRows(dir, 'qpx/2__DatabaseSuitability_2.mz.parquet', (rows) => rows.reverse())
+      const { spectra } = await readSearch(folder(dir).files)
+      // (the first PSMs of the input, opened one after the other while the earlier loads still run)
+      const rows = Array.from({ length: 8 }, (_, i) => 896 + i)
+      const loaded = await Promise.all(rows.map((row) => spectra.load(row)))
+      const peaks = (l: (typeof loaded)[number]) =>
+        Array.from(l.spectra.mz.subarray(l.spectra.offsets[l.spectrumRow], l.spectra.offsets[l.spectrumRow + 1]))
+      for (const [i, row] of rows.entries()) {
+        expect(loaded[i].spectrumRow, `row ${row}`).toBeGreaterThanOrEqual(0)
+        expect(peaks(loaded[i]), `row ${row}`).toEqual(peaks(await own.load(row)))
+      }
+    })
+  })
+
+  test('a PSM without a native ID (QPX spectrum_reference null) has no spectrum, the others theirs', async () => {
+    const { spectra: own } = await readSearch(folder(join(fixtures, 'example')).files)
+    await withCopy('example', async (dir) => {
+      // (ProSE leaves it null for a second spectrum of a native ID: the mz view has the first's row, never this one's)
+      const id = (await readSearch(folder(dir).files)).tables.psms.nativeId[1]
+      await changeRows(dir, 'qpx/quantms.psm.parquet', (rows) => {
+        rows[1].spectrum_reference = null
+      })
+      await changeRows(dir, 'qpx/1__DatabaseSuitability_1.mz.parquet', (rows) => rows.filter((r) => r.id !== id))
+      const { spectra, tables } = await readSearch(folder(dir).files)
+      expect(tables.psms.nativeId[1]).toBe('')
+      expect((await spectra.load(1)).spectrumRow).toBe(-1)
+      // the prediction is still the PSM's
+      const one = await spectra.load(1)
+      expect(one.predicted.psmOffsets[one.row + 1]).toBeGreaterThan(one.predicted.psmOffsets[one.row])
+      for (const row of [0, 2, 500, 895]) {
+        const [a, b] = [await spectra.load(row), await own.load(row)]
+        expect(a.spectrumRow, `row ${row}`).toBeGreaterThanOrEqual(0)
+        expect(Array.from(a.spectra.mz.subarray(a.spectra.offsets[a.spectrumRow], a.spectra.offsets[a.spectrumRow + 1]))).toEqual(
+          Array.from(b.spectra.mz.subarray(b.spectra.offsets[b.spectrumRow], b.spectra.offsets[b.spectrumRow + 1])),
+        )
+      }
+    })
+  })
+
   test('a PSM whose native ID\'s row is another spectrum (at another RT) has no spectrum', async () => {
     await withCopy('example', async (dir) => {
       // (as when two spectra share a native ID: the mz view has the first's)

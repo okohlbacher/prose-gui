@@ -253,6 +253,14 @@ export function visibleMatches(matches: PeakMatch[], o: PsmOptions): PeakMatch[]
   })
 }
 
+/**
+ * No fragment peak is matched among the ions shown while 1+ fragments are hidden (the charge choice, which stays for
+ * every PSM, left them out): the PSM view says so and offers to show them.
+ */
+export function onePlusHidden(shown: PeakMatch[], o: PsmOptions): boolean {
+  return !o.charges.includes(1) && !shown.some((m) => m.type !== 'precursor')
+}
+
 export type TheoreticalIon = { ion: string; type: string; ordinal: number; charge: number; mz: number }
 
 /** The loss of a theoretical ion, from its name ("y7-H2O++" → "H2O"). */

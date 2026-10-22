@@ -1006,6 +1006,8 @@ function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: R
       const first = new Map<string, number>()
       for (let r = 0; r < n; r++) {
         const id = rows.nativeId[from[k] + r]
+        // no native ID (QPX spectrum_reference null): ProSE stored no spectrum for the PSM, and it has no mz row
+        if (id === '') continue
         let m = first.get(id)
         if (m === undefined) {
           m = first.size
@@ -1022,7 +1024,10 @@ function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: R
         const ids = readLeaf(file, ['id'], 'values', [g]).values as unknown[]
         ids.forEach((id, r) => rowOf.set(String(id), layout.starts[g] + r))
       }
-      for (let r = 0; r < n; r++) out[r] = rowOf.get(rows.nativeId[from[k] + r]) ?? -1
+      for (let r = 0; r < n; r++) {
+        const id = rows.nativeId[from[k] + r]
+        out[r] = id === '' ? -1 : (rowOf.get(id) ?? -1)
+      }
       return out
     })
 
@@ -1095,11 +1100,15 @@ function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: R
         const peaks = await peaksOf(k, layout, mg)
         return { m, mat, peaks, matches: String(peaks.id[mat]) === rows.nativeId[row] }
       }
+      // (another load of this input may switch it to its ids meanwhile: one that began before must retry too)
+      const byIdsBefore = byIds.has(k)
       let found = mzLayout ? await spectrumOf(mzLayout) : null
-      if (mzLayout && found && !found.matches && !byIds.has(k)) {
+      if (mzLayout && found && !found.matches && !byIdsBefore) {
         // the order of the PSMs did not give the rows (spectra missing and others duplicated): by their ids, once
-        byIds.add(k)
-        mzRows.delete(k)
+        if (!byIds.has(k)) {
+          byIds.add(k)
+          mzRows.delete(k)
+        }
         found = await spectrumOf(mzLayout)
       }
       if (found && !found.matches) {

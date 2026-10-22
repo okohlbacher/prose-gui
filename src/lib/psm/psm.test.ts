@@ -18,6 +18,7 @@ import {
   matchedByReference,
   modificationList,
   nceFor,
+  onePlusHidden,
   precursorOptions,
   predictionRange,
   predictedIons,
@@ -224,6 +225,21 @@ describe('matches', () => {
     expect(visibleMatches(all, { ...o, ions: [...o.ions] }).map((m) => m.ion)).toEqual(['b2', 'y4-NH3'])
     const more = { ...o, ions: ['a', 'b', 'y'] as ('a' | 'b' | 'y')[], charges: [1, 2], losses: ['NH3', 'other'], precursor: true }
     expect(visibleMatches(all, more).map((m) => m.ion)).toEqual(['b2', 'a2', 'y3++', 'y4-NH3', 'b6-CH2NO', '[M+2H]++'])
+  })
+
+  it('says when nothing matches because 1+ fragments are hidden', () => {
+    const two = { ...o, ions: [...o.ions], charges: [2] }
+    const all = [match(0, 'b2'), match(1, 'y3'), match(2, '[M+2H]++')]
+    // only 1+ fragments match: with 2+ alone nothing is shown, the hint offers 1+
+    expect(onePlusHidden(visibleMatches(all, two), two)).toBe(true)
+    // the precursor peak alone is no fragment match
+    expect(onePlusHidden(visibleMatches(all, { ...two, precursor: true }), { ...two, precursor: true })).toBe(true)
+    // no charge chosen at all: 1+ is hidden as well
+    expect(onePlusHidden([], { ...two, charges: [] })).toBe(true)
+    // a 2+ fragment matches: no hint
+    expect(onePlusHidden(visibleMatches([...all, match(3, 'y4++')], two), two)).toBe(false)
+    // 1+ shown: no hint, even when nothing matches
+    expect(onePlusHidden([], { ...o, ions: [...o.ions] })).toBe(false)
   })
 
   it('filters the theoretical ions the same way (their loss is in the name)', () => {
