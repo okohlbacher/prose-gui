@@ -187,6 +187,8 @@ export async function openFirstPsm() {
   await browser.waitUntil(async () => (await grid.$$('tbody tr[aria-rowindex]')).length > 0)
   await jsClick((await grid.$$('tbody tr[aria-rowindex]'))[0])
   await $('[data-testid="psm-view"]').waitForDisplayed({ timeout: 10000 })
+  // its spectrum is read from its input's psm file when it is opened
+  await browser.waitUntil(async () => !(await $('[data-testid="spectrum-loading"]').isExisting()), { timeout: 10000 })
 }
 
 /** What `closeWindowLikeAUser` needs and the host lacks (xwininfo, xprop, python3 with libX11), or null. */

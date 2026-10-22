@@ -107,7 +107,7 @@ describe('the example search', () => {
     expect(await $('input[type="radio"][value="peptdeep"]').isSelected()).toBe(true)
     expect(await $('input[type="radio"][value="peptdeep"]').isEnabled()).toBe(true)
     // the stored spectra are filtered (the footer of the QPX files says how): the view says so
-    await expect($('[data-testid="peak-filter-note"]')).toHaveText(expect.stringContaining('Top 300 peaks per 100 m/z shown'))
+    await expect($('[data-testid="peak-filter-note"]')).toHaveText(expect.stringContaining('Top 100 peaks per 100 m/z shown'))
   })
 
   it('History survives a restart: the search is listed, can be renamed, and opens again with its results', async () => {
@@ -122,7 +122,7 @@ describe('the example search', () => {
     expect(existsSync(join(searchesDir(), searchId, 'search.json'))).toBe(true)
     expect(existsSync(join(searchesDir(), searchId, 'proteins.fasta'))).toBe(true)
     expect(existsSync(join(searchesDir(), searchId, 'database.fasta'))).toBe(false)
-    // the record's PSMs (written when ProSE ended, from the footer of its QPX psm file) are the result's
+    // the record's PSMs (written when ProSE ended, from its QPX run view) are the result's
     expect(await row().$('[data-column="psms"]').getProperty('textContent')).toBe('1,790')
 
     await row().$('button=Rename').click()

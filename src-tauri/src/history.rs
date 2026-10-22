@@ -610,7 +610,7 @@ pub fn import(dir: &Path, body: &[u8]) -> Result<String, String> {
     let text = std::str::from_utf8(record).map_err(|_| format!("{RECORD} is not text."))?;
     let mut map = parse_record(text)?;
     // the name is a name (as `rename` and `save` have it); the search is marked as imported, whatever
-    // the project says: its summary's database path is not served (`files::resolve_search_file`)
+    // the project says: the database path of its database.json is not served (`files::resolve_search_file`)
     if let Some(name) = map.get("name").and_then(|n| n.as_str()) {
         let cleaned = clean_name(name)?;
         map.insert("name".to_string(), serde_json::Value::String(cleaned));

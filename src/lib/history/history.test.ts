@@ -4,7 +4,7 @@
 
 import { strToU8, zipSync } from 'fflate'
 import { beforeAll, describe, expect, test, vi } from 'vitest'
-import { OldLayoutError } from '../results/read'
+import { OldLayoutError, RUNS } from '../results/read'
 import type { OpenResult } from '../search/session.svelte'
 import {
   countPsms,
@@ -15,7 +15,6 @@ import {
   isPlainName,
   MAX_UNPACKED,
   MAX_ZIP_ENTRIES,
-  MERGED_PSMS,
   openSearch,
   parseRecord,
   ProjectError,
@@ -155,28 +154,21 @@ describe('a saved search', () => {
     await expect(openSearch(backend, '100-0')).rejects.toThrow(/saved by an earlier version of ProSE Desktop/)
   })
 
-  test('the PSMs of a search come from the footer of its merged psm file, read from its end only', async () => {
+  test('the PSMs of a search come from its QPX run view', async () => {
     const backend = new MemoryBackend()
     backend.addFolder('7-0', fixture)
-    const tails: number[] = []
-    const readTail = backend.readTail.bind(backend)
-    backend.readTail = async (id, name, bytes) => {
-      tails.push(bytes)
-      expect(name).toBe(MERGED_PSMS)
-      return readTail(id, name, bytes)
+    const asked: string[] = []
+    const read = backend.read.bind(backend)
+    backend.read = async (id, name, range) => {
+      asked.push(name)
+      return read(id, name, range)
     }
     // 895 target PSMs in each of the example's two files
     expect(await psmsOfSearch(backend, '7-0')).toBe(1790)
-    expect(tails[0]).toBe(1 << 16)
-    // a footer larger than the first read: read again with its size
-    tails.length = 0
-    backend.readTail = async (id, name, bytes) => {
-      tails.push(bytes)
-      return readTail(id, name, Math.min(bytes, tails.length === 1 ? 100 : bytes))
-    }
-    expect(await psmsOfSearch(backend, '7-0')).toBe(1790)
-    expect(tails.length).toBe(2)
+    expect(asked).toEqual([RUNS])
     await expect(psmsOfSearch(backend, 'missing')).rejects.toThrow()
+    backend.folders.get('7-0')!.set(RUNS, strToU8('not parquet'))
+    await expect(psmsOfSearch(backend, '7-0')).rejects.toThrow(`${RUNS}:`)
   })
 
   test('opens when the FASTA it was searched with is gone: proteins.fasta has the sequences', async () => {
@@ -237,7 +229,10 @@ describe('project files', () => {
     const named = (files: string[]) => files.map((f) => f.split('/').pop())
     expect(opened.result.outcome.tables).toEqual({ ...result.outcome.tables, files: named(result.outcome.tables.files) })
     expect(opened.result.outcome.tables.files).toEqual(['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'])
-    expect(opened.result.outcome.spectra).toEqual(result.outcome.spectra)
+    // the spectra are read when a PSM is opened: the same peaks
+    const [a, b] = [await opened.result.outcome.spectra.load(5), await result.outcome.spectra.load(5)]
+    expect(a.spectra.mz).toEqual(b.spectra.mz)
+    expect(a.predicted).toEqual(b.predicted)
     expect(opened.result.outcome.summary.files.map((f) => f.path)).toEqual(['DatabaseSuitability_1.mzML', 'DatabaseSuitability_2.mzML'])
     expect({ ...opened.result.outcome.summary, files: [] }).toEqual({ ...result.outcome.summary, files: [] })
     expect(opened.origin.id).toBe(id)

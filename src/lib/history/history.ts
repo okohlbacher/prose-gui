@@ -20,12 +20,11 @@
 
 import { strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
 import type { DesignResolution } from '../design/model'
-import { readSearch, type SearchFiles } from '../results/read'
+import { readSearch, RUNS, type ByteRange, type SearchFiles } from '../results/read'
 import type { ResultTables } from '../results/types'
 import { formatBytes } from '../format/bytes'
 import { fileSafe, resultName } from '../results/display'
-import { footerOfTail } from '../results/parquet'
-import { targetPsmsOf } from '../results/summary'
+import { readRuns, targetPsmsOf } from '../results/summary'
 import type { EndedSearch, OpenResult } from '../search/session.svelte'
 // (only the version: a named import of a JSON module leaves the rest of package.json out of the bundle)
 import { version } from '../../../package.json'
@@ -115,10 +114,8 @@ export class ProjectVersionError extends ProjectError {
 /** The disk (desktop.ts implements it with the Rust commands; the tests with a folder in memory). */
 export interface HistoryBackend {
   list(): Promise<HistoryEntry[]>
-  /** A file of a search folder (rejects `{ notFound: true }` if it is not there). */
-  read(id: string, name: string): Promise<Uint8Array>
-  /** The last `bytes` bytes of a file of a search folder (all of a smaller one); rejects as `read`. */
-  readTail(id: string, name: string, bytes: number): Promise<Uint8Array>
+  /** A file of a search folder, or the bytes of `range` of it (rejects `{ notFound: true }` if it is not there). */
+  read(id: string, name: string, range?: ByteRange): Promise<Uint8Array>
   /** Writes the record: the search is then in History (a search that has one keeps it). */
   saveRecord(id: string, record: string): Promise<void>
   /** Writes `proteins.fasta` of a saved search, and removes its `database.fasta`. */
@@ -189,18 +186,17 @@ export function endedRecordOf(search: EndedSearch, name: string, toolVersion: st
   }
 }
 
-/** The QPX psm file of all inputs, whose footer has the statistics of the search. */
-export const MERGED_PSMS = 'qpx/quantms.psm.parquet'
-
 /**
- * The target PSMs of a search by the footer of its merged QPX psm file (the sum of `prose_files[].target_psms`;
- * 0 if it says none). Reads the end of the file only. Rejects if the file is missing or has no such footer.
+ * The target PSMs of a search by its QPX run view (the sum of `identified_spectra_count`; 0 if it says none).
+ * Rejects if the file is missing or is not ProSE's run view.
  */
 export async function psmsOfSearch(backend: HistoryBackend, id: string): Promise<number> {
-  let footer = footerOfTail(await backend.readTail(id, MERGED_PSMS, 1 << 16))
-  if (typeof footer === 'number') footer = footerOfTail(await backend.readTail(id, MERGED_PSMS, footer))
-  if (typeof footer === 'number') throw new Error(`${MERGED_PSMS}: its footer cannot be read.`)
-  return targetPsmsOf(footer)
+  const bytes = await backend.read(id, RUNS)
+  try {
+    return targetPsmsOf(await readRuns(bytes))
+  } catch (e) {
+    throw new Error(`${RUNS}: ${e instanceof Error ? e.message : String(e)}`, { cause: e })
+  }
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -283,7 +279,7 @@ export async function saveSearch(backend: HistoryBackend, result: OpenResult, na
 
 /** The `files` of the results reader for a search folder. */
 export function folderFiles(backend: HistoryBackend, id: string): SearchFiles {
-  return (name) => backend.read(id, name)
+  return (name, range) => backend.read(id, name, range)
 }
 
 /**

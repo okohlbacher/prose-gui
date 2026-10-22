@@ -2,6 +2,7 @@
 // bytes, with the semantics of the Rust commands that the tests rely on (src-tauri/src/history.rs).
 
 import type { HistoryBackend, HistoryEntry } from './history'
+import { bytesOfRange, type ByteRange } from '../results/read'
 
 export class NotFound extends Error {
   readonly notFound = true
@@ -85,7 +86,7 @@ export class MemoryBackend implements HistoryBackend {
     return entries.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
   }
 
-  async read(id: string, name: string): Promise<Uint8Array> {
+  async read(id: string, name: string, range?: ByteRange): Promise<Uint8Array> {
     // (as `files::resolve_search_file`: an imported search reads only its own folder; a path names no file of it)
     if (name.startsWith('/')) {
       const record = this.folder(id).get('search.json')
@@ -96,12 +97,7 @@ export class MemoryBackend implements HistoryBackend {
     }
     const data = this.folder(id).get(name)
     if (!data) throw new NotFound(`${name} does not exist.`)
-    return data
-  }
-
-  async readTail(id: string, name: string, bytes: number): Promise<Uint8Array> {
-    const data = await this.read(id, name)
-    return data.subarray(Math.max(0, data.length - bytes))
+    return bytesOfRange(data, range)
   }
 
   async saveRecord(id: string, record: string): Promise<void> {

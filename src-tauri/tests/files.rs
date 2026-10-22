@@ -5,7 +5,7 @@ mod common;
 
 use common::TempDir;
 use prose_desktop_lib::files::{
-    example_files, inspect, read_search_file, recorded_database, ReadError,
+    example_files, inspect, read_search_file, recorded_database, ByteRange, ReadError,
 };
 use std::fs;
 use std::path::Path;
@@ -57,11 +57,11 @@ fn refused(result: Result<Vec<u8>, ReadError>) -> bool {
 fn a_file_of_the_search_folder_is_served() {
     let (_tmp, searches) = search_with("/nowhere/db.fasta");
     assert_eq!(
-        read_search_file(&searches, "1-0", "inputs.json", None).unwrap(),
+        read_search_file(&searches, "1-0", "inputs.json", ByteRange::All).unwrap(),
         b"[]"
     );
     assert_eq!(
-        read_search_file(&searches, "1-0", "qpx/1__a.psm.parquet", None).unwrap(),
+        read_search_file(&searches, "1-0", "qpx/1__a.psm.parquet", ByteRange::All).unwrap(),
         b"PAR1....PAR1"
     );
 }
@@ -69,7 +69,8 @@ fn a_file_of_the_search_folder_is_served() {
 #[test]
 fn a_missing_file_rejects_with_not_found_and_a_message() {
     let (_tmp, searches) = search_with("/nowhere/db.fasta");
-    let error = read_search_file(&searches, "1-0", "qpx/quantms.pg.parquet", None).unwrap_err();
+    let error =
+        read_search_file(&searches, "1-0", "qpx/quantms.pg.parquet", ByteRange::All).unwrap_err();
     assert!(error.not_found);
     assert!(
         error.message.contains("qpx/quantms.pg.parquet"),
@@ -85,7 +86,7 @@ fn a_missing_file_rejects_with_not_found_and_a_message() {
         &searches,
         "9-9",
         "inputs.json",
-        None
+        ByteRange::All
     )));
 }
 
@@ -103,7 +104,7 @@ fn names_that_leave_the_folder_are_refused() {
         "/etc/passwd",
     ] {
         assert!(
-            refused(read_search_file(&searches, "1-0", name, None)),
+            refused(read_search_file(&searches, "1-0", name, ByteRange::All)),
             "{name:?} was not refused"
         );
     }
@@ -123,9 +124,9 @@ fn the_inputs_hard_links_are_not_served() {
         &searches,
         "1-0",
         "1__a.mzML",
-        None
+        ByteRange::All
     )));
-    let err = read_search_file(&searches, "1-0", "1__a.mzML", None).unwrap_err();
+    let err = read_search_file(&searches, "1-0", "1__a.mzML", ByteRange::All).unwrap_err();
     assert!(err.message.contains("input"), "{}", err.message);
 }
 
@@ -143,7 +144,12 @@ fn search_ids_that_are_paths_are_refused() {
         "a b",
     ] {
         assert!(
-            refused(read_search_file(&searches, id, "inputs.json", None)),
+            refused(read_search_file(
+                &searches,
+                id,
+                "inputs.json",
+                ByteRange::All
+            )),
             "{id:?} was not refused"
         );
     }
@@ -160,7 +166,7 @@ fn the_input_links_and_other_symlinks_cannot_lead_out_of_the_folder() {
         &searches,
         "1-0",
         "1__a.mzML",
-        None
+        ByteRange::All
     )));
     // a link to a folder outside, and a file through it
     link(&tmp.path().join("user"), &folder.join("out"));
@@ -168,12 +174,12 @@ fn the_input_links_and_other_symlinks_cannot_lead_out_of_the_folder() {
         &searches,
         "1-0",
         "out/a.mzML",
-        None
+        ByteRange::All
     )));
     // a link inside the folder to a file inside is fine
     link(&folder.join("inputs.json"), &folder.join("again.json"));
     assert_eq!(
-        read_search_file(&searches, "1-0", "again.json", None).unwrap(),
+        read_search_file(&searches, "1-0", "again.json", ByteRange::All).unwrap(),
         b"[]"
     );
 }
@@ -195,7 +201,7 @@ fn a_search_folder_that_is_a_link_is_refused_by_the_reader_and_by_history() {
     fs::rename(&folder, &elsewhere).unwrap();
     link(&elsewhere, &folder);
     for name in ["inputs.json", "search.json", "qpx/1__a.psm.parquet"] {
-        let result = read_search_file(&searches, "1-0", name, None);
+        let result = read_search_file(&searches, "1-0", name, ByteRange::All);
         assert!(refused(result.clone()), "{name}: {result:?}");
         assert!(result.unwrap_err().message.contains("not a folder"));
     }
@@ -214,7 +220,7 @@ fn a_search_folder_that_is_a_link_is_refused_by_the_reader_and_by_history() {
     fs::remove_file(&folder).unwrap();
     fs::rename(&elsewhere, &folder).unwrap();
     assert_eq!(
-        read_search_file(&searches, "1-0", "inputs.json", None).unwrap(),
+        read_search_file(&searches, "1-0", "inputs.json", ByteRange::All).unwrap(),
         b"[]"
     );
 }
@@ -232,14 +238,14 @@ fn the_database_that_database_json_records_is_served_and_no_other_absolute_path(
     let other = tmp0.write("other.fasta", ">P2\nPEPTIDE\n");
     let (_tmp, searches) = search_with(db.to_str().unwrap());
     assert_eq!(
-        read_search_file(&searches, "1-0", db.to_str().unwrap(), None).unwrap(),
+        read_search_file(&searches, "1-0", db.to_str().unwrap(), ByteRange::All).unwrap(),
         b">P1\nPEPTIDE\n"
     );
     assert!(refused(read_search_file(
         &searches,
         "1-0",
         other.to_str().unwrap(),
-        None
+        ByteRange::All
     )));
     // the recorded database gone (moved): not found, so the reader goes on without it
     fs::remove_file(&db).unwrap();
@@ -247,7 +253,7 @@ fn the_database_that_database_json_records_is_served_and_no_other_absolute_path(
         &searches,
         "1-0",
         db.to_str().unwrap(),
-        None
+        ByteRange::All
     )));
 }
 
@@ -259,26 +265,36 @@ fn an_imported_search_never_reads_the_database_path_it_records() {
     let (_tmp, searches) = search_with(name);
     let record = searches.join("1-0/search.json");
     // a search of this app (a record without the mark, or none yet): served
-    assert!(read_search_file(&searches, "1-0", name, None).is_ok());
+    assert!(read_search_file(&searches, "1-0", name, ByteRange::All).is_ok());
     fs::write(&record, r#"{"schema":1,"id":"1-0"}"#).unwrap();
-    assert!(read_search_file(&searches, "1-0", name, None).is_ok());
+    assert!(read_search_file(&searches, "1-0", name, ByteRange::All).is_ok());
     fs::write(&record, r#"{"schema":1,"id":"1-0","imported":false}"#).unwrap();
-    assert!(read_search_file(&searches, "1-0", name, None).is_ok());
+    assert!(read_search_file(&searches, "1-0", name, ByteRange::All).is_ok());
     // an imported one: refused, with a message that is no not-found (the reader goes on to its own files)
     fs::write(&record, r#"{"schema":1,"id":"1-0","imported":true}"#).unwrap();
-    let err = read_search_file(&searches, "1-0", name, None).unwrap_err();
+    let err = read_search_file(&searches, "1-0", name, ByteRange::All).unwrap_err();
     assert!(
         !err.not_found && err.message.contains("imported"),
         "{err:?}"
     );
     // its own files are served as before
-    assert!(read_search_file(&searches, "1-0", "qpx/1__a.psm.parquet", None).is_ok());
+    assert!(read_search_file(&searches, "1-0", "qpx/1__a.psm.parquet", ByteRange::All).is_ok());
     // a record that cannot be read is not trusted either
     fs::write(&record, "{ broken").unwrap();
-    assert!(refused(read_search_file(&searches, "1-0", name, None)));
+    assert!(refused(read_search_file(
+        &searches,
+        "1-0",
+        name,
+        ByteRange::All
+    )));
     fs::remove_file(&record).unwrap();
     fs::create_dir(&record).unwrap();
-    assert!(refused(read_search_file(&searches, "1-0", name, None)));
+    assert!(refused(read_search_file(
+        &searches,
+        "1-0",
+        name,
+        ByteRange::All
+    )));
 }
 
 #[test]
@@ -290,7 +306,7 @@ fn a_recorded_database_that_is_not_a_fasta_file_is_not_served() {
         &searches,
         "1-0",
         secret.to_str().unwrap(),
-        None
+        ByteRange::All
     )));
 }
 
@@ -324,23 +340,80 @@ fn the_last_bytes_of_a_file_are_served() {
     let (_tmp, searches) = search_with("/nowhere/db.fasta");
     let name = "qpx/1__a.psm.parquet";
     assert_eq!(
-        read_search_file(&searches, "1-0", name, Some(4)).unwrap(),
+        read_search_file(&searches, "1-0", name, ByteRange::Tail(4)).unwrap(),
         b"PAR1"
     );
     assert_eq!(
-        read_search_file(&searches, "1-0", name, Some(100)).unwrap(),
+        read_search_file(&searches, "1-0", name, ByteRange::Tail(100)).unwrap(),
         b"PAR1....PAR1"
     );
     assert_eq!(
-        read_search_file(&searches, "1-0", name, Some(0)).unwrap(),
+        read_search_file(&searches, "1-0", name, ByteRange::Tail(0)).unwrap(),
         b""
     );
     assert!(not_found(read_search_file(
         &searches,
         "1-0",
         "qpx/x.psm.parquet",
-        Some(4)
+        ByteRange::Tail(4)
     )));
+}
+
+#[test]
+fn a_byte_range_of_a_file_is_served() {
+    let (_tmp, searches) = search_with("/nowhere/db.fasta");
+    let name = "qpx/1__a.psm.parquet";
+    let range = |offset, length| ByteRange::Range { offset, length };
+    assert_eq!(
+        read_search_file(&searches, "1-0", name, range(4, 4)).unwrap(),
+        b"...."
+    );
+    // fewer bytes at the end, none past it
+    assert_eq!(
+        read_search_file(&searches, "1-0", name, range(8, 100)).unwrap(),
+        b"PAR1"
+    );
+    assert_eq!(
+        read_search_file(&searches, "1-0", name, range(100, 4)).unwrap(),
+        b""
+    );
+    assert!(refused(read_search_file(
+        &searches,
+        "1-0",
+        name,
+        range(0, (1 << 30) + 1)
+    )));
+    // scoped as the whole file: an input link is no file of the search
+    assert!(refused(read_search_file(
+        &searches,
+        "1-0",
+        "1__a.mzML",
+        range(0, 4)
+    )));
+    assert!(not_found(read_search_file(
+        &searches,
+        "1-0",
+        "qpx/x.psm.parquet",
+        range(0, 4)
+    )));
+}
+
+#[test]
+fn a_byte_range_is_tail_or_offset_and_length() {
+    assert_eq!(ByteRange::of(None, None, None).unwrap(), ByteRange::All);
+    assert_eq!(
+        ByteRange::of(Some(8), None, None).unwrap(),
+        ByteRange::Tail(8)
+    );
+    assert_eq!(
+        ByteRange::of(None, Some(1), Some(2)).unwrap(),
+        ByteRange::Range {
+            offset: 1,
+            length: 2
+        }
+    );
+    assert!(ByteRange::of(None, Some(1), None).is_err());
+    assert!(ByteRange::of(Some(1), Some(1), Some(2)).is_err());
 }
 
 #[test]

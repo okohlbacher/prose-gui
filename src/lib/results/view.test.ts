@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { ProSEMultiSummary, StoredSpectra } from '../results/types'
+import type { PsmSpectra } from '../results/read'
+import type { ProSEMultiSummary } from '../results/types'
 import type { OpenResult } from '../search/session.svelte'
 import { sampleDesign, sampleTables } from './fixtures'
 import { input } from '../design/fixtures'
@@ -19,8 +20,7 @@ function result(psmFdr = 0.01, proteinFdr = 0.01, rescored = false, proteinFdrAp
     settings: { parameters: {}, fixedMods: [], database: 'db.fasta', rescore: rescored, peptdeep: false, contaminants: true },
     outcome: {
       tables,
-      spectra: {} as StoredSpectra,
-      predicted: { psmOffsets: new Uint32Array(tables.psms.count + 1), ion: [], mz: new Float32Array(), intensity: new Float32Array() },
+      spectra: { predictions: false, load: () => Promise.reject(new Error('no spectra')) } as PsmSpectra,
       warnings: [],
       proteinsSaved: true,
       seconds: 1,

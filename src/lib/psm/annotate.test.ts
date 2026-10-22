@@ -10,7 +10,7 @@ import { basename, join } from 'node:path'
 import { zstdDecompressSync } from 'node:zlib'
 import { parquetReadObjects } from 'hyparquet'
 import { describe, expect, test } from 'vitest'
-import { FileNotFound, readSearch, type SearchResult } from '../results/read'
+import { bytesOfRange, FileNotFound, readSearch, type ByteRange, type SearchResult } from '../results/read'
 import type { PeakAnnotationResult } from '../results/types'
 import { annotatePeaks, type AnnotationOptions } from './annotate'
 
@@ -19,10 +19,10 @@ const results = new URL('../results/fixtures/', import.meta.url).pathname
 /** The search folder of the reader's fixture `name`, as the `files` contract has it. */
 function folder(name: string) {
   const dir = join(results, name)
-  return async (file: string): Promise<Uint8Array> => {
+  return async (file: string, range?: ByteRange): Promise<Uint8Array> => {
     const path = file.startsWith('/') ? join(dir, 'user', basename(file)) : join(dir, file)
     try {
-      return new Uint8Array(readFileSync(path))
+      return bytesOfRange(new Uint8Array(readFileSync(path)), range)
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === 'ENOENT') throw new FileNotFound(file)
       throw e
@@ -37,11 +37,12 @@ const search = (name: string) => {
 }
 
 /** The stored peaks of PSM `row` (views of the stored arrays, as the PSM view passes them). */
-function psmPeaks(r: SearchResult, row: number): { mz: Float32Array; intensity: Float32Array } {
-  const s = r.spectra.psmSpectrum[row]
+async function psmPeaks(r: SearchResult, row: number): Promise<{ mz: Float32Array; intensity: Float32Array }> {
+  const { spectra, row: at } = await r.spectra.load(row)
+  const s = spectra.psmSpectrum[at]
   expect(s, `row ${row} has a spectrum`).toBeGreaterThanOrEqual(0)
-  const [from, to] = [r.spectra.offsets[s], r.spectra.offsets[s + 1]]
-  return { mz: r.spectra.mz.subarray(from, to), intensity: r.spectra.intensity.subarray(from, to) }
+  const [from, to] = [spectra.offsets[s], spectra.offsets[s + 1]]
+  return { mz: spectra.mz.subarray(from, to), intensity: spectra.intensity.subarray(from, to) }
 }
 
 type Match = [number, string, string, number, number, string, number, number]
@@ -87,7 +88,7 @@ async function expectGolden(golden: Golden) {
       let intensity: ArrayLike<number>
       if ('fixture' in c.spectrum) {
         const r = await search(c.spectrum.fixture)
-        ;({ mz, intensity } = psmPeaks(r, c.spectrum.row))
+        ;({ mz, intensity } = await psmPeaks(r, c.spectrum.row))
         expect(mz.length, `${c.name}: the PSM's peaks`).toBe(c.spectrum.peaks)
         // the PSM's own peptide and charge (the variants change the peptide)
         if (/^(example|mods) \d+ (options|precursor)/.test(c.name)) {
@@ -218,11 +219,11 @@ describe('annotatePeaks', () => {
     let same = 0
     let extra = 0
     const differences: string[] = []
-    rows.forEach((q, row) => {
+    for (const [row, q] of rows.entries()) {
       const peptide = r.tables.peptides.openms[r.tables.psms.peptide[row]]
       expect(r.tables.peptides.sequence[r.tables.psms.peptide[row]]).toBe(q.sequence)
       const charge = r.tables.psms.charge[row]
-      const { mz, intensity } = psmPeaks(r, row)
+      const { mz, intensity } = await psmPeaks(r, row)
       const maxCharge = charge >= 2 ? Math.min(charge - 1, 2) : 1
       const ours = annotatePeaks(mz, intensity, peptide, charge, { tolerance: 20, unit: 'ppm', maxCharge, ions: ['b', 'y'] })
       const prose = (q.ion_type_array ?? []).map((name, k) => ({ ion: name.replace(/^([a-z]\d+)\+$/, '$1'), mz: Math.fround(q.mz_array![k]) }))
@@ -230,7 +231,7 @@ describe('annotatePeaks', () => {
       ions += prose.length
       if (JSON.stringify(mine) === JSON.stringify(prose)) {
         same++
-        return
+        continue
       }
       // ProSE's ions are ours, in order and on the same peaks; ours besides are on isotope peaks
       const rest = mine.filter((m) => !prose.some((p) => p.ion === m.ion))
@@ -239,7 +240,7 @@ describe('annotatePeaks', () => {
         differences.push(`row ${row} ${peptide}/${charge}: ${JSON.stringify(mine)}, ProSE ${JSON.stringify(prose)}`)
       }
       extra += rest.length
-    })
+    }
     expect(ions).toBeGreaterThan(5000)
     expect(differences, `${differences.length} of ${rows.length} PSMs differ:\n${differences.slice(0, 10).join('\n')}`).toEqual([])
     // nearly all PSMs agree ion for ion

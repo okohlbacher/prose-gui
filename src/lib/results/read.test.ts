@@ -13,28 +13,30 @@ import { parquetMetadata, parquetReadObjects } from 'hyparquet'
 import { parquetWriteBuffer } from 'hyparquet-writer'
 import { describe, expect, test } from 'vitest'
 import { resolveDesign } from '../design/model'
-import { FileNotFound, OldLayoutError, readSearch, ZSTD } from './read'
+import { bytesOfRange, FileNotFound, OldLayoutError, readSearch, ZSTD, type ByteRange } from './read'
 import type { ProSEMultiSummary, ResultTables, StoredSpectra } from './types'
 
 const fixtures = new URL('./fixtures/', import.meta.url).pathname
 
 /**
- * The files of a search folder, as the `files` contract has it (a missing file: FileNotFound); an
- * absolute path (the user's FASTA of a search without contaminants) is in user/.
+ * The files of a search folder, as the `files` contract has it (a missing file: FileNotFound; a byte range:
+ * those bytes); an absolute path (the user's FASTA of a search without contaminants) is in user/.
  */
 function folder(dir: string) {
   const asked: string[] = []
-  const files = async (name: string): Promise<Uint8Array> => {
+  const ranges: { name: string; range: ByteRange }[] = []
+  const files = async (name: string, range?: ByteRange): Promise<Uint8Array> => {
     asked.push(name)
+    if (range) ranges.push({ name, range })
     const path = name.startsWith('/') ? join(dir, 'user', basename(name)) : join(dir, name)
     try {
-      return new Uint8Array(readFileSync(path))
+      return bytesOfRange(new Uint8Array(readFileSync(path)), range)
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === 'ENOENT') throw new FileNotFound(name)
       throw e
     }
   }
-  return { files, asked }
+  return { files, asked, ranges }
 }
 
 /** A copy of fixture `name` to change, removed after `use`. */
@@ -255,7 +257,7 @@ describe('readSearch', () => {
     expect(tables.peptides.openms).toContain('IALSRPNVEVVALNDPFITNDYAAYM(Oxidation)FK')
     expectTables(tables, w.tables, w.names, { score: 1e-6 })
     expectSummary(summary, w.summary)
-    // without contaminants the search read the user's FASTA, named in the footer (prose_database_file)
+    // without contaminants the search read the user's FASTA, named in the provenance (database_file)
     expect(asked.filter((n) => n.startsWith('/')).map((n) => basename(n))).toEqual(['SimpleSearchEngine_1.fasta'])
   })
 
@@ -309,29 +311,39 @@ const peaks = (sp: StoredSpectra | Json, s: number) => {
 }
 
 describe('peaks and predictions belong to their PSM', () => {
-  // (the example's spectra have at most 77 peaks: the peak filter, 300 per 100 m/z and the annotated ones, keeps them all)
-  test('the peaks and the precursor of each PSM are the web app\'s', async () => {
+  // (the example's spectra have at most 77 peaks: the peak filter, 100 per 100 m/z and the annotated ones, keeps them all)
+  test('the peaks and the precursor of each PSM are the web app\'s, read by row group of its input\'s file', async () => {
     const w = web('example')
-    const { spectra, tables } = await readSearch(folder(join(fixtures, 'example')).files)
-    expect(spectra.psmSpectrum.length).toBe(tables.psms.count)
+    const { files, ranges } = folder(join(fixtures, 'example'))
+    const { spectra, tables } = await readSearch(files)
+    // nothing of the inputs' psm files is read until a PSM is opened
+    expect(ranges.filter((r) => !r.name.startsWith('qpx/quantms.'))).toEqual([])
     for (let i = 0; i < tables.psms.count; i++) {
-      const s = spectra.psmSpectrum[i]
+      const { spectra: sp, row } = await spectra.load(i)
+      const s = sp.psmSpectrum[row]
       const ws = w.spectra.psmSpectrum[i]
       expect(s >= 0, `row ${i} has peaks`).toBe(ws >= 0)
-      expect(peaks(spectra, s), `peaks of row ${i}`).toEqual(peaks(w.spectra, ws))
-      expectCloseRelative(`precursorMz of row ${i}`, [spectra.precursorMz[s]], [w.spectra.precursorMz[ws]], FLOAT32)
+      expect(peaks(sp, s), `peaks of row ${i}`).toEqual(peaks(w.spectra, ws))
+      expectCloseRelative(`precursorMz of row ${i}`, [sp.precursorMz[s]], [w.spectra.precursorMz[ws]], FLOAT32)
+      // the collision energy is not read (docs/parity.md: the predictions are ProSE's)
+      expect(Number.isNaN(sp.collisionEnergy[s])).toBe(true)
     }
-    // the collision energy is not read (docs/parity.md: the predictions are ProSE's)
-    expect(Array.from(spectra.collisionEnergy).every(Number.isNaN)).toBe(true)
+    // each input's footer once, then the spectrum columns of each row group once (its last few are kept)
+    const read = ranges.filter((r) => !r.name.startsWith('qpx/quantms.'))
+    const tails = read.filter((r) => 'tail' in r.range)
+    expect(tails.map((r) => r.name)).toEqual(['qpx/1__DatabaseSuitability_1.psm.parquet', 'qpx/2__DatabaseSuitability_2.psm.parquet'])
+    // 896 rows of each input in row groups of 256
+    expect(read.length - tails.length).toBe(8)
   })
 
   test('the predictions of each PSM are the web app\'s predictMS2 of its peptide', async () => {
     const w = web('example')
-    const { predicted, tables } = await readSearch(folder(join(fixtures, 'example')).files)
+    const { spectra, tables } = await readSearch(folder(join(fixtures, 'example')).files)
+    expect(spectra.predictions).toBe(true)
     const wp = w.predicted
-    expect(predicted.psmOffsets.length).toBe(tables.psms.count + 1)
     for (let i = 0; i < tables.psms.count; i++) {
-      const [from, to] = [predicted.psmOffsets[i], predicted.psmOffsets[i + 1]]
+      const { predicted, row } = await spectra.load(i)
+      const [from, to] = [predicted.psmOffsets[row], predicted.psmOffsets[row + 1]]
       const [wf, wt] = [wp.psmOffsets[i], wp.psmOffsets[i + 1]]
       expect(to - from, `row ${i} has a prediction`).toBeGreaterThan(0)
       expect(predicted.ion.slice(from, to), `ions of row ${i}`).toEqual(wp.ion.slice(wf, wt))
@@ -341,11 +353,23 @@ describe('peaks and predictions belong to their PSM', () => {
   })
 
   test('the peak filter of the footer is passed on, for the PSM view\'s note', async () => {
-    expect((await readSearch(folder(join(fixtures, 'example')).files)).peakFilter).toEqual({ top: 300, window: 100 })
+    expect((await readSearch(folder(join(fixtures, 'example')).files)).peakFilter).toEqual({ top: 100, window: 100 })
     await withCopy('mods', async (dir) => {
-      const path = join(dir, 'qpx', '1__SimpleSearchEngine_1.psm.parquet')
+      const path = join(dir, 'qpx', 'quantms.psm.parquet')
       writeFileSync(path, await withFooter(new Uint8Array(readFileSync(path)), (f) => f.set('prose_peak_top', '0')))
       expect((await readSearch(folder(dir).files)).peakFilter).toBeNull()
+    })
+  })
+
+  test('an input\'s psm file that is missing or of other rows fails the PSM, not the search', async () => {
+    await withCopy('example', async (dir) => {
+      rmSync(join(dir, 'qpx', '2__DatabaseSuitability_2.psm.parquet'))
+      cpSync(join(dir, 'qpx', 'quantms.pg.parquet'), join(dir, 'qpx', '1__DatabaseSuitability_1.psm.parquet'))
+      const { spectra, tables } = await readSearch(folder(dir).files)
+      expect(tables.psms.count).toBe(1792)
+      await expect(spectra.load(1000)).rejects.toThrow('qpx/2__DatabaseSuitability_2.psm.parquet does not exist')
+      await expect(spectra.load(0)).rejects.toThrow(/qpx\/1__DatabaseSuitability_1.psm.parquet: \d+ rows, but qpx\/quantms.psm.parquet has 896 of this input/)
+      await expect(spectra.load(5000)).rejects.toThrow('There is no PSM row 5000.')
     })
   })
 })
@@ -369,7 +393,12 @@ function topColumns(metadata: ReturnType<typeof parquetMetadata>): string[] {
  * A Parquet file with `rows` in the schema of `bytes` (hyparquet-writer, Zstandard as ProSE's: Node's zlib), with
  * the footer key-value metadata of `bytes` changed by `footer`.
  */
-function rewrite(bytes: Uint8Array, rows: Record<string, unknown>[], footer: (kv: Map<string, string>) => void = () => {}): Uint8Array {
+function rewrite(
+  bytes: Uint8Array,
+  rows: Record<string, unknown>[],
+  footer: (kv: Map<string, string>) => void = () => {},
+  rowGroupSize = 100_000,
+): Uint8Array {
   const metadata = parquetMetadata(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer)
   const kv = new Map((metadata.key_value_metadata ?? []).map((e) => [e.key, e.value ?? '']))
   footer(kv)
@@ -378,7 +407,7 @@ function rewrite(bytes: Uint8Array, rows: Record<string, unknown>[], footer: (kv
     parquetWriteBuffer({
       columnData,
       schema: metadata.schema,
-      rowGroupSize: 100_000,
+      rowGroupSize,
       codec: 'ZSTD',
       compressors: { ZSTD: (input: Uint8Array) => new Uint8Array(zstdCompressSync(input)) },
       kvMetadata: [...kv].map(([key, value]) => ({ key, value })),
@@ -396,22 +425,34 @@ async function withFooter(bytes: Uint8Array, change: (kv: Map<string, string>) =
   return rewrite(bytes, await rowsOf(bytes), change)
 }
 
-/** Changes the entry `index` of the footer's prose_files. */
-const fileEntry = (index: number, change: (entry: Record<string, unknown>) => void) => (kv: Map<string, string>) => {
-  const files = JSON.parse(kv.get('prose_files')!)
-  change(files[index])
-  kv.set('prose_files', JSON.stringify(files))
+/** Rewrites the file `name` of `dir` with its rows changed by `change` (which may also drop or add rows). */
+async function changeRows(dir: string, name: string, change: (rows: Record<string, any>[]) => Record<string, any>[] | void) {
+  const path = join(dir, name)
+  const bytes = new Uint8Array(readFileSync(path))
+  const rows = await rowsOf(bytes)
+  writeFileSync(path, rewrite(bytes, change(rows) ?? rows))
 }
+
+/** Sets parameters of the step `step` of the provenance view of `dir`. */
+const setParameters = (dir: string, step: string, values: Record<string, string>) =>
+  changeRows(dir, 'qpx/quantms.provenance.parquet', (rows) => {
+    const row = rows.find((r) => r.step_name === step)!
+    for (const [key, value] of Object.entries(values)) {
+      const p = row.parameters.find((e: { key: string }) => e.key === key)
+      if (p) p.value = value
+      else row.parameters.push({ key, value })
+    }
+  })
 
 describe('missing and broken files', () => {
   const example = ['1__DatabaseSuitability_1', '2__DatabaseSuitability_2']
 
   test('a corrupt Parquet file fails the read, naming the file', async () => {
     await withCopy('example', async (dir) => {
-      const path = join(dir, 'qpx', `${example[0]}.psm.parquet`)
+      const path = join(dir, 'qpx', 'quantms.psm.parquet')
       const bytes = readFileSync(path)
       writeFileSync(path, bytes.subarray(0, bytes.length >> 1))
-      await expect(readSearch(folder(dir).files)).rejects.toThrow(`qpx/${example[0]}.psm.parquet:`)
+      await expect(readSearch(folder(dir).files)).rejects.toThrow('qpx/quantms.psm.parquet:')
     })
   })
 
@@ -421,66 +462,98 @@ describe('missing and broken files', () => {
     await expect(readSearch(failing)).rejects.toThrow('qpx/quantms.pg.parquet: permission denied')
   })
 
-  test('a QPX psm file without the columns and the footer of -qpx_extended fails the read, naming the file', async () => {
+  test('a QPX psm file without the columns of -qpx_extended fails the read, naming the file', async () => {
     await withCopy('mods', async (dir) => {
-      const path = join(dir, 'qpx', '1__SimpleSearchEngine_1.psm.parquet')
-      writeFileSync(path, await withFooter(new Uint8Array(readFileSync(path)), (f) => f.delete('prose_files')))
-      await expect(readSearch(folder(dir).files)).rejects.toThrow("qpx/1__SimpleSearchEngine_1.psm.parquet: the QPX psm view has not the columns and the footer of ProSE's -qpx_extended")
+      // a plain QPX psm view: no spectrum_reference, isotope_error, protein_mappings (two of its columns suffice here)
+      writeFileSync(
+        join(dir, 'qpx', 'quantms.psm.parquet'),
+        new Uint8Array(parquetWriteBuffer({ columnData: [{ name: 'sequence', data: ['PEPTIDE'] }, { name: 'charge', data: [2] }] })),
+      )
+      await expect(readSearch(folder(dir).files)).rejects.toThrow("qpx/quantms.psm.parquet: the QPX psm view has not the columns of ProSE's -qpx_extended")
     })
   })
 
-  test('a search folder of the earlier layout (summary.yaml) fails the read with a clear message', async () => {
+  test('a search folder of an earlier layout fails the read with a clear message', async () => {
     await withCopy('mods', async (dir) => {
-      const path = join(dir, 'qpx', '1__SimpleSearchEngine_1.psm.parquet')
-      writeFileSync(path, await withFooter(new Uint8Array(readFileSync(path)), (f) => f.delete('prose_files')))
-      writeFileSync(join(dir, 'summary.yaml'), 'shared:\n  enzyme: "Trypsin"\nper_file: []\n')
+      // QPX files without the run and provenance views (the first QPX-only layout)
+      rmSync(join(dir, 'qpx', 'quantms.run.parquet'))
+      rmSync(join(dir, 'qpx', 'quantms.provenance.parquet'))
       await expect(readSearch(folder(dir).files)).rejects.toThrow(OldLayoutError)
-      // without any QPX psm file too
-      rmSync(path)
+      // summary.yaml without any QPX psm file
+      for (const f of ['quantms.psm.parquet', '1__SimpleSearchEngine_1.psm.parquet']) rmSync(join(dir, 'qpx', f))
+      writeFileSync(join(dir, 'summary.yaml'), 'shared:\n  enzyme: "Trypsin"\nper_file: []\n')
       await expect(readSearch(folder(dir).files)).rejects.toThrow('saved by an earlier version of ProSE Desktop')
+      // no results at all
+      rmSync(join(dir, 'summary.yaml'))
+      await expect(readSearch(folder(dir).files)).rejects.toThrow('The search folder has no results of ProSE')
     })
   })
 
-  test('an input without its psm file (a failed search) has no PSMs', async () => {
+  test('an input whose search failed has no PSMs, and its status', async () => {
     await withCopy('example', async (dir) => {
+      await changeRows(dir, 'qpx/quantms.run.parquet', (rows) => {
+        Object.assign(rows[1], { search_status: 'INPUT_FILE_EMPTY', psm_rows: 0n, identified_spectra_count: 0n, decoy_psm_count: 0n })
+      })
+      await changeRows(dir, 'qpx/quantms.psm.parquet', (rows) => rows.slice(0, 896))
       rmSync(join(dir, 'qpx', `${example[1]}.psm.parquet`))
-      // the footer of a failed input reports no PSMs for it
-      const path = join(dir, 'qpx', `${example[0]}.psm.parquet`)
-      writeFileSync(path, await withFooter(new Uint8Array(readFileSync(path)), fileEntry(1, (e) => (e.target_psms = 0))))
-      const { tables, warnings } = await readSearch(folder(dir).files)
+      const { tables, summary, warnings } = await readSearch(folder(dir).files)
       expect(tables.psms.count).toBe(896)
       expect(Array.from(tables.psms.file).every((f) => f === 0)).toBe(true)
+      expect(summary.files.map((f) => f.status)).toEqual(['EXECUTION_OK', 'INPUT_FILE_EMPTY'])
       expect(warnings).toEqual([])
     })
   })
 
-  test('an input whose footer reports PSMs but whose psm file is missing is named in a warning', async () => {
-    // (e.g. a stem the shim got wrong: the reader looks for <stem>.psm.parquet and finds nothing)
+  test('a search in which every input failed reads, with the statuses of its inputs', async () => {
     await withCopy('example', async (dir) => {
-      rmSync(join(dir, 'qpx', `${example[1]}.psm.parquet`))
+      await changeRows(dir, 'qpx/quantms.run.parquet', (rows) => {
+        for (const r of rows) Object.assign(r, { search_status: 'UNKNOWN_ERROR', psm_rows: 0n, identified_spectra_count: 0n })
+      })
+      await changeRows(dir, 'qpx/quantms.psm.parquet', () => [])
+      for (const e of example) rmSync(join(dir, 'qpx', `${e}.psm.parquet`))
+      const { tables, summary } = await readSearch(folder(dir).files)
+      expect(tables.psms.count).toBe(0)
+      expect(summary.files.map((f) => f.status)).toEqual(['UNKNOWN_ERROR', 'UNKNOWN_ERROR'])
+    })
+  })
+
+  test('an input whose search reports PSMs but has no rows is named in a warning', async () => {
+    // (its psm file could not be written: ProSE leaves its rows out of quantms.psm.parquet)
+    await withCopy('example', async (dir) => {
+      await changeRows(dir, 'qpx/quantms.run.parquet', (rows) => {
+        rows[1].psm_rows = 0n
+      })
+      await changeRows(dir, 'qpx/quantms.psm.parquet', (rows) => rows.slice(0, 896))
       const { tables, warnings } = await readSearch(folder(dir).files)
       expect(tables.psms.count).toBe(896)
       expect(warnings).toEqual([
-        `DatabaseSuitability_2.mzML: ProSE reports 895 target PSMs for it, but its results (qpx/${example[1]}.psm.parquet) are not in the search folder, so its PSMs are not shown.`,
+        'DatabaseSuitability_2.mzML: ProSE reports 895 target PSMs for it, but its results are not in the search folder, so its PSMs are not shown.',
       ])
+    })
+  })
+
+  test('rows that the run view does not account for fail the read', async () => {
+    await withCopy('example', async (dir) => {
+      await changeRows(dir, 'qpx/quantms.psm.parquet', (rows) => rows.slice(0, 1000))
+      await expect(readSearch(folder(dir).files)).rejects.toThrow('qpx/quantms.psm.parquet: 1000 rows, but qpx/quantms.run.parquet gives its inputs 1792.')
     })
   })
 
   test('an empty result (no PSMs, no proteins) reads', async () => {
     await withCopy('mods', async (dir) => {
-      for (const f of ['qpx/1__SimpleSearchEngine_1.psm.parquet', 'qpx/quantms.pg.parquet']) {
-        const path = join(dir, f)
-        writeFileSync(path, rewrite(new Uint8Array(readFileSync(path)), []))
-      }
-      const { tables, spectra, predicted, summary, warnings } = await readSearch(folder(dir).files)
+      await changeRows(dir, 'qpx/quantms.psm.parquet', () => [])
+      await changeRows(dir, 'qpx/quantms.pg.parquet', () => [])
+      await changeRows(dir, 'qpx/quantms.run.parquet', (rows) => {
+        rows[0].psm_rows = 0n
+        rows[0].identified_spectra_count = 0n
+      })
+      const { tables, spectra, summary, warnings } = await readSearch(folder(dir).files)
       expect(tables.psms.count).toBe(0)
       expect(tables.peptides.count).toBe(0)
       expect(tables.proteins.count).toBe(0)
       expect(tables.psms.featureNames).toEqual(['ln(hyperscore)'])
       expect(Array.from(tables.peptides.modOffsets)).toEqual([0])
-      expect(spectra.psmSpectrum.length).toBe(0)
-      expect(Array.from(spectra.offsets)).toEqual([0])
-      expect(Array.from(predicted.psmOffsets)).toEqual([0])
+      await expect(spectra.load(0)).rejects.toThrow('There is no PSM row 0.')
       expect(summary.files.length).toBe(1)
       expect(warnings).toEqual([])
     })
@@ -488,16 +561,13 @@ describe('missing and broken files', () => {
 
   test("ProSE's output of a search in which no PSM passes the FDR reads as an empty result", async () => {
     // fixtures/empty: two inputs with the protein FDR and Percolator, the files as ProSE writes them (header only)
-    const { tables, spectra, predicted, summary, warnings } = await readSearch(folder(join(fixtures, 'empty')).files)
+    const { tables, summary, warnings } = await readSearch(folder(join(fixtures, 'empty')).files)
     expect(tables.files).toEqual(['/data/DatabaseSuitability_1.mzML', '/data/DatabaseSuitability_2.mzML'])
     expect(tables.psms.count).toBe(0)
     expect(tables.peptides.count).toBe(0)
     expect(tables.proteins.count).toBe(0)
     expect(Array.from(tables.peptides.modOffsets)).toEqual([0])
     expect(Array.from(tables.peptides.proteinOffsets)).toEqual([0])
-    expect(spectra.psmSpectrum.length).toBe(0)
-    expect(Array.from(spectra.offsets)).toEqual([0])
-    expect(Array.from(predicted.psmOffsets)).toEqual([0])
     expect(summary.files.map((f) => [f.status, f.ms2Spectra, f.targetPSMs, f.decoyPSMs])).toEqual([
       ['EXECUTION_OK', 2789, 0, 0],
       ['EXECUTION_OK', 2789, 0, 0],
@@ -525,6 +595,81 @@ describe('missing and broken files', () => {
     expect(tables.proteins.count).toBe(3)
     expect(Array.from(tables.proteins.group)).toEqual([0, 1, 2])
     expect(Array.from(tables.proteins.qValue).every(Number.isNaN)).toBe(true)
+  })
+})
+
+describe('values the reader computes or picks', () => {
+  test('the protein q-value is the pg row\'s additional_scores entry q-value, whatever its position', async () => {
+    const { tables } = await readSearch(folder(join(fixtures, 'example')).files)
+    await withCopy('example', async (dir) => {
+      await changeRows(dir, 'qpx/quantms.pg.parquet', (rows) => {
+        for (const r of rows) r.additional_scores = [{ score_name: 'other_score', score_value: 42, higher_better: true }, ...(r.additional_scores ?? [])]
+      })
+      const changed = (await readSearch(folder(dir).files)).tables
+      expect(Array.from(changed.proteins.qValue)).toEqual(Array.from(tables.proteins.qValue))
+      expect(Array.from(tables.proteins.qValue).some((q) => q > 0 && q < 1)).toBe(true)
+    })
+  })
+
+  test("the tool's protein_mappings: 1-based positions and flanking residues of the peptide in the FASTA", async () => {
+    const bytes = new Uint8Array(readFileSync(join(fixtures, 'example', 'qpx', 'quantms.psm.parquet')))
+    const rows = await rowsOf(bytes)
+    const fasta = new Map<string, string>()
+    let id = ''
+    for (const line of readFileSync(join(fixtures, 'example', 'database.fasta'), 'utf8').split('\n')) {
+      if (line.startsWith('>')) {
+        id = line.slice(1).split(/\s/)[0]
+        fasta.set(id, '')
+      } else fasta.set(id, fasta.get(id)! + line.trim())
+    }
+    let checked = 0
+    for (const r of rows) {
+      const sequence = String(r.sequence)
+      for (const m of r.protein_mappings as { accession: string; start: number; end: number; aa_before: string; aa_after: string }[]) {
+        const protein = fasta.get(m.accession)
+        if (protein === undefined) continue // a decoy ProSE generated
+        expect(protein.slice(m.start - 1, m.end), `${sequence} in ${m.accession}`).toBe(sequence)
+        expect(m.aa_before).toBe(m.start === 1 ? '-' : protein[m.start - 2])
+        expect(m.aa_after).toBe(m.end === protein.length ? '-' : protein[m.end])
+        checked++
+      }
+    }
+    expect(checked).toBeGreaterThan(1000)
+  })
+
+  test('without precursor_mz_error_ppm the precursor error is computed from the m/z and the isotope error', async () => {
+    const { tables } = await readSearch(folder(join(fixtures, 'example')).files)
+    await withCopy('example', async (dir) => {
+      await changeRows(dir, 'qpx/quantms.psm.parquet', (rows) => {
+        for (const r of rows) r.additional_scores = r.additional_scores.filter((s: { score_name: string }) => s.score_name !== 'precursor_mz_error_ppm')
+      })
+      const computed = (await readSearch(folder(dir).files)).tables
+      // float32 m/z: within about 0.1 ppm (docs/parity.md, "Precision")
+      expectClose('precursorErrorPpm', computed.psms.precursorErrorPpm, Array.from(tables.psms.precursorErrorPpm), 0.12)
+    })
+  })
+
+  test("the isotope error is QPX's; its feature and dm have the sign of ProSE's convention, as Percolator saw them", async () => {
+    await withCopy('example', async (dir) => {
+      // row 0 at its 13C peak: observed minus theoretical +1
+      await changeRows(dir, 'qpx/quantms.psm.parquet', (rows) => {
+        rows[0].isotope_error = 1
+        for (const s of rows[0].additional_scores) if (s.score_name === 'isotope_error') s.score_value = 1
+      })
+      const read = async () => {
+        const { tables } = await readSearch(folder(dir).files)
+        const p = tables.psms
+        const at = (name: string) => p.features[p.featureNames.indexOf(name)]
+        return { isotope: p.isotopeError[0], feature: at('isotope_error'), dm: at('dm'), charge: p.charge[0] }
+      }
+      const observed = await read()
+      expect([observed.isotope, observed.feature]).toEqual([1, 1])
+      await setParameters(dir, 'peptide_search', { isotope_error_convention: 'theoretical_minus_observed' })
+      const theoretical = await read()
+      expect([theoretical.isotope, theoretical.feature]).toEqual([1, -1])
+      // dm: the observed mass corrected by +1 and by −1 13C spacing
+      expect(theoretical.dm - observed.dm).toBeCloseTo((2 * 1.0033548378) / observed.charge, 4)
+    })
   })
 })
 
@@ -574,60 +719,103 @@ describe('protein sequences', () => {
 
 /**
  * A search folder of one input with `n` PSMs: the rows of the example's first file, repeated, each with its
- * own psm_id and scores, in the schema of the tool's QPX psm file, with its footer for one input.
+ * own psm_id and scores, in the schema of the tool's QPX psm files (quantms.psm.parquet, and the input's file
+ * with the spectra in row groups of 256 rows), with the run view for one input.
  */
 async function writeLargeFolder(dir: string, n: number): Promise<void> {
   const source = join(fixtures, 'example')
   const stem = '1__DatabaseSuitability_1'
   const read = (p: string) => new Uint8Array(readFileSync(join(source, p)))
-  const qpx = await rowsOf(read(`qpx/${stem}.psm.parquet`))
   const id = (i: number) => BigInt(i + 1) * 7919n
   // the scores of every row its own (as in a real search, where they are hardly ever repeated: Arrow writes
   // them without a dictionary)
   type Score = { score_name: string; score_value: number; higher_better: boolean | null }
-  const rows = Array.from({ length: n }, (_, i) => {
-    const r = qpx[i % qpx.length]
-    return {
-      ...r,
-      psm_id: id(i),
-      additional_scores: (r.additional_scores as Score[]).map((sc) => ({ ...sc, score_value: sc.score_value + i * 1e-9 })),
-    }
-  })
+  const many = async (file: string) => {
+    const qpx = (await rowsOf(read(file))).slice(0, 896)
+    return Array.from({ length: n }, (_, i) => {
+      const r = qpx[i % qpx.length]
+      return {
+        ...r,
+        psm_id: id(i),
+        additional_scores: (r.additional_scores as Score[]).map((sc) => ({ ...sc, score_value: sc.score_value + i * 1e-9 })),
+      }
+    })
+  }
   mkdirSync(join(dir, 'qpx'), { recursive: true })
-  writeFileSync(
-    join(dir, `qpx/${stem}.psm.parquet`),
-    rewrite(read(`qpx/${stem}.psm.parquet`), rows, (kv) => {
-      const files = JSON.parse(kv.get('prose_files')!).slice(0, 1)
-      files[0].target_psms = n
-      kv.set('prose_files', JSON.stringify(files))
-      kv.set('prose_protein_fdr_applied', 'false')
-    }),
-  )
-  for (const f of ['qpx/quantms.pg.parquet', 'database.fasta']) cpSync(join(source, f), join(dir, f))
+  writeFileSync(join(dir, 'qpx/quantms.psm.parquet'), rewrite(read('qpx/quantms.psm.parquet'), await many('qpx/quantms.psm.parquet')))
+  writeFileSync(join(dir, `qpx/${stem}.psm.parquet`), rewrite(read(`qpx/${stem}.psm.parquet`), await many(`qpx/${stem}.psm.parquet`), () => {}, 256))
+  const runs = (await rowsOf(read('qpx/quantms.run.parquet'))).slice(0, 1)
+  Object.assign(runs[0], { psm_rows: BigInt(n), identified_spectra_count: BigInt(n) })
+  writeFileSync(join(dir, 'qpx/quantms.run.parquet'), rewrite(read('qpx/quantms.run.parquet'), runs))
+  for (const f of ['qpx/quantms.pg.parquet', 'qpx/quantms.provenance.parquet', 'database.fasta']) cpSync(join(source, f), join(dir, f))
+  await setParameters(dir, 'target_decoy_fdr', { protein_fdr_applied: 'false' })
   const inputs = JSON.parse(readFileSync(join(source, 'inputs.json'), 'utf8')).slice(0, 1)
   writeFileSync(join(dir, 'inputs.json'), JSON.stringify(inputs))
 }
 
 describe('performance', () => {
-  test('reads a 150k-PSM fixture in under 3 s', async () => {
+  test('reads a 150k-PSM fixture in under 3 s, and the spectrum of a PSM in under 300 ms', async () => {
     const N = 150_000
     const dir = mkdtempSync(join(tmpdir(), 'prose-reader-150k-'))
     try {
       await writeLargeFolder(dir, N)
-      const files = folder(dir).files
+      // (the files in memory, as the app reads the bytes asked for only: the times are the reader's)
+      const own = folder(dir).files
+      const cache = new Map<string, Uint8Array>()
+      const files = async (name: string, range?: ByteRange) => {
+        if (!cache.has(name)) cache.set(name, await own(name))
+        return bytesOfRange(cache.get(name)!, range)
+      }
+      await files('qpx/1__DatabaseSuitability_1.psm.parquet')
       const started = performance.now()
-      const { tables, spectra, predicted } = await readSearch(files)
+      const { tables, spectra } = await readSearch(files)
       const seconds = (performance.now() - started) / 1000
       console.log(`150k PSMs read in ${seconds.toFixed(2)} s`)
       expect(tables.psms.count).toBe(N)
-      expect(spectra.psmSpectrum[N - 1]).toBe(N - 1)
-      expect(predicted.psmOffsets.length).toBe(N + 1)
       expect(seconds).toBeLessThan(3)
+      // the first PSM opened reads the footer of its file; the others their row group only
+      for (const row of [N - 1, 70_000, 70_001, 3]) {
+        const t = performance.now()
+        const { spectra: sp, row: r } = await spectra.load(row)
+        const ms = performance.now() - t
+        console.log(`the spectrum of PSM ${row} read in ${ms.toFixed(0)} ms`)
+        expect(sp.psmSpectrum[r]).toBeGreaterThanOrEqual(0)
+        expect(ms).toBeLessThan(300)
+      }
     } finally {
       if (process.env.KEEP_150K) cpSync(dir, process.env.KEEP_150K, { recursive: true })
       rmSync(dir, { recursive: true, force: true })
     }
   }, 300_000)
+
+  // On demand: the time to open a real search folder (PROSE_SEARCH_DIR, as the shim makes it) and to read the
+  // spectra of PSMs as the PSM view does, one after the other at random (the first reads its input's footer).
+  //   PROSE_SEARCH_DIR=/scratch/x npx vitest run src/lib/results/read.test.ts -t 'a real search'
+  test.runIf(Boolean(process.env.PROSE_SEARCH_DIR))('opens a real search and reads the spectra of its PSMs', async () => {
+    // (the files in memory, as the app reads the bytes asked for only: the times are the reader's)
+    const own = folder(process.env.PROSE_SEARCH_DIR!).files
+    const cache = new Map<string, Uint8Array>()
+    const files = async (name: string, range?: ByteRange) => {
+      if (!cache.has(name)) cache.set(name, await own(name))
+      return bytesOfRange(cache.get(name)!, range)
+    }
+    await files(`qpx/${JSON.parse(readFileSync(join(process.env.PROSE_SEARCH_DIR!, 'inputs.json'), 'utf8'))[0].stem}.psm.parquet`)
+    let started = performance.now()
+    const { tables, spectra } = await readSearch(files)
+    console.log(`REAL ${tables.psms.count} PSMs opened in ${((performance.now() - started) / 1000).toFixed(2)} s`)
+    const times: number[] = []
+    let random = 12345
+    for (let k = 0; k < 50; k++) {
+      random = (random * 1103515245 + 12345) % 2147483648
+      const row = random % tables.psms.count
+      started = performance.now()
+      const { spectra: sp, row: r } = await spectra.load(row)
+      times.push(performance.now() - started)
+      expect(sp.psmSpectrum[r]).toBeGreaterThanOrEqual(-1)
+    }
+    const sorted = [...times].sort((a, b) => a - b)
+    console.log(`REAL spectra: first ${times[0].toFixed(0)} ms, median ${sorted[25].toFixed(0)} ms, max of the others ${Math.max(...times.slice(1)).toFixed(0)} ms`)
+  }, 600_000)
 
   // On demand: search folders of PROSE_LARGE_PSMS PSMs (default 500k, 1M, 2M, 4M) in PROSE_LARGE_DIR/<id>/,
   // saved searches (with search.json) that e2e/large.spec.ts opens in the app to measure the largest result

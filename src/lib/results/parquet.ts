@@ -45,7 +45,10 @@ export const ZSTD = (input: Uint8Array, outputLength: number): Uint8Array =>
 const compressors: Compressors = { ZSTD }
 
 export interface ParquetFile {
+  /** the bytes of the file from `base` on (all of it: `base` 0) */
   bytes: Uint8Array
+  /** the position of `bytes` in the file */
+  base: number
   buffer: ArrayBuffer
   metadata: FileMetaData
   tree: SchemaTree
@@ -58,7 +61,38 @@ export function openParquet(bytes: Uint8Array): ParquetFile {
       ? bytes.buffer
       : (bytes.slice().buffer as ArrayBuffer)
   const metadata = parquetMetadata(buffer)
-  return { bytes: new Uint8Array(buffer), buffer, metadata, tree: parquetSchema(metadata), rows: Number(metadata.num_rows) }
+  return { bytes: new Uint8Array(buffer), base: 0, buffer, metadata, tree: parquetSchema(metadata), rows: Number(metadata.num_rows) }
+}
+
+/**
+ * The metadata of a Parquet file from its last bytes `tail` (see footerOfTail), or the number of last bytes
+ * it needs if `tail` has fewer. Throws if `tail` is not the end of a Parquet file.
+ */
+export function metadataOfTail(tail: Uint8Array): FileMetaData | number {
+  if (tail.byteLength < 8) throw new Error('not a Parquet file (too short)')
+  const view = new DataView(tail.buffer, tail.byteOffset, tail.byteLength)
+  if (view.getUint32(tail.byteLength - 4, true) !== 0x31524150) throw new Error('not a Parquet file (no PAR1 at its end)')
+  const needed = view.getUint32(tail.byteLength - 8, true) + 8
+  if (needed > tail.byteLength) return needed
+  return parquetMetadata(tail.slice(tail.byteLength - needed).buffer)
+}
+
+/** The bytes of a column chunk: from its first page (the dictionary's, if any) on. */
+export function chunkRange(meta: { dictionary_page_offset?: bigint; data_page_offset: bigint; total_compressed_size: bigint }): {
+  start: number
+  end: number
+} {
+  let start = Number(meta.dictionary_page_offset ?? meta.data_page_offset)
+  if (!start || Number(meta.data_page_offset) < start) start = Number(meta.data_page_offset)
+  return { start, end: start + Number(meta.total_compressed_size) }
+}
+
+/**
+ * A part of a Parquet file whose metadata is known: `bytes` from position `base` of the file, enough for
+ * the column chunks that readLeaf is asked for.
+ */
+export function partOfParquet(metadata: FileMetaData, bytes: Uint8Array, base: number): ParquetFile {
+  return { bytes, base, buffer: bytes.buffer as ArrayBuffer, metadata, tree: parquetSchema(metadata), rows: Number(metadata.num_rows) }
 }
 
 /** The key-value metadata of the file's footer. */
@@ -72,12 +106,8 @@ export function footerOf(file: ParquetFile): Map<string, string> {
  * not the end of a Parquet file.
  */
 export function footerOfTail(tail: Uint8Array): Map<string, string> | number {
-  if (tail.byteLength < 8) throw new Error('not a Parquet file (too short)')
-  const view = new DataView(tail.buffer, tail.byteOffset, tail.byteLength)
-  if (view.getUint32(tail.byteLength - 4, true) !== 0x31524150) throw new Error('not a Parquet file (no PAR1 at its end)')
-  const needed = view.getUint32(tail.byteLength - 8, true) + 8
-  if (needed > tail.byteLength) return needed
-  const metadata = parquetMetadata(tail.slice(tail.byteLength - needed).buffer)
+  const metadata = metadataOfTail(tail)
+  if (typeof metadata === 'number') return metadata
   return new Map((metadata.key_value_metadata ?? []).map((kv) => [kv.key, kv.value ?? '']))
 }
 
@@ -118,9 +148,10 @@ function makeNumbers(type: string | undefined, length: number): Float64Array | F
 
 /**
  * Reads the leaf column at `path` (e.g. ['psm_metavalues', 'list', 'element', 'name']) of every row
- * group, as `mode` says. Leaves under at most one repeated level only.
+ * group (or of the row groups `groups`, in their order), as `mode` says. Leaves under at most one
+ * repeated level only.
  */
-export function readLeaf<T extends Values = Values>(file: ParquetFile, path: string[], mode: LeafMode = 'values'): Leaf<T> {
+export function readLeaf<T extends Values = Values>(file: ParquetFile, path: string[], mode: LeafMode = 'values', groups?: number[]): Leaf<T> {
   const schemaPath = getTreePath(file.tree, path)
   const element = schemaPath[schemaPath.length - 1].element
   let maxDef = 0
@@ -138,7 +169,9 @@ export function readLeaf<T extends Values = Values>(file: ParquetFile, path: str
   const listed = maxRep === 1
 
   const key = path.join('\u0000')
-  const chunks = file.metadata.row_groups.map((group) => {
+  const rowGroups = groups ? groups.map((g) => file.metadata.row_groups[g]) : file.metadata.row_groups
+  const rows = groups ? rowGroups.reduce((n, g) => n + Number(g.num_rows), 0) : file.rows
+  const chunks = rowGroups.map((group) => {
     const chunk = group.columns.find((c) => c.meta_data?.path_in_schema.join('\u0000') === key)
     if (!chunk?.meta_data) throw new Error(`readLeaf: no column ${path.join('.')}`)
     return chunk.meta_data
@@ -147,7 +180,7 @@ export function readLeaf<T extends Values = Values>(file: ParquetFile, path: str
   const entries = chunks.reduce((n, c) => n + Number(c.num_values), 0)
   // numbers in a typed array, anything else (strings, booleans, bigints) in an array (null: absent)
   const asCodes = mode === 'codes' && element.type === 'BYTE_ARRAY'
-  const numbers = asCodes ? new Int32Array(listed ? entries : file.rows).fill(-1) : makeNumbers(element.type, listed ? entries : file.rows)
+  const numbers = asCodes ? new Int32Array(listed ? entries : rows).fill(-1) : makeNumbers(element.type, listed ? entries : rows)
   // codes: the strings, and the code of each
   const strings: string[] = []
   const codeOf = new Map<string, number>()
@@ -161,10 +194,10 @@ export function readLeaf<T extends Values = Values>(file: ParquetFile, path: str
     }
     return c
   }
-  const others: unknown[] = numbers ? [] : new Array(listed ? entries : file.rows)
+  const others: unknown[] = numbers ? [] : new Array(listed ? entries : rows)
   let o = 0
-  const offsets = listed ? new Uint32Array(file.rows + 1) : null
-  const nullList = listed ? new Uint8Array(file.rows) : null
+  const offsets = listed ? new Uint32Array(rows + 1) : null
+  const nullList = listed ? new Uint8Array(rows) : null
   let row = 0
   let count = 0 // elements (list) so far
 
@@ -179,9 +212,9 @@ export function readLeaf<T extends Values = Values>(file: ParquetFile, path: str
       compressors,
       utf8: true,
     }
-    let start = Number(meta.dictionary_page_offset ?? meta.data_page_offset)
-    if (!start || Number(meta.data_page_offset) < start) start = Number(meta.data_page_offset)
-    const bytes = file.bytes.subarray(start, start + Number(meta.total_compressed_size))
+    const { start, end } = chunkRange(meta)
+    if (start < file.base || end - file.base > file.bytes.byteLength) throw new Error(`readLeaf: ${path.join('.')} is not in the bytes read`)
+    const bytes = file.bytes.subarray(start - file.base, end - file.base)
     const reader = { view: new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), offset: 0 }
     let dictionary: DecodedArray | undefined
     let seen = 0
@@ -247,11 +280,11 @@ export function readLeaf<T extends Values = Values>(file: ParquetFile, path: str
       seen += n
     }
   }
-  if (row !== file.rows) throw new Error(`readLeaf: ${path.join('.')} has ${row} rows, the file ${file.rows}`)
-  if (offsets) offsets[file.rows] = count
+  if (row !== rows) throw new Error(`readLeaf: ${path.join('.')} has ${row} rows, the file ${rows}`)
+  if (offsets) offsets[rows] = count
   others.length = o
   const values = numbers ? (listed ? numbers.subarray(0, count) : numbers) : others
-  return { rows: file.rows, offsets, nullList, values: values as T, dictionary: asCodes ? strings : undefined }
+  return { rows, offsets, nullList, values: values as T, dictionary: asCodes ? strings : undefined }
 }
 
 /** The leaves `fields` of the list of structs `column` (`column.list.element.<field>`). */

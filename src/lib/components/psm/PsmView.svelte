@@ -2,7 +2,8 @@
   // The PSM view (mockup 3), beside the PSM table: breadcrumb, Prev/Next and "Export spectrum (SVG)";
   // the peptide with its fragment ladder; the spectrum annotated (psm/annotate.ts, the web module's
   // annotatePeaks in TypeScript), mirrored against PeptDeep's prediction, which ProSE wrote for every
-  // PSM (the PSM spectra sidecar), or the theoretical spectrum, with ion, charge and loss toggles; the
+  // PSM (its input's QPX psm file, read when the PSM is opened), or the theoretical spectrum, with ion,
+  // charge and loss toggles; the
   // ion table, the fragment mass errors and the PSM's features. A PSM whose peaks the search did not
   // keep shows its ladder, theoretical ions and features. An open search's unlocalized mass shift is
   // shown, and the annotation is of the peptide without it.
@@ -43,6 +44,7 @@
   import { exportSpectrumSvg } from '$lib/psm/svg-export'
   import { baseName } from '$lib/results/model'
   import { formatQValue, parseAccession, parseDescription, scanNumber } from '$lib/results/display'
+  import type { LoadedSpectra, PsmSpectra } from '$lib/results/read'
   import type { PeakAnnotationResult } from '$lib/results/types'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { defaultsOf } from '$lib/settings/parameters'
@@ -90,11 +92,30 @@
   const defaults = defaultsOf(PROSE_PARAMETERS)
   const tolerance = $derived(fragmentTolerance(parameters, defaults))
   const instrument = $derived(instrumentOf(parameters, defaults))
-  // ProSE wrote PeptDeep's prediction for the PSMs (none at all: a tool without ONNX Runtime)
-  const predicted = $derived(view.result.outcome.predicted)
-  const onnx = $derived(predicted.ion.length > 0)
-
-  const peaks = $derived(spectrumPeaks(view.result.outcome.spectra, row))
+  // The peaks and PeptDeep's prediction of the PSM: read from its input's psm file when it is opened
+  const source = $derived(view.result.outcome.spectra)
+  // ProSE wrote PeptDeep's predictions (none at all: a tool without ONNX Runtime)
+  const onnx = $derived(source.predictions)
+  // (raw: the spectra are large typed arrays, and `source` is compared by identity)
+  let loaded = $state.raw<{ row: number; source: PsmSpectra; data: LoadedSpectra | null; error: string | null } | null>(null)
+  $effect(() => {
+    const [r, s] = [row, source]
+    let current = true
+    s.load(r).then(
+      (data) => {
+        if (current) loaded = { row: r, source: s, data, error: null }
+      },
+      (e: unknown) => {
+        if (current) loaded = { row: r, source: s, data: null, error: e instanceof Error ? e.message : String(e) }
+      },
+    )
+    return () => {
+      current = false
+    }
+  })
+  /** The spectra of this PSM; null while they are read. */
+  const spectra = $derived(loaded && loaded.row === row && loaded.source === source ? loaded : null)
+  const peaks = $derived(spectra?.data ? spectrumPeaks(spectra.data.spectra, spectra.data.row) : null)
   // ProSE stored the spectra filtered (its -qpx_peak_top and -qpx_peak_window, in the footer of its QPX files)
   const peakFilter = $derived(view.result.outcome.peakFilter ?? null)
   const mods = $derived.by(() => {
@@ -146,7 +167,7 @@
   const summary = $derived(result && peaks ? matchSummary(shown, theoretical, peaks.intensity) : null)
 
   // PeptDeep's prediction for the lower half, as ProSE wrote it for this PSM (at the NCE of its file)
-  const prediction = $derived(predictedIons(predicted, row))
+  const prediction = $derived(spectra?.data ? predictedIons(spectra.data.predicted, spectra.data.row) : [])
 
   const bottom: Bottom = $derived.by(() => {
     if (options.bottom === 'theoretical') {
@@ -160,6 +181,7 @@
       }
     }
     const label = `PeptDeep · ${nce.label} · ${instrument} · 100 % = strongest predicted b/y`
+    if (spectra === null) return { kind: 'status', label: 'PeptDeep', message: 'Reading the prediction…', failed: false }
     if (prediction.length === 0) {
       return { kind: 'status', label: 'PeptDeep', message: 'Prediction unavailable: ProSE wrote no prediction for this PSM', failed: true }
     }
@@ -396,7 +418,7 @@
         size="sm"
         class="h-7 px-2.5 text-xs"
         disabled={!peaks || pending}
-        title={!peaks ? 'The spectrum was not stored' : pending ? 'Wait for the annotation and the prediction' : undefined}
+        title={spectra === null ? 'Reading the spectrum' : !peaks ? 'The spectrum was not stored' : pending ? 'Wait for the annotation and the prediction' : undefined}
         onclick={exportSvg}>Export spectrum (SVG)</Button>
       <Button variant="ghost" size="icon-sm" aria-label="Close the PSM view" title="Back (Esc)" onclick={onClose}>
         <XIcon aria-hidden="true" />
@@ -525,6 +547,15 @@
           fragments are shown without them. Switching the precursor peaks off and on tries again.
         </p>
       {/if}
+    {:else if spectra === null}
+      <div class="my-2 rounded-md border border-dashed px-4 py-8 text-center text-xs text-muted-foreground" data-testid="spectrum-loading">
+        Reading the spectrum…
+      </div>
+    {:else if spectra.error}
+      <div class="my-2 rounded-md border border-dashed px-4 py-8 text-center" role="alert" data-testid="spectrum-error">
+        <p class="font-medium">The spectrum could not be read</p>
+        <p class="mx-auto mt-1 max-w-[44rem] text-xs text-muted-foreground">{spectra.error}</p>
+      </div>
     {:else}
       <div class="my-2 rounded-md border border-dashed px-4 py-8 text-center" data-testid="spectrum-missing">
         <p class="font-medium">Spectrum not stored</p>

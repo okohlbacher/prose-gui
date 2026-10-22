@@ -1,110 +1,194 @@
-// The statistics of a search: the footer of ProSE's QPX psm files ('prose_' keys of -qpx_extended, documented in
-// the tool's documentation) and the open search's modification analysis
+// The statistics of a search: ProSE's QPX run and provenance views (quantms.run.parquet, one row per input;
+// quantms.provenance.parquet, one row per step of the search, with -qpx_extended; documented in the tool's
+// documentation) and the open search's modification analysis
 // (mods/*_ModificationAnalysis_{DeltaMassStats,PTMStats}.tsv) as the web app's ProSEMultiSummary
 // (docs/parity.md, "ProSEMultiSummary").
 
+import { openParquet, readObjects } from './parquet'
 import type { ProSEFileSummary, ProSEMultiSummary, ProSESummary } from './types'
 
-/** The footer key-value metadata of a psm.parquet. */
-export type Footer = Map<string, string>
-
-/** One entry of the footer's 'prose_files' (JSON). */
-type FileEntry = Record<string, any>
-
-/** ProSE's exit codes (TOPPBase::ExitCodes) as the web app's status. */
-const STATUS: Record<number, ProSEFileSummary['status']> = {
-  0: 'EXECUTION_OK',
-  1: 'INPUT_FILE_EMPTY',
-  2: 'UNEXPECTED_RESULT',
-  3: 'UNKNOWN_ERROR',
-  4: 'ILLEGAL_PARAMETERS',
+/** A row of the run view: one input of the search, in input order. */
+export interface RunRow {
+  run_accession: string
+  search_status: string | null
+  ms2_spectra_count: number
+  identified_spectra_count: number
+  decoy_psm_count: number
+  /** its rows in quantms.psm.parquet */
+  psm_rows: number
+  /** null: the search did not rescore */
+  rescoring_applied: boolean | null
+  rescoring_skipped_reason: string | null
+  rescoring_warning: string | null
+  prediction_nce: number | null
+  precursor_error_median_ppm: number | null
+  precursor_error_mad_ppm: number | null
+  precursor_tolerance_recommended_ppm: number | null
+  fragment_error_median_ppm: number | null
+  fragment_error_mad_ppm: number | null
+  fragment_tolerance_recommended_ppm: number | null
+  search_seconds: number
 }
 
-/** The footer's 'prose_files': one entry per input, in input order. Throws if it is missing or not JSON. */
-export function filesOf(footer: Footer): FileEntry[] {
-  const text = footer.get('prose_files')
-  if (text === undefined) throw new Error('the footer has no prose_files')
-  const files: unknown = JSON.parse(text)
-  if (!Array.isArray(files)) throw new Error('prose_files is not a list')
-  return files as FileEntry[]
+/** The parameters of a step of the provenance view, by key. */
+export type Parameters = Map<string, string>
+
+/** What the run and provenance views say about the search. */
+export interface SearchMeta {
+  runs: RunRow[]
+  /** the parameters of the database search (step 'peptide_search') */
+  search: Parameters
+  /** the parameters of the FDR filtering (step 'target_decoy_fdr') */
+  fdr: Parameters
 }
 
-const number = (v: unknown, fallback = 0): number => (typeof v === 'number' ? v : fallback)
-const text = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
-/** A footer number; `fallback` if it is missing or not a number. */
-export const footerNumber = (footer: Footer, key: string, fallback = 0): number => {
-  const v = Number(footer.get(key) ?? NaN)
-  return Number.isNaN(v) ? fallback : v
+const RUN_COLUMNS: (keyof RunRow)[] = [
+  'run_accession',
+  'search_status',
+  'ms2_spectra_count',
+  'identified_spectra_count',
+  'decoy_psm_count',
+  'psm_rows',
+  'rescoring_applied',
+  'rescoring_skipped_reason',
+  'rescoring_warning',
+  'prediction_nce',
+  'precursor_error_median_ppm',
+  'precursor_error_mad_ppm',
+  'precursor_tolerance_recommended_ppm',
+  'fragment_error_median_ppm',
+  'fragment_error_mad_ppm',
+  'fragment_tolerance_recommended_ppm',
+  'search_seconds',
+]
+
+/** A number of a view (int64 as bigint); `fallback` if it is null. */
+const asNumber = (v: unknown, fallback: number): number => (typeof v === 'bigint' ? Number(v) : typeof v === 'number' ? v : fallback)
+
+/** The rows of the run view (bytes of quantms.run.parquet). Throws if a column is missing. */
+export async function readRuns(bytes: Uint8Array): Promise<RunRow[]> {
+  const file = openParquet(bytes)
+  const names = new Set(file.tree.children.map((c) => c.element.name))
+  const missing = RUN_COLUMNS.filter((c) => !names.has(c))
+  if (missing.length > 0) throw new Error(`the run view has not the columns of ProSE's -qpx_extended (${missing.join(', ')})`)
+  const rows = await readObjects(file, RUN_COLUMNS)
+  return rows.map((r) => ({
+    run_accession: String(r.run_accession ?? ''),
+    search_status: typeof r.search_status === 'string' ? r.search_status : null,
+    ms2_spectra_count: asNumber(r.ms2_spectra_count, 0),
+    identified_spectra_count: asNumber(r.identified_spectra_count, 0),
+    decoy_psm_count: asNumber(r.decoy_psm_count, 0),
+    psm_rows: asNumber(r.psm_rows, 0),
+    rescoring_applied: typeof r.rescoring_applied === 'boolean' ? r.rescoring_applied : null,
+    rescoring_skipped_reason: typeof r.rescoring_skipped_reason === 'string' ? r.rescoring_skipped_reason : null,
+    rescoring_warning: typeof r.rescoring_warning === 'string' ? r.rescoring_warning : null,
+    prediction_nce: r.prediction_nce === null || r.prediction_nce === undefined ? null : asNumber(r.prediction_nce, NaN),
+    precursor_error_median_ppm: r.precursor_error_median_ppm === null ? null : asNumber(r.precursor_error_median_ppm, NaN),
+    precursor_error_mad_ppm: r.precursor_error_mad_ppm === null ? null : asNumber(r.precursor_error_mad_ppm, NaN),
+    precursor_tolerance_recommended_ppm:
+      r.precursor_tolerance_recommended_ppm === null ? null : asNumber(r.precursor_tolerance_recommended_ppm, NaN),
+    fragment_error_median_ppm: r.fragment_error_median_ppm === null ? null : asNumber(r.fragment_error_median_ppm, NaN),
+    fragment_error_mad_ppm: r.fragment_error_mad_ppm === null ? null : asNumber(r.fragment_error_mad_ppm, NaN),
+    fragment_tolerance_recommended_ppm:
+      r.fragment_tolerance_recommended_ppm === null ? null : asNumber(r.fragment_tolerance_recommended_ppm, NaN),
+    search_seconds: asNumber(r.search_seconds, 0),
+  }))
 }
-export const footerFlag = (footer: Footer, key: string): boolean => footer.get(key) === 'true'
+
+/** The parameters of each step of the provenance view (bytes of quantms.provenance.parquet), by step name. */
+export async function readSteps(bytes: Uint8Array): Promise<Map<string, Parameters>> {
+  const file = openParquet(bytes)
+  const rows = await readObjects(file, ['step_name', 'parameters'])
+  const steps = new Map<string, Parameters>()
+  for (const r of rows) {
+    const parameters = new Map<string, string>()
+    for (const p of (r.parameters as { key: string; value: string }[] | null) ?? []) parameters.set(p.key, p.value ?? '')
+    steps.set(String(r.step_name), parameters)
+  }
+  return steps
+}
+
+/** The search's meta data from the bytes of the run and provenance views. Throws if a step is missing. */
+export async function readMeta(runBytes: Uint8Array, provenanceBytes: Uint8Array): Promise<SearchMeta> {
+  const [runs, steps] = await Promise.all([readRuns(runBytes), readSteps(provenanceBytes)])
+  const search = steps.get('peptide_search')
+  const fdr = steps.get('target_decoy_fdr')
+  if (!search || !fdr) throw new Error('the provenance view has not the steps of ProSE (peptide_search, target_decoy_fdr)')
+  return { runs, search, fdr }
+}
+
+/** A number parameter; `fallback` if it is missing or not a number. */
+export const parameterNumber = (p: Parameters, key: string, fallback = 0): number => {
+  const v = Number(p.get(key) ?? NaN)
+  return p.get(key) === '' || Number.isNaN(v) ? fallback : v
+}
+export const parameterFlag = (p: Parameters, key: string): boolean => p.get(key) === 'true'
+
+const STATUSES: ProSEFileSummary['status'][] = ['EXECUTION_OK', 'INPUT_FILE_EMPTY', 'UNEXPECTED_RESULT', 'UNKNOWN_ERROR', 'ILLEGAL_PARAMETERS']
 
 /** A mass error estimate; null: none. */
-function massError(e: FileEntry | null | undefined): ProSESummary['run']['precursorError'] {
-  if (!e || typeof e !== 'object') return null
-  return { median: number(e.median_ppm), mad: number(e.mad_ppm), recommended: number(e.recommended_ppm) }
+function massError(median: number | null, mad: number | null, recommended: number | null): ProSESummary['run']['precursorError'] {
+  if (median === null || mad === null || recommended === null) return null
+  return { median, mad, recommended }
 }
 
 /**
- * Percolator's outcome for a file: null when the search did not rescore (`applied: false` without a
- * reason; the web app has null for a search with `rescore: false`), else applied, skipped and warning.
+ * The rescoring outcome of a run: null when the search did not rescore (the web app has null for a search
+ * with `rescore: false`), else applied, skipped and warning.
  */
-function percolator(p: FileEntry | undefined): ProSEFileSummary['percolator'] {
-  if (!p) return null
-  const applied = p.applied === true
-  const skipped = text(p.skipped_reason)
-  if (!applied && skipped === null) return null
-  return { applied, skipped, warning: text(p.warning) }
+function percolator(r: RunRow): ProSEFileSummary['percolator'] {
+  if (r.rescoring_applied === null) return null
+  if (!r.rescoring_applied && r.rescoring_skipped_reason === null) return null
+  return { applied: r.rescoring_applied, skipped: r.rescoring_skipped_reason, warning: r.rescoring_warning }
 }
 
 /**
- * The summary of the search: `paths` are the app's inputs (in order; the footer has their names in the
- * search folder), `modificationAnalysis` the parsed TSVs (null: closed search).
+ * The summary of the search: `paths` are the app's inputs (in order; the run view has their stems),
+ * `modificationAnalysis` the parsed TSVs (null: closed search).
  */
-export function toSummary(footer: Footer, paths: string[], modificationAnalysis: ProSESummary['modificationAnalysis']): ProSEMultiSummary {
-  const files: ProSEFileSummary[] = filesOf(footer).map((f, i) => ({
-    path: paths[i] ?? String(f.input_file ?? ''),
-    status: STATUS[number(f.exit_code, 3)] ?? 'UNKNOWN_ERROR',
-    ms2Spectra: number(f.ms2_spectra),
-    targetPSMs: number(f.target_psms),
-    decoyPSMs: number(f.decoy_psms),
-    percolator: percolator(f.percolator),
-    peptdeepNce: typeof f.peptdeep_nce === 'number' ? f.peptdeep_nce : null,
-    precursorError: massError(f.precursor_error),
-    fragmentError: massError(f.fragment_error),
-    secondsSearch: number(f.seconds_search),
+export function toSummary(meta: SearchMeta, paths: string[], modificationAnalysis: ProSESummary['modificationAnalysis']): ProSEMultiSummary {
+  const s = meta.search
+  const files: ProSEFileSummary[] = meta.runs.map((r, i) => ({
+    path: paths[i] ?? r.run_accession,
+    status: STATUSES.find((x) => x === r.search_status) ?? 'UNKNOWN_ERROR',
+    ms2Spectra: r.ms2_spectra_count,
+    targetPSMs: r.identified_spectra_count,
+    decoyPSMs: r.decoy_psm_count,
+    percolator: percolator(r),
+    peptdeepNce: r.prediction_nce,
+    precursorError: massError(r.precursor_error_median_ppm, r.precursor_error_mad_ppm, r.precursor_tolerance_recommended_ppm),
+    fragmentError: massError(r.fragment_error_median_ppm, r.fragment_error_mad_ppm, r.fragment_tolerance_recommended_ppm),
+    secondsSearch: r.search_seconds,
   }))
-  const openSearch = footerFlag(footer, 'prose_open_search')
+  const openSearch = parameterFlag(s, 'open_search')
   return {
     files,
     search: {
-      databaseFile: footer.get('prose_database_file') ?? '',
-      enzyme: footer.get('prose_enzyme') ?? '',
+      databaseFile: s.get('database_file') ?? '',
+      enzyme: s.get('enzyme') ?? '',
       openSearch,
-      calibration: footerFlag(footer, 'prose_calibration'),
-      chunked: footerFlag(footer, 'prose_chunked'),
-      decoyMode: footer.get('prose_decoy_mode') ?? '',
-      targetProteins: footerNumber(footer, 'prose_db_target_proteins'),
-      decoyProteins: footerNumber(footer, 'prose_db_decoy_proteins'),
-      indexedPeptides: footerNumber(footer, 'prose_indexed_peptides'),
-      indexedFragments: footerNumber(footer, 'prose_indexed_fragments'),
-      secondsIndexBuild: footerNumber(footer, 'prose_seconds_index_build'),
-      secondsTotal: footerNumber(footer, 'prose_seconds_total'),
+      calibration: parameterFlag(s, 'calibration'),
+      chunked: parameterFlag(s, 'chunked'),
+      decoyMode: s.get('decoy_mode') ?? '',
+      targetProteins: parameterNumber(s, 'db_target_proteins'),
+      decoyProteins: parameterNumber(s, 'db_decoy_proteins'),
+      indexedPeptides: parameterNumber(s, 'indexed_peptides'),
+      indexedFragments: parameterNumber(s, 'indexed_fragments'),
+      secondsIndexBuild: parameterNumber(s, 'seconds_index_build'),
+      secondsTotal: parameterNumber(s, 'seconds_total'),
     },
-    proteinFdrApplied: footerFlag(footer, 'prose_protein_fdr_applied'),
-    psmFdr: footerNumber(footer, 'prose_psm_fdr'),
-    proteinFdr: footerNumber(footer, 'prose_protein_fdr'),
-    decoyString: footer.get('prose_decoy_string') ?? 'DECOY_',
+    proteinFdrApplied: parameterFlag(meta.fdr, 'protein_fdr_applied'),
+    psmFdr: parameterNumber(meta.fdr, 'psm_fdr'),
+    proteinFdr: parameterNumber(meta.fdr, 'protein_fdr'),
+    decoyString: s.get('decoy_string') ?? 'DECOY_',
     openSearch,
     modificationAnalysis,
   }
 }
 
-/** The target PSMs of a search by its footer (the sum of `prose_files[].target_psms`); 0 if it says none. */
-export function targetPsmsOf(footer: Footer): number {
-  return filesOf(footer).reduce((n: number, f) => {
-    const psms = f?.target_psms
-    return n + (typeof psms === 'number' && Number.isFinite(psms) ? psms : 0)
-  }, 0)
+/** The target PSMs of a search by its run view (the sum of identified_spectra_count); 0 if it says none. */
+export function targetPsmsOf(runs: RunRow[]): number {
+  return runs.reduce((n, r) => n + (Number.isFinite(r.identified_spectra_count) ? r.identified_spectra_count : 0), 0)
 }
 
 //------------------------------------------------------------------------------

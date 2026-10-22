@@ -1,7 +1,7 @@
 //! What the front end may read of the disk, and nothing more:
 //!
 //! - [`read_search_file`]: a file of one search's folder (`<searches>/<id>/`), by its name relative to
-//!   the folder (or its last bytes), or the database that the search's `database.json` records (the shim
+//!   the folder (all of it, its last bytes, or a byte range), or the database that the search's `database.json` records (the shim
 //!   writes it when ProSE reads the user's FASTA as it is). Names are checked as text
 //!   (no `..`, `.`, empty parts, other absolute paths) and the file's canonical path must lie inside
 //!   the canonical folder, so no symlink leads out of it: the shim's input links (`<n>__<name>`, to the
@@ -28,7 +28,7 @@ pub struct ReadError {
 }
 
 impl ReadError {
-    fn refused(message: String) -> ReadError {
+    pub(crate) fn refused(message: String) -> ReadError {
         ReadError {
             not_found: false,
             message,
@@ -178,26 +178,74 @@ pub fn resolve_search_file(
     Ok(canonical)
 }
 
-/// The contents of `name` of the search `search_id` (see the module docs for what is served): all of it, or
-/// with `tail` its last `tail` bytes (all of a smaller file; the footer of a Parquet file, which History reads).
+/// Which bytes of a file [`read_search_file`] reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ByteRange {
+    /// All of it.
+    All,
+    /// The last bytes (all of a smaller file): the footer of a Parquet file, which History and the
+    /// results reader read.
+    Tail(u64),
+    /// `length` bytes from `offset` (fewer at the end of the file, none past it): a part of a Parquet file,
+    /// e.g. the peaks of one PSM, which the PSM view reads.
+    Range { offset: u64, length: u64 },
+}
+
+impl ByteRange {
+    /// The range of the command's arguments: `tail`, or `offset` with `length`, or all (an `offset` without
+    /// `length` or the other way round, or `tail` with them, is refused).
+    pub fn of(
+        tail: Option<u64>,
+        offset: Option<u64>,
+        length: Option<u64>,
+    ) -> Result<Self, ReadError> {
+        match (tail, offset, length) {
+            (None, None, None) => Ok(ByteRange::All),
+            (Some(tail), None, None) => Ok(ByteRange::Tail(tail)),
+            (None, Some(offset), Some(length)) => Ok(ByteRange::Range { offset, length }),
+            _ => Err(ReadError::refused(
+                "Give either tail, or offset and length, or none of them.".to_string(),
+            )),
+        }
+    }
+}
+
+/// The largest byte range [`read_search_file`] reads at once (the peaks of one row group are a few MB).
+pub const MAX_RANGE: u64 = 1 << 30;
+
+/// The contents of `name` of the search `search_id` (see the module docs for what is served): the bytes of
+/// `range`.
 pub fn read_search_file(
     searches_dir: &Path,
     search_id: &str,
     name: &str,
-    tail: Option<u64>,
+    range: ByteRange,
 ) -> Result<Vec<u8>, ReadError> {
     let path = resolve_search_file(searches_dir, search_id, name)?;
-    let Some(tail) = tail else {
+    if range == ByteRange::All {
         return fs::read(&path).map_err(|e| ReadError::io(name, e));
-    };
+    }
     use io::Seek;
     let mut file = fs::File::open(&path).map_err(|e| ReadError::io(name, e))?;
     let size = file.metadata().map_err(|e| ReadError::io(name, e))?.len();
-    let start = size.saturating_sub(tail);
+    let (start, length) = match range {
+        ByteRange::Tail(tail) => (size.saturating_sub(tail), tail.min(size)),
+        ByteRange::Range { offset, length } => {
+            if length > MAX_RANGE {
+                return Err(ReadError::refused(format!(
+                    "{name}: {length} bytes at once are more than the {MAX_RANGE} the app reads."
+                )));
+            }
+            let start = offset.min(size);
+            (start, length.min(size - start))
+        }
+        ByteRange::All => unreachable!(),
+    };
     file.seek(io::SeekFrom::Start(start))
         .map_err(|e| ReadError::io(name, e))?;
-    let mut bytes = Vec::with_capacity((size - start) as usize);
-    file.read_to_end(&mut bytes)
+    let mut bytes = Vec::with_capacity(length as usize);
+    file.take(length)
+        .read_to_end(&mut bytes)
         .map_err(|e| ReadError::io(name, e))?;
     Ok(bytes)
 }

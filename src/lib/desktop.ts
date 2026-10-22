@@ -13,7 +13,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { open } from '@tauri-apps/plugin-dialog'
 import type { HistoryBackend, HistoryEntry } from './history/history'
-import type { SearchFiles } from './results/read'
+import type { ByteRange, SearchFiles } from './results/read'
 
 /** The ProSE tool the app runs: its version, where it is, and whether it has ONNX Runtime (PeptDeep). */
 export type ToolInfo = { version: string; path: string; onnx: boolean }
@@ -147,13 +147,19 @@ export function cancelSearch(searchId: string): Promise<void> {
   return invoke('cancel_search', { searchId })
 }
 
+/** A file of a search's folder (all of it, or the bytes of `range`): the command read_search_file. */
+async function readSearchFile(searchId: string, name: string, range?: ByteRange): Promise<Uint8Array> {
+  const part = !range ? {} : 'tail' in range ? { tail: range.tail } : { offset: range.offset, length: range.length }
+  return new Uint8Array(await invoke<ArrayBuffer>('read_search_file', { searchId, name, ...part }))
+}
+
 /**
  * The files of a search for the results reader (`readSearch`): its folder's files by relative name,
  * and the database it was searched with (its database.json) by absolute path. A missing file rejects with
  * `{ notFound: true, message }`.
  */
 export function searchFiles(searchId: string): SearchFiles {
-  return async (name) => new Uint8Array(await invoke<ArrayBuffer>('read_search_file', { searchId, name }))
+  return (name, range) => readSearchFile(searchId, name, range)
 }
 
 /** Sizes and counts of files given by path (the open dialog, drag and drop, the example). */
@@ -213,8 +219,7 @@ export function saveSearchFile(searchId: string, name: string, suggested: string
  */
 export const desktopBackend: HistoryBackend = {
   list: () => invoke<HistoryEntry[]>('history_list'),
-  read: async (searchId, name) => new Uint8Array(await invoke<ArrayBuffer>('read_search_file', { searchId, name })),
-  readTail: async (searchId, name, bytes) => new Uint8Array(await invoke<ArrayBuffer>('read_search_file', { searchId, name, tail: bytes })),
+  read: readSearchFile,
   saveRecord: (searchId, record) => invoke('history_save_record', { searchId, record }),
   saveProteins: (searchId, proteins) => invoke('history_save_proteins', { searchId, proteins }),
   rename: (searchId, name) => invoke('history_rename', { searchId, name }),

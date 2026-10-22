@@ -2,23 +2,24 @@
 // so that the web app's screens show them unchanged.
 //
 // The folder is the shim's (src-tauri/src/args.rs, run.rs): inputs.json (the inputs in order, with the
-// links `<n>__<name>` ProSE saw and their stems), qpx/<stem>.psm.parquet (the QPX psm view of each input with
-// the optional columns and the footer of ProSE's -qpx_extended), qpx/quantms.pg.parquet (the protein groups:
-// of several inputs the pooled inference), mods/ (open search: the tables the footer names), and
-// database.fasta (with the contaminants). Without contaminants ProSE searched the user's FASTA: the reader
-// asks for the path the footer records (`prose_database_file`), an absolute path, which the `files` callback
-// has to serve too. The protein sequences and descriptions come from proteins.fasta (the identified
-// proteins, if the folder has it), else the database, else they are left out with a warning
-// (`SearchResult.warnings`).
+// links `<n>__<name>` ProSE saw and their stems), and in qpx/ the QPX views of ProSE's -qpx_extended:
+// quantms.psm.parquet (the PSM rows of all inputs, in input order, with the optional columns but without the
+// spectra), quantms.run.parquet (one row per input: its statistics and its rows in quantms.psm.parquet),
+// quantms.provenance.parquet (the steps of the search with their parameters), quantms.pg.parquet (the protein
+// groups: of several inputs the pooled inference), and <stem>.psm.parquet of each input (the same rows with
+// the peaks and PeptDeep's prediction, read by row group when a PSM is opened); mods/ (open search: the
+// tables the provenance names), and database.fasta (with the contaminants). Without contaminants ProSE
+// searched the user's FASTA: the reader asks for the path the provenance records (`database_file`), an
+// absolute path, which the `files` callback has to serve too. The protein sequences and descriptions come
+// from proteins.fasta (the identified proteins, if the folder has it), else the database, else they are left
+// out with a warning (`SearchResult.warnings`).
 //
-// The `files` contract: resolve with the contents, or reject with `FileNotFound` (or any error or object
-// with `notFound: true`, as a Tauri command can send it) when the file does not exist. Only that counts
-// as a missing file; any other rejection fails the read, with the file's name in the message. A file
-// that is there but cannot be read fails the read too, naming the file.
-//
-// Rows: the PSM rows are the QPX psm rows of the inputs in order; their peaks and PeptDeep's prediction
-// are columns of the same rows.
+// The `files` contract: resolve with the contents (all of the file, or the byte range asked for), or reject
+// with `FileNotFound` (or any error or object with `notFound: true`, as a Tauri command can send it) when the
+// file does not exist. Only that counts as a missing file; any other rejection fails the read, with the
+// file's name in the message. A file that is there but cannot be read fails the read too, naming the file.
 
+import type { FileMetaData } from 'hyparquet'
 import {
   C13C12_MASSDIFF_U,
   countEnzymatic,
@@ -32,17 +33,42 @@ import {
   type DecoyGeneration,
   type Modification,
 } from './derive'
-import { footerOf, hasColumn, openParquet, readLeaf, readObjects, readStructList, startZstd, type LeafMode, type ParquetFile } from './parquet'
-import { filesOf, footerFlag, footerNumber, parseModificationAnalysis, toSummary, type Footer } from './summary'
+import {
+  chunkRange,
+  footerOf,
+  hasColumn,
+  metadataOfTail,
+  openParquet,
+  partOfParquet,
+  readLeaf,
+  readObjects,
+  readStructList,
+  startZstd,
+  type LeafMode,
+  type ParquetFile,
+} from './parquet'
+import { parameterFlag, parameterNumber, parseModificationAnalysis, readMeta, toSummary, type SearchMeta } from './summary'
 import type { PredictedSpectra, ProSESummary, ProSEMultiSummary, ResultTables, StoredSpectra } from './types'
 
 export { ZSTD } from './parquet'
 
+/** A part of a file: its last `tail` bytes (all of a smaller file), or `length` bytes from `offset` (fewer at its end). */
+export type ByteRange = { tail: number } | { offset: number; length: number }
+
 /**
- * The contents of a file of the search folder by its name relative to the folder (or an absolute path).
- * A file that does not exist: reject with FileNotFound (or anything with `notFound: true`).
+ * The contents of a file of the search folder by its name relative to the folder (or an absolute path): all
+ * of it, or the bytes of `range`. A file that does not exist: reject with FileNotFound (or anything with
+ * `notFound: true`).
  */
-export type SearchFiles = (name: string) => Promise<Uint8Array>
+export type SearchFiles = (name: string, range?: ByteRange) => Promise<Uint8Array>
+
+/** The bytes of `range` of a file's contents `bytes` (for a `SearchFiles` that has the whole file at hand). */
+export function bytesOfRange(bytes: Uint8Array, range?: ByteRange): Uint8Array {
+  if (!range) return bytes
+  if ('tail' in range) return bytes.subarray(Math.max(0, bytes.length - range.tail))
+  const start = Math.min(range.offset, bytes.length)
+  return bytes.subarray(start, Math.min(bytes.length, start + range.length))
+}
 
 /** The rejection of `SearchFiles` for a file that does not exist. */
 export class FileNotFound extends Error {
@@ -59,8 +85,8 @@ export function isNotFound(e: unknown): boolean {
 }
 
 /**
- * A search folder of the app's earlier layout (summary.yaml and OpenMS' own Parquet files next to the QPX
- * files), which this version does not read.
+ * A search folder of the app's earlier layouts (summary.yaml and OpenMS' own Parquet files next to the QPX
+ * files; or QPX files without the run and provenance views), which this version does not read.
  */
 export class OldLayoutError extends Error {
   readonly oldLayout = true
@@ -79,11 +105,29 @@ export interface PeakFilter {
   window: number
 }
 
+/**
+ * The peaks and PeptDeep's prediction of the PSMs of a row group of an input's psm file, as the web app's
+ * StoredSpectra and PredictedSpectra of those rows: the opened PSM is their row `row`.
+ */
+export interface LoadedSpectra {
+  spectra: StoredSpectra
+  predicted: PredictedSpectra
+  row: number
+}
+
+/** The peaks and predictions of the PSM rows, read when a PSM is opened. */
+export interface PsmSpectra {
+  /** ProSE predicted spectra (it has ONNX Runtime): some input has the NCE of a prediction */
+  predictions: boolean
+  /** The peaks and the prediction of PSM row `row` (of ResultTables.psms), read from its input's psm file. */
+  load(row: number): Promise<LoadedSpectra>
+}
+
 export interface SearchResult {
   summary: ProSEMultiSummary
   tables: ResultTables
-  spectra: StoredSpectra
-  predicted: PredictedSpectra
+  /** the peaks and predictions of the PSMs (read when a PSM is opened) */
+  spectra: PsmSpectra
   /** what could not be read and was left out, for the user (e.g. the protein sequences) */
   warnings: string[]
   /**
@@ -122,17 +166,17 @@ const utf8 = new TextDecoder()
 const HYPERSCORE = 'ln(hyperscore)'
 const PEPTDEEP_FEATURES = ['ms2_cosine', 'ms2_spectral_angle', 'ms2_pearson', 'ms2_frac_pred_found', 'rt_abs_error']
 
-/** The columns -qpx_extended adds to the QPX psm view (besides the scores). */
-const EXTENDED_COLUMNS = [
-  'spectrum_reference',
-  'isotope_error',
-  'protein_mappings',
-  'peak_mz_array',
-  'peak_intensity_array',
-  'predicted_ion_type_array',
-  'predicted_mz_array',
-  'predicted_intensity_array',
-]
+/** The QPX views of the search (in qpx/). */
+export const MERGED_PSMS = 'qpx/quantms.psm.parquet'
+export const RUNS = 'qpx/quantms.run.parquet'
+export const PROVENANCE = 'qpx/quantms.provenance.parquet'
+const GROUPS = 'qpx/quantms.pg.parquet'
+
+/** The columns -qpx_extended adds to every QPX psm view (besides the scores). */
+const EXTENDED_COLUMNS = ['spectrum_reference', 'isotope_error', 'protein_mappings']
+
+/** The columns of the spectra, in the per-input psm files only. */
+const SPECTRUM_COLUMNS = ['peak_mz_array', 'peak_intensity_array', 'predicted_ion_type_array', 'predicted_mz_array', 'predicted_intensity_array']
 
 const first = (...values: number[]) => values.find((v) => !Number.isNaN(v)) ?? NaN
 
@@ -140,7 +184,7 @@ const first = (...values: number[]) => values.find((v) => !Number.isNaN(v)) ?? N
 const fmax = (a: number, b: number) => (Number.isNaN(a) ? b : Number.isNaN(b) ? a : Math.max(a, b))
 
 //------------------------------------------------------------------------------
-// One input's file
+// The PSM rows
 
 interface ListLeaf<T> {
   offsets: Uint32Array
@@ -148,10 +192,10 @@ interface ListLeaf<T> {
   values: T
 }
 
-/** The PSM rows of one input: the columns of its QPX psm file. */
-interface InputRows {
+/** The PSM rows of the search: the columns of quantms.psm.parquet. */
+interface PsmRows {
   count: number
-  footer: Footer
+  footer: Map<string, string>
   sequence: unknown[]
   charge: Float64Array
   pep: Float64Array
@@ -167,13 +211,6 @@ interface InputRows {
   isotope: Float64Array
   /** protein_mappings: 1-based start and end, NaN: null */
   evidence: { offsets: Uint32Array; accession: unknown[]; aa_before: unknown[]; aa_after: unknown[]; start: Float64Array; end: Float64Array }
-  peakMz: ListLeaf<Float32Array>
-  peakIntensity: ListLeaf<Float32Array>
-  /** the ion names as codes into `ionNames` */
-  ion: ListLeaf<Int32Array>
-  ionNames: string[]
-  predictedMz: ListLeaf<Float32Array>
-  predictedIntensity: ListLeaf<Float32Array>
 }
 
 interface QpxModification {
@@ -182,31 +219,29 @@ interface QpxModification {
   positions: { position: number }[]
 }
 
-function listLeaf<T>(file: ParquetFile, column: string, mode: LeafMode = 'values'): ListLeaf<T> & { dictionary?: string[] } {
-  const leaf = readLeaf(file, [column, 'list', 'element'], mode)
+function listLeaf<T>(file: ParquetFile, column: string, mode: LeafMode = 'values', groups?: number[]): ListLeaf<T> & { dictionary?: string[] } {
+  const leaf = readLeaf(file, [column, 'list', 'element'], mode, groups)
   return { offsets: leaf.offsets!, nullList: leaf.nullList!, values: leaf.values as T, dictionary: leaf.dictionary }
 }
 
-/** A psm file without the columns or the footer of -qpx_extended. */
+/** A psm file without the columns of -qpx_extended. */
 class NotExtended extends Error {}
 
-async function readInput(name: string, bytes: Uint8Array): Promise<InputRows> {
+async function readRows(name: string, bytes: Uint8Array): Promise<PsmRows> {
   const flat = <T>(file: ParquetFile, column: string) => readLeaf(file, [column]).values as T
   return inFile(name, async () => {
     const qpx = openParquet(bytes)
-    const footer = footerOf(qpx)
-    if (!footer.has('prose_files') || EXTENDED_COLUMNS.some((c) => !hasColumn(qpx, c))) {
-      throw new NotExtended(`${name}: the QPX psm view has not the columns and the footer of ProSE's -qpx_extended`)
+    if (EXTENDED_COLUMNS.some((c) => !hasColumn(qpx, c))) {
+      throw new NotExtended(`${name}: the QPX psm view has not the columns of ProSE's -qpx_extended`)
     }
     const scores = readStructList(qpx, 'additional_scores', ['score_name', 'score_value'], { score_name: 'codes' })
     const evidence = readStructList(qpx, 'protein_mappings', ['accession', 'aa_before', 'aa_after', 'start', 'end'])
     // the modifications (a list of lists): only if some row has any
     const modLeaf = readLeaf(qpx, ['modifications', 'list', 'element', 'name'])
     const modified = modLeaf.offsets![qpx.rows] > 0
-    const ion = listLeaf<Int32Array>(qpx, 'predicted_ion_type_array', 'codes')
     return {
       count: qpx.rows,
-      footer,
+      footer: footerOf(qpx),
       sequence: flat<unknown[]>(qpx, 'sequence'),
       charge: flat<Float64Array>(qpx, 'charge'),
       pep: flat<Float64Array>(qpx, 'posterior_error_probability'),
@@ -233,13 +268,6 @@ async function readInput(name: string, bytes: Uint8Array): Promise<InputRows> {
         start: evidence.start as Float64Array,
         end: evidence.end as Float64Array,
       },
-      peakMz: listLeaf(qpx, 'peak_mz_array'),
-      peakIntensity: listLeaf(qpx, 'peak_intensity_array'),
-      ion,
-      // as the web app names them
-      ionNames: (ion.dictionary ?? []).map(webIonName),
-      predictedMz: listLeaf(qpx, 'predicted_mz_array'),
-      predictedIntensity: listLeaf(qpx, 'predicted_intensity_array'),
     }
   })
 }
@@ -281,6 +309,9 @@ function readFasta(text: string): Map<string, FastaEntry> {
 /** The sequence as ProSE searches it: without the stop codons ('*') at its end. */
 const searched = (sequence: string) => sequence.replace(/\*+$/, '')
 
+/** The protein q-value of a pg row's additional_scores: the entry named q-value (any spelling). */
+const isQValueName = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '') === 'qvalue'
+
 //------------------------------------------------------------------------------
 // The reader
 
@@ -289,8 +320,8 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   const zstd = startZstd()
   const warnings: string[] = []
   /** a file that may be missing: null if it does not exist */
-  const optional = (name: string) =>
-    files(name).catch((e: unknown) => {
+  const optional = (name: string, range?: ByteRange) =>
+    files(name, range).catch((e: unknown) => {
       if (isNotFound(e)) return null
       throw new Error(`${name}: ${e instanceof Error ? e.message : String(e)}`, { cause: e })
     })
@@ -303,55 +334,56 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   const inputs = await inFile('inputs.json', async () =>
     (JSON.parse(utf8.decode(await required('inputs.json'))) as InputRecord[]).sort((a, b) => a.index - b.index),
   )
-  const several = inputs.length > 1
   await zstd
 
-  const groupsName = 'qpx/quantms.pg.parquet'
-  let perInput: (InputRows | null)[]
-  let groupBytes: Uint8Array | null
-  try {
-    ;[perInput, groupBytes] = await Promise.all([
-      Promise.all(
-        inputs.map(async ({ stem }) => {
-          const name = `qpx/${stem}.psm.parquet`
-          const bytes = await optional(name)
-          // an input whose search failed has no psm file
-          return bytes ? readInput(name, bytes) : null
-        }),
-      ),
-      optional(groupsName),
-    ])
-  } catch (e) {
-    // the earlier layout of the app's search folders: QPX files without the columns of -qpx_extended
-    if (e instanceof NotExtended || (e as { cause?: unknown })?.cause instanceof NotExtended) {
-      if (await optional('summary.yaml')) throw new OldLayoutError()
+  const [runBytes, provenanceBytes, psmBytes, groupBytes] = await Promise.all([
+    optional(RUNS),
+    optional(PROVENANCE),
+    optional(MERGED_PSMS),
+    optional(GROUPS),
+  ])
+  if (!runBytes || !provenanceBytes) {
+    // the earlier layouts of the app's search folders: summary.yaml, or QPX files without these views
+    if (psmBytes || (await optional('summary.yaml'))) throw new OldLayoutError()
+    throw new Error(`The search folder has no results of ProSE (${RUNS}, ${PROVENANCE}).`)
+  }
+  const meta: SearchMeta = await inFile(`${RUNS}, ${PROVENANCE}`, () => readMeta(runBytes, provenanceBytes))
+  if (meta.runs.length !== inputs.length) {
+    throw new Error(`${RUNS}: ${meta.runs.length} runs, but the search has ${inputs.length} input(s).`)
+  }
+  let rows: PsmRows | null = null
+  if (psmBytes) {
+    try {
+      rows = await readRows(MERGED_PSMS, psmBytes)
+    } catch (e) {
+      if (e instanceof NotExtended || (e as { cause?: unknown })?.cause instanceof NotExtended) {
+        if (await optional('summary.yaml')) throw new OldLayoutError()
+      }
+      throw e
     }
-    throw e
   }
-  const footer = perInput.find((f) => f !== null)?.footer
-  if (!footer) {
-    if (await optional('summary.yaml')) throw new OldLayoutError()
-    throw new Error(`The search folder has no results of ProSE (qpx/<input>.psm.parquet) for any of its ${inputs.length} input(s).`)
+  // the rows of each input in quantms.psm.parquet: input k has rows from[k] .. from[k + 1]
+  const from = [0]
+  meta.runs.forEach((r) => from.push(from[from.length - 1] + r.psm_rows))
+  const count = rows?.count ?? 0
+  if (from[inputs.length] !== count) {
+    throw new Error(`${MERGED_PSMS}: ${count} rows, but ${RUNS} gives its inputs ${from[inputs.length]}.`)
   }
-  // an input without its psm file whose search reports PSMs: its results are not under its stem (a stem
-  // the shim got wrong, a file removed), and its PSMs would be left out without a word
-  const perFile = inFile('the footer of the psm files', () => filesOf(footer))
-  const fileEntries = await perFile
+  // an input without rows whose search reports PSMs: its psm file could not be written
   inputs.forEach((input, k) => {
-    if (perInput[k]) return
-    const own = fileEntries.find((f) => f?.input_file === input.link) ?? fileEntries[k]
-    const psms = own?.target_psms
-    if (typeof psms === 'number' && psms > 0) {
+    const r = meta.runs[k]
+    if (r.psm_rows === 0 && r.search_status === 'EXECUTION_OK' && r.identified_spectra_count > 0) {
       warnings.push(
-        `${input.name}: ProSE reports ${psms} target PSMs for it, but its results (qpx/${input.stem}.psm.parquet) are not in the search folder, so its PSMs are not shown.`,
+        `${input.name}: ProSE reports ${r.identified_spectra_count} target PSMs for it, but its results are not in the search folder, so its PSMs are not shown.`,
       )
     }
   })
-  const decoyString = footer.get('prose_decoy_string') ?? 'DECOY_'
-  const decoyIsPrefix = (footer.get('prose_decoy_position') ?? 'prefix') === 'prefix'
+  const S = meta.search
+  const decoyString = S.get('decoy_string') ?? 'DECOY_'
+  const decoyIsPrefix = (S.get('decoy_position') ?? 'prefix') === 'prefix'
   const hasDecoyMarker = (accession: string) =>
     decoyString !== '' && (decoyIsPrefix ? accession.startsWith(decoyString) : accession.endsWith(decoyString))
-  const proteinFdrApplied = footerFlag(footer, 'prose_protein_fdr_applied')
+  const proteinFdrApplied = parameterFlag(meta.fdr, 'protein_fdr_applied')
 
   //------------------------------------------------------------------------------
   // Proteins and their groups: the protein groups of the QPX pg view (several inputs: the pooled inference;
@@ -365,19 +397,21 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   const proteinRow = new Map<string, number>()
   if (groupBytes) {
     const bytes = groupBytes
-    await inFile(groupsName, () => {
+    await inFile(GROUPS, () => {
       const pg = openParquet(bytes)
       const members = readLeaf(pg, ['pg_accessions', 'list', 'element'])
       const names = readLeaf(pg, ['pg_names', 'list', 'element'])
       const isDecoy = readLeaf(pg, ['is_decoy']).values as unknown[]
       const groupQ = readLeaf(pg, ['global_qvalue']).values as Float64Array
-      // the score of the group's first protein (the protein q-value once the protein FDR was applied)
-      const scores = readStructList(pg, 'additional_scores', ['score_value'])
+      // the q-value of the group's first protein (once the protein FDR was applied): its additional_scores
+      // entry 'q-value'
+      const scores = readStructList(pg, 'additional_scores', ['score_name', 'score_value'], { score_name: 'codes' })
+      const qName = (scores.dictionaries.score_name ?? []).map(isQValueName)
       const groupOf = new Map<string, number>()
       for (let r = 0; r < pg.rows; r++) {
-        const from = members.offsets![r]
-        const to = members.offsets![r + 1]
-        const list = Array.from({ length: to - from }, (_, k) => String((members.values as unknown[])[from + k]))
+        const begin = members.offsets![r]
+        const end = members.offsets![r + 1]
+        const list = Array.from({ length: end - begin }, (_, k) => String((members.values as unknown[])[begin + k]))
         // a group of several runs has a row per run
         const key = list.join('\u0000')
         let g = groupOf.get(key)
@@ -385,7 +419,14 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
           g = groupOf.size
           groupOf.set(key, g)
         }
-        const q = scores.offsets[r + 1] > scores.offsets[r] ? (scores.score_value as Float64Array)[scores.offsets[r]] : groupQ[r]
+        let q = groupQ[r]
+        for (let k = scores.offsets[r]; k < scores.offsets[r + 1]; k++) {
+          const c = (scores.score_name as Int32Array)[k]
+          if (c >= 0 && qName[c]) {
+            q = (scores.score_value as Float64Array)[k]
+            break
+          }
+        }
         list.forEach((a, k) => {
           if (proteinRow.has(a)) return
           proteinRow.set(a, accession.length)
@@ -413,7 +454,7 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
     const sources: [string, boolean][] = [
       ['proteins.fasta', true],
       ['database.fasta', false],
-      [footer.get('prose_database_file') ?? '', false],
+      [S.get('database_file') ?? '', false],
     ]
     let found = false
     for (const [name, own] of sources) {
@@ -433,11 +474,11 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
       warnings.push(`The protein sequences are not available, so there is no sequence coverage: none of ${tried.join(', ')} could be read.`)
     }
     const decoys: DecoyGeneration = {
-      enzyme: footer.get('prose_enzyme') ?? '',
-      keepInitialMet: footerFlag(footer, 'prose_clip_nterm_methionine'),
-      unspecific: footer.get('prose_enzyme_specificity') === 'none',
+      enzyme: S.get('enzyme') ?? '',
+      keepInitialMet: parameterFlag(S, 'clip_nterm_methionine'),
+      unspecific: S.get('enzyme_specificity') === 'none',
     }
-    const generated = footer.get('prose_decoy_mode') === 'generated'
+    const generated = S.get('decoy_mode') === 'generated'
     for (let p = 0; p < proteinCount; p++) {
       const a = accession[p]
       const decoy = proteinDecoy[p] === 1
@@ -457,12 +498,10 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   //------------------------------------------------------------------------------
   // PSMs and their peptides
 
-  const count = perInput.reduce((n, f) => n + (f?.count ?? 0), 0)
-  let minCharge = footerNumber(footer, 'prose_min_charge', Infinity)
-  let maxCharge = footerNumber(footer, 'prose_max_charge', -Infinity)
-  for (const f of perInput) {
-    if (!f) continue
-    for (const c of f.charge) {
+  let minCharge = parameterNumber(S, 'min_charge', Infinity)
+  let maxCharge = parameterNumber(S, 'max_charge', -Infinity)
+  if (rows) {
+    for (const c of rows.charge) {
       minCharge = Math.min(minCharge, c)
       maxCharge = Math.max(maxCharge, c)
     }
@@ -480,7 +519,7 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   const chargeFeatures: string[] = []
   for (let c = minCharge; Number.isFinite(c) && c <= maxCharge; c++) chargeFeatures.push(`charge${c}`)
   for (const name of ['CalcMass', 'mass', 'peplen', ...chargeFeatures, 'enzN', 'enzC', 'enzInt', 'dm', 'absdm']) addFeature(name, true)
-  for (const name of (footer.get('prose_extra_features') ?? '').split(',')) addFeature(name.trim())
+  for (const name of (S.get('extra_features') ?? '').split(',')) addFeature(name.trim())
   for (const name of PEPTDEEP_FEATURES) addFeature(name)
   const nFeatures = featureNames.length
   const featureIndex = new Map(featureNames.map((n, j) => [n, j]))
@@ -518,7 +557,11 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   const [calcMassJ, massJ, peplenJ, enzNJ, enzCJ, enzIntJ, dmJ, absdmJ] = ['CalcMass', 'mass', 'peplen', 'enzN', 'enzC', 'enzInt', 'dm', 'absdm'].map(pinColumn)
   const chargeColumns = chargeFeatures.map(pinColumn)
   const [hyperscoreS, percolatorScoreS, qS, percolatorQS, percolatorPepS, precursorErrorS, isotopeErrorS, deltaMassS] = SCORES.map(slot)
-  const enzyme = pinEnzymeName(footer.get('prose_enzyme') ?? '')
+  const enzyme = pinEnzymeName(S.get('enzyme') ?? '')
+  // QPX has the isotope error observed minus theoretical (column and additional_scores); Percolator saw
+  // ProSE's meta value, whose sign 'report:isotope_error_convention' sets: its feature and dm have that sign
+  const isotopeSign = S.get('isotope_error_convention') === 'theoretical_minus_observed' ? -1 : 1
+  const isotopeFeatureJ = featureIndex.get('isotope_error') ?? -1
 
   const psmFile = new Uint16Array(count)
   const nativeId = new Array<string>(count)
@@ -557,12 +600,12 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
 
   const clampInt8 = (v: number) => (Number.isNaN(v) ? 0 : Math.max(-128, Math.min(127, Math.round(v))))
 
-  let i = 0
-  perInput.forEach((f, fileIndex) => {
-    if (!f) return
+  if (rows) {
+    const f = rows
     const scoreUses = f.scores.names.map(useOf)
-    for (let r = 0; r < f.count; r++, i++) {
-      psmFile[i] = fileIndex
+    for (let k = 0; k < inputs.length; k++) psmFile.fill(k, from[k], from[k + 1])
+    for (let i = 0; i < count; i++) {
+      const r = i
       nativeId[i] = String(f.nativeId[r] ?? '')
       rt[i] = f.rt[r]
       const observed = f.observedMz[r]
@@ -582,7 +625,7 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
         const v = f.scores.value[k]
         if (use[0] >= 0) values[use[0]] = v
         if (use[1] >= 0 && !Number.isNaN(v)) {
-          features[row + use[1]] = v
+          features[row + use[1]] = use[1] === isotopeFeatureJ ? isotopeSign * v : v
           featurePresent[use[1]] = 1
         }
       }
@@ -592,8 +635,8 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
       score[i] = s
       qValue[i] = first(values[qS], values[percolatorQS])
       pep[i] = first(f.pep[r], values[percolatorPepS])
-      // the isotope error of QPX (observed minus theoretical); the one Percolator saw (ProSE's meta value) for dm
-      const isotope = f.isotope[r]
+      // the isotope error of QPX (observed minus theoretical)
+      const isotope = first(f.isotope[r], values[isotopeErrorS])
       isotopeError[i] = clampInt8(isotope)
       const corrected = observed - ((Number.isNaN(isotope) ? 0 : isotope) * C13C12_MASSDIFF_U) / z
       precursorErrorPpm[i] = first(values[precursorErrorS], calc > 0 ? ((corrected - calc) / calc) * 1e6 : NaN)
@@ -604,7 +647,8 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
       const sequence = String(f.sequence[r] ?? '')
       const e0 = f.evidence.offsets[r]
       if (f.evidence.offsets[r + 1] > e0) {
-        const iso = Math.fround(first(values[isotopeErrorS], isotope))
+        // Percolator's dm: corrected by ProSE's isotope error meta value as it is (with its convention's sign)
+        const iso = Math.fround(isotopeSign * isotope)
         const dm = (Number.isNaN(iso) ? observed : observed - (iso * C13C12_MASSDIFF_U) / z) - calc
         // a protein terminus ('-' in QPX) as OpenMS' '[' and ']', which Percolator's features were computed with
         const before = f.evidence.aa_before[e0] === '-' ? '[' : String(f.evidence.aa_before[e0] ?? '')
@@ -654,26 +698,26 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
         if (p === undefined) continue // a protein the protein FDR removed
         const protein = proteinSequence[p]
         // 1-based first and last position -> 0-based
-        let from = f.evidence.start[e] - 1
-        let to = f.evidence.end[e] - 1
-        let known = from >= 0 && to >= from
+        let begin = f.evidence.start[e] - 1
+        let last = f.evidence.end[e] - 1
+        let known = begin >= 0 && last >= begin
         const inSequence =
-          known && to < protein.length && to - from + 1 === sequence.length && protein.startsWith(sequence, from)
+          known && last < protein.length && last - begin + 1 === sequence.length && protein.startsWith(sequence, begin)
         if (!inSequence) {
           const at = protein.indexOf(sequence)
           if (at >= 0 && sequence.length > 0) {
-            from = at
-            to = at + sequence.length - 1
+            begin = at
+            last = at + sequence.length - 1
             known = true
           }
         }
         pt.protein.push(p)
-        pt.start.push(known ? from : 0)
-        pt.end.push(known ? to + 1 : 0)
+        pt.start.push(known ? begin : 0)
+        pt.end.push(known ? last + 1 : 0)
       }
       pt.proteinOffsets.push(pt.protein.length)
     }
-  })
+  }
 
   // the score of a protein: the best score of its PSMs
   for (let k = 0; k < pt.openms.length; k++) {
@@ -740,19 +784,26 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   }
 
   //------------------------------------------------------------------------------
-  // Spectra and predictions: the columns of the PSM rows
+  // Spectra and predictions: read from the inputs' psm files when a PSM is opened
 
-  const { spectra, predicted } = spectraOf(perInput, count)
-  const top = footerNumber(footer, 'prose_peak_top', 0)
-  const peakFilter = top > 0 ? { top, window: footerNumber(footer, 'prose_peak_window', 0) } : null
+  const footer = rows?.footer ?? new Map<string, string>()
+  const top = Number(footer.get('prose_peak_top') ?? 0)
+  const peakFilter = top > 0 ? { top, window: Number(footer.get('prose_peak_window') ?? 0) } : null
+  const spectra = psmSpectra(
+    files,
+    inputs.map((input) => `qpx/${input.stem}.psm.parquet`),
+    from,
+    mz,
+    meta.runs.some((r) => r.prediction_nce !== null),
+  )
 
   //------------------------------------------------------------------------------
   // Summary
 
   let modificationAnalysis: ProSESummary['modificationAnalysis'] = null
-  const deltaName = footer.get('prose_mod_analysis_delta_masses')
-  const ptmName = footer.get('prose_mod_analysis_ptms')
-  if (footerFlag(footer, 'prose_open_search') && deltaName && ptmName) {
+  const deltaName = S.get('mod_analysis_delta_masses')
+  const ptmName = S.get('mod_analysis_ptms')
+  if (parameterFlag(S, 'open_search') && deltaName && ptmName) {
     const [deltas, ptms] = await Promise.all([optional(`mods/${deltaName}`), optional(`mods/${ptmName}`)])
     if (deltas && ptms) {
       modificationAnalysis = await inFile(`mods/{${deltaName},${ptmName}}`, () =>
@@ -760,8 +811,8 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
       )
     }
   }
-  const summary = await inFile('the footer of the psm files', () => toSummary(footer, paths, modificationAnalysis))
-  return { summary, tables, spectra, predicted, warnings, proteinsSaved, peakFilter }
+  const summary = toSummary(meta, paths, modificationAnalysis)
+  return { summary, tables, spectra, warnings, proteinsSaved, peakFilter }
 }
 
 /** The modifications of a QPX row, by position (−1 N-terminal, the length C-terminal, else 0-based). */
@@ -783,79 +834,126 @@ function modificationsOf(mods: QpxModification[] | null, length: number): Modifi
   return out.sort((a, b) => a.position - b.position)
 }
 
-/** StoredSpectra (one spectrum per PSM row with peaks) and PredictedSpectra of the PSM rows. */
-function spectraOf(perInput: (InputRows | null)[], count: number): { spectra: StoredSpectra; predicted: PredictedSpectra } {
-  let peakCount = 0
-  let spectrumCount = 0
-  let ionCount = 0
-  for (const f of perInput) {
-    if (!f) continue
-    for (let r = 0; r < f.count; r++) {
-      if (!f.peakMz.nullList[r]) {
-        spectrumCount++
-        peakCount += f.peakMz.offsets[r + 1] - f.peakMz.offsets[r]
-      }
-      if (!f.ion.nullList[r]) ionCount += f.ion.offsets[r + 1] - f.ion.offsets[r]
-    }
-  }
-  const psmSpectrum = new Int32Array(count).fill(-1)
-  const offsets = new Uint32Array(spectrumCount + 1)
-  const mz = new Float32Array(peakCount)
-  const intensity = new Float32Array(peakCount)
-  const precursorMz = new Float64Array(spectrumCount)
-  const psmOffsets = new Uint32Array(count + 1)
-  const ion = new Array<string>(ionCount)
-  const predictedMz = new Float32Array(ionCount)
-  const predictedIntensity = new Float32Array(ionCount)
+//------------------------------------------------------------------------------
+// The spectra of the PSMs: by row group of the inputs' psm files
 
-  let i = 0
-  let spectrum = 0
-  let peak = 0
-  let ions = 0
-  for (const f of perInput) {
-    if (!f) continue
-    for (let r = 0; r < f.count; r++, i++) {
-      psmOffsets[i] = ions
-      // (element by element: a PSM has tens of peaks, too few for subarray() and set())
-      if (!f.peakMz.nullList[r]) {
-        const from = f.peakMz.offsets[r]
-        const n = f.peakMz.offsets[r + 1] - from
-        const intensityFrom = f.peakIntensity.offsets[r]
-        for (let k = 0; k < n; k++) {
-          mz[peak + k] = f.peakMz.values[from + k]
-          intensity[peak + k] = f.peakIntensity.values[intensityFrom + k]
-        }
-        peak += n
-        precursorMz[spectrum] = f.observedMz[r]
-        psmSpectrum[i] = spectrum++
-        offsets[spectrum] = peak
-      }
-      if (!f.ion.nullList[r]) {
-        const from = f.ion.offsets[r]
-        const n = f.ion.offsets[r + 1] - from
-        const mzFrom = f.predictedMz.offsets[r]
-        const intensityFrom = f.predictedIntensity.offsets[r]
-        for (let k = 0; k < n; k++) {
-          const c = f.ion.values[from + k]
-          ion[ions + k] = c < 0 ? '' : f.ionNames[c]
-          predictedMz[ions + k] = f.predictedMz.values[mzFrom + k]
-          predictedIntensity[ions + k] = f.predictedIntensity.values[intensityFrom + k]
-        }
-        ions += n
-      }
+/** The row groups of an input's psm file that the PSM view keeps decoded (the last ones opened). */
+const CACHED_GROUPS = 4
+
+/**
+ * The PsmSpectra of the PSM rows: the rows of input k are from[k] .. from[k + 1] of the PSM rows, and rows of
+ * its psm file `names[k]`; `precursorMz` the precursor m/z of the PSM rows.
+ */
+function psmSpectra(files: SearchFiles, names: string[], from: number[], precursorMz: Float64Array, predictions: boolean): PsmSpectra {
+  const footers = new Map<number, Promise<FileMetaData>>()
+  const cache = new Map<string, Promise<LoadedSpectra>>()
+
+  /** The metadata of input k's psm file (its footer, read once). */
+  const metadataOf = (k: number) => {
+    let p = footers.get(k)
+    if (!p) {
+      const name = names[k]
+      p = inFile(name, async () => {
+        let metadata = metadataOfTail(await files(name, { tail: 1 << 16 }))
+        if (typeof metadata === 'number') metadata = metadataOfTail(await files(name, { tail: metadata }))
+        if (typeof metadata === 'number') throw new Error('its footer cannot be read')
+        const rows = Number(metadata.num_rows)
+        if (rows !== from[k + 1] - from[k]) throw new Error(`${rows} rows, but ${MERGED_PSMS} has ${from[k + 1] - from[k]} of this input`)
+        return metadata
+      })
+      p.catch(() => footers.delete(k))
+      footers.set(k, p)
     }
+    return p
   }
-  psmOffsets[count] = ions
+
+  /** The spectra of row group g of input k's psm file (whose first row is PSM row `first`). */
+  const loadGroup = (k: number, metadata: FileMetaData, g: number, firstRow: number): Promise<LoadedSpectra> =>
+    inFile(names[k], async () => {
+      const group = metadata.row_groups[g]
+      const ranges = group.columns
+        .filter((c) => c.meta_data && SPECTRUM_COLUMNS.includes(c.meta_data.path_in_schema[0]))
+        .map((c) => chunkRange(c.meta_data!))
+      if (ranges.length < SPECTRUM_COLUMNS.length) throw new Error("it has not the spectrum columns of ProSE's -qpx_extended")
+      const start = Math.min(...ranges.map((r) => r.start))
+      const end = Math.max(...ranges.map((r) => r.end))
+      const bytes = await files(names[k], { offset: start, length: end - start })
+      if (bytes.byteLength !== end - start) throw new Error(`${bytes.byteLength} bytes at ${start}, expected ${end - start}`)
+      const file = partOfParquet(metadata, bytes, start)
+      const groups = [g]
+      const peakMz = listLeaf<Float32Array>(file, 'peak_mz_array', 'values', groups)
+      const peakIntensity = listLeaf<Float32Array>(file, 'peak_intensity_array', 'values', groups)
+      const ion = listLeaf<Int32Array>(file, 'predicted_ion_type_array', 'codes', groups)
+      const ionNames = (ion.dictionary ?? []).map(webIonName)
+      const predictedMz = listLeaf<Float32Array>(file, 'predicted_mz_array', 'values', groups)
+      const predictedIntensity = listLeaf<Float32Array>(file, 'predicted_intensity_array', 'values', groups)
+      const n = Number(group.num_rows)
+
+      // StoredSpectra and PredictedSpectra of the n rows (one spectrum per row with peaks)
+      let spectrumCount = 0
+      for (let r = 0; r < n; r++) if (!peakMz.nullList[r]) spectrumCount++
+      const psmSpectrum = new Int32Array(n).fill(-1)
+      const offsets = new Uint32Array(spectrumCount + 1)
+      const precursor = new Float64Array(spectrumCount)
+      let s = 0
+      for (let r = 0; r < n; r++) {
+        if (peakMz.nullList[r]) continue
+        psmSpectrum[r] = s
+        offsets[s] = peakMz.offsets[r]
+        if (peakIntensity.offsets[r] !== peakMz.offsets[r] || peakIntensity.offsets[r + 1] !== peakMz.offsets[r + 1]) {
+          throw new Error(`row ${r} of row group ${g} has other numbers of peak m/z and intensities`)
+        }
+        precursor[s] = precursorMz[firstRow + r]
+        s++
+        offsets[s] = peakMz.offsets[r + 1]
+      }
+      // (a row without a prediction has an empty range: its list is null)
+      const psmOffsets = ion.offsets
+      const ions = Array.from(ion.values, (c) => (c < 0 ? '' : ionNames[c]))
+      if (predictedMz.values.length !== ions.length || predictedIntensity.values.length !== ions.length) {
+        throw new Error(`row group ${g} has other numbers of predicted ions, m/z and intensities`)
+      }
+      return {
+        spectra: {
+          psmSpectrum,
+          offsets,
+          mz: peakMz.values,
+          intensity: peakIntensity.values,
+          precursorMz: precursor,
+          // not read: the web app took it as a fallback NCE for its own predictions; these are ProSE's
+          collisionEnergy: new Float32Array(spectrumCount).fill(NaN),
+        },
+        predicted: { psmOffsets, ion: ions, mz: predictedMz.values, intensity: predictedIntensity.values },
+        row: 0,
+      }
+    })
+
   return {
-    spectra: {
-      psmSpectrum,
-      offsets,
-      mz,
-      intensity,
-      precursorMz,
-      // not read: the web app took it as a fallback NCE for its own predictions; these are ProSE's
-      collisionEnergy: new Float32Array(spectrumCount).fill(NaN),
+    predictions,
+    async load(row: number): Promise<LoadedSpectra> {
+      let k = 0
+      while (k + 1 < from.length && row >= from[k + 1]) k++
+      if (!(row >= 0) || k >= names.length) throw new Error(`There is no PSM row ${row}.`)
+      const metadata = await metadataOf(k)
+      // its row group
+      let local = row - from[k]
+      let g = 0
+      for (; g < metadata.row_groups.length; g++) {
+        const n = Number(metadata.row_groups[g].num_rows)
+        if (local < n) break
+        local -= n
+      }
+      if (g >= metadata.row_groups.length) throw new Error(`${names[k]}: no row ${row - from[k]}`)
+      const key = `${k}/${g}`
+      let p = cache.get(key)
+      if (p) cache.delete(key) // (re-inserted below: the most recent last)
+      else {
+        p = loadGroup(k, metadata, g, row - local)
+        p.catch(() => cache.delete(key))
+      }
+      cache.set(key, p)
+      while (cache.size > CACHED_GROUPS) cache.delete(cache.keys().next().value!)
+      return { ...(await p), row: local }
     },
-    predicted: { psmOffsets, ion, mz: predictedMz, intensity: predictedIntensity },
   }
 }
