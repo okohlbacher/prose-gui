@@ -1,9 +1,14 @@
 // Helpers of the specs: the app's data folder, the processes on the machine, files dropped on the window,
 // and the steps of a search through the screens. Not a spec (no `.spec.` in the name).
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+/** The example's run and FASTA, as the app bundles them (src-tauri/resources/example). */
+export const EXAMPLE_DIR = resolve(fileURLToPath(new URL('../src-tauri/resources/example', import.meta.url)))
+export const EXAMPLE_MZML = join(EXAMPLE_DIR, 'Ecoli_MS2_small.mzML')
+export const EXAMPLE_FASTA = join(EXAMPLE_DIR, 'Ecoli_K12_proteome.fasta')
 
 /** The spec's own data folder (XDG_DATA_HOME of its app; wdio.conf.ts sets it). */
 export function dataHome(): string {
@@ -168,7 +173,7 @@ export function closeWindowLikeAUser(appPid: number) {
 export async function runExample(options: { peptdeep?: boolean } = {}): Promise<string> {
   await freshForm()
   await $('button=Try the example').click()
-  await expect($('[data-testid="fasta-proteins"]')).toHaveText('49 proteins')
+  await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
   if (options.peptdeep) {
     await $('#peptdeep').click()
     await expect($('#peptdeep')).toHaveAttribute('aria-checked', 'true')
@@ -177,6 +182,36 @@ export async function runExample(options: { peptdeep?: boolean } = {}): Promise<
   const id = await waitForResults()
   await $('[data-testid="psm-count"]').waitForDisplayed({ timeout: 30000 })
   return id
+}
+
+/** New search with the example's settings and nothing else: "Try the example", then "Start over" (which keeps them). */
+export async function exampleSettings() {
+  await freshForm()
+  await $('button=Try the example').click()
+  await expect($('#fragment-tolerance')).toHaveValue('0.5')
+  await $('button=Start over').click()
+  await expect($('button=Try the example')).toBeDisplayed()
+}
+
+/** The files of `longSearch`: copies of the example's run, Ecoli_1.mzML … Ecoli_<n>.mzML, in the spec's data folder. */
+export const LONG_SEARCH_FILES = 24
+
+/**
+ * A search that is long enough to be cancelled, killed or closed while a file is searched: the example searches in
+ * a few seconds, so its run goes in as LONG_SEARCH_FILES files (copies in the spec's data folder), with the example's
+ * settings and FASTA. Started; resolves when its progress is shown.
+ */
+export async function startLongSearch() {
+  const dir = join(dataHome(), 'long-search')
+  mkdirSync(dir, { recursive: true })
+  const files = Array.from({ length: LONG_SEARCH_FILES }, (_, i) => join(dir, `Ecoli_${i + 1}.mzML`))
+  for (const f of files) if (!existsSync(f)) copyFileSync(EXAMPLE_MZML, f)
+  await exampleSettings()
+  await dropFiles([...files, EXAMPLE_FASTA])
+  await expect($('[data-testid="design-summary"]')).toHaveText(expect.stringContaining(`${LONG_SEARCH_FILES} files`))
+  await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
+  await $('button*=Start search').click()
+  await $('[data-testid="search-progress"]').waitForDisplayed({ timeout: 20000 })
 }
 
 /** Opens the PSM view of the first PSM in the PSMs tab of the results. */

@@ -3,18 +3,24 @@
 // Gated: runs only with PROSE_BIN set (the app inherits it).
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { appReady, clearSearches, freshForm, goTo, proseProcesses, resultsId, searchesDir, searchFolders, textOf, waitForResults } from './lib.ts'
+import {
+  appReady,
+  clearSearches,
+  goTo,
+  LONG_SEARCH_FILES,
+  proseProcesses,
+  resultsId,
+  searchesDir,
+  searchFolders,
+  startLongSearch,
+  textOf,
+  waitForResults,
+} from './lib.ts'
 
 const enabled = Boolean(process.env.PROSE_BIN)
 
-/** New search with the example, and Start. */
-async function startExample() {
-  await freshForm()
-  await $('button=Try the example').click()
-  await expect($('[data-testid="fasta-proteins"]')).toHaveText('49 proteins')
-  await $('button*=Start search').click()
-  await $('[data-testid="search-progress"]').waitForDisplayed({ timeout: 20000 })
-}
+/** New search with the example's run as many files (lib.ts startLongSearch), and Start. */
+const startExample = startLongSearch
 
 /** The search is in a file's step (the file is being searched). */
 const searching = () =>
@@ -31,14 +37,15 @@ async function expectNothingKept() {
   await $('[data-testid="history-empty"]').waitForDisplayed({ timeout: 20000 })
 }
 
-/** The next search runs: the example once more, to its results. */
+/** The next search runs: the same files once more, to its results. */
 async function nextSearchRuns() {
   await goTo('New search')
-  // New search kept the example's files and its choices; Start again
+  // New search kept the files and the choices; Start again
   await $('button*=Start search').waitForClickable({ timeout: 20000 })
   await $('button*=Start search').click()
   await waitForResults()
-  await expect($('[data-testid="psm-count"]')).toHaveText(expect.stringContaining('1,790'))
+  // each copy of the example's run has the example's 60 PSMs
+  await expect($('[data-testid="psm-count"]')).toHaveText(expect.stringContaining((60 * LONG_SEARCH_FILES).toLocaleString('en-US')))
   expect(searchFolders().finished).toHaveLength(1)
   expect(searchFolders().partial).toEqual([])
 }
@@ -90,7 +97,7 @@ describe('a search that does not finish', () => {
     expect(text).toContain('The search stopped')
     // the stage and the file it was searching, and what happened to ProSE
     expect(text).toContain('While searching')
-    expect(text).toMatch(/DatabaseSuitability_[12]\.mzML/)
+    expect(text).toMatch(/Ecoli_\d+\.mzML/)
     // how ProSE ended leads the message
     expect(text).toContain('ProSE crashed (signal 9, SIGKILL')
     // its log is kept in the app's data (and named in the details)

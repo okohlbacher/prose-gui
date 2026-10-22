@@ -8,10 +8,10 @@
 #    non-ASCII name. The bundled ProSE inside is checked (bundle_closure.py macho-verify / pe-verify).
 # 2. The bundled ProSE prints its version, from an empty environment (Windows: only Windows' folders on
 #    PATH).
-# 3. It searches the example (<example-dir>: DatabaseSuitability_in_spec.mzML and
-#    DatabaseSuitability_database.fasta, copied into a folder with a space in its name) from the command
-#    line, with Percolator and PeptDeep: it has to end with 0, write the outputs the app reads, rescore
-#    with PeptDeep, and find more than 500 target PSMs (895 with these settings).
+# 3. It searches the example (<example-dir>: Ecoli_MS2_small.mzML and Ecoli_K12_proteome.fasta, copied into a
+#    folder with a space in its name) from the command line with the example's settings, Percolator and PeptDeep:
+#    it has to end with 0, write the outputs the app reads, rescore with PeptDeep, and find more than 40 target
+#    PSMs (69 with these settings).
 #    The same in a folder named 'Größe ü', with the temporary folder there too, has to give the same number
 #    of PSMs.
 # 4. The app starts with --smoke-test (src-tauri/src/lib.rs): once its page has loaded it reports the page
@@ -101,13 +101,15 @@ echo "ProSE version: $version"
 search() { # <folder>: copies the example there and searches it as the app does (QPX only); leaves out.txt
   local dir=$1
   mkdir -p "$dir"
-  cp "$EXAMPLE/DatabaseSuitability_in_spec.mzML" "$EXAMPLE/DatabaseSuitability_database.fasta" "$dir/"
-  clean "$TOOL" -in "$(native "$dir/DatabaseSuitability_in_spec.mzML")" \
-    -database "$(native "$dir/DatabaseSuitability_database.fasta")" \
+  cp "$EXAMPLE/Ecoli_MS2_small.mzML" "$EXAMPLE/Ecoli_K12_proteome.fasta" "$dir/"
+  clean "$TOOL" -in "$(native "$dir/Ecoli_MS2_small.mzML")" \
+    -database "$(native "$dir/Ecoli_K12_proteome.fasta")" \
     -out_qpx "$(native "$dir/qpx")" -qpx_extended -qpx_peak_window 100 -qpx_peak_top 100 -keep_decoys \
     -threads 3 -Search:rescore true -Search:peptdeep:enable -Search:peptdeep:instrument QE \
-    -Search:FDR:PSM 0.01 -Search:modifications:fixed "Carbamidomethyl (C)" \
-    -Search:modifications:variable "Oxidation (M)" >"$dir/out.txt" 2>&1
+    -Search:FDR:PSM 0.01 -Search:enzyme Trypsin/P -Search:peptide:missed_cleavages 2 \
+    -Search:modifications:fixed "Carbamidomethyl (C)" \
+    -Search:modifications:variable "Oxidation (M)" "Acetyl (Protein N-term)" \
+    -Search:fragment:mass_tolerance 0.5 -Search:fragment:mass_tolerance_unit Da >"$dir/out.txt" 2>&1
 }
 started=$(date +%s)
 data="$work/example data"
@@ -118,13 +120,13 @@ fi
 seconds=$(( $(date +%s) - started ))
 grep -E '^\[PeptDeepRescoring\] Predicted features added' "$data/out.txt" \
   || die "the search did not rescore with PeptDeep: $(grep -i peptdeep "$data/out.txt" | tail -n 5)"
-for f in qpx/DatabaseSuitability_in_spec.psm.parquet qpx/quantms.psm.parquet qpx/quantms.pg.parquet qpx/quantms.run.parquet qpx/quantms.provenance.parquet; do
+for f in qpx/Ecoli_MS2_small.psm.parquet qpx/Ecoli_MS2_small.mz.parquet qpx/quantms.psm.parquet qpx/quantms.pg.parquet qpx/quantms.run.parquet qpx/quantms.provenance.parquet; do
   [ -s "$data/$f" ] || die "the search wrote no $f"
 done
-# the target PSMs of the end-of-search report ("[ProSE] Target/decoy : 892 target / 1 decoy PSMs")
+# the target PSMs of the end-of-search report ("[ProSE] Target/decoy : 69 target / 0 decoy PSMs")
 target_psms() { sed -n 's/^\[ProSE\] Target\/decoy *: *\([0-9]*\) target.*/\1/p' "$1" | head -n 1; }
 psms=$(target_psms "$data/out.txt")
-[ -n "$psms" ] && [ "$psms" -gt 500 ] || die "the search found ${psms:-no} target PSMs, expected more than 500"
+[ -n "$psms" ] && [ "$psms" -gt 40 ] || die "the search found ${psms:-no} target PSMs, expected more than 40"
 echo "command-line search: $psms target PSMs at 1 % FDR, with PeptDeep, in ${seconds} s"
 
 # a folder name outside ASCII, the temporary folder too (Windows: ProSE.exe runs with the UTF-8 code page,

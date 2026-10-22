@@ -30,8 +30,8 @@ describe('the example with PeptDeep', () => {
     rmSync(join(dataHome(), 'chosen.prose'), { force: true })
   })
 
-  it('the example with PeptDeep: 1,790 PSMs, a PSM shows the PeptDeep mirror', async () => {
-    await expect($('[data-testid="psm-count"]')).toHaveText(expect.stringContaining('1,790'))
+  it('the example with PeptDeep: 120 PSMs, a PSM shows the PeptDeep mirror', async () => {
+    await expect($('[data-testid="psm-count"]')).toHaveText(expect.stringContaining('120'))
 
     await openFirstPsm()
     // the lower half is PeptDeep's prediction, with peaks, not the theoretical spectrum or a "no prediction" note
@@ -66,10 +66,29 @@ describe('the example with PeptDeep', () => {
     expect(await peakLabels()).toEqual(before)
   })
 
+  it('with 1+ fragments hidden and nothing matched, the view says so and shows them again in one click', async () => {
+    await openFirstPsm()
+    expect((await peakLabels()).length).toBeGreaterThan(0)
+    expect(await $('[data-testid="oneplus-hint"]').isExisting()).toBe(false)
+    // every fragment charge off (1+, and 2+ where the precursor has it)
+    for (const charge of ['1+', '2+']) {
+      const box = $(`input[aria-label="${charge} fragments"]`)
+      if ((await box.isExisting()) && (await box.isSelected())) await jsClick(await box)
+    }
+    const hint = $('[data-testid="oneplus-hint"]')
+    await hint.waitForDisplayed({ timeout: 10000 })
+    await expect(hint).toHaveText(expect.stringContaining('1+ fragments are hidden'))
+    expect(await peakLabels()).toEqual([])
+    await hint.$('button=Show 1+').click()
+    await browser.waitUntil(async () => (await peakLabels()).length > 0, { timeoutMsg: 'no peak is annotated again' })
+    expect(await $('input[aria-label="1+ fragments"]').isSelected()).toBe(true)
+    await expect(hint).not.toBeExisting()
+  })
+
   it('a project opens again with the same PSMs', async () => {
     // Export > Project (.prose): the app writes it where the specs' dialog seam says (app.sh)
     const count = await textOf('[data-testid="psm-count"]')
-    expect(count).toContain('1,790')
+    expect(count).toContain('120')
     const file = join(dataHome(), 'chosen.prose')
     rmSync(file, { force: true })
     await $('header').$('button*=Export').click()

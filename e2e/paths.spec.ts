@@ -1,18 +1,27 @@
 // Inputs by path, as the file manager would hand them over: names with spaces and umlauts, two inputs
 // of the same name from different folders, and an mzML.gz. The example's run and FASTA are copied into
-// folders made for the spec; the app reads them where they are.
+// folders made for the spec; the app reads them where they are. They are searched with the example's settings (its
+// fragment tolerance of 0.5 Da: "Try the example", then "Start over", which keeps the settings).
 // Gated: runs only with PROSE_BIN set (the app inherits it).
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import { gzipSync } from 'node:zlib'
-import { appReady, clearSearches, dataHome, dropFiles, freshForm, goTo, searchFolders, textOf, waitForResults } from './lib.ts'
+import {
+  appReady,
+  clearSearches,
+  dataHome,
+  dropFiles,
+  EXAMPLE_FASTA as FASTA,
+  EXAMPLE_MZML as MZML,
+  exampleSettings,
+  goTo,
+  searchFolders,
+  textOf,
+  waitForResults,
+} from './lib.ts'
 
 const enabled = Boolean(process.env.PROSE_BIN)
-const example = resolve(fileURLToPath(new URL('../src-tauri/resources/example', import.meta.url)))
-const MZML = join(example, 'DatabaseSuitability_in_spec.mzML')
-const FASTA = join(example, 'DatabaseSuitability_database.fasta')
 
 describe('inputs by path', () => {
   let work: string
@@ -42,13 +51,13 @@ describe('inputs by path', () => {
 
   /** Drops the paths on New search, starts the search and returns the text of the PSM count. */
   async function search(paths: string[], fileName: string) {
-    await freshForm()
+    await exampleSettings()
     await dropFiles(paths)
     // the table lists the file (one file has no design summary)
     await browser.waitUntil(async () => (await textOf('[data-testid="design-scroll"]')).includes(fileName), {
       timeoutMsg: `${fileName} is not in the table`,
     })
-    await expect($('[data-testid="fasta-proteins"]')).toHaveText('49 proteins')
+    await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
     await $('button*=Start search').click()
     await waitForResults()
     const count = $('[data-testid="psm-count"]')
@@ -108,7 +117,7 @@ describe('inputs by path', () => {
     mkdirSync(second)
     copyFileSync(MZML, join(first, 'Lauf.mzML'))
     copyFileSync(MZML, join(second, 'Lauf.mzML'))
-    await freshForm()
+    await exampleSettings()
     await dropFiles([join(first, 'Lauf.mzML'), join(second, 'Lauf.mzML'), umlautFasta])
     await expect($('[data-testid="design-summary"]')).toHaveText(expect.stringContaining('2 files'))
     // the table tells them apart by their folders
@@ -122,7 +131,7 @@ describe('inputs by path', () => {
     const count = $('[data-testid="psm-count"]')
     await count.waitForDisplayed({ timeout: 20000 })
     // two copies of the run give what the example's two names give
-    await expect(count).toHaveText(expect.stringContaining('1,790'))
+    await expect(count).toHaveText(expect.stringContaining('120'))
     expect(await textOf('[data-testid="result-chip"]')).toContain('2 files')
   })
 })

@@ -1,14 +1,15 @@
 // The Rust shim through the app's IPC: tool_info, start_search with its events, cancel_search.
-// Gated: runs only with PROSE_BIN set (the app inherits it) and the web app's example data
-// (PROSE_EXAMPLE_DIR, default /scratch/sachsenb/prose-pages/app/public/example). It writes the
-// finished search into the app data folder and removes it at the end.
+// Gated: runs only with PROSE_BIN set (the app inherits it) and the example data (PROSE_EXAMPLE_DIR, default the
+// app's src-tauri/resources/example). It writes the finished search into the app data folder and removes it at the
+// end.
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { EXAMPLE_DIR } from './lib.ts'
 
-const example = process.env.PROSE_EXAMPLE_DIR ?? '/scratch/sachsenb/prose-pages/app/public/example'
-const mzml = join(example, 'DatabaseSuitability_in_spec.mzML')
-const fasta = join(example, 'DatabaseSuitability_database.fasta')
+const example = process.env.PROSE_EXAMPLE_DIR ?? EXAMPLE_DIR
+const mzml = join(example, 'Ecoli_MS2_small.mzML')
+const fasta = join(example, 'Ecoli_K12_proteome.fasta')
 const enabled = Boolean(process.env.PROSE_BIN) && existsSync(mzml) && existsSync(fasta)
 
 type Events = { progress: any[]; done: any[]; failed: any[] }
@@ -47,13 +48,21 @@ describe('the shim', () => {
 
   const events = (): Promise<Events> => browser.execute(() => (window as any).__events)
 
-  const request = (dir: string) => ({
+  /** The example's run, its settings; `more` parameters on top. */
+  const request = (dir: string, more: Record<string, unknown> = {}) => ({
     request: {
       files: [{ id: 'f1', path: mzml }],
       database: fasta,
       contaminants: true,
       settings: {
-        parameters: { 'FDR:PSM': 0.01, 'FDR:protein': 0.05, 'modifications:variable': ['Oxidation (M)'] },
+        parameters: {
+          'FDR:PSM': 0.01,
+          'FDR:protein': 0.01,
+          'modifications:variable': ['Oxidation (M)'],
+          'fragment:mass_tolerance': 0.5,
+          'fragment:mass_tolerance_unit': 'Da',
+          ...more,
+        } as Record<string, unknown>,
         rescore: true,
         peptdeep: false,
         threads: 2,
@@ -88,14 +97,14 @@ describe('the shim', () => {
     expect(existsSync(join(e.done[0].folder, 'qpx', 'quantms.psm.parquet'))).toBe(true)
     expect(e.progress.length).toBeGreaterThan(2)
     expect(e.progress.every((p: any) => p.searchId === id && typeof p.label === 'string' && p.fraction >= 0 && p.fraction <= 1)).toBe(true)
-    expect(e.progress.some((p: any) => p.file === 0 && p.label.startsWith('Searching DatabaseSuitability_in_spec.mzML (1 of 1)'))).toBe(true)
+    expect(e.progress.some((p: any) => p.file === 0 && p.label.startsWith('Searching Ecoli_MS2_small.mzML (1 of 1)'))).toBe(true)
     rmSync(e.done[0].folder, { recursive: true, force: true })
     rmSync(work, { recursive: true, force: true })
   })
 
   it('start_search refuses an unknown parameter', async () => {
     const r = request('')
-    r.request.settings.parameters = { bogus: 1 } as any
+    r.request.settings.parameters = { bogus: 1 }
     const { failure } = await invoke('start_search', { request: r.request })
     expect(failure).toContain('bogus')
   })
@@ -105,7 +114,8 @@ describe('the shim', () => {
       const e = (window as any).__events
       e.progress.length = e.done.length = e.failed.length = 0
     })
-    const { result } = await invoke('start_search', { request: request('').request })
+    // (the example takes seconds; in chunks of 20 proteins it runs long enough to be cancelled)
+    const { result } = await invoke('start_search', { request: request('', { 'database:chunk_size': 20 }).request })
     await browser.waitUntil(async () => (await events()).progress.some((p: any) => p.label.startsWith('Searching')), { timeout: 30000 })
     const { failure } = await invoke('cancel_search', { searchId: result.searchId })
     expect(failure).toBeUndefined()

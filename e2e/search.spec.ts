@@ -2,9 +2,11 @@
 // Gated: runs only with PROSE_BIN set (the app inherits it). Every test that needs a result searches the
 // example itself, so each runs alone; the searches' folders (in the spec's own data folder) are removed
 // after each test.
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { clearSearches, openFirstPsm, runExample, searchesDir } from './lib.ts'
+import { zstdDecompressSync } from 'node:zlib'
+import { parquetReadObjects } from 'hyparquet'
+import { clearSearches, freshForm, openFirstPsm, runExample, searchesDir, waitForResults } from './lib.ts'
 
 const enabled = Boolean(process.env.PROSE_BIN)
 
@@ -74,15 +76,17 @@ describe('the example search', () => {
     expect(widths.sequence).toBeLessThan(widths.dejavu - 10)
   })
 
-  it('the example search shows 1,790 PSMs', async () => {
+  it('the example search shows 120 PSMs', async () => {
     await $('header').waitForDisplayed({ timeout: 20000 })
     await $('button=Try the example').click()
     // the two files in the design table, the database counted
     await expect($('[data-testid="design-summary"]')).toHaveText('2 files → 2 samples · 1 condition')
-    await expect($('[data-testid="fasta-proteins"]')).toHaveText('49 proteins')
+    await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
+    // the example's fragment tolerance for its ion-trap spectra
+    await expect($('#fragment-tolerance')).toHaveValue('0.5')
     // (textContent: the footer line is cut to the window's width)
     expect(await $('[data-testid="search-plan"]').getProperty('textContent')).toBe(
-      '2 files in 2 samples · 49 proteins + 116 cRAP + decoys · example: 5 % protein FDR, small database',
+      '2 files in 2 samples · 4,136 proteins + 116 cRAP + decoys · ion-trap example, 0.5 Da fragment tolerance',
     )
     await $('button*=Start search').click()
     await expect($('[data-testid="search-progress"]')).toBeDisplayed()
@@ -93,8 +97,67 @@ describe('the example search', () => {
     })
     const count = $('[data-testid="psm-count"]')
     await count.waitForDisplayed({ timeout: 20000 })
-    await expect(count).toHaveText(expect.stringContaining('1,790'))
-    expect(await $('[data-testid="result-chip"]').getProperty('textContent')).toContain('DatabaseSuitability · 2 files')
+    await expect(count).toHaveText(expect.stringContaining('120'))
+    expect(await $('[data-testid="result-chip"]').getProperty('textContent')).toContain('Ecoli · 2 files')
+    // real data: the first PSM's precursor error is not 0 ppm, its peaks have intensities of their own
+    await openFirstPsm()
+    const header = String(await $('[data-testid="psm-header"]').getProperty('textContent'))
+    const ppm = /([−+-]?\d+\.\d) ppm/.exec(header)
+    expect(ppm, header).not.toBeNull()
+    expect(Number(ppm![1].replace('−', '-'))).not.toBe(0)
+    const sticks = String(await $('[data-testid="unmatched-peaks"]').getAttribute('d'))
+    const tops = new Set([...sticks.matchAll(/V(-?[\d.]+)/g)].map((m) => m[1]))
+    expect(tops.size).toBeGreaterThan(5)
+  })
+
+  it('Remove all empties the Spectra table; Start over drops the database too and keeps the settings', async () => {
+    await freshForm()
+    await $('button=Try the example').click()
+    await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
+    await $('button=Remove all').click()
+    await expect($('button=Try the example')).toBeDisplayed()
+    await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
+    await $('button=Try the example').click()
+    await expect($('[data-testid="design-summary"]')).toHaveText('2 files → 2 samples · 1 condition')
+    await $('button=Start over').click()
+    await expect($('button=Try the example')).toBeDisplayed()
+    await expect($('#fasta-chosen')).toHaveText('Choose a FASTA file…')
+    expect(await $('[data-testid="search-plan"]').getProperty('textContent')).toBe('No spectra yet')
+    // the settings stay (the example's fragment tolerance among them)
+    await expect($('#fragment-tolerance')).toHaveValue('0.5')
+    await expect($('button=Start over')).not.toBeExisting()
+  })
+
+  it('a parameter set in "All parameters" reaches ProSE', async () => {
+    await freshForm()
+    await $('button=Try the example').click()
+    await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
+    await $('button*=parameters').click()
+    const dialog = $('[role="dialog"]')
+    await dialog.waitForDisplayed({ timeout: 10000 })
+    await expect(dialog.$('h2')).toHaveText(expect.stringMatching(/^All \d+ parameters$/))
+    // an advanced parameter without a field on the page, found by its name (PeptDeep is off: no effect on the result)
+    await dialog.$('input[aria-label="Find a parameter"]').setValue('batch_size')
+    const field = dialog.$('#param-peptdeep-batch_size')
+    await field.waitForDisplayed({ timeout: 10000 })
+    await field.setValue('64')
+    await expect(dialog.$('button*=default:')).toBeDisplayed()
+    await dialog.$('button=Done').click()
+    await expect(dialog).not.toBeDisplayed()
+    // the preset counts as modified
+    await expect($('span=modified')).toBeDisplayed()
+    await $('button*=Start search').click()
+    const id = await waitForResults()
+    // ProSE's own record of its parameters: the provenance view's configuration
+    const bytes = readFileSync(join(searchesDir(), id, 'qpx', 'quantms.provenance.parquet'))
+    const rows = (await parquetReadObjects({
+      file: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+      columns: ['step_name', 'config'],
+      compressors: { ZSTD: (input: Uint8Array) => new Uint8Array(zstdDecompressSync(input)) },
+    })) as { step_name: string; config: string }[]
+    const config = JSON.parse(rows.find((r) => r.step_name === 'peptide_search')!.config)
+    expect(config['Search:peptdeep:batch_size']).toBe(64)
+    expect(config['Search:fragment:mass_tolerance']).toBe(0.5)
   })
 
   it('the example without PeptDeep still shows the prediction', async () => {
@@ -116,14 +179,14 @@ describe('the example search', () => {
     await $('nav[aria-label="Main"]').$('a=History').click()
     await row().waitForDisplayed({ timeout: 20000 })
     // (textContent: WebKit's visible text leaves out the cells that the table cuts to its width)
-    expect(await row().getProperty('textContent')).toContain('DatabaseSuitability_1.mzML, DatabaseSuitability_2.mzML')
+    expect(await row().getProperty('textContent')).toContain('Ecoli_1.mzML, Ecoli_2.mzML')
     // the folder has its record: the shim's outputs, proteins.fasta and search.json; proteins.fasta replaced the
     // copy of the database with the contaminants
     expect(existsSync(join(searchesDir(), searchId, 'search.json'))).toBe(true)
     expect(existsSync(join(searchesDir(), searchId, 'proteins.fasta'))).toBe(true)
     expect(existsSync(join(searchesDir(), searchId, 'database.fasta'))).toBe(false)
     // the record's PSMs (written when ProSE ended, from its QPX run view) are the result's
-    expect(await row().$('[data-column="psms"]').getProperty('textContent')).toBe('1,790')
+    expect(await row().$('[data-column="psms"]').getProperty('textContent')).toBe('120')
 
     await row().$('button=Rename').click()
     await row().$('input').waitForDisplayed()
@@ -142,6 +205,6 @@ describe('the example search', () => {
     await browser.waitUntil(async () => (await browser.getUrl()).endsWith(`#/results/${searchId}`), { timeout: 30000 })
     const count = $('[data-testid="psm-count"]')
     await count.waitForDisplayed({ timeout: 30000 })
-    await expect(count).toHaveText(expect.stringContaining('1,790'))
+    await expect(count).toHaveText(expect.stringContaining('120'))
   })
 })

@@ -30,7 +30,7 @@ describe('screens', () => {
     await shot('01-new-search-empty')
 
     await $('button=Try the example').click()
-    await browser.waitUntil(async () => (await text('[data-testid="fasta-proteins"]')).includes('49 proteins'), { timeout: 20000 })
+    await browser.waitUntil(async () => (await text('[data-testid="fasta-proteins"]')).includes('4,136 proteins'), { timeout: 20000 })
     // as the web app's screenshots: PeptDeep on
     await $('#peptdeep').click()
     await browser.execute(() => window.scrollTo(0, 0))

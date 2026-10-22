@@ -229,8 +229,7 @@ jobs:
           python -m venv "$RUNNER_TEMP/qpx"
           "$RUNNER_TEMP/qpx/bin/pip" install --quiet "qpx @ git+https://github.com/bigbio/qpx@0dd22d2f2bcba3cd82fee745dc3559b328a95875"
           # (the example as the app bundles it: src-tauri/resources/{example,fasta})
-          WEB_PUBLIC=src-tauri/resources OUT="$RUNNER_TEMP/qpx-example" \
-            node scripts/results-fixture-native.mjs example src-tauri/resources/prose/bin/ProSE
+          OUT="$RUNNER_TEMP/qpx-example" node scripts/results-fixture-native.mjs example src-tauri/resources/prose/bin/ProSE
           "$RUNNER_TEMP/qpx/bin/python" -I scripts/qpx-validate.py src/lib/results/fixtures/*/qpx "$RUNNER_TEMP/qpx-example/qpx"
 
       - name: Unit tests (cargo test, with the bundled ProSE)

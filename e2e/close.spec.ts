@@ -7,22 +7,18 @@ import {
   appReady,
   clearSearches,
   closeWindowLikeAUser,
-  freshForm,
   proseProcesses,
   searchFolders,
+  startLongSearch,
   textOf,
   windowCloseToolsMissing,
 } from './lib.ts'
 
 const enabled = Boolean(process.env.PROSE_BIN)
 
-/** The example, started and in a file's step: ProSE runs. */
+/** A search (the example's run as many files, lib.ts startLongSearch), started and in a file's step: ProSE runs. */
 async function searchRunning() {
-  await freshForm()
-  await $('button=Try the example').click()
-  await expect($('[data-testid="fasta-proteins"]')).toHaveText('49 proteins')
-  await $('button*=Start search').click()
-  await $('[data-testid="search-progress"]').waitForDisplayed({ timeout: 20000 })
+  await startLongSearch()
   await browser.waitUntil(async () => /Searching/.test(await textOf('[data-testid="search-progress"]')), { timeout: 60000, interval: 100 })
   expect(proseProcesses()).toHaveLength(1)
   expect(appProcesses()).toHaveLength(1)
