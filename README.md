@@ -88,7 +88,9 @@ most 3 GB (larger searches are refused with a message; they stay in History).
   | 8,000,000 | 382 s | 16.7 GB |
 
   About 2.1 GB per million PSMs: a computer with 16 GB opens about 5 million, with 32 GB about 10 million (no larger
-  result was tried). The PSM rows take about 0.3 MB of disk per thousand PSMs, the spectra 2.8 MB (not read at open).
+  result was tried). These are lower bounds: the repeated rows share their native-ID strings and have only the
+  search's 20,000 distinct peptides, so a real search of as many distinct spectra and peptides needs somewhat more
+  (estimated +10–20 %), and opening the first PSM of an input briefly maps its native IDs to the spectra. The PSM rows take about 0.3 MB of disk per thousand PSMs, the spectra 2.8 MB (not read at open).
   On Windows the webview (WebView2) runs Chromium's JavaScript engine, whose arrays are smaller (an earlier
   measurement in Node.js, the same engine, read 4 million synthetic PSMs but not 8 million), so there the limit may
   be lower; macOS' webview is WebKit, as on Linux. Project files are made and read in memory too, and hold at most

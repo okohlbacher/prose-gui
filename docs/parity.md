@@ -37,7 +37,7 @@ ProSE -in <files…> -database <fasta (+ cRAP)> -threads <n> -Search:… (form)
 | Short name | File | Content |
 | --- | --- | --- |
 | psm | `qpx/<stem>.psm.parquet` (per input) | one row per written PSM (best hit of a spectrum): the QPX psm view, with the columns of `-qpx_extended` (below) including PeptDeep's prediction; written as soon as its input is done, in row groups of 256 rows (the PSM view reads the row group of the PSM it opens) |
-| mz | `qpx/<stem>.mz.parquet` (per input) | the QPX mz view of the MS2 spectra of the input's written PSMs only, one row per spectrum in the order of its first PSM, with **filtered peaks** (below); row groups of 256 rows; its footer has the filter (`prose_peak_window`, `prose_peak_top`, `prose_peak_annotated` "kept") |
+| mz | `qpx/<stem>.mz.parquet` (per input) | the QPX mz view of the MS2 spectra of the input's written PSMs only, one row per spectrum in the order of its first PSM and one per native ID (the view's key: of several spectra of one native ID only the first's, so the PSMs of the others have none), with **filtered peaks** (below); row groups of 256 rows; its footer has the filter (`prose_peak_window`, `prose_peak_top`, `prose_peak_annotated` "kept") |
 | merged psm | `qpx/quantms.psm.parquet` | the rows of all inputs (whose files were written), in input order, without the prediction columns: the reader's PSM rows |
 | run | `qpx/quantms.run.parquet` | the QPX run view: one row per input, in input order, with ProSE's optional columns (below) |
 | provenance | `qpx/quantms.provenance.parquet` | the QPX provenance view: one row per step of the search (`peptide_search`, `spectrum_prediction`, `psm_rescoring`, `target_decoy_fdr`, `protein_grouping`) with curated `parameters`; the complete ProSE parameters as JSON in the `config` of the search step |
@@ -125,8 +125,9 @@ input could not be read again) leaves its PSMs without peaks.
 Rows: the PSM rows of `ResultTables.psms` are the rows of `quantms.psm.parquet` (the inputs in order, `psm_rows`
 each). A PSM's prediction is the same row of its input's psm file (checked: `psm_id`); its spectrum the row of the
 input's mz view whose `id` is its `spectrum_reference` (checked): the mz rows are in the order of each spectrum's
-first PSM, so the reader counts them; if the view has another number of rows (a spectrum not found), it finds them by
-their ids. Both are read by row group (256 rows) when the PSM view opens a PSM, and the last four row groups of each
+first PSM, so the reader counts them; if the view has another number of rows (a spectrum not found), or the counted
+row has another id, it finds them by their ids (once per input). A row whose `scan_start_time` is not the PSM's RT
+(the first of several spectra of the PSM's native ID) is not the PSM's: it has no spectrum. Both are read by row group (256 rows) when the PSM view opens a PSM, and the last four row groups of each
 are kept (`src/lib/results/read.ts`, `SearchResult.spectra.load`). Nothing of them is read when the search opens.
 
 ## ResultTables
