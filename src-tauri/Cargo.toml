@@ -1,6 +1,6 @@
 [package]
 name = "prose-desktop"
-version = "0.1.0"
+version = "0.1.1"
 description = "ProSE desktop: the OpenMS search engine, with the look of the ProSE web app"
 edition = "2021"
 license = "BSD-3-Clause"

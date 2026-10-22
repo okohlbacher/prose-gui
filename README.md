@@ -88,9 +88,11 @@ most 3 GB (larger searches are refused with a message; they stay in History).
   | 8,000,000 | 382 s | 16.7 GB |
 
   About 2.1 GB per million PSMs: a computer with 16 GB opens about 5 million, with 32 GB about 10 million (no larger
-  result was tried). These are lower bounds: the repeated rows share their native-ID strings and have only the
-  search's 20,000 distinct peptides, so a real search of as many distinct spectra and peptides needs somewhat more
-  (estimated +10–20 %), and opening the first PSM of an input briefly maps its native IDs to the spectra. The PSM rows take about 0.3 MB of disk per thousand PSMs, the spectra 2.8 MB (not read at open).
+  result was tried). The memory figures are lower bounds, so these counts are upper estimates. The repeated rows share
+  their native-ID strings and have only the search's 20,000 distinct peptides, so a real search of as many distinct
+  spectra and peptides needs somewhat more memory (estimated +10–20 %). Opening the first PSM of an input also maps
+  its native IDs to the spectra for a moment. The PSM rows take about 0.3 MB of disk per thousand PSMs, the spectra
+  2.8 MB (not read at open).
   On Windows the webview (WebView2) runs Chromium's JavaScript engine, whose arrays are smaller (an earlier
   measurement in Node.js, the same engine, read 4 million synthetic PSMs but not 8 million), so there the limit may
   be lower; macOS' webview is WebKit, as on Linux. Project files are made and read in memory too, and hold at most
@@ -117,7 +119,7 @@ Packages and their smoke test (needs the OpenMS build of `native/scripts/build-o
 ```bash
 native/scripts/bundle-prose.sh /scratch/sachsenb/openms-desktop/build src-tauri/resources/prose
 native/scripts/package-linux.sh                                    # .deb and AppImage
-native/scripts/smoke-appimage.sh src-tauri/target/release/bundle/appimage/ProSE_0.1.0_amd64.AppImage \
+native/scripts/smoke-appimage.sh src-tauri/target/release/bundle/appimage/ProSE_0.1.1_amd64.AppImage \
   --hide-openms /scratch/sachsenb/openms-desktop/build
 ```
 
