@@ -400,12 +400,20 @@ export function ionTable(theoretical: TheoreticalIon[], matches: PeakMatch[], le
 }
 
 /** The mean and the (sample) standard deviation of the matches' errors in ppm; NaN where undefined. */
-export function errorStats(matches: PeakMatch[]): { mean: number; sd: number; n: number } {
+export function errorStats(matches: PeakMatch[], error: (m: PeakMatch) => number = (m) => m.errorPpm): { mean: number; sd: number; n: number } {
   const n = matches.length
   if (n === 0) return { mean: NaN, sd: NaN, n }
-  const mean = matches.reduce((s, m) => s + m.errorPpm, 0) / n
-  const sd = n < 2 ? NaN : Math.sqrt(matches.reduce((s, m) => s + (m.errorPpm - mean) ** 2, 0) / (n - 1))
+  const mean = matches.reduce((s, m) => s + error(m), 0) / n
+  const sd = n < 2 ? NaN : Math.sqrt(matches.reduce((s, m) => s + (error(m) - mean) ** 2, 0) / (n - 1))
   return { mean, sd, n }
+}
+
+/**
+ * A match's fragment mass error in the unit of the search's fragment tolerance: ppm as the annotation gives it, or
+ * Da (observed minus theoretical m/z of the peak; fragments of charge 2 are m/z too, as the tolerance is applied).
+ */
+export function fragmentError(m: PeakMatch, mz: ArrayLike<number>, unit: Tolerance['unit']): number {
+  return unit === 'Da' ? mz[m.peak] - m.theoreticalMz : m.errorPpm
 }
 
 /** The ions matched of those shown, and the share of the spectrum's intensity that their peaks carry. */

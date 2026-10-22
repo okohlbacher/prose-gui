@@ -40,7 +40,9 @@
         variant="outline"
         size="sm"
         disabled={form.busy}
-        title="Removes the spectra and the database. Your settings stay, but the example's fragment tolerance goes back to the preset's."
+        title={form.exampleSettingsActive
+          ? "Removes the spectra and the database. Your settings stay, but the example's fragment tolerance goes back to the preset's."
+          : 'Removes the spectra and the database. Your settings stay.'}
         onclick={() => form.startOver()}>Start over</Button>
     {/if}
   </div>

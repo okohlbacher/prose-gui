@@ -79,6 +79,17 @@ export function formatQValue(q: number): string {
 }
 
 /**
+ * A q-value in a narrow cell (the list beside the PSM view): at most six characters, below 0.01 in scientific
+ * notation with one decimal ("3.1e-3"; "<1e-9" below that), else two significant digits ("0.012", "0.5"); NaN is "–".
+ */
+export function formatQCompact(q: number): string {
+  if (q !== q) return '–'
+  if (q === 0) return '0'
+  if (q < 1e-9) return '<1e-9'
+  return q < 0.01 ? q.toExponential(1) : String(Number(q.toPrecision(2)))
+}
+
+/**
  * A PSM's (or protein's best) score with three decimals, a negative one with a real minus (rounded
  * first: no "−0.000"). A hit Percolator could not score carries -100 with q-value 1: it shows as "–",
  * as does a missing score.

@@ -3,19 +3,43 @@
 import type { ProSEFileStatus, ProSEFileSummary, ProSEMultiSummary } from '../results/types'
 import { baseName, type ResultModel } from './model'
 
+/** An engine's long text, with the short plain line the table shows (the long one goes in its tooltip). */
+export type EngineNote = { short: string; full: string }
+
 export type PercolatorStatus = {
   /** `off`: the search did not rescore (the PSMs keep ProSE's scores). */
   kind: 'applied' | 'skipped' | 'off'
   label: string
   /** Why Percolator was skipped. */
-  detail: string | null
-  warning: string | null
+  detail: EngineNote | null
+  warning: EngineNote | null
+}
+
+/** ProSE's Percolator texts we know, in short plain words. */
+const SHORT_NOTES: [RegExp, string][] = [
+  [/sanity check rejected the learned model/i, 'Too few confident PSMs, so scored by the best single feature'],
+  [/^Only (\d+) PSMs, Percolator rescoring needs at least (\d+)/, 'Only $1 PSMs, at least $2 needed'],
+  [/^No decoy PSMs for the target\/decoy competition/, 'No decoy PSMs to learn from'],
+  [/^No search run .* to rescore/, 'No search run to rescore'],
+  [/^Percolator failed/, 'Percolator failed'],
+]
+
+/** A long engine text as a short line: a known one in plain words, else its first sentence, cut at 80 characters. */
+export function engineNote(text: string | null): EngineNote | null {
+  if (text === null || text.trim() === '') return null
+  const full = text.trim()
+  for (const [pattern, short] of SHORT_NOTES) {
+    const m = pattern.exec(full)
+    if (m) return { short: m[0].replace(pattern, short), full }
+  }
+  const first = full.split(/(?<=\.)\s|\s\(|;\s/, 1)[0].replace(/\.$/, '')
+  return { short: first.length > 80 ? `${first.slice(0, 79).trimEnd()}…` : first, full }
 }
 
 export function percolatorStatus(p: ProSEFileSummary['percolator']): PercolatorStatus {
   if (p === null) return { kind: 'off', label: 'Not used', detail: null, warning: null }
-  if (p.applied) return { kind: 'applied', label: 'Rescored', detail: null, warning: p.warning }
-  return { kind: 'skipped', label: 'Skipped', detail: p.skipped, warning: p.warning }
+  if (p.applied) return { kind: 'applied', label: 'Rescored', detail: null, warning: engineNote(p.warning) }
+  return { kind: 'skipped', label: 'Skipped', detail: engineNote(p.skipped), warning: engineNote(p.warning) }
 }
 
 const statusLabels: Record<ProSEFileStatus, string> = {

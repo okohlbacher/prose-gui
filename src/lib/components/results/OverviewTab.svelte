@@ -5,7 +5,7 @@
   import * as Table from '$lib/components/ui/table'
   import { formatPercent, formatQ } from '$lib/format/fdr'
   import { formatCount } from '$lib/results/display'
-  import { fileRows, formatSeconds, totalsOf } from '$lib/results/overview'
+  import { fileRows, formatSeconds, totalsOf, type EngineNote } from '$lib/results/overview'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { toolState } from '$lib/search/tool.svelte'
   import DeltaMassPanel from './DeltaMassPanel.svelte'
@@ -53,6 +53,18 @@
   const foot = 'px-2.5 py-1.5 font-medium'
 </script>
 
+<!-- an engine's note in short plain words; the whole text in its tooltip and, opened, below it -->
+{#snippet engineNote(note: EngineNote)}
+  {#if note.short === note.full}
+    <span class="block max-w-[28rem] font-normal text-muted-foreground">{note.full}</span>
+  {:else}
+    <details class="max-w-[28rem] font-normal text-muted-foreground" data-testid="engine-note">
+      <summary class="cursor-pointer hover:text-foreground" title={note.full}>{note.short}</summary>
+      <p class="mt-0.5 text-xs">{note.full}</p>
+    </details>
+  {/if}
+{/snippet}
+
 <div class="flex flex-col gap-6 pb-6">
   <section aria-labelledby="overview-search">
     <h2 id="overview-search" class="mb-2 text-[13px] font-semibold">Search</h2>
@@ -94,7 +106,7 @@
               <Table.Cell data-column="targets" class="{cell} text-right">{r.targets === null ? '–' : formatCount(r.targets)}</Table.Cell>
               <Table.Cell data-column="decoys" class="{cell} text-right">{r.decoys === null ? '–' : formatCount(r.decoys)}</Table.Cell>
               <Table.Cell data-column="percolator" class="{cell} text-left whitespace-normal {r.percolator.kind === 'off' ? 'text-muted-foreground' : ''}">
-                {r.percolator.label}{#if r.percolator.detail}<span class="block max-w-[28rem] font-normal text-muted-foreground">{r.percolator.detail}</span>{/if}{#if r.percolator.warning}<span class="block max-w-[28rem] font-normal text-muted-foreground">Warning: {r.percolator.warning}</span>{/if}
+                {r.percolator.label}{#each [r.percolator.detail, r.percolator.warning] as note, k (k)}{#if note}{@render engineNote(note)}{/if}{/each}
               </Table.Cell>
               {#if showNce}
                 <Table.Cell data-column="nce" class="{cell} text-right">{r.nce === null ? '–' : String(Number(r.nce.toFixed(1)))}</Table.Cell>

@@ -5,6 +5,7 @@ import { makeTables } from '../results/synthetic'
 import {
   annotationOptions,
   errorStats,
+  fragmentError,
   featureValue,
   fragmentCharges,
   fragmentTolerance,
@@ -302,6 +303,12 @@ describe('numbers', () => {
     expect(s.mean).toBeCloseTo(1)
     expect(s.sd).toBeCloseTo(2)
     expect(errorStats([match(0, 'b2', { errorPpm: 2 })]).sd).toBeNaN()
+    // in Da: observed minus theoretical m/z of the peak (match() puts the theoretical m/z at 100 + peak)
+    const mz = Float32Array.of(100.25, 101, 101.5)
+    const da = [match(0, 'b2'), match(1, 'b3'), match(2, 'y2++')]
+    expect(da.map((m) => fragmentError(m, mz, 'Da'))).toEqual([0.25, 0, -0.5])
+    expect(fragmentError(match(0, 'b2', { errorPpm: 7 }), mz, 'ppm')).toBe(7)
+    expect(errorStats(da, (m) => fragmentError(m, mz, 'Da')).mean).toBeCloseTo(-0.25 / 3, 6)
     expect(errorStats([]).mean).toBeNaN()
   })
 

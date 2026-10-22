@@ -47,7 +47,9 @@ export type Removed = {
   files: FileRow[]
   database: DatabaseChoice | null
   notices: string[]
+  /** The example's settings the removal replaced, and the values it put in (Undo restores only over those). */
   parameters: Record<string, unknown>
+  replacedWith: Record<string, unknown>
 }
 
 /** The name of a path's file (either separator). */
@@ -93,7 +95,11 @@ class SearchForm {
   /** What the last "Remove all" or "Start over" removed, for its Undo (until files or a database are chosen again). */
   removed = $state<Removed | null>(null)
   /** The example's settings (EXAMPLE.parameters) are in force: set by loadExample, the example's files still there. */
-  #exampleSettings = false
+  #exampleSettings = $state(false)
+  /** The example's own settings are in force (Start over's tooltip says they go back to the preset's). */
+  get exampleSettingsActive(): boolean {
+    return this.#exampleSettings
+  }
 
   /** Threads of the search (Advanced); null: all cores. */
   threads = $state<number | null>(null)
@@ -158,8 +164,6 @@ class SearchForm {
    */
   async addFiles(paths: Iterable<string>) {
     const list = [...paths]
-    if (list.length > 0) this.#leaveExample()
-    this.removed = null
     const skipped = list.filter((p) => !isMzML(fileName(p)) && !isFasta(fileName(p))).map(fileName)
     const spectra = list.filter((p) => isMzML(fileName(p)))
     const database = list.filter((p) => isFasta(fileName(p))).pop()
@@ -174,6 +178,11 @@ class SearchForm {
     try {
       const facts = await inspectFiles(spectra)
       const unreadable = facts.filter((f) => f.error !== null)
+      // (rows join: the example's settings end, an Undo of a removal is no longer offered)
+      if (facts.some((f) => f.error === null)) {
+        this.#leaveExample()
+        this.removed = null
+      }
       for (const f of facts) if (f.error === null) this.#addRow(f, {})
       if (unreadable.length > 0) this.notices.push(...unreadable.map((f) => `${f.name}: ${f.error}`))
     } catch (e) {
@@ -214,7 +223,7 @@ class SearchForm {
       files: this.files,
       database: database ? this.database : null,
       notices: this.notices,
-      parameters: this.#leaveExample(),
+      ...this.#leaveExampleWithUndo(),
     }
     if (removed.files.length > 0 || removed.database) this.removed = removed
     this.files = []
@@ -229,9 +238,24 @@ class SearchForm {
     this.removed = null
     this.files = [...r.files, ...this.files]
     this.notices = r.notices
-    if (r.database) this.database = r.database
-    for (const [name, value] of Object.entries(r.parameters)) this.overrides[name] = copyValue(value)
-    if (Object.keys(r.parameters).length > 0) this.#exampleSettings = true
+    if (r.database) {
+      this.database = r.database
+      // a database whose count the removal cut short is counted again
+      if (r.database.proteins === null && r.database.error === null) void this.setDatabase(r.database.file.path, { example: true })
+    }
+    // the example's settings come back unless the user set others since the removal
+    const names = Object.keys(r.parameters)
+    if (names.length > 0 && names.every((name) => sameValue(this.values[name], r.replacedWith[name]))) {
+      for (const name of names) this.overrides[name] = copyValue(r.parameters[name])
+      this.#exampleSettings = true
+    }
+  }
+
+  /** `#leaveExample` for a removal: the example's values it replaced and what it put in their place. */
+  #leaveExampleWithUndo(): { parameters: Record<string, unknown>; replacedWith: Record<string, unknown> } {
+    const parameters = this.#leaveExample()
+    const replacedWith = Object.fromEntries(Object.keys(parameters).map((name) => [name, copyValue(this.values[name])]))
+    return { parameters, replacedWith }
   }
 
   /**

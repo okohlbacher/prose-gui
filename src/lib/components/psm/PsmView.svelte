@@ -41,7 +41,6 @@
     type IonType,
     type PsmOptions,
   } from '$lib/psm/psm'
-  import { mzDomain } from '$lib/psm/plot'
   import { exportSpectrumSvg } from '$lib/psm/svg-export'
   import { baseName } from '$lib/results/model'
   import { formatQValue, parseAccession, parseDescription, scanNumber } from '$lib/results/display'
@@ -56,7 +55,6 @@
   import { tick } from 'svelte'
   import FragmentLadder from './FragmentLadder.svelte'
   import IonTable from './IonTable.svelte'
-  import MassErrorPlot from './MassErrorPlot.svelte'
   import PsmFeatures from './PsmFeatures.svelte'
   import SpectrumMirror, { type Bottom } from './SpectrumMirror.svelte'
 
@@ -212,7 +210,6 @@
   /** The prediction is on its way: the spectrum is not exported meanwhile. */
   const pending = $derived(bottom.kind === 'status' && !bottom.failed)
 
-  const domain = $derived(peaks ? mzDomain([peaks.mz, bottom.kind === 'ions' ? bottom.ions.map((b) => b.mz) : []]) : ([0, 100] as [number, number]))
 
   // breadcrumb and header
   const proteinRow = $derived.by(() => {
@@ -538,6 +535,7 @@
         {similarity}
         title={spectrumTitle}
         description={spectrumDescription}
+        errors={{ matches: shown, tolerance }}
         onTheoretical={() => (view.psmOptions.bottom = 'theoretical')} />
       {#if hiddenOnePlus}
         <p class="flex flex-wrap items-center gap-2 pb-1 text-xs text-muted-foreground" role="status" data-testid="oneplus-hint">
@@ -587,7 +585,7 @@
     {/if}
   </div>
 
-  <!-- the ion table, the mass errors and the features side by side; what does not fit wraps -->
+  <!-- below the spectrum (and its mass errors): the ion table and the features side by side; what does not fit wraps -->
   <div class="mt-3 flex flex-wrap items-start gap-3">
     <div class="max-w-full min-w-0 flex-none rounded-lg border bg-background px-2 py-2">
       {#if table}
@@ -598,15 +596,7 @@
         </p>
       {/if}
     </div>
-    <div class="min-w-[280px] flex-[1_1_320px] rounded-lg border bg-background px-3.5 py-3" data-testid="mass-error">
-      <h3 class="mb-1 text-[13px] font-semibold">Fragment mass error</h3>
-      {#if peaks}
-        <MassErrorPlot matches={shown} mz={peaks.mz} intensity={peaks.intensity} {tolerance} {domain} />
-      {:else}
-        <p class="py-6 text-center text-xs text-muted-foreground">No spectrum, so no mass errors to show.</p>
-      {/if}
-    </div>
-    <div class="max-w-[380px] min-w-[250px] flex-[1_1_260px] rounded-lg border bg-background px-3.5 py-3">
+    <div class="min-w-[260px] flex-[1_1_420px] rounded-lg border bg-background px-3.5 py-3">
       <PsmFeatures model={m} {row} {fixedMods} matched={summary} />
     </div>
   </div>

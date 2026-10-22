@@ -17,7 +17,14 @@
   const stats = $derived([
     {
       value: formatCount(figures.proteinGroups),
-      note: proteinFdrApplied ? `protein groups · ${formatPercent(proteinFdr)} FDR` : 'protein groups · no protein FDR',
+      // (the Proteins tab counts proteins: where groups join some, both numbers)
+      note: [
+        'protein groups',
+        figures.proteins !== figures.proteinGroups ? `${formatCount(figures.proteins)} proteins` : null,
+        proteinFdrApplied ? `${formatPercent(proteinFdr)} FDR` : 'no protein FDR',
+      ]
+        .filter(Boolean)
+        .join(' · '),
       title: groupTitle,
       testid: 'protein-count',
     },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bandPath, clipMarks, mzDomain, niceTicks, placeLabels, scale, stickGroups, stickPath, stripFits, textWidth } from './plot'
+import { clipMarks, mzDomain, niceTicks, placeLabels, scale, stickGroups, stickPath, stripFits, textWidth } from './plot'
 
 describe('axes', () => {
   it('puts ticks on round numbers inside the range', () => {
@@ -50,14 +50,6 @@ describe('marks', () => {
     expect(below[0]).toMatchObject({ faint: true, xs: [400], tops: [200] })
     expect(Math.abs(below[0].xs[0] - groups[0].xs[0])).toBeLessThan(0.01)
     expect(clipMarks([500], 0, true)).toBe('M497 0L500 -5L503 0Z')
-  })
-
-  it('draws a tolerance band that follows m/z for Da', () => {
-    // ±10 ppm is a rectangle
-    expect(bandPath({ value: 10, unit: 'ppm' }, [100, 1000], (mz) => mz / 10, (ppm) => 100 - ppm, 8)).toBe('M10 90H100V110H10Z')
-    // ±0.01 Da is 100 ppm at m/z 100 and 10 ppm at m/z 1000, clipped to the plot's ±50 ppm
-    const d = bandPath({ value: 0.01, unit: 'Da' }, [100, 1000], (mz) => mz / 10, (ppm) => 100 - ppm, 3, [-50, 50])
-    expect(d).toBe('M10 50L55 81.8L100 90L100 110L55 118.2L10 150Z')
   })
 })
 

@@ -57,7 +57,7 @@ export function collapseChannels<T extends { fileName: string; label?: string }>
       kind: 'multiplexed',
       message:
         `${count} several labels: ${shown}${more}. ` +
-        'Each is loaded as one row. Its condition and replicate are kept only where all its channels agree.',
+        'Each is loaded as one row. Its condition and replicate are kept only if all its channels agree.',
       rows: [],
     },
   }

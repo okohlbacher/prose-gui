@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProSEFileSummary, ProSEMultiSummary } from '../results/types'
 import { sampleDesign, sampleTables } from './fixtures'
 import { buildModel } from './model'
-import { fileRows, fileStatus, formatSeconds, percolatorStatus, totalsOf } from './overview'
+import { engineNote, fileRows, fileStatus, formatSeconds, percolatorStatus, totalsOf } from './overview'
 
 const file = (path: string, more: Partial<ProSEFileSummary> = {}): ProSEFileSummary => ({
   path,
@@ -48,11 +48,25 @@ describe('percolatorStatus', () => {
     expect(percolatorStatus({ applied: false, skipped: 'Fewer than 100 PSMs.', warning: null })).toEqual({
       kind: 'skipped',
       label: 'Skipped',
-      detail: 'Fewer than 100 PSMs.',
+      detail: { short: 'Fewer than 100 PSMs', full: 'Fewer than 100 PSMs.' },
       warning: null,
     })
     expect(percolatorStatus(null)).toEqual({ kind: 'off', label: 'Not used', detail: null, warning: null })
-    expect(percolatorStatus({ applied: true, skipped: null, warning: 'Few decoys' }).warning).toBe('Few decoys')
+    expect(percolatorStatus({ applied: true, skipped: null, warning: 'Few decoys' }).warning).toEqual({ short: 'Few decoys', full: 'Few decoys' })
+  })
+
+  it("puts ProSE's long texts in short plain words, the full text kept for the tooltip", () => {
+    const sanity =
+      "Percolator's sanity check rejected the learned model (on the held-out folds it found no target PSM at q < 0.01, or fewer than the best single feature; typical for blank runs and runs with few confident PSMs), so the PSMs are scored with that feature alone."
+    expect(engineNote(sanity)).toEqual({ short: 'Too few confident PSMs, so scored by the best single feature', full: sanity })
+    expect(engineNote('Only 42 PSMs, Percolator rescoring needs at least 100.')?.short).toBe('Only 42 PSMs, at least 100 needed')
+    expect(engineNote("No decoy PSMs for the target/decoy competition of Percolator. A search without decoys needs …")?.short).toBe('No decoy PSMs to learn from')
+    expect(engineNote('Percolator failed: out of memory')?.short).toBe('Percolator failed')
+    // an unknown one: its first sentence, at most 80 characters
+    expect(engineNote('Something new happened. More text follows here.')?.short).toBe('Something new happened')
+    expect(engineNote('x'.repeat(200))!.short).toHaveLength(80)
+    expect(engineNote(null)).toBeNull()
+    expect(engineNote('  ')).toBeNull()
   })
 })
 

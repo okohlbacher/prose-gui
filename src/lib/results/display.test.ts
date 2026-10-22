@@ -3,6 +3,7 @@ import {
   fileSafe,
   fileSafeMaxBytes,
   formatCount,
+  formatQCompact,
   formatQValue,
   formatScore,
   naturalKey,
@@ -71,6 +72,17 @@ describe('cell formats', () => {
     expect(formatQValue(0.00002)).toBe('2.0e-5')
     expect(formatQValue(0)).toBe('0')
     expect(formatQValue(NaN)).toBe('–')
+  })
+
+  it('formats q-values for the narrow list beside the PSM view in six characters at most', () => {
+    expect(formatQCompact(0.0031)).toBe('3.1e-3')
+    expect(formatQCompact(0.00002)).toBe('2.0e-5')
+    expect(formatQCompact(0.0123)).toBe('0.012')
+    expect(formatQCompact(0.5)).toBe('0.5')
+    expect(formatQCompact(0)).toBe('0')
+    expect(formatQCompact(NaN)).toBe('–')
+    expect(formatQCompact(1e-12)).toBe('<1e-9')
+    for (const q of [1e-12, 0.0099, 0.01, 0.0999, 0.999]) expect(formatQCompact(q).length).toBeLessThanOrEqual(6)
   })
 
   it('shows the scores Percolator could not give (-100 at q = 1) as a dash', () => {

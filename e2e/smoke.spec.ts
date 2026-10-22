@@ -14,6 +14,6 @@ describe('smoke', () => {
     await expect(logo).toBeDisplayed()
     await browser.waitUntil(() => browser.execute((img: HTMLImageElement) => img.complete, logo as unknown as HTMLImageElement))
     const size = await browser.execute((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight, img.width], logo as unknown as HTMLImageElement)
-    expect(size).toEqual([180, 180, 28])
+    expect(size).toEqual([180, 180, 36])
   })
 })

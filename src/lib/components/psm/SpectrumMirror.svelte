@@ -21,8 +21,14 @@
   // placed most intense first and left out where they would collide. Hovering tells a peak's m/z,
   // intensity and ions; the ion table is the chart's table view. What only the page shows (a prediction
   // on its way) is marked `data-no-export`.
+  //
+  // Below the lower half, on the same m/z axis (one x scale, the same margins, so each dot sits under its peak), the
+  // strip of the fragment mass errors: one dot per matched ion, its error in the unit of the search's fragment
+  // tolerance (ppm, or Da), its area by its peak's intensity, the band the tolerance; the m/z labels come below it.
+  // It is part of the SVG, so "Export spectrum (SVG)" has it too.
   import { signedNumber } from '$lib/format/number'
-  import { ionLabel, COLORS, type PeakGroup } from '$lib/psm/psm'
+  import type { PeakMatch } from '$lib/results/types'
+  import { errorStats, fragmentError, ionColor, ionLabel, COLORS, type PeakGroup, type Tolerance } from '$lib/psm/psm'
   import { clipMarks, mzDomain, nearest, niceTicks, placeLabels, px, scale, stickGroups, stickPath, stripFits, textWidth } from '$lib/psm/plot'
 
   let {
@@ -35,6 +41,7 @@
     title,
     description,
     onTheoretical,
+    errors = null,
   }: {
     mz: Float32Array
     intensity: Float32Array
@@ -49,6 +56,8 @@
     description: string
     /** Offered when the prediction failed: switch to the theoretical spectrum. */
     onTheoretical?: () => void
+    /** The fragment mass errors under the spectrum: the matches shown and the search's fragment tolerance. */
+    errors?: { matches: PeakMatch[]; tolerance: Tolerance } | null
   } = $props()
 
   const uid = $props.id()
@@ -59,6 +68,11 @@
   const plotTop = 24
   const plotBottom = plotHeight - 42
   const mid = (plotTop + plotBottom) / 2
+  /** The error strip: its header line, then its plot (errorTop to errorBottom). */
+  const errorTop = plotBottom + 30
+  const errorBottom = errorTop + 84
+  /** The m/z labels sit below the lowest part: the lower half, or the error strip. */
+  const axisBase = $derived(errors ? errorBottom : plotBottom)
   const font = "'Inter Variable', ui-sans-serif, system-ui, sans-serif"
   const ink = '#3f3f46'
   const muted = '#71717a'
@@ -66,7 +80,7 @@
   let width = $state(800)
   /** The similarity moves to a line of its own when the label and it would meet (a narrow view). */
   const stacked = $derived(!stripFits(bottom.label, similarity, width - M.left - M.right))
-  const H = $derived(plotHeight + (stacked ? 15 : 0))
+  const H = $derived(axisBase + 42 + (stacked ? 15 : 0))
   let svg = $state<SVGSVGElement | null>(null)
 
   /** The SVG (for "Export spectrum (SVG)"). */
@@ -127,6 +141,49 @@
   })
 
   const xTicks = $derived(niceTicks(domain[0], domain[1], Math.max(2, Math.floor((width - M.left - M.right) / 90))))
+
+  // the error strip: the errors in the tolerance's unit, the band ±tolerance, a little room around it
+  const unit = $derived(errors?.tolerance.unit ?? 'ppm')
+  const errorOf = (m: PeakMatch) => fragmentError(m, mz, unit)
+  const errorMax = $derived.by(() => {
+    if (!errors) return 1
+    const worst = Math.max(0, ...errors.matches.map((m) => Math.abs(errorOf(m))))
+    return Math.max(errors.tolerance.value, worst) * 1.12 || 1
+  })
+  const ey = $derived(scale([errorMax, -errorMax], [errorTop, errorBottom]))
+  const maxI = $derived.by(() => {
+    let max = 0
+    for (let i = 0; i < intensity.length; i++) if (intensity[i] > max) max = intensity[i]
+    return max > 0 ? max : 1
+  })
+  // the large dots first, so that small ones stay visible on top
+  const dots = $derived(
+    errors
+      ? [...errors.matches]
+          .sort((p, q) => (intensity[q.peak] ?? 0) - (intensity[p.peak] ?? 0))
+          .map((m) => ({ m, error: errorOf(m), r: 2.25 + 3.75 * Math.sqrt(Math.max(0, intensity[m.peak] ?? 0) / maxI) }))
+      : [],
+  )
+  const stats = $derived(errors ? errorStats(errors.matches, errorOf) : { mean: NaN, sd: NaN, n: 0 })
+  /** An error with its unit: ppm with one decimal, Da with three. */
+  const errorText = (v: number) => `${signedNumber(v, unit === 'Da' ? 3 : 1)} ${unit}`
+  const errorTick = (v: number) => signedNumber(v, unit === 'Da' ? 2 : 1, { plus: false, trim: true })
+  const errorHeader = $derived(
+    !errors
+      ? ''
+      : errors.matches.length === 0
+        ? 'Fragment mass error · no matched ions'
+        : `Fragment mass error · mean ${errorText(stats.mean)}${Number.isFinite(stats.sd) ? ` · SD ${errorText(stats.sd).replace(/^[+−-]/, '')}` : ''} · dot size = intensity`,
+  )
+  /** The strip for screen readers, in sentences. */
+  const errorDescription = $derived(
+    !errors
+      ? ''
+      : errors.matches.length === 0
+        ? ' Below it, no ion is matched, so no mass error is shown.'
+        : ` Below it, the mass error in ${unit} of each of the ${errors.matches.length} matched ions is shown under its peak, within the tolerance of ±${errors.tolerance.value} ${unit}.` +
+          ` The mean error is ${errorText(stats.mean)}${Number.isFinite(stats.sd) ? `, the standard deviation ${errorText(stats.sd).replace(/^[+−-]/, '')}` : ''}.`,
+  )
 
   /** The legend at the top right: the series that show, in a fixed order. */
   const legend = $derived.by(() => {
@@ -206,11 +263,11 @@
     {onpointermove}
     onpointerleave={() => (tip = null)}>
     <title id="{uid}-title">{title}</title>
-    <desc id="{uid}-desc">{description}</desc>
+    <desc id="{uid}-desc">{description}{errorDescription}</desc>
 
-    <!-- grid: hairlines at the m/z ticks -->
+    <!-- grid: hairlines at the m/z ticks, through the error strip -->
     {#each xTicks as t (t)}
-      <line x1={px(x(t))} x2={px(x(t))} y1={plotTop} y2={plotBottom} stroke="#f4f4f5" stroke-width="1" />
+      <line x1={px(x(t))} x2={px(x(t))} y1={plotTop} y2={axisBase} stroke="#f4f4f5" stroke-width="1" />
     {/each}
 
     <!-- the observed peaks: unmatched light grey and thin, matched in their series' colour -->
@@ -250,12 +307,48 @@
         data-no-export="">{bottom.message}</text>
     {/if}
 
-    <!-- the axis -->
+    <!-- the fragment mass errors, under their peaks -->
+    {#if errors}
+      <g data-testid="mass-error">
+        <text x={M.left} y={errorTop - 10} font-size="11" fill={muted} data-testid="error-stats">{errorHeader}</text>
+        <text x={width - M.right} y={errorTop - 10} text-anchor="end" font-size="10" fill={muted}
+          >tolerance ±{errors.tolerance.value} {unit}</text>
+        <rect
+          x={M.left}
+          y={px(ey(errors.tolerance.value))}
+          width={Math.max(0, width - M.right - M.left)}
+          height={Math.max(0, ey(-errors.tolerance.value) - ey(errors.tolerance.value))}
+          fill="#f4f4f5"
+          fill-opacity="0.8"
+          data-testid="tolerance-band" />
+        {#each [errors.tolerance.value, 0, -errors.tolerance.value] as t (t)}
+          <line x1={M.left} x2={width - M.right} y1={px(ey(t))} y2={px(ey(t))} stroke={t === 0 ? '#a1a1aa' : '#e4e4e7'} stroke-width="1" />
+          <text x={M.left - 6} y={px(ey(t) + 3.5)} text-anchor="end" font-size="10" fill={muted}>{errorTick(t)}</text>
+        {/each}
+        <text x={M.left - 6} y={errorTop - 10} text-anchor="end" font-size="10" fill={muted} data-testid="error-unit">{unit}</text>
+        {#each dots as d, i (i)}
+          <circle
+            cx={px(x(mz[d.m.peak]))}
+            cy={px(ey(d.error))}
+            r={px(d.r)}
+            fill={ionColor(d.m.type)}
+            stroke="#ffffff"
+            stroke-width="1.25"
+            data-testid="error-dot"
+            data-type={d.m.type}
+            data-error={d.error}
+            data-mz={mz[d.m.peak]}
+            ><title>{ionLabel(d.m.ion)} · m/z {mz[d.m.peak].toFixed(4)} · {errorText(d.error)}</title></circle>
+        {/each}
+      </g>
+    {/if}
+
+    <!-- the axis: the halves' baseline, the m/z labels below everything -->
     <line x1={M.left} x2={width - M.right} y1={mid} y2={mid} stroke={muted} stroke-width="1" />
     {#each xTicks as t (t)}
-      {#if x(t) < width - M.right - 30}<text x={px(x(t))} y={plotBottom + 15} text-anchor="middle" font-size="11" fill={muted}>{t}</text>{/if}
+      {#if x(t) < width - M.right - 30}<text x={px(x(t))} y={axisBase + 15} text-anchor="middle" font-size="11" fill={muted}>{t}</text>{/if}
     {/each}
-    <text x={width - M.right} y={plotBottom + 15} text-anchor="end" font-size="11" fill={muted}>m/z</text>
+    <text x={width - M.right} y={axisBase + 15} text-anchor="end" font-size="11" fill={muted}>m/z</text>
 
     <!-- relative intensity, of each half's 100 % -->
     <g font-size="10" fill={muted} text-anchor="end">
@@ -294,7 +387,7 @@
     {/each}
     <text
       x={M.left}
-      y={plotHeight - 6}
+      y={axisBase + 36}
       font-size="11"
       fill={muted}
       data-testid="bottom-label"

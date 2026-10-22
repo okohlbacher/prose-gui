@@ -85,9 +85,17 @@ describe('the example search', () => {
     // the example's fragment tolerance for its ion-trap spectra
     await expect($('#fragment-tolerance')).toHaveValue('0.5')
     // (textContent: the footer line is cut to the window's width)
-    expect(await $('[data-testid="search-plan"]').getProperty('textContent')).toBe(
-"2 files in 2 samples · 4,136 proteins + 116 cRAP + decoys · ion-trap example, 0.5 Da fragment tolerance · too few PSMs for Percolator's full model or a protein FDR",
+    expect(await $('[data-testid="search-plan"]').getProperty('textContent')).toBe('2 files in 2 samples · 4,136 proteins + 116 cRAP + decoys')
+    // the example's note, on a line of its own that wraps (not cut)
+    // (textContent: WebKitWebDriver reads no visible text of a line-clamped box)
+    expect(await $('[data-testid="search-note"]').getProperty('textContent')).toBe(
+      "Ion-trap example with a 0.5 Da fragment tolerance. It has too few PSMs for Percolator's full model or a protein FDR.",
     )
+    const clipped = await browser.execute(() => {
+      const note = document.querySelector('[data-testid="search-note"]') as HTMLElement
+      return note.scrollHeight > note.clientHeight + 1
+    })
+    expect(clipped).toBe(false)
     await $('button*=Start search').click()
     await expect($('[data-testid="search-progress"]')).toBeDisplayed()
     await browser.waitUntil(async () => /#\/results\/[^/]+$/.test(await browser.getUrl()), {
@@ -108,6 +116,16 @@ describe('the example search', () => {
     const sticks = String(await $('[data-testid="unmatched-peaks"]').getAttribute('d'))
     const tops = new Set([...sticks.matchAll(/V(-?[\d.]+)/g)].map((m) => m[1]))
     expect(tops.size).toBeGreaterThan(5)
+    // the fragment mass errors under the spectrum, in Da (the example's tolerance is in Da), each dot under its peak
+    const strip = await browser.execute(() => {
+      const svg = document.querySelector('[data-testid="spectrum"]')!
+      const peaks = [...svg.querySelectorAll('[data-testid="matched-peaks"]')].map((p) => p.getAttribute('d') ?? '').join('')
+      const dots = [...svg.querySelectorAll('[data-testid="error-dot"]')].map((d) => d.getAttribute('cx'))
+      return { unit: svg.querySelector('[data-testid="error-unit"]')?.textContent, dots: dots.length, unaligned: dots.filter((cx) => !peaks.includes(`M${cx} `)) }
+    })
+    expect(strip.unit).toBe('Da')
+    expect(strip.dots).toBeGreaterThan(5)
+    expect(strip.unaligned).toEqual([])
   })
 
   it('Remove all and Start over empty the form, give back the preset\'s tolerance, and can be undone', async () => {

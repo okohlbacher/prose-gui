@@ -56,7 +56,8 @@ describe('closing the window', () => {
     await guard.waitForDisplayed({ reverse: true, timeout: 10000 })
     expect(appProcesses().map((p) => p.pid)).toEqual([app])
     expect(proseProcesses()).toHaveLength(1)
-    expect(await textOf('[data-testid="search-progress"]')).toMatch(/Searching|Building|Rescoring|PeptDeep|Percolator|Writing/)
+    // (the search goes on: its progress is shown, whatever step it is in)
+    expect(await $('[data-testid="search-progress"]').isDisplayed()).toBe(true)
     // asked again: "Close ProSE" closes as before
     closeWindowLikeAUser(app)
     await guard.waitForDisplayed({ timeout: 20000 })

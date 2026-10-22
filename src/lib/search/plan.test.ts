@@ -93,7 +93,10 @@ describe('the search request', () => {
     expect(r.settings).toMatchObject({ rescore: true, peptdeep: false, threads: 0 })
     expect(r.contaminants).toBe(true)
     expect(searchPlan.line).toBe(
-      "2 files in 2 samples · 4,136 proteins + 116 cRAP + decoys · ion-trap example, 0.5 Da fragment tolerance · too few PSMs for Percolator's full model or a protein FDR",
+      '2 files in 2 samples · 4,136 proteins + 116 cRAP + decoys',
+    )
+    expect(searchPlan.note).toBe(
+      "Ion-trap example with a 0.5 Da fragment tolerance. It has too few PSMs for Percolator's full model or a protein FDR.",
     )
   })
 
@@ -230,6 +233,47 @@ describe('the footer', () => {
     await settle()
     await form.setDatabase('/db/human.fasta')
     expect(form.value('fragment:mass_tolerance')).toBe(20)
+  })
+
+  test('the example stays the example when nothing joins; Undo keeps a tolerance set after the removal', async () => {
+    await form.loadExample()
+    await settle()
+    // a vendor file only, or an mzML that cannot be read: no row joins, the example's settings stay
+    await form.addFiles(['/r/run.raw'])
+    expect(form.value('fragment:mass_tolerance')).toBe(0.5)
+    const facts = vi.mocked((await import('../desktop')).inspectFiles)
+    facts.mockImplementationOnce(async (paths: string[]) =>
+      paths.map((p) => ({ path: p, name: p.split('/').pop()!, size: 0, spectra: null, proteins: null, residues: null, error: 'not an mzML' })),
+    )
+    await form.addFiles(['/r/broken.mzML'])
+    expect(form.isExample).toBe(true)
+    expect(form.value('fragment:mass_tolerance')).toBe(0.5)
+    expect(form.exampleSettingsActive).toBe(true)
+    // Start over, then the user sets 10 ppm, then Undo: the files come back, the user's 10 ppm stays
+    form.startOver()
+    expect(form.exampleSettingsActive).toBe(false)
+    form.setParam('fragment:mass_tolerance', 10)
+    form.undoRemove()
+    await settle()
+    expect(form.isExample).toBe(true)
+    expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit')]).toEqual([10, 'ppm'])
+  })
+
+  test('Undo counts a database again whose count the removal cut short', async () => {
+    await form.addFiles(['/r/a.mzML'])
+    let release: () => void = () => {}
+    const facts = vi.mocked((await import('../desktop')).inspectFiles)
+    const real = facts.getMockImplementation()!
+    facts.mockImplementationOnce((paths: string[]) => new Promise((resolve) => (release = () => resolve(real(paths)))))
+    const counting = form.setDatabase('/db/slow.fasta')
+    expect(form.database?.proteins).toBeNull()
+    form.startOver()
+    release()
+    await counting
+    form.undoRemove()
+    await settle()
+    expect(form.database?.file.name).toBe('slow.fasta')
+    expect(form.database?.proteins).toBe(4136)
   })
 
   test('Remove all and Start over wait while files or the example are loading', async () => {

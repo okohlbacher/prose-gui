@@ -37,13 +37,19 @@ class SearchPlan {
     } else {
       parts.push('no database yet')
     }
-    if (form.isExample) {
-      parts.push(`ion-trap example, ${form.value('fragment:mass_tolerance')} ${form.value('fragment:mass_tolerance_unit')} fragment tolerance`)
-      // (why its results say that Percolator fell back and that no protein FDR was applied)
-      parts.push("too few PSMs for Percolator's full model or a protein FDR")
-    }
     return parts.join(' · ')
   })
+
+  /**
+   * The example's note, a line of its own under the plan (it wraps): its tolerance, and why its results say that
+   * Percolator fell back and that no protein FDR was applied.
+   */
+  note = $derived(
+    form.isExample
+      ? `Ion-trap example with a ${form.value('fragment:mass_tolerance')} ${form.value('fragment:mass_tolerance_unit')} fragment tolerance. ` +
+          "It has too few PSMs for Percolator's full model or a protein FDR."
+      : null,
+  )
 
   /** Modification names ProSE does not know. */
   unknownMods = $derived(unknownModifications(form.values, PROSE_PARAMETERS))

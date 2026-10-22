@@ -6,7 +6,7 @@
   import PeptideSequence from '$lib/components/PeptideSequence.svelte'
   import { massShift, peptideView } from '$lib/format/peptide'
   import { baseName } from '$lib/results/model'
-  import { formatQValue, formatScore, spectrumLabel } from '$lib/results/display'
+  import { formatQCompact, formatQValue, formatScore, spectrumLabel } from '$lib/results/display'
   import type { LevelState, ResultsView } from '$lib/results/view.svelte'
   import { fixed, signed, tableColumns, type CellDef } from './cells'
   import DataTable from './DataTable.svelte'
@@ -33,7 +33,7 @@
           cellTitle: (i) => Array.from(m.peptide.proteins[ps.peptide[i]], (p) => m.tables.proteins.accession[p]).join('\n'),
         }
       case 'sample':
-        return { cell: (i) => m.samples[m.psmSample[i]].label }
+        return { cell: (i) => m.samples[m.psmSample[i]].label, cellTitle: (i) => m.samples[m.psmSample[i]].label }
       case 'scan':
         return { cell: (i) => spectrumLabel(ps.nativeId[i]), cellTitle: (i) => ps.nativeId[i] }
       case 'charge':
@@ -66,18 +66,26 @@
   const compactColumns: Record<string, { width: number | 'auto'; header?: string; title?: string }> = {
     peptide: { width: 'auto' },
     charge: { width: 32 },
-    sample: { width: 74 },
-    qValue: { width: 60, header: 'q' },
+    sample: { width: 88 },
+    qValue: { width: 64, header: 'q' },
     precursorError: { width: 58, header: 'Δ ppm', title: 'Precursor mass error (ppm)' },
   }
 
   const columns = $derived.by(() => {
     if (!compact) return tableColumns(level.visible, cells)
+    // (one sample: its column would say the same on every row, and the peptides get the room)
     const specs = Object.entries(compactColumns).flatMap(([id, narrow]) => {
+      if (id === 'sample' && m.samples.length <= 1) return []
       const spec = level.specs.find((s) => s.id === id)
       return spec ? [{ ...spec, ...narrow }] : []
     })
-    return tableColumns(specs, (id) => (id === 'precursorError' ? { cell: (i: number) => signed(ps.precursorErrorPpm[i], 1) } : cells(id)))
+    return tableColumns(specs, (id) =>
+      id === 'precursorError'
+        ? { cell: (i: number) => signed(ps.precursorErrorPpm[i], 1) }
+        : id === 'qValue'
+          ? { cell: (i: number) => formatQCompact(ps.qValue[i]), cellTitle: (i: number) => String(ps.qValue[i]) }
+          : cells(id),
+    )
   })
 
   let table = $state<DataTable | null>(null)

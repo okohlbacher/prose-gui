@@ -102,10 +102,13 @@
 
 <div data-testid="psm-features">
   <h3 class="mb-1.5 text-[13px] font-semibold">PSM features</h3>
+  <!-- one name and value per line, flowing into columns as the card gets wider -->
   <dl class="kv">
     {#each items as item (item.name)}
-      <dt title={item.title}>{item.name}</dt>
-      <dd title={item.title}>{item.value}{#if item.note}<span class="sr-only"> ({item.note})</span>{/if}</dd>
+      <div class="kv-row">
+        <dt title={item.title}>{item.name}</dt>
+        <dd title={item.title}>{item.value}{#if item.note}<span class="sr-only"> ({item.note})</span>{/if}</dd>
+      </div>
     {/each}
   </dl>
   {#if alsoIn.length > 0 || otherForms.psms > 0}
@@ -119,8 +122,10 @@
       <summary class="cursor-pointer text-muted-foreground hover:text-foreground">All {names.length} features</summary>
       <dl class="kv mt-1.5">
         {#each names as name, j (name)}
-          <dt>{name}</dt>
-          <dd>{number(ps.features[row * names.length + j], 4)}</dd>
+          <div class="kv-row">
+            <dt>{name}</dt>
+            <dd>{number(ps.features[row * names.length + j], 4)}</dd>
+          </div>
         {/each}
       </dl>
     </details>
@@ -129,10 +134,16 @@
 
 <style>
   .kv {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 3px 12px;
+    columns: 240px;
+    column-gap: 32px;
     font-size: 12px;
+  }
+  .kv-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 1.5px 0;
+    break-inside: avoid;
   }
   .kv dt {
     color: var(--color-muted-foreground);

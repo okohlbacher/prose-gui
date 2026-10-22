@@ -1,8 +1,6 @@
-// Geometry of the PSM view's two charts (the mirror spectrum and the fragment mass errors), drawn
+// Geometry of the PSM view's chart (the mirror spectrum with the fragment mass errors under it), drawn
 // as SVG by hand: scales, round ticks, sticks as one path per series (a spectrum can have thousands
-// of peaks), the tolerance band, and the placement of peak labels without overlaps.
-
-import type { Tolerance } from './psm'
+// of peaks), and the placement of peak labels without overlaps.
 
 /** A linear map from `domain` to `range`. */
 export function scale([d0, d1]: [number, number], [r0, r1]: [number, number]): (v: number) => number {
@@ -88,33 +86,6 @@ export function stickGroups(
 export function clipMarks(xs: number[], y: number, up: boolean): string {
   const tip = up ? y - 5 : y + 5
   return xs.map((x) => `M${px(x - 3)} ${px(y)}L${px(x)} ${px(tip)}L${px(x + 3)} ${px(y)}Z`).join('')
-}
-
-/**
- * The band of ±`tolerance` around 0 ppm over the m/z range: a rectangle for ppm; for Da a band that
- * narrows with m/z (a fixed Da tolerance is more ppm at low m/z), sampled at `steps` points and clipped
- * to `clip` (the ppm range of the plot).
- */
-export function bandPath(
-  tolerance: Tolerance,
-  [mz0, mz1]: [number, number],
-  x: (mz: number) => number,
-  y: (ppm: number) => number,
-  steps: number,
-  clip: [number, number] = [-Infinity, Infinity],
-): string {
-  const limit = (ppm: number) => Math.min(clip[1], Math.max(clip[0], ppm))
-  if (tolerance.unit === 'ppm') {
-    const t = limit(tolerance.value)
-    const b = limit(-tolerance.value)
-    return `M${px(x(mz0))} ${px(y(t))}H${px(x(mz1))}V${px(y(b))}H${px(x(mz0))}Z`
-  }
-  const n = Math.max(2, steps)
-  const at = Array.from({ length: n }, (_, i) => mz0 + ((mz1 - mz0) * i) / (n - 1))
-  const ppm = (mz: number) => (tolerance.value / Math.max(mz, 1e-6)) * 1e6
-  const upper = at.map((mz, i) => `${i === 0 ? 'M' : 'L'}${px(x(mz))} ${px(y(limit(ppm(mz))))}`)
-  const lower = at.reverse().map((mz) => `L${px(x(mz))} ${px(y(limit(-ppm(mz))))}`)
-  return `${upper.join('')}${lower.join('')}Z`
 }
 
 /**
