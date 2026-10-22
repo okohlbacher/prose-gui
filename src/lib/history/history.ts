@@ -5,7 +5,7 @@
 // The folder is the shim's (docs/parity.md for the tool's outputs); History adds
 //
 //   search.json     the record below, written as soon as ProSE has ended (before the results are read,
-//                   from the request and the footer of qpx/quantms.psm.parquet): a folder with it is a
+//                   from the request and the QPX run view qpx/quantms.run.parquet): a folder with it is a
 //                   saved search
 //   proteins.fasta  every protein of the result's protein table (accession, description, sequence;
 //                   generated decoys as searched), written once the results are read, so that the search

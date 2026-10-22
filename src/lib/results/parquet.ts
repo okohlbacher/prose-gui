@@ -4,8 +4,8 @@
 // large search (150,000 PSMs with ~30 scores and hundreds of peaks each) that is millions of objects and
 // seconds of garbage collection. The reader needs the columns, not the objects, so `readLeaf` decodes one
 // leaf column with hyparquet's page decoders (its exported `src/*.js` modules) and keeps it flat: one value
-// per row, or per element of a list of one level, with the offsets of the rows' lists. Lists of lists
-// (QPX `modifications`) are read with hyparquet as objects (`readObjects`), which is cheap for them.
+// per row, or per element of a list (and of a list of lists, as QPX `modifications` positions), with the offsets
+// of the rows' lists. Only small views (run, provenance) are read with hyparquet as objects (`readObjects`).
 
 import { parquetMetadata, parquetReadObjects, parquetSchema } from 'hyparquet'
 import type { Compressors, DecodedArray, FileMetaData, SchemaTree } from 'hyparquet'
@@ -129,6 +129,11 @@ export interface Leaf<T> {
   values: T
   /** mode 'codes': the strings of the codes */
   dictionary?: string[]
+  /**
+   * A leaf in a list of lists: `offsets` are the rows' ranges of the outer elements, and the inner elements (the
+   * values) of outer element e are offsets2[e] .. offsets2[e + 1]
+   */
+  offsets2?: Uint32Array
 }
 
 /**
@@ -139,10 +144,13 @@ export type LeafMode = 'values' | 'codes'
 
 type Values = Float64Array | Float32Array | Int32Array | unknown[]
 
-/** The numbers of a leaf: FLOAT as Float32Array, DOUBLE and INT32 as Float64Array (NaN: absent); else null. */
+/**
+ * The numbers of a leaf: FLOAT as Float32Array, DOUBLE, INT32 and INT64 as Float64Array (NaN: absent; INT64 as the
+ * nearest double: identities compare, but large values are not exact); else null.
+ */
 function makeNumbers(type: string | undefined, length: number): Float64Array | Float32Array | null {
   if (type === 'FLOAT') return new Float32Array(length).fill(NaN)
-  if (type === 'DOUBLE' || type === 'INT32') return new Float64Array(length).fill(NaN)
+  if (type === 'DOUBLE' || type === 'INT32' || type === 'INT64') return new Float64Array(length).fill(NaN)
   return null
 }
 
@@ -156,17 +164,21 @@ export function readLeaf<T extends Values = Values>(file: ParquetFile, path: str
   const element = schemaPath[schemaPath.length - 1].element
   let maxDef = 0
   let maxRep = 0
-  let elementDef = 0 // the definition level at which a list element exists
+  // the definition levels at which an element of the outer list (elementDef1) and of the inner one (elementDef) exist
+  let elementDef1 = 0
+  let elementDef = 0
   for (const node of schemaPath.slice(1)) {
     const repetition = node.element.repetition_type
     if (repetition !== 'REQUIRED') maxDef++
     if (repetition === 'REPEATED') {
       maxRep++
+      if (maxRep === 1) elementDef1 = maxDef
       elementDef = maxDef
     }
   }
-  if (maxRep > 1) throw new Error(`readLeaf: ${path.join('.')} is a list of lists`)
-  const listed = maxRep === 1
+  if (maxRep > 2) throw new Error(`readLeaf: ${path.join('.')} is nested deeper than a list of lists`)
+  const listed = maxRep >= 1
+  const nested = maxRep === 2
 
   const key = path.join('\u0000')
   const rowGroups = groups ? groups.map((g) => file.metadata.row_groups[g]) : file.metadata.row_groups
@@ -198,8 +210,11 @@ export function readLeaf<T extends Values = Values>(file: ParquetFile, path: str
   let o = 0
   const offsets = listed ? new Uint32Array(rows + 1) : null
   const nullList = listed ? new Uint8Array(rows) : null
+  // a list of lists: the outer elements' ranges of the inner elements
+  const offsets2 = nested ? new Uint32Array(entries + 1) : null
   let row = 0
-  let count = 0 // elements (list) so far
+  let count = 0 // (inner) elements so far
+  let count1 = 0 // outer elements so far (a list of lists)
 
   for (const meta of chunks) {
     const decoder = {
@@ -250,12 +265,33 @@ export function readLeaf<T extends Values = Values>(file: ParquetFile, path: str
         for (let k = 0; k < indices.length; k++) data[k] = (dictionary as Int32Array)[indices[k] as number]
       } else if (asCodes) data = Int32Array.from(convert(page.dataPage, decoder) as string[], code)
       else data = convertWithDictionary(page.dataPage, dictionary, encoding as Parameters<typeof convertWithDictionary>[2], decoder)
+      // (INT64 decodes as bigints: as doubles into the Float64Array)
+      if (numbers && element.type === 'INT64') data = Float64Array.from(data as ArrayLike<bigint>, (b) => Number(b))
       const def = page.definitionLevels ?? []
       const rep = page.repetitionLevels ?? []
       const n = Math.max(def.length, rep.length, data.length)
       const allDefined = def.length === 0
       let v = 0
-      if (listed) {
+      if (nested) {
+        for (let k = 0; k < n; k++) {
+          const d = allDefined ? maxDef : def[k]
+          const r = rep[k] ?? 0
+          if (r === 0) {
+            offsets![row] = count1
+            if (d < elementDef1 - 1) nullList![row] = 1
+            row++
+          }
+          if (r <= 1 && d >= elementDef1) offsets2![count1++] = count
+          if (d >= elementDef) {
+            if (numbers) {
+              if (d === maxDef) numbers[count] = data[v++] as number
+            } else {
+              others[o++] = d === maxDef ? data[v++] : null
+            }
+            count++
+          }
+        }
+      } else if (listed) {
         for (let k = 0; k < n; k++) {
           const d = allDefined ? maxDef : def[k]
           if (rep[k] === 0) {
@@ -281,10 +317,18 @@ export function readLeaf<T extends Values = Values>(file: ParquetFile, path: str
     }
   }
   if (row !== rows) throw new Error(`readLeaf: ${path.join('.')} has ${row} rows, the file ${rows}`)
-  if (offsets) offsets[rows] = count
+  if (offsets) offsets[rows] = nested ? count1 : count
+  if (offsets2) offsets2[count1] = count
   others.length = o
   const values = numbers ? (listed ? numbers.subarray(0, count) : numbers) : others
-  return { rows, offsets, nullList, values: values as T, dictionary: asCodes ? strings : undefined }
+  return {
+    rows,
+    offsets,
+    nullList,
+    offsets2: offsets2 ? offsets2.subarray(0, count1 + 1) : undefined,
+    values: values as T,
+    dictionary: asCodes ? strings : undefined,
+  }
 }
 
 /** The leaves `fields` of the list of structs `column` (`column.list.element.<field>`). */

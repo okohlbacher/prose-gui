@@ -6,8 +6,9 @@
 // quantms.psm.parquet (the PSM rows of all inputs, in input order, with the optional columns but without the
 // spectra), quantms.run.parquet (one row per input: its statistics and its rows in quantms.psm.parquet),
 // quantms.provenance.parquet (the steps of the search with their parameters), quantms.pg.parquet (the protein
-// groups: of several inputs the pooled inference), and <stem>.psm.parquet of each input (the same rows with
-// the peaks and PeptDeep's prediction, read by row group when a PSM is opened); mods/ (open search: the
+// groups: of several inputs the pooled inference), and of each input <stem>.psm.parquet (the same rows with
+// PeptDeep's prediction) and <stem>.mz.parquet (the QPX mz view of the spectra of its PSMs, filtered peaks), read
+// by row group when a PSM is opened; mods/ (open search: the
 // tables the provenance names), and database.fasta (with the contaminants). Without contaminants ProSE
 // searched the user's FASTA: the reader asks for the path the provenance records (`database_file`), an
 // absolute path, which the `files` callback has to serve too. The protein sequences and descriptions come
@@ -41,7 +42,6 @@ import {
   openParquet,
   partOfParquet,
   readLeaf,
-  readObjects,
   readStructList,
   startZstd,
   type LeafMode,
@@ -106,13 +106,18 @@ export interface PeakFilter {
 }
 
 /**
- * The peaks and PeptDeep's prediction of the PSMs of a row group of an input's psm file, as the web app's
- * StoredSpectra and PredictedSpectra of those rows: the opened PSM is their row `row`.
+ * The peaks (the input's mz view) and PeptDeep's prediction (its psm file) of the PSMs of a row group, as the web
+ * app's StoredSpectra and PredictedSpectra of those rows.
  */
 export interface LoadedSpectra {
+  /** the spectra of a row group of the input's mz view; the PSM's is spectrumRow (−1: none) */
   spectra: StoredSpectra
+  spectrumRow: number
+  /** the predictions of a row group of the input's psm file; the PSM's is row */
   predicted: PredictedSpectra
   row: number
+  /** the peak filter ProSE applied to the input's spectra (the PSM view says so; its mz view's footer); null: every peak */
+  peakFilter: PeakFilter | null
 }
 
 /** The peaks and predictions of the PSM rows, read when a PSM is opened. */
@@ -135,8 +140,6 @@ export interface SearchResult {
    * write proteins.fasta for this search (it does when this is false: history.ts, `openSearch`).
    */
   proteinsSaved: boolean
-  /** The peak filter ProSE applied to the stored spectra (the PSM view says so); null or absent: every peak. */
-  peakFilter?: PeakFilter | null
 }
 
 /** Runs `read` on the file `name`; an error names the file. */
@@ -175,8 +178,10 @@ const GROUPS = 'qpx/quantms.pg.parquet'
 /** The columns -qpx_extended adds to every QPX psm view (besides the scores). */
 const EXTENDED_COLUMNS = ['spectrum_reference', 'isotope_error', 'protein_mappings']
 
-/** The columns of the spectra, in the per-input psm files only. */
-const SPECTRUM_COLUMNS = ['peak_mz_array', 'peak_intensity_array', 'predicted_ion_type_array', 'predicted_mz_array', 'predicted_intensity_array']
+/** The columns of the predictions, in the per-input psm files only. */
+const PREDICTION_COLUMNS = ['predicted_ion_type_array', 'predicted_mz_array', 'predicted_intensity_array']
+/** The columns of the mz view the PSM view reads. */
+const PEAK_COLUMNS = ['id', 'mz', 'intensity']
 
 const first = (...values: number[]) => values.find((v) => !Number.isNaN(v)) ?? NaN
 
@@ -202,7 +207,10 @@ interface PsmRows {
   decoy: unknown[]
   /** the scores: names as codes into `names` */
   scores: { offsets: Uint32Array; name: Int32Array; names: string[]; value: Float64Array }
-  modifications: (QpxModification[] | null)[] | null
+  /** QPX modifications, as leaves: null if no row has one */
+  modifications: Modifications | null
+  /** QPX psm_id (as doubles): the identity of a row in the input's own psm file */
+  psmId: Float64Array
   nativeId: unknown[]
   rt: ArrayLike<number>
   observedMz: ArrayLike<number>
@@ -213,10 +221,16 @@ interface PsmRows {
   evidence: { offsets: Uint32Array; accession: unknown[]; aa_before: unknown[]; aa_after: unknown[]; start: Float64Array; end: Float64Array }
 }
 
-interface QpxModification {
-  name: string
-  accession: string | null
-  positions: { position: number }[]
+/** The QPX modifications of the rows: row r has the modifications offsets[r] .. offsets[r + 1], modification m the
+ * positions positionOffsets[m] .. positionOffsets[m + 1] */
+interface Modifications {
+  offsets: Uint32Array
+  name: Int32Array
+  names: string[]
+  accession: Int32Array
+  accessions: string[]
+  positionOffsets: Uint32Array
+  position: Float64Array
 }
 
 function listLeaf<T>(file: ParquetFile, column: string, mode: LeafMode = 'values', groups?: number[]): ListLeaf<T> & { dictionary?: string[] } {
@@ -236,9 +250,24 @@ async function readRows(name: string, bytes: Uint8Array): Promise<PsmRows> {
     }
     const scores = readStructList(qpx, 'additional_scores', ['score_name', 'score_value'], { score_name: 'codes' })
     const evidence = readStructList(qpx, 'protein_mappings', ['accession', 'aa_before', 'aa_after', 'start', 'end'])
-    // the modifications (a list of lists): only if some row has any
-    const modLeaf = readLeaf(qpx, ['modifications', 'list', 'element', 'name'])
+    // the modifications (a list of structs with a list): as leaves, without an object per row; only if some row has any
+    const modLeaf = readLeaf(qpx, ['modifications', 'list', 'element', 'name'], 'codes')
     const modified = modLeaf.offsets![qpx.rows] > 0
+    let modifications: Modifications | null = null
+    if (modified) {
+      const accession = readLeaf(qpx, ['modifications', 'list', 'element', 'accession'], 'codes')
+      const position = readLeaf(qpx, ['modifications', 'list', 'element', 'positions', 'list', 'element', 'position'])
+      modifications = {
+        offsets: modLeaf.offsets!,
+        name: modLeaf.values as Int32Array,
+        names: modLeaf.dictionary ?? [],
+        accession: accession.values as Int32Array,
+        accessions: accession.dictionary ?? [],
+        positionOffsets: position.offsets2!,
+        position: position.values as Float64Array,
+      }
+      if (position.offsets![qpx.rows] !== modLeaf.offsets![qpx.rows]) throw new Error('the modifications and their positions do not agree')
+    }
     return {
       count: qpx.rows,
       footer: footerOf(qpx),
@@ -252,9 +281,8 @@ async function readRows(name: string, bytes: Uint8Array): Promise<PsmRows> {
         names: scores.dictionaries.score_name ?? [],
         value: scores.score_value as Float64Array,
       },
-      modifications: modified
-        ? (await readObjects(qpx, ['modifications'])).map((r) => (r.modifications as QpxModification[] | null) ?? null)
-        : null,
+      modifications,
+      psmId: flat<Float64Array>(qpx, 'psm_id'),
       nativeId: flat<unknown[]>(qpx, 'spectrum_reference'),
       rt: flat<Float32Array>(qpx, 'rt'),
       observedMz: flat<Float32Array>(qpx, 'observed_mz'),
@@ -669,7 +697,7 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
       }
 
       // its peptide, unique by the OpenMS string
-      const mods = modificationsOf(f.modifications?.[r] ?? null, sequence.length)
+      const mods = modificationsOf(f.modifications, r, sequence.length)
       const openms = openmsString(sequence, mods)
       let k = peptideRow.get(openms)
       if (k !== undefined) {
@@ -786,14 +814,11 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   //------------------------------------------------------------------------------
   // Spectra and predictions: read from the inputs' psm files when a PSM is opened
 
-  const footer = rows?.footer ?? new Map<string, string>()
-  const top = Number(footer.get('prose_peak_top') ?? 0)
-  const peakFilter = top > 0 ? { top, window: Number(footer.get('prose_peak_window') ?? 0) } : null
   const spectra = psmSpectra(
     files,
-    inputs.map((input) => `qpx/${input.stem}.psm.parquet`),
+    inputs.map((input) => input.stem),
     from,
-    mz,
+    { nativeId, psmId: rows?.psmId ?? new Float64Array(0), precursorMz: mz },
     meta.runs.some((r) => r.prediction_nce !== null),
   )
 
@@ -812,148 +837,265 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
     }
   }
   const summary = toSummary(meta, paths, modificationAnalysis)
-  return { summary, tables, spectra, warnings, proteinsSaved, peakFilter }
+  return { summary, tables, spectra, warnings, proteinsSaved }
 }
 
-/** The modifications of a QPX row, by position (−1 N-terminal, the length C-terminal, else 0-based). */
-function modificationsOf(mods: QpxModification[] | null, length: number): Modification[] {
-  if (!mods || mods.length === 0) return []
+/** The modifications of QPX row `r`, by position (−1 N-terminal, the length C-terminal, else 0-based). */
+function modificationsOf(mods: Modifications | null, r: number, length: number): Modification[] {
+  if (!mods || mods.offsets[r] === mods.offsets[r + 1]) return []
   const out: Modification[] = []
-  for (const m of mods) {
-    const accession = /^UNIMOD:(\d+)$/i.exec(m.accession ?? '')
+  for (let m = mods.offsets[r]; m < mods.offsets[r + 1]; m++) {
+    const name = mods.name[m] < 0 ? '' : mods.names[mods.name[m]]
+    const accession = /^UNIMOD:(\d+)$/i.exec(mods.accession[m] < 0 ? '' : mods.accessions[mods.accession[m]])
     const unimod = accession ? Number(accession[1]) : -1
-    for (const { position } of m.positions ?? []) {
-      out.push({
-        position: position === 0 ? -1 : position === length + 1 ? length : position - 1,
-        name: m.name,
-        unimod,
-        mass: modificationMass(m.name, unimod),
-      })
+    const mass = modificationMass(name, unimod)
+    for (let k = mods.positionOffsets[m]; k < mods.positionOffsets[m + 1]; k++) {
+      const position = mods.position[k]
+      out.push({ position: position === 0 ? -1 : position === length + 1 ? length : position - 1, name, unimod, mass })
     }
   }
   return out.sort((a, b) => a.position - b.position)
 }
 
 //------------------------------------------------------------------------------
-// The spectra of the PSMs: by row group of the inputs' psm files
+// The spectra of the PSMs: by row group of the inputs' psm and mz files
 
-/** The row groups of an input's psm file that the PSM view keeps decoded (the last ones opened). */
+/** The row groups of an input's files that the PSM view keeps decoded (the last ones opened). */
 const CACHED_GROUPS = 4
 
-/**
- * The PsmSpectra of the PSM rows: the rows of input k are from[k] .. from[k + 1] of the PSM rows, and rows of
- * its psm file `names[k]`; `precursorMz` the precursor m/z of the PSM rows.
- */
-function psmSpectra(files: SearchFiles, names: string[], from: number[], precursorMz: Float64Array, predictions: boolean): PsmSpectra {
-  const footers = new Map<number, Promise<FileMetaData>>()
-  const cache = new Map<string, Promise<LoadedSpectra>>()
+/** The PSM rows' values that the spectra are checked against. */
+interface RowIdentity {
+  /** the native ID of each PSM row (the mz view's `id` of its spectrum) */
+  nativeId: string[]
+  /** the psm_id of each PSM row (in the input's psm file the same) */
+  psmId: Float64Array
+  /** the precursor m/z of each PSM row (the spectrum's, when the mz view has none) */
+  precursorMz: Float64Array
+}
 
-  /** The metadata of input k's psm file (its footer, read once). */
-  const metadataOf = (k: number) => {
-    let p = footers.get(k)
+/** A file's metadata and where its rows are: row group g has the rows starts[g] .. starts[g + 1]. */
+interface Layout {
+  metadata: FileMetaData
+  starts: number[]
+}
+
+/** The row group of `row` and its row in it. */
+function groupOf(layout: Layout, row: number): [number, number] {
+  let g = 0
+  while (g + 1 < layout.starts.length - 1 && row >= layout.starts[g + 1]) g++
+  return [g, row - layout.starts[g]]
+}
+
+/**
+ * The PsmSpectra of the PSM rows: the rows of input k are from[k] .. from[k + 1] of the PSM rows and the rows of
+ * its psm file `qpx/<stems[k]>.psm.parquet`, in order; its spectra are the rows of `qpx/<stems[k]>.mz.parquet`, one per
+ * spectrum in the order of its first PSM (else found by their ids).
+ */
+function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: RowIdentity, predictions: boolean): PsmSpectra {
+  const layouts = new Map<string, Promise<Layout>>()
+  const predictionCache = new Map<string, Promise<{ psmId: Float64Array; predicted: PredictedSpectra }>>()
+  const peakCache = new Map<string, Promise<{ id: unknown[]; spectra: StoredSpectra }>>()
+  const mzRows = new Map<number, Promise<Int32Array>>()
+  const psmName = (k: number) => `qpx/${stems[k]}.psm.parquet`
+  const mzName = (k: number) => `qpx/${stems[k]}.mz.parquet`
+
+  /** A value made once, kept until it fails. */
+  const once = <K, T>(map: Map<K, Promise<T>>, key: K, make: () => Promise<T>): Promise<T> => {
+    let p = map.get(key)
     if (!p) {
-      const name = names[k]
-      p = inFile(name, async () => {
-        let metadata = metadataOfTail(await files(name, { tail: 1 << 16 }))
-        if (typeof metadata === 'number') metadata = metadataOfTail(await files(name, { tail: metadata }))
-        if (typeof metadata === 'number') throw new Error('its footer cannot be read')
-        const rows = Number(metadata.num_rows)
-        if (rows !== from[k + 1] - from[k]) throw new Error(`${rows} rows, but ${MERGED_PSMS} has ${from[k + 1] - from[k]} of this input`)
-        return metadata
-      })
-      p.catch(() => footers.delete(k))
-      footers.set(k, p)
+      p = make()
+      p.catch(() => map.delete(key))
+      map.set(key, p)
     }
     return p
   }
 
-  /** The spectra of row group g of input k's psm file (whose first row is PSM row `first`). */
-  const loadGroup = (k: number, metadata: FileMetaData, g: number, firstRow: number): Promise<LoadedSpectra> =>
-    inFile(names[k], async () => {
-      const group = metadata.row_groups[g]
-      const ranges = group.columns
-        .filter((c) => c.meta_data && SPECTRUM_COLUMNS.includes(c.meta_data.path_in_schema[0]))
-        .map((c) => chunkRange(c.meta_data!))
-      if (ranges.length < SPECTRUM_COLUMNS.length) throw new Error("it has not the spectrum columns of ProSE's -qpx_extended")
-      const start = Math.min(...ranges.map((r) => r.start))
-      const end = Math.max(...ranges.map((r) => r.end))
-      const bytes = await files(names[k], { offset: start, length: end - start })
-      if (bytes.byteLength !== end - start) throw new Error(`${bytes.byteLength} bytes at ${start}, expected ${end - start}`)
-      const file = partOfParquet(metadata, bytes, start)
-      const groups = [g]
-      const peakMz = listLeaf<Float32Array>(file, 'peak_mz_array', 'values', groups)
-      const peakIntensity = listLeaf<Float32Array>(file, 'peak_intensity_array', 'values', groups)
-      const ion = listLeaf<Int32Array>(file, 'predicted_ion_type_array', 'codes', groups)
-      const ionNames = (ion.dictionary ?? []).map(webIonName)
-      const predictedMz = listLeaf<Float32Array>(file, 'predicted_mz_array', 'values', groups)
-      const predictedIntensity = listLeaf<Float32Array>(file, 'predicted_intensity_array', 'values', groups)
-      const n = Number(group.num_rows)
+  /** The layout of the file `name` (its footer, read once). */
+  const layoutOf = (name: string) =>
+    once(layouts, name, () =>
+      inFile(name, async () => {
+        let metadata = metadataOfTail(await files(name, { tail: 1 << 16 }))
+        if (typeof metadata === 'number') metadata = metadataOfTail(await files(name, { tail: metadata }))
+        if (typeof metadata === 'number') throw new Error('its footer cannot be read')
+        const starts = [0]
+        for (const g of metadata.row_groups) starts.push(starts[starts.length - 1] + Number(g.num_rows))
+        return { metadata, starts }
+      }),
+    )
 
-      // StoredSpectra and PredictedSpectra of the n rows (one spectrum per row with peaks)
-      let spectrumCount = 0
-      for (let r = 0; r < n; r++) if (!peakMz.nullList[r]) spectrumCount++
-      const psmSpectrum = new Int32Array(n).fill(-1)
-      const offsets = new Uint32Array(spectrumCount + 1)
-      const precursor = new Float64Array(spectrumCount)
-      let s = 0
-      for (let r = 0; r < n; r++) {
-        if (peakMz.nullList[r]) continue
-        psmSpectrum[r] = s
-        offsets[s] = peakMz.offsets[r]
-        if (peakIntensity.offsets[r] !== peakMz.offsets[r] || peakIntensity.offsets[r + 1] !== peakMz.offsets[r + 1]) {
-          throw new Error(`row ${r} of row group ${g} has other numbers of peak m/z and intensities`)
+  /** The columns `columns` of row group g of the file `name` (one byte range for all of them). */
+  const groupFile = async (name: string, layout: Layout, g: number, columns: string[]) => {
+    const ranges = layout.metadata.row_groups[g].columns
+      .filter((c) => c.meta_data && columns.includes(c.meta_data.path_in_schema[0]))
+      .map((c) => chunkRange(c.meta_data!))
+    const present = new Set(layout.metadata.row_groups[g].columns.map((c) => c.meta_data?.path_in_schema[0]))
+    const missing = columns.filter((c) => !present.has(c))
+    if (missing.length > 0) throw new Error(`it has not the columns of ProSE's -qpx_extended (${missing.join(', ')})`)
+    const start = Math.min(...ranges.map((r) => r.start))
+    const end = Math.max(...ranges.map((r) => r.end))
+    const bytes = await files(name, { offset: start, length: end - start })
+    if (bytes.byteLength !== end - start) throw new Error(`${bytes.byteLength} bytes at ${start}, expected ${end - start}`)
+    return partOfParquet(layout.metadata, bytes, start)
+  }
+
+  /** The predictions of row group g of input k's psm file, and its psm_id. */
+  const predictionsOf = (k: number, layout: Layout, g: number) =>
+    once(predictionCache, `${k}/${g}`, () =>
+      inFile(psmName(k), async () => {
+        const file = await groupFile(psmName(k), layout, g, ['psm_id', ...PREDICTION_COLUMNS])
+        const groups = [g]
+        const psmId = readLeaf(file, ['psm_id'], 'values', groups).values as Float64Array
+        const ion = listLeaf<Int32Array>(file, 'predicted_ion_type_array', 'codes', groups)
+        const ionNames = (ion.dictionary ?? []).map(webIonName)
+        const predictedMz = listLeaf<Float32Array>(file, 'predicted_mz_array', 'values', groups)
+        const predictedIntensity = listLeaf<Float32Array>(file, 'predicted_intensity_array', 'values', groups)
+        const ions = Array.from(ion.values, (c) => (c < 0 ? '' : ionNames[c]))
+        if (predictedMz.values.length !== ions.length || predictedIntensity.values.length !== ions.length) {
+          throw new Error(`row group ${g} has other numbers of predicted ions, m/z and intensities`)
         }
-        precursor[s] = precursorMz[firstRow + r]
-        s++
-        offsets[s] = peakMz.offsets[r + 1]
-      }
-      // (a row without a prediction has an empty range: its list is null)
-      const psmOffsets = ion.offsets
-      const ions = Array.from(ion.values, (c) => (c < 0 ? '' : ionNames[c]))
-      if (predictedMz.values.length !== ions.length || predictedIntensity.values.length !== ions.length) {
-        throw new Error(`row group ${g} has other numbers of predicted ions, m/z and intensities`)
-      }
-      return {
-        spectra: {
-          psmSpectrum,
-          offsets,
+        // (a row without a prediction has an empty range: its list is null)
+        const predicted: PredictedSpectra = { psmOffsets: ion.offsets, ion: ions, mz: predictedMz.values, intensity: predictedIntensity.values }
+        return { psmId, predicted }
+      }),
+    )
+
+  /** The spectra of row group g of input k's mz view: StoredSpectra of its rows (spectrum s = row s), their ids. */
+  const peaksOf = (k: number, layout: Layout, g: number) =>
+    once(peakCache, `${k}/${g}`, () =>
+      inFile(mzName(k), async () => {
+        const file = await groupFile(mzName(k), layout, g, [...PEAK_COLUMNS, 'precursors'])
+        const groups = [g]
+        const id = readLeaf(file, ['id'], 'values', groups).values as unknown[]
+        const peakMz = listLeaf<Float32Array>(file, 'mz', 'values', groups)
+        const peakIntensity = listLeaf<Float32Array>(file, 'intensity', 'values', groups)
+        const precursor = readLeaf(file, ['precursors', 'list', 'element', 'selected_ion_mz'], 'values', groups)
+        const n = id.length
+        const precursorMz = new Float64Array(n).fill(NaN)
+        for (let r = 0; r < n; r++) {
+          if (peakIntensity.offsets[r] !== peakMz.offsets[r] || peakIntensity.offsets[r + 1] !== peakMz.offsets[r + 1]) {
+            throw new Error(`row ${r} of row group ${g} has other numbers of peak m/z and intensities`)
+          }
+          if (precursor.offsets![r + 1] > precursor.offsets![r]) precursorMz[r] = (precursor.values as Float32Array)[precursor.offsets![r]]
+        }
+        const spectra: StoredSpectra = {
+          psmSpectrum: Int32Array.from({ length: n }, (_, r) => r),
+          offsets: peakMz.offsets,
           mz: peakMz.values,
           intensity: peakIntensity.values,
-          precursorMz: precursor,
+          precursorMz,
           // not read: the web app took it as a fallback NCE for its own predictions; these are ProSE's
-          collisionEnergy: new Float32Array(spectrumCount).fill(NaN),
-        },
-        predicted: { psmOffsets, ion: ions, mz: predictedMz.values, intensity: predictedIntensity.values },
-        row: 0,
+          collisionEnergy: new Float32Array(n).fill(NaN),
+        }
+        return { id, spectra }
+      }),
+    )
+
+  /**
+   * The mz row of each PSM row of input k (−1: none): the order of each spectrum's first PSM; if the mz view has another
+   * number of rows (a PSM's spectrum not found), by the ids of all its rows.
+   */
+  const mzRowsOf = (k: number, layout: Layout) =>
+    once(mzRows, k, async () => {
+      const n = from[k + 1] - from[k]
+      const out = new Int32Array(n).fill(-1)
+      const first = new Map<string, number>()
+      for (let r = 0; r < n; r++) {
+        const id = rows.nativeId[from[k] + r]
+        let m = first.get(id)
+        if (m === undefined) {
+          m = first.size
+          first.set(id, m)
+        }
+        out[r] = m
       }
+      const total = layout.starts[layout.starts.length - 1]
+      if (total === first.size) return out
+      // by the ids
+      const rowOf = new Map<string, number>()
+      for (let g = 0; g < layout.metadata.row_groups.length; g++) {
+        const file = await inFile(mzName(k), () => groupFile(mzName(k), layout, g, ['id']))
+        const ids = readLeaf(file, ['id'], 'values', [g]).values as unknown[]
+        ids.forEach((id, r) => rowOf.set(String(id), layout.starts[g] + r))
+      }
+      for (let r = 0; r < n; r++) out[r] = rowOf.get(rows.nativeId[from[k] + r]) ?? -1
+      return out
     })
+
+  /** The peak filter of input k's mz view (its footer). */
+  const filterOf = (layout: Layout): PeakFilter | null => {
+    const footer = new Map((layout.metadata.key_value_metadata ?? []).map((kv) => [kv.key, kv.value ?? '']))
+    const top = Number(footer.get('prose_peak_top') ?? 0)
+    return top > 0 ? { top, window: Number(footer.get('prose_peak_window') ?? 0) } : null
+  }
+
+  /** Keeps the last CACHED_GROUPS row groups of each kind. */
+  const trim = () => {
+    for (const cache of [predictionCache, peakCache] as Map<string, unknown>[]) {
+      const keys = [...cache.keys()]
+      for (const key of keys.slice(0, Math.max(0, keys.length - CACHED_GROUPS))) cache.delete(key)
+    }
+  }
+  /** Marks `key` of `cache` as used last. */
+  const touch = <T>(cache: Map<string, T>, key: string) => {
+    const p = cache.get(key)
+    if (p) {
+      cache.delete(key)
+      cache.set(key, p)
+    }
+  }
+
+  const noSpectra: StoredSpectra = {
+    psmSpectrum: new Int32Array(0),
+    offsets: new Uint32Array(1),
+    mz: new Float32Array(0),
+    intensity: new Float32Array(0),
+    precursorMz: new Float64Array(0),
+    collisionEnergy: new Float32Array(0),
+  }
 
   return {
     predictions,
     async load(row: number): Promise<LoadedSpectra> {
       let k = 0
       while (k + 1 < from.length && row >= from[k + 1]) k++
-      if (!(row >= 0) || k >= names.length) throw new Error(`There is no PSM row ${row}.`)
-      const metadata = await metadataOf(k)
-      // its row group
-      let local = row - from[k]
-      let g = 0
-      for (; g < metadata.row_groups.length; g++) {
-        const n = Number(metadata.row_groups[g].num_rows)
-        if (local < n) break
-        local -= n
+      if (!(row >= 0) || k >= stems.length) throw new Error(`There is no PSM row ${row}.`)
+      const local = row - from[k]
+
+      // the prediction: the same row of the input's psm file (whose psm_id has to be the row's)
+      const psmLayout = await layoutOf(psmName(k))
+      if (psmLayout.starts[psmLayout.starts.length - 1] !== from[k + 1] - from[k]) {
+        throw new Error(`${psmName(k)}: ${psmLayout.starts[psmLayout.starts.length - 1]} rows, but ${MERGED_PSMS} has ${from[k + 1] - from[k]} of this input`)
       }
-      if (g >= metadata.row_groups.length) throw new Error(`${names[k]}: no row ${row - from[k]}`)
-      const key = `${k}/${g}`
-      let p = cache.get(key)
-      if (p) cache.delete(key) // (re-inserted below: the most recent last)
-      else {
-        p = loadGroup(k, metadata, g, row - local)
-        p.catch(() => cache.delete(key))
+      const [g, at] = groupOf(psmLayout, local)
+      touch(predictionCache, `${k}/${g}`)
+      const { psmId, predicted } = await predictionsOf(k, psmLayout, g)
+      if (psmId[at] !== rows.psmId[row]) throw new Error(`${psmName(k)}: its row ${local} is another PSM than the search's (psm_id)`)
+
+      // the spectrum: its row in the input's mz view (whose id has to be the PSM's native ID); none without the view
+      let mzLayout: Layout | null = null
+      try {
+        mzLayout = await layoutOf(mzName(k))
+      } catch (e) {
+        if (!isNotFound((e as { cause?: unknown }).cause ?? e)) throw e
       }
-      cache.set(key, p)
-      while (cache.size > CACHED_GROUPS) cache.delete(cache.keys().next().value!)
-      return { ...(await p), row: local }
+      let spectra = noSpectra
+      let spectrumRow = -1
+      let peakFilter: PeakFilter | null = null
+      const m = mzLayout ? (await mzRowsOf(k, mzLayout))[local] : -1
+      if (mzLayout && m >= 0) {
+        const [mg, mat] = groupOf(mzLayout, m)
+        touch(peakCache, `${k}/${mg}`)
+        const peaks = await peaksOf(k, mzLayout, mg)
+        if (String(peaks.id[mat]) !== rows.nativeId[row]) {
+          throw new Error(`${mzName(k)}: its row ${m} is the spectrum ${String(peaks.id[mat])}, not the PSM's ${rows.nativeId[row]}`)
+        }
+        spectra = peaks.spectra
+        spectrumRow = mat
+        if (Number.isNaN(spectra.precursorMz[mat])) spectra.precursorMz[mat] = rows.precursorMz[row]
+        peakFilter = filterOf(mzLayout)
+      }
+      trim()
+      return { spectra, spectrumRow, predicted, row: at, peakFilter }
     },
   }
 }

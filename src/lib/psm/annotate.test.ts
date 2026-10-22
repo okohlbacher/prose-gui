@@ -38,8 +38,8 @@ const search = (name: string) => {
 
 /** The stored peaks of PSM `row` (views of the stored arrays, as the PSM view passes them). */
 async function psmPeaks(r: SearchResult, row: number): Promise<{ mz: Float32Array; intensity: Float32Array }> {
-  const { spectra, row: at } = await r.spectra.load(row)
-  const s = spectra.psmSpectrum[at]
+  const { spectra, spectrumRow } = await r.spectra.load(row)
+  const s = spectra.psmSpectrum[spectrumRow] ?? -1
   expect(s, `row ${row} has a spectrum`).toBeGreaterThanOrEqual(0)
   const [from, to] = [spectra.offsets[s], spectra.offsets[s + 1]]
   return { mz: spectra.mz.subarray(from, to), intensity: spectra.intensity.subarray(from, to) }

@@ -140,7 +140,7 @@ async function writeRecord(id: string, record: string): Promise<boolean> {
 
 /**
  * Saves the record of a search whose ProSE has just ended, before its results are read: from the request
- * and the target PSMs of the footer of its merged QPX psm file (0 if that cannot be read). Never rejects: the outcome is
+ * and the target PSMs of its QPX run view (0 if that cannot be read). Never rejects: the outcome is
  * `history.save`.
  */
 export function saveEnded(search: EndedSearch): Promise<void> {

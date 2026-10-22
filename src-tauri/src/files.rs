@@ -183,11 +183,11 @@ pub fn resolve_search_file(
 pub enum ByteRange {
     /// All of it.
     All,
-    /// The last bytes (all of a smaller file): the footer of a Parquet file, which History and the
-    /// results reader read.
+    /// The last bytes (all of a smaller file): the footer of a Parquet file, which the results reader
+    /// reads to find a PSM's row group.
     Tail(u64),
     /// `length` bytes from `offset` (fewer at the end of the file, none past it): a part of a Parquet file,
-    /// e.g. the peaks of one PSM, which the PSM view reads.
+    /// e.g. the row group of the peaks or the prediction of one PSM, which the PSM view reads.
     Range { offset: u64, length: u64 },
 }
 

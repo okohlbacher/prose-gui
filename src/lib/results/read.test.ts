@@ -316,11 +316,11 @@ describe('peaks and predictions belong to their PSM', () => {
     const w = web('example')
     const { files, ranges } = folder(join(fixtures, 'example'))
     const { spectra, tables } = await readSearch(files)
-    // nothing of the inputs' psm files is read until a PSM is opened
+    // nothing of the inputs' psm and mz files is read until a PSM is opened
     expect(ranges.filter((r) => !r.name.startsWith('qpx/quantms.'))).toEqual([])
     for (let i = 0; i < tables.psms.count; i++) {
-      const { spectra: sp, row } = await spectra.load(i)
-      const s = sp.psmSpectrum[row]
+      const { spectra: sp, spectrumRow } = await spectra.load(i)
+      const s = sp.psmSpectrum[spectrumRow] ?? -1
       const ws = w.spectra.psmSpectrum[i]
       expect(s >= 0, `row ${i} has peaks`).toBe(ws >= 0)
       expect(peaks(sp, s), `peaks of row ${i}`).toEqual(peaks(w.spectra, ws))
@@ -328,12 +328,18 @@ describe('peaks and predictions belong to their PSM', () => {
       // the collision energy is not read (docs/parity.md: the predictions are ProSE's)
       expect(Number.isNaN(sp.collisionEnergy[s])).toBe(true)
     }
-    // each input's footer once, then the spectrum columns of each row group once (its last few are kept)
+    // the footer of each input's psm file and mz view once, then the columns of each row group once (the last few
+    // are kept)
     const read = ranges.filter((r) => !r.name.startsWith('qpx/quantms.'))
     const tails = read.filter((r) => 'tail' in r.range)
-    expect(tails.map((r) => r.name)).toEqual(['qpx/1__DatabaseSuitability_1.psm.parquet', 'qpx/2__DatabaseSuitability_2.psm.parquet'])
-    // 896 rows of each input in row groups of 256
-    expect(read.length - tails.length).toBe(8)
+    expect(tails.map((r) => r.name)).toEqual([
+      'qpx/1__DatabaseSuitability_1.psm.parquet',
+      'qpx/1__DatabaseSuitability_1.mz.parquet',
+      'qpx/2__DatabaseSuitability_2.psm.parquet',
+      'qpx/2__DatabaseSuitability_2.mz.parquet',
+    ])
+    // 896 PSMs and spectra of each input in row groups of 256: 4 of the psm file, 4 of the mz view
+    expect(read.length - tails.length).toBe(16)
   })
 
   test('the predictions of each PSM are the web app\'s predictMS2 of its peptide', async () => {
@@ -352,12 +358,49 @@ describe('peaks and predictions belong to their PSM', () => {
     }
   })
 
-  test('the peak filter of the footer is passed on, for the PSM view\'s note', async () => {
-    expect((await readSearch(folder(join(fixtures, 'example')).files)).peakFilter).toEqual({ top: 100, window: 100 })
+  test('the peak filter of the mz view\'s footer is passed on, for the PSM view\'s note', async () => {
+    const example = await readSearch(folder(join(fixtures, 'example')).files)
+    expect((await example.spectra.load(0)).peakFilter).toEqual({ top: 100, window: 100 })
     await withCopy('mods', async (dir) => {
-      const path = join(dir, 'qpx', 'quantms.psm.parquet')
+      const path = join(dir, 'qpx', '1__SimpleSearchEngine_1.mz.parquet')
       writeFileSync(path, await withFooter(new Uint8Array(readFileSync(path)), (f) => f.set('prose_peak_top', '0')))
-      expect((await readSearch(folder(dir).files)).peakFilter).toBeNull()
+      expect((await (await readSearch(folder(dir).files)).spectra.load(0)).peakFilter).toBeNull()
+    })
+  })
+
+  test('the mz view\'s rows are found by the ids when a PSM\'s spectrum is not in it', async () => {
+    const { spectra: own } = await readSearch(folder(join(fixtures, 'example')).files)
+    await withCopy('example', async (dir) => {
+      // the spectrum of PSM row 1 left out: the rows are no longer in the order of the PSMs
+      const left = (await readSearch(folder(dir).files)).tables.psms.nativeId[1]
+      await changeRows(dir, 'qpx/1__DatabaseSuitability_1.mz.parquet', (rows) => rows.filter((r) => r.id !== left))
+      const { spectra } = await readSearch(folder(dir).files)
+      expect((await spectra.load(1)).spectrumRow).toBe(-1)
+      for (const row of [0, 2, 500, 895]) {
+        const [a, b] = [await spectra.load(row), await own.load(row)]
+        expect(Array.from(a.spectra.mz.subarray(a.spectra.offsets[a.spectrumRow], a.spectra.offsets[a.spectrumRow + 1]))).toEqual(
+          Array.from(b.spectra.mz.subarray(b.spectra.offsets[b.spectrumRow], b.spectra.offsets[b.spectrumRow + 1])),
+        )
+      }
+    })
+  })
+
+  test('an input\'s psm file or mz view of other rows fails the PSM, not the search', async () => {
+    await withCopy('example', async (dir) => {
+      // the psm files of the two inputs swapped: as many rows, other PSMs (psm_id)
+      const [a, b] = ['1__DatabaseSuitability_1', '2__DatabaseSuitability_2'].map((stem) => join(dir, 'qpx', `${stem}.psm.parquet`))
+      const bytes = readFileSync(a)
+      cpSync(b, a)
+      writeFileSync(b, bytes)
+      // the mz view of input 2 in another order
+      await changeRows(dir, 'qpx/2__DatabaseSuitability_2.mz.parquet', (rows) => rows.reverse())
+      const { spectra } = await readSearch(folder(dir).files)
+      await expect(spectra.load(0)).rejects.toThrow('qpx/1__DatabaseSuitability_1.psm.parquet: its row 0 is another PSM than the search\'s (psm_id)')
+      writeFileSync(b, readFileSync(a))
+      cpSync(join(fixtures, 'example', 'qpx', '2__DatabaseSuitability_2.psm.parquet'), b)
+      cpSync(join(fixtures, 'example', 'qpx', '1__DatabaseSuitability_1.psm.parquet'), a)
+      const again = await readSearch(folder(dir).files)
+      await expect(again.spectra.load(896)).rejects.toThrow(/qpx\/2__DatabaseSuitability_2.mz.parquet: its row 0 is the spectrum .*, not the PSM's/)
     })
   })
 
@@ -370,6 +413,12 @@ describe('peaks and predictions belong to their PSM', () => {
       await expect(spectra.load(1000)).rejects.toThrow('qpx/2__DatabaseSuitability_2.psm.parquet does not exist')
       await expect(spectra.load(0)).rejects.toThrow(/qpx\/1__DatabaseSuitability_1.psm.parquet: \d+ rows, but qpx\/quantms.psm.parquet has 896 of this input/)
       await expect(spectra.load(5000)).rejects.toThrow('There is no PSM row 5000.')
+      // without its mz view (its spectra could not be read again) a PSM has its prediction, no peaks
+      cpSync(join(fixtures, 'example', 'qpx', '1__DatabaseSuitability_1.psm.parquet'), join(dir, 'qpx', '1__DatabaseSuitability_1.psm.parquet'))
+      rmSync(join(dir, 'qpx', '1__DatabaseSuitability_1.mz.parquet'))
+      const loaded = await (await readSearch(folder(dir).files)).spectra.load(0)
+      expect(loaded.spectrumRow).toBe(-1)
+      expect(loaded.predicted.psmOffsets[loaded.row + 1]).toBeGreaterThan(loaded.predicted.psmOffsets[loaded.row])
     })
   })
 })
@@ -747,7 +796,10 @@ async function writeLargeFolder(dir: string, n: number): Promise<void> {
   const runs = (await rowsOf(read('qpx/quantms.run.parquet'))).slice(0, 1)
   Object.assign(runs[0], { psm_rows: BigInt(n), identified_spectra_count: BigInt(n) })
   writeFileSync(join(dir, 'qpx/quantms.run.parquet'), rewrite(read('qpx/quantms.run.parquet'), runs))
-  for (const f of ['qpx/quantms.pg.parquet', 'qpx/quantms.provenance.parquet', 'database.fasta']) cpSync(join(source, f), join(dir, f))
+  // (the spectra of the repeated PSMs: the example's, as their native IDs repeat)
+  for (const f of ['qpx/quantms.pg.parquet', 'qpx/quantms.provenance.parquet', `qpx/${stem}.mz.parquet`, 'database.fasta']) {
+    cpSync(join(source, f), join(dir, f))
+  }
   await setParameters(dir, 'target_decoy_fdr', { protein_fdr_applied: 'false' })
   const inputs = JSON.parse(readFileSync(join(source, 'inputs.json'), 'utf8')).slice(0, 1)
   writeFileSync(join(dir, 'inputs.json'), JSON.stringify(inputs))
@@ -776,10 +828,10 @@ describe('performance', () => {
       // the first PSM opened reads the footer of its file; the others their row group only
       for (const row of [N - 1, 70_000, 70_001, 3]) {
         const t = performance.now()
-        const { spectra: sp, row: r } = await spectra.load(row)
+        const { spectra: sp, spectrumRow } = await spectra.load(row)
         const ms = performance.now() - t
         console.log(`the spectrum of PSM ${row} read in ${ms.toFixed(0)} ms`)
-        expect(sp.psmSpectrum[r]).toBeGreaterThanOrEqual(0)
+        expect(sp.psmSpectrum[spectrumRow]).toBeGreaterThanOrEqual(0)
         expect(ms).toBeLessThan(300)
       }
     } finally {
@@ -802,16 +854,18 @@ describe('performance', () => {
     await files(`qpx/${JSON.parse(readFileSync(join(process.env.PROSE_SEARCH_DIR!, 'inputs.json'), 'utf8'))[0].stem}.psm.parquet`)
     let started = performance.now()
     const { tables, spectra } = await readSearch(files)
-    console.log(`REAL ${tables.psms.count} PSMs opened in ${((performance.now() - started) / 1000).toFixed(2)} s`)
+    console.log(
+      `REAL ${tables.psms.count} PSMs opened in ${((performance.now() - started) / 1000).toFixed(2)} s; RSS ${(process.memoryUsage().rss / 2 ** 30).toFixed(2)} GB`,
+    )
     const times: number[] = []
     let random = 12345
     for (let k = 0; k < 50; k++) {
       random = (random * 1103515245 + 12345) % 2147483648
       const row = random % tables.psms.count
       started = performance.now()
-      const { spectra: sp, row: r } = await spectra.load(row)
+      const { spectra: sp, spectrumRow } = await spectra.load(row)
       times.push(performance.now() - started)
-      expect(sp.psmSpectrum[r]).toBeGreaterThanOrEqual(-1)
+      expect(spectrumRow < 0 || sp.psmSpectrum[spectrumRow] >= 0).toBe(true)
     }
     const sorted = [...times].sort((a, b) => a - b)
     console.log(`REAL spectra: first ${times[0].toFixed(0)} ms, median ${sorted[25].toFixed(0)} ms, max of the others ${Math.max(...times.slice(1)).toFixed(0)} ms`)

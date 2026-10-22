@@ -115,9 +115,9 @@
   })
   /** The spectra of this PSM; null while they are read. */
   const spectra = $derived(loaded && loaded.row === row && loaded.source === source ? loaded : null)
-  const peaks = $derived(spectra?.data ? spectrumPeaks(spectra.data.spectra, spectra.data.row) : null)
-  // ProSE stored the spectra filtered (its -qpx_peak_top and -qpx_peak_window, in the footer of its QPX files)
-  const peakFilter = $derived(view.result.outcome.peakFilter ?? null)
+  const peaks = $derived(spectra?.data ? spectrumPeaks(spectra.data.spectra, spectra.data.spectrumRow) : null)
+  // ProSE stored the spectra filtered (its -qpx_peak_top and -qpx_peak_window, in the footer of the input's mz view)
+  const peakFilter = $derived(spectra?.data?.peakFilter ?? null)
   const mods = $derived.by(() => {
     const out: { name: string; residue: string }[] = []
     for (let i = pt.modOffsets[k]; i < pt.modOffsets[k + 1]; i++) out.push({ name: pt.modName[i], residue: sequence[pt.modPosition[i]] ?? '' })
