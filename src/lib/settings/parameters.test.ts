@@ -1,13 +1,17 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { ParamEntry } from './parameters'
 import {
+  CARD_PARAMETERS,
   changedParameters,
   defaultsOf,
   dialogEntries,
   parameterSections,
   requestParameters,
   sameValue,
+  SWITCH_PARAMETERS,
 } from './parameters'
+import { PROSE_PARAMETERS } from './prose'
 
 const entry = (name: string, value: ParamEntry['value'], more: Partial<ParamEntry> = {}): ParamEntry => ({
   name,
@@ -66,5 +70,39 @@ describe('parameters', () => {
     const defaults = defaultsOf(entries)
     const values = { ...defaults, enzyme: 'Lys-C', rescore: false, 'peptdeep:enable': true, 'peptdeep:instrument': 'timsTOF' }
     expect(requestParameters(values, defaults)).toEqual({ enzyme: 'Lys-C', 'peptdeep:instrument': 'timsTOF' })
+  })
+})
+
+describe('the "All parameters" dialog and the shim', () => {
+  // The shim's allowlist (src-tauri/src/args.rs `PARAMETERS`): every parameter a search may set, with its kind.
+  const argsRs = readFileSync(new URL('../../../src-tauri/src/args.rs', import.meta.url), 'utf8')
+  const list = /pub const PARAMETERS: &\[\(&str, Kind\)\] = &\[([\s\S]*?)\];/.exec(argsRs)?.[1] ?? ''
+  const allowlist = new Map([...list.matchAll(/\("([^"]+)",\s*(\w+)\)/g)].map((m) => [m[1], m[2]]))
+
+  /** The shim's kind (args.rs `Kind`) of a parameter as the dialog edits it (ParameterField). */
+  const kindOf = (e: ParamEntry): string => {
+    if (e.type === 'bool') return 'Flag'
+    if (e.type === 'int') return 'Int'
+    if (e.type === 'double') return 'Float'
+    if (e.type.endsWith('[]')) return 'List'
+    return e.validStrings && e.validStrings.length > 0 ? 'Choice' : 'Text'
+  }
+
+  it('sets only what the shim lets through, each with the shim\'s kind, and every allowed parameter has a control', () => {
+    expect(allowlist.size).toBeGreaterThan(50)
+    const dialog = dialogEntries(PROSE_PARAMETERS)
+    for (const e of dialog) {
+      expect(allowlist.has(e.name), `${e.name} is not in args.rs PARAMETERS`).toBe(true)
+      expect(kindOf(e), `kind of ${e.name}`).toBe(allowlist.get(e.name))
+    }
+    // the reverse: each allowed parameter is in the dialog, or has its control on the page (the PeptDeep instrument)
+    const controlled = new Set([...dialog.map((e) => e.name), ...CARD_PARAMETERS])
+    for (const name of allowlist.keys()) expect(controlled.has(name), `${name} has no control in the app`).toBe(true)
+    for (const name of CARD_PARAMETERS) {
+      const e = PROSE_PARAMETERS.find((p) => p.name === name)!
+      expect(kindOf(e), `kind of ${name}`).toBe(allowlist.get(name))
+    }
+    // the switches of the Rescoring card are the request's own fields, never parameters
+    for (const name of SWITCH_PARAMETERS) expect(allowlist.has(name), name).toBe(false)
   })
 })

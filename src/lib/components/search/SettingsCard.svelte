@@ -1,18 +1,23 @@
 <script lang="ts">
-  // Search settings: the preset, the ten common parameters (in the mockup's order) and "Advanced": the
-  // threads (all cores by default) and the database chunks. (The web app's "All N parameters" dialog,
-  // generated from its module's parameter list, is not part of the desktop app.)
+  // Search settings: the preset, the ten common parameters (in the mockup's order), "Advanced": the
+  // threads (all cores by default) and the database chunks, and the web app's "All N parameters" dialog
+  // (AllParametersDialog), made from the pinned ProSE's parameter list.
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right'
   import FdrInput from '$lib/components/FdrInput.svelte'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
   import { Label } from '$lib/components/ui/label'
   import { searchForm as form } from '$lib/search/form.svelte'
+  import { dialogEntries } from '$lib/settings/parameters'
+  import AllParametersDialog from './AllParametersDialog.svelte'
   import ChoiceSelect from './ChoiceSelect.svelte'
   import ModificationsField from './ModificationsField.svelte'
   import NumberField from './NumberField.svelte'
   import RangeField from './RangeField.svelte'
   import ToleranceField from './ToleranceField.svelte'
+
+  let dialogOpen = $state(false)
+  const count = $derived(dialogEntries([...form.entries.values()]).length)
 
   /** The cores of this computer (the default of the threads). */
   const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || null : null
@@ -68,6 +73,9 @@
       aria-controls="advanced-settings"
       onclick={() => (form.advancedSettings = !form.advancedSettings)}>
       Advanced<ChevronRightIcon class="size-3.5 transition-transform {form.advancedSettings ? 'rotate-90' : ''}" />
+    </Button>
+    <Button variant="ghost" size="sm" class="h-7 px-2 text-xs text-muted-foreground" onclick={() => (dialogOpen = true)}>
+      All {count} parameters<ChevronRightIcon class="size-3.5" />
     </Button>
   </Card.Header>
 
@@ -195,3 +203,5 @@
     {/if}
   </Card.Content>
 </Card.Root>
+
+<AllParametersDialog bind:open={dialogOpen} />
