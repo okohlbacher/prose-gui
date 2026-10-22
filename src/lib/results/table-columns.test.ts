@@ -30,9 +30,9 @@ describe('columnSpecs', () => {
   it('says that the protein counts are at the search PSM FDR', () => {
     const specs = columnSpecs(model({ psmFdr: 0.01 }), 'proteins', { openSearch: false })
     for (const id of ['peptides', 'psms']) {
-      expect(specs.find((s) => s.id === id)!.title).toBe('At the search PSM FDR (1 %, q ≤ 0.01)')
+      expect(specs.find((s) => s.id === id)!.title).toBe("Counted at the search's PSM FDR (1 %, q ≤ 0.01)")
     }
-    expect(specs.find((s) => s.id === 'sample:0')!.title).toBe('control 1: at the search PSM FDR (1 %, q ≤ 0.01)')
+    expect(specs.find((s) => s.id === 'sample:0')!.title).toBe("control 1. Counted at the search's PSM FDR (1 %, q ≤ 0.01)")
   })
 
   it('names the score after the rescoring', () => {

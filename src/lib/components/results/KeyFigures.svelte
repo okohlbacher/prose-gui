@@ -9,9 +9,9 @@
   // proteins that cannot be told apart count once here, but each has a row in the Proteins tab
   const groupTitle = $derived.by(() => {
     const { proteins, proteinGroups } = figures
-    const base = `Target protein groups at the protein FDR (contaminants included). Proteins that share all their identified peptides cannot be told apart and form one group, so they count once here, while the Proteins tab lists every protein.`
-    if (proteins === proteinGroups) return `${base} Here every protein is a group of its own: ${formatCount(proteins)} proteins in ${formatCount(proteinGroups)} groups.`
-    return `${base} Here: ${formatCount(proteins)} proteins in ${formatCount(proteinGroups)} groups.`
+    const base = `Target protein groups at the protein FDR, contaminants included. Proteins that share all their identified peptides cannot be told apart. They form one group and count once here. The Proteins tab lists every protein.`
+    if (proteins === proteinGroups) return `${base} In this search every protein is its own group, so ${formatCount(proteins)} proteins make ${formatCount(proteinGroups)} groups.`
+    return `${base} In this search, ${formatCount(proteins)} proteins form ${formatCount(proteinGroups)} groups.`
   })
   const share = $derived(figures.psmShareOfMs2 === null ? null : `${(figures.psmShareOfMs2 * 100).toFixed(0)} % of MS2`)
   const stats = $derived([
@@ -21,23 +21,23 @@
       title: groupTitle,
       testid: 'protein-count',
     },
-    { value: formatCount(figures.peptides), note: 'peptides', title: 'Target peptides (with their modifications) at the PSM FDR', testid: 'peptide-count' },
+    { value: formatCount(figures.peptides), note: 'peptides', title: 'Target peptides at the PSM FDR. Each modified form counts as its own peptide.', testid: 'peptide-count' },
     {
       value: formatCount(figures.psms),
       note: share ? `PSMs · ${share}` : 'PSMs',
-      title: `Target PSMs at the PSM FDR, of ${formatCount(figures.ms2)} MS2 spectra`,
+      title: `Target PSMs at the PSM FDR, out of ${formatCount(figures.ms2)} MS2 spectra`,
       testid: 'psm-count',
     },
     {
       value: formatCount(figures.samples),
       note: `${figures.samples === 1 ? 'sample' : 'samples'}${figures.conditions > 0 ? ` · ${figures.conditions} ${figures.conditions === 1 ? 'condition' : 'conditions'}` : ''}`,
-      title: 'Biological samples (Condition + Replicate) of the design',
+      title: 'Biological samples in the design. Each condition and replicate is one sample.',
       testid: 'sample-count',
     },
     {
       value: figures.medianAbsPpm === null ? '–' : `${figures.medianAbsPpm.toFixed(1)} ppm`,
       note: 'median |precursor error|',
-      title: 'Median absolute precursor mass error of those PSMs',
+      title: 'Median absolute precursor mass error of the target PSMs at the PSM FDR',
       testid: 'precursor-error',
     },
   ])

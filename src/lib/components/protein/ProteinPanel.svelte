@@ -86,7 +86,7 @@
       </h2>
       {#if mates.length > 0}
         <p class="mt-0.5 text-xs text-muted-foreground" data-testid="panel-group" title={mates.map((q) => pr.accession[q]).join('\n')}>
-          Indistinguishable from: {mateNames.slice(0, 4).join(', ')}{#if mates.length > 4}
+          Indistinguishable from {mateNames.slice(0, 4).join(', ')}{#if mates.length > 4}
             and {mates.length - 4} more{/if}
         </p>
       {/if}
@@ -97,15 +97,15 @@
   </header>
 
   <div class="mt-2.5 flex flex-wrap gap-1.5">
-    <span class={badge} data-testid="panel-coverage" title="Residues covered by peptides with PSMs at the search PSM FDR"
+    <span class={badge} data-testid="panel-coverage" title="Residues covered by peptides with PSMs at the search's PSM FDR"
       >Coverage {(detail.coverage * 100).toFixed(1)} %</span>
-    <span class={badge} data-testid="panel-peptides" title="Peptides by plain sequence (modified forms count once)"
+    <span class={badge} data-testid="panel-peptides" title="Peptides counted by plain sequence. Modified forms count once."
       >{formatCount(detail.sequences)} {detail.sequences === 1 ? 'peptide' : 'peptides'}</span>
     <span class={badge} data-testid="panel-psms">{formatCount(detail.psms)} PSMs</span>
     <span
       class="{badge} {detail.sites.length > 0 ? 'border-[#a7e9cf] bg-[#d7f5ea] text-[#065f46]' : 'text-muted-foreground'}"
       data-testid="panel-sites"
-      title="Residues with a modification that the search did not fix, in peptides with PSMs"
+      title="Residues with a modification in peptides with PSMs. Fixed modifications are not counted."
       >{detail.sites.length} modified {detail.sites.length === 1 ? 'site' : 'sites'}</span>
   </div>
 
@@ -148,11 +148,11 @@
   <!-- what a dot is, the strip says; this says what a marked residue is and what is not marked -->
   <p class="mt-2 text-xs text-muted-foreground" data-testid="panel-legend">
     {#if displaySettings.modMode === 'marked'}
-      <span class="legend-mod">M<sup>ox</sup></span> modified residue (hover for the modification){#if fixedMods.length > 0}{' · '}fixed
-        modifications are not marked: {fixedText}{/if}
+      <span class="legend-mod">M<sup>ox</sup></span> modified residue, hover to see the modification{#if fixedMods.length > 0}{' · '}fixed
+        modifications ({fixedText}) are not marked{/if}
     {:else}
-      ProForma writes all modifications{#if fixedMods.length > 0}, the fixed ones too: {fixedText}. Only the others are dotted as
-        sites{/if}
+      ProForma shows all modifications{#if fixedMods.length > 0}, including the fixed ones ({fixedText}). Only the others appear as
+        modified-site dots{/if}
     {/if}
   </p>
 </section>

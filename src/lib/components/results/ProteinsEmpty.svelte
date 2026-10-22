@@ -21,12 +21,12 @@
     <p class="text-sm font-medium">No protein reaches {formatQ(cutoff)} (protein FDR {formatPercent(cutoff)}).</p>
     <!-- N is not in the result: the engine drops the proteins above the cutoff, so the sentence stays general -->
     <p class="text-muted-foreground">
-      With N target proteins, protein q-values cannot go below 1/(N + 1): a {formatPercent(cutoff)} protein FDR needs
+      With N target proteins, protein q-values cannot go below 1/(N + 1). So a {formatPercent(cutoff)} protein FDR needs
       at least {formatCount(proteinsNeeded(cutoff))} target proteins with evidence. Small databases cannot reach low
       protein q-values.
     </p>
     <p class="text-muted-foreground">
-      The identifications are there: {formatCount(peptides)}
+      The search still found {formatCount(peptides)}
       {peptides === 1 ? 'peptide' : 'peptides'} and {formatCount(psms)}
       {psms === 1 ? 'PSM' : 'PSMs'} at the PSM FDR.
     </p>
@@ -40,7 +40,7 @@
     </div>
     {#if cutoff < looser && !again}
       <p class="text-xs text-muted-foreground">
-        To search again with a looser protein FDR (e.g. {formatPercent(looser)}), set it under Search settings in New
+        To search again with a looser protein FDR, such as {formatPercent(looser)}, set it under Search settings in New
         search.
       </p>
     {/if}

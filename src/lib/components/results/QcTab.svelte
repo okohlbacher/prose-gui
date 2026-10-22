@@ -53,8 +53,8 @@
     <ChartCard
       testid="qc-score"
       title="Score distribution"
-      subtitle="PSMs at the search FDR ({fdr}) · decoys kept"
-      notes={score.unscored > 0 ? [`${formatCount(score.unscored)} PSMs without a score (Percolator could not rescore them) are left out.`] : []}
+      subtitle="PSMs at the search FDR ({fdr}) · decoys included"
+      notes={score.unscored > 0 ? [`${formatCount(score.unscored)} PSMs have no score because Percolator could not rescore them. They are left out.`] : []}
       legend={[
         { label: 'Targets', color: targetColor, value: formatCount(score.nTargets) },
         { label: 'Decoys', color: decoyColor, value: formatCount(score.nDecoys) },
@@ -79,7 +79,7 @@
         ]} />
     </ChartCard>
   {:else}
-    <ChartCard testid="qc-score" title="Score distribution" subtitle="PSMs at the search FDR ({fdr}) · decoys kept">
+    <ChartCard testid="qc-score" title="Score distribution" subtitle="PSMs at the search FDR ({fdr}) · decoys included">
       <p class="py-8 text-center text-xs text-muted-foreground">No PSM passes the search's PSM FDR, so there is nothing to plot.</p>
     </ChartCard>
   {/if}
@@ -90,9 +90,9 @@
       testid="qc-precursor"
       title="Precursor mass error"
       subtitle={openSearch
-        ? `Unmodified PSMs only (|Δ| ≤ 0.05 Da): ${formatCount(errors.n)} of ${formatCount(errors.considered)} target PSMs at the search FDR (${fdr})`
+        ? `Unmodified PSMs only (|Δ| ≤ 0.05 Da) · ${formatCount(errors.n)} of ${formatCount(errors.considered)} target PSMs at the search FDR (${fdr})`
         : `Target PSMs at the search FDR (${fdr}) · ${formatCount(errors.n)} PSMs`}
-      notes={openSearch ? ["A PSM with a mass shift has that shift in its precursor error, so it is left out."] : []}
+      notes={openSearch ? ["PSMs with a mass shift are left out, because the shift would count as precursor error."] : []}
       table={{
         name: 'Precursor mass error: PSMs per range',
         columns: [

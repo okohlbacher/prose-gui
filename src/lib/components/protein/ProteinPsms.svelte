@@ -38,8 +38,8 @@
 
 {#snippet peptideCell(i: number)}
   {@const shift = massShift(ps.deltaMass[i])}
-  {#if shift !== null}<span class="font-mono text-[12.5px] text-muted-foreground" title="Unassigned mass shift (Da), not localized">[{shift}]?</span>{/if}<PeptideSequence
+  {#if shift !== null}<span class="font-mono text-[12.5px] text-muted-foreground" title="Unassigned mass shift in Da. Its position on the peptide is not known.">[{shift}]?</span>{/if}<PeptideSequence
     view={peptideView(m.tables.peptides, ps.peptide[i], fixedMods)} />
 {/snippet}
 
-<DataTable {label} {rows} {columns} {sort} {onSort} onRowClick={onOpenPsm} autoMinWidth={170} empty="No PSM of this protein is at the search's PSM FDR." />
+<DataTable {label} {rows} {columns} {sort} {onSort} onRowClick={onOpenPsm} autoMinWidth={170} empty="No PSM of this protein passes the search's PSM FDR." />

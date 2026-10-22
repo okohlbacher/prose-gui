@@ -215,12 +215,12 @@
             {#if level.level !== 'proteins' && !psmOpen}
               <p class="-mt-1 text-xs text-muted-foreground" data-testid="mod-legend">
                 {#if displaySettings.modMode === 'marked'}
-                  <span class="legend-mod">M<sup>ox</sup></span> modified residue (hover for the modification) · fixed
+                  <span class="legend-mod">M<sup>ox</sup></span> modified residue, hover to see the modification · fixed
                   modifications ({fixedText}) are not marked
                 {:else}
-                  ProForma: fixed modifications included ({fixedText})
+                  ProForma with fixed modifications ({fixedText})
                 {/if}
-                · CSV and copy write ProForma
+                · CSV and copy use ProForma
               </p>
             {/if}
           </Tabs.Content>
@@ -253,7 +253,7 @@
     <p class="mb-5 text-muted-foreground" data-testid="results-none">
       {#if id === null}No result is open. Start a search, or open one from History.{:else if restoring === id}Opening result {id}
         from History…{:else if restoreFailed?.id === id && restoreFailed.reason}Result {id} could not be opened from
-        History: {restoreFailed.reason}{:else}Result {id} is not open, and History does not have it. Open one from History.{/if}
+        History: {restoreFailed.reason}{:else}Result {id} is not in History. Open a search from History instead.{/if}
     </p>
   </section>
 {/if}

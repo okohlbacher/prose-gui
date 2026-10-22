@@ -42,7 +42,7 @@
     data-testid="fragment-ladder"
     role="img"
     aria-label="{peptide.proforma}: {explained}">
-    {#if shift}<span class="shift" title="Unassigned mass shift (Da), not localized">[{shift}]?</span>{/if}
+    {#if shift}<span class="shift" title="Unassigned mass shift in Da. Its position on the peptide is not known.">[{shift}]?</span>{/if}
     {#if peptide.nTerm}<span class="term" title={modTitle(peptide.nTerm)}>{peptide.nTerm.label}</span>{/if}
     {#each peptide.residues as r, i (i)}
       <span class="aa" class:mod={r.mod !== undefined} title={r.mod ? modTitle(r.mod) : undefined}>

@@ -28,7 +28,7 @@ export type ColumnSpec = {
 }
 
 /** The tooltip of a spectrum column: how it sorts (the PSM table and the protein panel share it). */
-export const spectrumTitle = 'Sorts by scan number when every spectrum has one, else by native ID in natural order (scan 2 before scan 10)'
+export const spectrumTitle = 'Sorts by scan number if every spectrum has one. Otherwise sorts by native ID in natural order, so scan 2 comes before scan 10.'
 
 /** The pseudo-id of the Columns menu that hides all per-sample columns. */
 export const samplesColumn = 'samples'
@@ -52,17 +52,17 @@ function sampleSpecs(m: ResultModel): ColumnSpec[] {
  */
 export function columnSpecs(m: ResultModel, level: Level, search: { openSearch: boolean }): ColumnSpec[] {
   const nSamples = new Set(m.columnSample).size
-  const foundTitle = `Biological samples (Condition + Replicate) with a PSM, of ${nSamples}`
+  const foundTitle = `Biological samples with a PSM, out of ${nSamples}. Each condition and replicate is one sample.`
   if (level === 'proteins') {
-    const atSearch = `At the search PSM FDR (${formatPercent(m.psmFdr)}, ${formatQ(m.psmFdr)})`
+    const atSearch = `Counted at the search's PSM FDR (${formatPercent(m.psmFdr)}, ${formatQ(m.psmFdr)})`
     return [
       col('accession', 'Accession', 160, 'left'),
       col('gene', 'Gene', 84, 'left', { optional: 'shown' }),
       col('description', 'Description', 'auto', 'left'),
-      col('coverage', 'Coverage', 112, 'left', { title: `Residues covered by peptides with PSMs at the search PSM FDR` }),
+      col('coverage', 'Coverage', 112, 'left', { title: `Residues covered by peptides with PSMs at the search's PSM FDR` }),
       col('peptides', 'Peptides', 90, 'right', { title: atSearch }),
       col('psms', 'PSMs', 84, 'right', { title: atSearch }),
-      ...sampleSpecs(m).map((s) => ({ ...s, title: `${s.title}: ${atSearch.charAt(0).toLowerCase()}${atSearch.slice(1)}` })),
+      ...sampleSpecs(m).map((s) => ({ ...s, title: `${s.title}. ${atSearch}` })),
       col('foundIn', 'Found in', 84, 'left', { title: foundTitle }),
       col('qValue', 'q-value', 90, 'right', { optional: 'hidden', title: 'Protein q-value' }),
       col('score', columnDef(m, 'proteins', 'score')!.header, 170, 'right', { optional: 'hidden' }),
@@ -74,7 +74,7 @@ export function columnSpecs(m: ResultModel, level: Level, search: { openSearch: 
     return [
       col('peptide', 'Peptide', 'auto', 'left', { sortKey: 'sequence' }),
       col('proteins', 'Proteins', 190, 'left'),
-      col('psms', 'PSMs', 84, 'right', { title: 'At the best PSM q-value filter' }),
+      col('psms', 'PSMs', 84, 'right', { title: 'PSMs that pass the Best PSM q-value filter' }),
       ...sampleSpecs(m),
       col('foundIn', 'Found in', 84, 'left', { title: foundTitle }),
       col('bestQ', 'Best PSM q-value', 148, 'right'),
@@ -88,7 +88,7 @@ export function columnSpecs(m: ResultModel, level: Level, search: { openSearch: 
     col('scan', 'Spectrum', 90, 'left', { sortKey: 'nativeId', csv: ['nativeId'], title: spectrumTitle }),
     col('charge', 'z', 44, 'right', { title: 'Charge' }),
     col('mz', 'm/z', 94, 'right'),
-    col('rt', 'RT (min)', 84, 'right', { title: 'Retention time (the CSV writes seconds)' }),
+    col('rt', 'RT (min)', 84, 'right', { title: 'Retention time. The CSV file has it in seconds.' }),
     col('precursorError', 'Error (ppm)', 106, 'right', { sortKey: 'precursorErrorPpm', csv: ['precursorErrorPpm'], title: 'Precursor mass error' }),
     col('score', columnDef(m, 'psms', 'score')!.header, 130, 'right'),
     col('qValue', 'q-value', 90, 'right'),

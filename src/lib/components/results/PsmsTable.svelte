@@ -89,7 +89,7 @@
 
 {#snippet peptideCell(i: number)}
   {@const shift = massShift(ps.deltaMass[i])}
-  {#if shift !== null}<span class="font-mono text-[12.5px] text-muted-foreground" title="Unassigned mass shift (Da), not localized"
+  {#if shift !== null}<span class="font-mono text-[12.5px] text-muted-foreground" title="Unassigned mass shift in Da. Its position on the peptide is not known."
       >[{shift}]?</span
     >{/if}<PeptideSequence view={peptideView(m.tables.peptides, ps.peptide[i], fixedMods)} />
 {/snippet}

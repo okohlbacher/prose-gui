@@ -76,12 +76,12 @@
     <DropdownMenu.Item onSelect={() => guard(() => exportDesign(view.result))}>Design (design.tsv)</DropdownMenu.Item>
     <DropdownMenu.Item
       disabled={!canSpectrum}
-      title={canSpectrum ? undefined : 'Open a PSM whose spectrum is stored'}
+      title={canSpectrum ? undefined : 'Open a PSM with a stored spectrum first'}
       class={explained}
       onSelect={() => guard(() => view.spectrumExporter?.())}>Spectrum (SVG)</DropdownMenu.Item>
     <DropdownMenu.Item
       disabled={view.exporting}
-      title="The search's results as one file, to open in ProSE elsewhere. It holds ProSE's outputs, which name folders of this computer (the database's, the search's); the mzML files and the log are left out."
+      title="Saves the search's results as one file that you can open in ProSE elsewhere. It contains ProSE's outputs, which name folders on this computer, such as those of the database and the search. The mzML files and the log are not included."
       onSelect={project}>Project (.prose)</DropdownMenu.Item>
     <DropdownMenu.Separator />
     <DropdownMenu.Item onSelect={idXML}>{idXMLFile(view.result).label}</DropdownMenu.Item>

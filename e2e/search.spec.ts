@@ -107,7 +107,7 @@ describe('the example search', () => {
     expect(await $('input[type="radio"][value="peptdeep"]').isSelected()).toBe(true)
     expect(await $('input[type="radio"][value="peptdeep"]').isEnabled()).toBe(true)
     // the stored spectra are filtered (the footer of the QPX files says how): the view says so
-    await expect($('[data-testid="peak-filter-note"]')).toHaveText(expect.stringContaining('Top 100 peaks per 100 m/z shown'))
+    await expect($('[data-testid="peak-filter-note"]')).toHaveText(expect.stringContaining('Showing the top 100 peaks per 100 m/z'))
   })
 
   it('History survives a restart: the search is listed, can be renamed, and opens again with its results', async () => {

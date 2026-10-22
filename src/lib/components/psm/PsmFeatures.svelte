@@ -66,16 +66,16 @@
       list.push({
         name: 'Matched ions',
         value: `${matched.matched} / ${matched.total}${share}`,
-        title: 'Of the ions shown (the toggles above); the share of the spectrum’s intensity that their peaks carry',
+        title: 'Matched ions out of the ions shown, as set by the toggles above. The percentage is the share of the spectrum’s intensity in their peaks.',
       })
     }
     for (const name of ['ms2_cosine', 'ms2_spectral_angle', 'ms2_pearson']) {
       const v = feature(name)
-      if (Number.isFinite(v)) list.push({ name, value: number(v, 3), title: 'PeptDeep feature of the search (over all ions)' })
+      if (Number.isFinite(v)) list.push({ name, value: number(v, 3), title: 'PeptDeep feature from the search, computed over all ions' })
     }
     const rtError = feature('rt_abs_error')
     if (Number.isFinite(rtError)) {
-      list.push({ name: 'rt_abs_error', value: `${number(rtError, 3)} s`, title: 'PeptDeep feature of the search: |RT − predicted RT| after calibration' })
+      list.push({ name: 'rt_abs_error', value: `${number(rtError, 3)} s`, title: 'PeptDeep feature from the search. It is |RT − predicted RT| after calibration.' })
     }
     if (shift === null) {
       list.push({ name: 'Precursor error', value: `${signedNumber(ps.precursorErrorPpm[row], 2)} ppm` })
@@ -90,7 +90,7 @@
           `The open search puts the whole mass difference into the shift (${shiftText} Da), so no error is left to show. ` +
           `The PSM table's ${signedNumber(ps.precursorErrorPpm[row], 1)} ppm is relative to the unmodified peptide.`,
       })
-      list.push({ name: 'Mass shift', value: `${shiftText} Da`, title: 'Unassigned mass shift of the open search, not localized' })
+      list.push({ name: 'Mass shift', value: `${shiftText} Da`, title: 'Unassigned mass shift from the open search. Its position on the peptide is not known.' })
     }
     list.push({ name: 'Isotope error', value: String(ps.isotopeError[row]) })
     const missed = feature('enzInt')
@@ -110,9 +110,8 @@
   </dl>
   {#if alsoIn.length > 0 || otherForms.psms > 0}
     <p class="mt-2.5 text-xs text-muted-foreground">
-      {#if alsoIn.length > 0}Also identified in: {alsoIn.join(', ')}{/if}{#if alsoIn.length > 0 && otherForms.psms > 0}{' · '}{/if}{#if otherForms.psms > 0}other
-        {otherForms.forms === 1 ? 'form' : 'forms'} of the sequence: {formatCount(otherForms.psms)}
-        {otherForms.psms === 1 ? 'PSM' : 'PSMs'}{/if}
+      {#if alsoIn.length > 0}Also identified in {alsoIn.join(', ')}{/if}{#if alsoIn.length > 0 && otherForms.psms > 0}{' · '}{/if}{#if otherForms.psms > 0}{formatCount(otherForms.psms)}
+        {otherForms.psms === 1 ? 'PSM' : 'PSMs'} of {otherForms.forms === 1 ? 'another form' : 'other forms'} of the sequence{/if}
     </p>
   {/if}
   {#if names.length > 0}

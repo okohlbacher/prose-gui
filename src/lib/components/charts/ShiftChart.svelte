@@ -99,7 +99,7 @@
     ]
   })
 
-  const zeroNote = $derived(`unmodified (|Δ| ≤ 0.05 Da): ${formatCount(unmodified)} PSMs, not drawn`)
+  const zeroNote = $derived(`${formatCount(unmodified)} unmodified PSMs (|Δ| ≤ 0.05 Da) not drawn`)
   const zeroEnd = $derived(x(0) + textWidth(zeroNote, labelFont) + 8 > width - M.right)
 </script>
 

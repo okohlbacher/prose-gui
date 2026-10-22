@@ -103,7 +103,7 @@
         {/snippet}
       </Tooltip.Trigger>
       <Tooltip.Content class="max-w-xs" role="tooltip"
-        >This search applied no protein FDR (the proteins have no q-values), so proteins cannot be filtered by it.</Tooltip.Content>
+        >This search did not apply a protein FDR, so the proteins have no q-values to filter by.</Tooltip.Content>
     </Tooltip.Root>
   {:else}
     <Popover.Root>
@@ -117,8 +117,8 @@
           <label for={qId} class="text-xs font-medium">{name.q}</label>
           <FdrInput id={qId} bind:value={level.filters.maxQ} max={cutoff} />
           <p class="text-xs text-muted-foreground">
-            The search's cutoff is {formatPercent(cutoff)} ({formatQ(cutoff)}). Tighten it here; a looser one needs a new
-            search.
+            The search's cutoff is {formatPercent(cutoff)} ({formatQ(cutoff)}). You can tighten it here. A looser cutoff
+            needs a new search.
           </p>
         </div>
       </Popover.Content>

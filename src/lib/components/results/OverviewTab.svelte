@@ -77,11 +77,11 @@
             <Table.Head scope="col" class="{head} text-right" title="MS2 spectra in the file">MS2 spectra</Table.Head>
             <Table.Head scope="col" class="{head} text-right" title="Target PSMs the search reports for the file">Target PSMs</Table.Head>
             <Table.Head scope="col" class="{head} text-right" title="Decoy PSMs the search reports for the file">Decoy PSMs</Table.Head>
-            <Table.Head scope="col" class="{head} text-left" title="Whether Percolator rescored the PSMs of the file, and why not if it did not">Percolator</Table.Head>
+            <Table.Head scope="col" class="{head} text-left" title="Whether Percolator rescored this file's PSMs, and if not, why">Percolator</Table.Head>
             {#if showNce}
               <Table.Head scope="col" class="{head} text-right" title="The normalised collision energy that PeptDeep calibrated for the file">PeptDeep NCE</Table.Head>
             {/if}
-            <Table.Head scope="col" class="{head} text-right" title="How long the database search of the file took (the engine's own measure, without reading the files and loading the models)">Database search</Table.Head>
+            <Table.Head scope="col" class="{head} text-right" title="How long the database search of this file took, as measured by the engine. Reading the files and loading the models are not included.">Database search</Table.Head>
             <Table.Head scope="col" class="{head} text-left">Status</Table.Head>
           </Table.Row>
         </Table.Header>
@@ -128,7 +128,7 @@
       <section data-testid="delta-mass-missing" aria-labelledby="delta-mass-heading">
         <h2 id="delta-mass-heading" class="mb-1 text-[13px] font-semibold">Mass shifts (open search)</h2>
         <p class="rounded-lg border border-dashed px-4 py-6 text-center text-xs text-muted-foreground">
-          The search reports no analysis of its mass shifts. The Δ mass column of the PSM table has them.
+          The search reported no analysis of its mass shifts. You can find the shifts in the Δ mass column of the PSM table.
         </p>
       </section>
     {/if}

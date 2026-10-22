@@ -12,7 +12,7 @@
 </script>
 
 {#if first === null}
-  <span class="text-muted-foreground italic" title="All proteins of this peptide are above the protein FDR">below protein FDR</span>
+  <span class="text-muted-foreground italic" title="None of this peptide's proteins pass the protein FDR">below protein FDR</span>
 {:else}
   <span class="font-mono text-[12.5px]">{first.id}</span>{#if proteins.length > 1}<span class="text-muted-foreground">
       +{proteins.length - 1}</span

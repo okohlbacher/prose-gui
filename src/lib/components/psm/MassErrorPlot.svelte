@@ -113,7 +113,7 @@
     {/each}
   </svg>
   <p class="mt-1 text-xs text-foreground tabular-nums" data-testid="error-stats">{statsText}</p>
-  <p class="mt-0.5 flex flex-wrap gap-x-3 text-[11px] text-muted-foreground" aria-hidden="true" title="Hover a dot for its ion">
+  <p class="mt-0.5 flex flex-wrap gap-x-3 text-[11px] text-muted-foreground" aria-hidden="true" title="Hover over a dot to see its ion">
     <span><i class="key" style:background={COLORS.b}></i>b</span>
     <span><i class="key" style:background={COLORS.y}></i>y</span>
     <span><i class="key" style:background={COLORS.other}></i>other series</span>

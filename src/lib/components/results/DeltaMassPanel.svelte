@@ -35,7 +35,7 @@
   <div>
     <h2 id="delta-mass-heading" class="text-[13px] font-semibold">Mass shifts (open search)</h2>
     <p class="mt-0.5 text-xs text-muted-foreground" data-testid="shift-summary">
-      {formatCount(summary.shifted)} of {formatCount(summary.total)} PSMs (targets and decoys) carry a mass shift above 0.05 Da ({(summary.shareShifted * 100).toFixed(1)} %);
+      {formatCount(summary.shifted)} of {formatCount(summary.total)} PSMs ({(summary.shareShifted * 100).toFixed(1)} %) carry a mass shift above 0.05 Da, counting targets and decoys.
       {formatCount(summary.unmodified)} are unmodified.
       {#if summary.shifted > 0}
         Of the shifted PSMs, {formatCount(summary.mapped)} match a known modification and {formatCount(summary.unassigned)} do not.
@@ -63,10 +63,10 @@
           <Table.Root class="text-xs tabular-nums" aria-label="Mass shifts">
             <Table.Header class="sticky top-0 bg-background">
               <Table.Row class="hover:bg-transparent">
-                <Table.Head scope="col" class="{head} h-auto text-right" title="Delta mass: observed minus theoretical mass of the peptide, in Da">Δ mass (Da)</Table.Head>
+                <Table.Head scope="col" class="{head} h-auto text-right" title="Observed minus theoretical mass of the peptide, in Da">Δ mass (Da)</Table.Head>
                 <Table.Head scope="col" class="{head} h-auto text-right">PSMs</Table.Head>
                 <Table.Head scope="col" class="{head} h-auto text-right" title="Share of the PSMs with a mass shift">%</Table.Head>
-                <Table.Head scope="col" class="{head} h-auto text-left" title="The known modification (Unimod) with this mass">Modification</Table.Head>
+                <Table.Head scope="col" class="{head} h-auto text-left" title="The known Unimod modification with this mass">Modification</Table.Head>
               </Table.Row>
             </Table.Header>
             <Table.Body>
@@ -84,21 +84,21 @@
       </div>
 
       <div class="min-w-0">
-        <h3 class="mb-1 text-xs font-medium text-muted-foreground" title="The engine matches a shift to a modification of the Unimod list within 0.02 Da; the deviation says how close the match is">
-          Shifts matched to known modifications <span class="font-normal">(within 0.02 Da: check the deviation)</span>
+        <h3 class="mb-1 text-xs font-medium text-muted-foreground" title="The engine matches a shift to a Unimod modification within 0.02 Da. The deviation shows how close the match is.">
+          Shifts matched to known modifications <span class="font-normal">(within 0.02 Da, so check the deviation)</span>
         </h3>
         <div class="max-h-72 overflow-auto rounded-lg border bg-background">
           <Table.Root class="text-xs tabular-nums" aria-label="Mapped modifications">
             <Table.Header class="sticky top-0 bg-background">
               <Table.Row class="hover:bg-transparent">
                 <Table.Head scope="col" class="{head} h-auto text-left">Modification</Table.Head>
-                <Table.Head scope="col" class="{head} h-auto text-right" title="Mass of the modification (Unimod)">Δ mass (theor.)</Table.Head>
+                <Table.Head scope="col" class="{head} h-auto text-right" title="Mass of the modification in Unimod">Δ mass (theor.)</Table.Head>
                 <Table.Head scope="col" class="{head} h-auto text-right" title="Mean delta mass of its PSMs">Δ mass (obs.)</Table.Head>
                 <Table.Head scope="col" class="{head} h-auto text-right" title="Observed minus theoretical mass, in mDa">Dev. (mDa)</Table.Head>
                 <Table.Head scope="col" class="{head} h-auto text-right">PSMs</Table.Head>
-                <Table.Head scope="col" class="{head} h-auto text-right" title="Distinct peptides (with their modifications) among those PSMs">Peptides</Table.Head>
+                <Table.Head scope="col" class="{head} h-auto text-right" title="Distinct peptides among these PSMs. Each modified form counts as its own peptide.">Peptides</Table.Head>
                 <Table.Head scope="col" class="{head} h-auto text-right" title="Share of the PSMs that match a known modification">%</Table.Head>
-                <Table.Head scope="col" class="{head} h-auto text-left" title="The residues the modification can sit on, as the Unimod entry lists them">Residues (Unimod)</Table.Head>
+                <Table.Head scope="col" class="{head} h-auto text-left" title="Residues the modification can sit on, as listed in Unimod">Residues (Unimod)</Table.Head>
               </Table.Row>
             </Table.Header>
             <Table.Body>
@@ -116,7 +116,7 @@
               {:else}
                 <Table.Row class="hover:bg-transparent" data-testid="ptm-empty">
                   <Table.Cell colspan={8} class="whitespace-normal px-3 py-3 text-muted-foreground">
-                    The engine matched none of the {formatCount(summary.unassigned)} shifted PSMs to a known modification; the table on
+                    The engine matched none of the {formatCount(summary.unassigned)} shifted PSMs to a known modification. The table on
                     the left lists their shifts.
                   </Table.Cell>
                 </Table.Row>

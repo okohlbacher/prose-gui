@@ -127,13 +127,13 @@
 {:else}
   <p class="mb-1.5 text-xs text-muted-foreground" data-testid="peptide-note">
     {#if left > 0}
-      Showing {formatCount(count)} of {formatCount(detail.peptides.length)} peptides{#if detail.peptides.length !== detail.sequences}
-        ({formatCount(detail.sequences)} sequences; modified forms are listed apart){/if}, by position.
+      Showing {formatCount(count)} of {formatCount(detail.peptides.length)} peptides, by position.{#if detail.peptides.length !== detail.sequences}
+        Modified forms of the {formatCount(detail.sequences)} sequences are listed separately.{/if}
     {:else if detail.peptides.length !== detail.sequences}
-      {formatCount(detail.peptides.length)} peptide forms of {formatCount(detail.sequences)} peptides: modified forms of a
-      sequence are listed apart.
+      {formatCount(detail.peptides.length)} peptide forms of {formatCount(detail.sequences)} peptides. Modified forms of a
+      sequence are listed separately.
     {:else}
-      Click a peptide to list its PSMs, a PSM to open its spectrum.
+      Click a peptide to list its PSMs. Click a PSM to open its spectrum.
     {/if}
   </p>
   <div class="overflow-x-auto">
@@ -151,8 +151,8 @@
       <thead class="sticky top-0 z-10 bg-background">
         <tr>
           <th scope="col" rowspan={hasGroups ? 2 : 1} class={cn(th, 'text-left')}>Peptide</th>
-          <th scope="col" rowspan={hasGroups ? 2 : 1} class={th} title="First residue of the peptide in the protein (1-based)">Start</th>
-          <th scope="col" rowspan={hasGroups ? 2 : 1} class={th} title="PSMs at the search PSM FDR">PSMs</th>
+          <th scope="col" rowspan={hasGroups ? 2 : 1} class={th} title="Position of the peptide's first residue in the protein, counting from 1">Start</th>
+          <th scope="col" rowspan={hasGroups ? 2 : 1} class={th} title="PSMs at the search's PSM FDR">PSMs</th>
           <th scope="col" rowspan={hasGroups ? 2 : 1} class={th} title="Best PSM q-value">best q</th>
           {#if hasGroups}
             {#each groups as g, i (i)}
@@ -193,7 +193,7 @@
                 <span class="min-w-0 truncate"><PeptideSequence view={peptideView(pt, e.peptide, fixedMods)} /></span><span class="sr-only">, {e.psms} PSMs</span>
               </button>
             </td>
-            <td class={td} data-column="start" title={e.located ? `Residues ${e.spans.map((s) => `${s.start + 1}–${s.end}`).join(', ')}` : 'The search recorded no place for it in the sequence'}>
+            <td class={td} data-column="start" title={e.located ? `Residues ${e.spans.map((s) => `${s.start + 1}–${s.end}`).join(', ')}` : 'The search did not record where this peptide is in the sequence'}>
               {start ?? '–'}
             </td>
             <td class={td} data-column="psms">{formatCount(e.psms)}</td>

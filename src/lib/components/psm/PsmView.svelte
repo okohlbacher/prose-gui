@@ -187,7 +187,7 @@
     const label = `PeptDeep · ${nce.label} · ${instrument} · 100 % = strongest predicted b/y`
     if (spectra === null) return { kind: 'status', label: 'PeptDeep', message: 'Reading the prediction…', failed: false }
     if (prediction.length === 0) {
-      return { kind: 'status', label: 'PeptDeep', message: 'Prediction unavailable: ProSE wrote no prediction for this PSM', failed: true }
+      return { kind: 'status', label: 'PeptDeep', message: 'ProSE wrote no prediction for this PSM', failed: true }
     }
     const ions = prediction
       .filter((p) => (options.ions as string[]).includes(p.type) && options.charges.includes(p.charge))
@@ -384,7 +384,7 @@
           </li>
           <li><button type="button" class={crumb} onclick={() => onBreadcrumb({ tab: 'peptides' })}>Peptides</button> ›</li>
           <li>
-            <button type="button" class="{crumb} max-w-[22rem] truncate align-bottom font-medium text-foreground" title="{proforma} – its PSMs in the PSM table" onclick={() => onBreadcrumb({ peptide: k })}
+            <button type="button" class="{crumb} max-w-[22rem] truncate align-bottom font-medium text-foreground" title="Show the PSMs of {proforma} in the PSM table" onclick={() => onBreadcrumb({ peptide: k })}
               >{peptideCrumb}</button>
             ›
           </li>
@@ -403,7 +403,7 @@
         size="sm"
         class="h-7 px-2.5 text-xs"
         aria-label="Previous PSM"
-        title={neighbours.position < 0 ? 'The filters of the list hide this PSM' : 'Previous PSM of the list (←)'}
+        title={neighbours.position < 0 ? "The list's filters hide this PSM" : 'Previous PSM in the list (←)'}
         aria-keyshortcuts="ArrowLeft"
         disabled={neighbours.prev === null}
         onclick={() => step(-1)}>‹ Prev</Button>
@@ -413,7 +413,7 @@
         size="sm"
         class="h-7 px-2.5 text-xs"
         aria-label="Next PSM"
-        title={neighbours.position < 0 ? 'The filters of the list hide this PSM' : 'Next PSM of the list (→)'}
+        title={neighbours.position < 0 ? "The list's filters hide this PSM" : 'Next PSM in the list (→)'}
         aria-keyshortcuts="ArrowRight"
         disabled={neighbours.next === null}
         onclick={() => step(1)}>Next ›</Button>
@@ -438,8 +438,8 @@
   </div>
   {#if shift}
     <p class="-mt-1 mb-2 text-xs text-muted-foreground" data-testid="open-search-note">
-      Open search: an unlocalized mass shift of {shiftText} Da. The annotation is of the peptide without it, so fragments that carry
-      the shift stay unannotated.
+      This PSM from the open search has a mass shift of {shiftText} Da at an unknown position. The annotation shows the peptide
+      without the shift, so fragments that carry it are not annotated.
     </p>
   {/if}
 
@@ -490,7 +490,7 @@
                 <DropdownMenu.CheckboxItem
                   checked={options.losses.includes(l.formula)}
                   onCheckedChange={(on) => setLoss(l.formula, on)}
-                  title={l.formula === 'other' ? 'Other neutral losses the engine finds (e.g. of side chains)' : undefined}
+                  title={l.formula === 'other' ? 'Other neutral losses the engine finds, such as losses from side chains' : undefined}
                   >{l.formula === 'other' ? 'other losses' : `${l.label} loss${l.note ? ` (${l.note})` : ''}`}</DropdownMenu.CheckboxItem>
               {/each}
             </DropdownMenu.Group>
@@ -502,7 +502,7 @@
       </div>
       <div class="ml-auto flex items-center gap-1" role="radiogroup" aria-labelledby="{uid}-bottom">
         <span id="{uid}-bottom" class="mr-1 text-muted-foreground">Bottom</span>
-        <label class="relative" title={onnx ? undefined : 'This search has no PeptDeep predictions (ProSE without ONNX Runtime)'}>
+        <label class="relative" title={onnx ? undefined : 'This search has no PeptDeep predictions, because ProSE ran without ONNX Runtime'}>
           <input
             type="radio"
             name="{uid}-bottom"
@@ -546,7 +546,7 @@
       {/if}
       {#if peakFilter}
         <p class="pb-1 text-xs text-muted-foreground" data-testid="peak-filter-note">
-          Top {peakFilter.top} peaks per {peakFilter.window} m/z shown, and every peak ProSE annotated.
+          Showing the top {peakFilter.top} peaks per {peakFilter.window} m/z, plus every peak ProSE annotated.
         </p>
       {/if}
       {#if annotationError}
@@ -554,7 +554,7 @@
       {:else if precursorError}
         <p class="pb-1 text-xs text-muted-foreground" role="status" data-testid="precursor-note">
           The precursor peaks could not be annotated ({precursorError.length > 90 ? `${precursorError.slice(0, 89)}…` : precursorError}), so the
-          fragments are shown without them. Switching the precursor peaks off and on tries again.
+          fragments are shown without them. To try again, switch Precursor peaks off and on.
         </p>
       {/if}
     {:else if spectra === null}
@@ -570,9 +570,9 @@
       <div class="my-2 rounded-md border border-dashed px-4 py-8 text-center" data-testid="spectrum-missing">
         <p class="font-medium">Spectrum not stored</p>
         <p class="mx-auto mt-1 max-w-[44rem] text-xs text-muted-foreground">
-          The result has no peaks for this PSM, so its spectrum cannot be shown, annotated or exported. A search keeps the spectra of
-          its PSMs within its PSM FDR; results opened without them (as the debug results) have none. The ladder needs the
-          peaks too; the table below lists the theoretical ions.
+          The result has no peaks for this PSM, so its spectrum cannot be shown, annotated or exported. A search saves the spectra of
+          its PSMs within its PSM FDR. Results opened without them, such as the debug results, have none. The fragment ladder
+          needs the peaks too, but the table below lists the theoretical ions.
         </p>
       </div>
     {/if}
@@ -594,7 +594,7 @@
       {#if peaks}
         <MassErrorPlot matches={shown} mz={peaks.mz} intensity={peaks.intensity} {tolerance} {domain} />
       {:else}
-        <p class="py-6 text-center text-xs text-muted-foreground">No spectrum: no mass errors.</p>
+        <p class="py-6 text-center text-xs text-muted-foreground">No spectrum, so no mass errors to show.</p>
       {/if}
     </div>
     <div class="max-w-[380px] min-w-[250px] flex-[1_1_260px] rounded-lg border bg-background px-3.5 py-3">
