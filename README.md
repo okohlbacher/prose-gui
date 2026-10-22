@@ -42,7 +42,7 @@ libglvnd-gles` (Fedora).
 - Disk: each search keeps ProSE's QPX outputs, most of it the spectra of the PSMs (the QPX mz view of each input: the
   100 most intense peaks per 100 m/z and every annotated peak): about 3.6 MB per thousand PSMs of an Orbitrap HCD
   run with ~1,100 peaks per MS2 spectrum (2.8 MB the input's mz view, 0.5 MB its psm file with PeptDeep's
-  predictions, 0.3 MB the merged psm file of all inputs), under 1 MB for the example's small spectra.
+  predictions, 0.3 MB the merged psm file of all inputs), under 1 MB for the example.
 
 ## Where the data is
 
@@ -100,6 +100,23 @@ most 3 GB (larger searches are refused with a message; they stay in History).
   zip (with zip64).
 - macOS: Apple silicon only; not signed with a Developer ID (see Install).
 - Windows: two inputs of one name are searched together only when they are on the drive of the app's data.
+
+## The example
+
+"Try the example" in New search loads OpenMS' example run `Ecoli_MS2_small.mzML` (E. coli, LTQ Orbitrap XL, CID,
+139 MS2 spectra, 1.2 MB) twice, as two replicates of one condition, and the 4,136 E. coli K-12 proteins (targets
+only: ProSE adds the decoys, the app the cRAP contaminants). The settings are the default preset with a fragment
+tolerance of 0.5 Da for the ion-trap fragments. The search takes a few seconds and finds 60 target PSMs at 1 % FDR
+in each replicate (54 peptides, 52 proteins), with precursor errors between −6 and +8 ppm (median 3.9 ppm) and a few
+isotope errors. The run is small: no decoy PSM passes 1 %, so ProSE applies no protein FDR (Overview says "not
+applied"), and Percolator falls back to its best single feature (Overview says why).
+
+## Licence
+
+ProSE desktop is under OpenMS' licence (BSD-3-Clause, `LICENSE`). The packages list everything they bundle, with its
+licence, in `resources/notices/THIRD-PARTY-NOTICES.txt`; the ProSE tool's libraries come with theirs in
+`resources/prose/share/OpenMS/LICENSES`. The example is OpenMS example data. OpenMS logo © OpenMS Inc., used with
+permission (the OpenMS Assets License, `src/assets/logo`).
 
 ## Develop (ibminode06, no root)
 

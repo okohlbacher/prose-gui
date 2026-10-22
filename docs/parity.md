@@ -11,9 +11,12 @@ where it comes from, and a verdict:
   `develop`, in the pin `native/OPENMS_COMMIT`) adds it;
 - **not needed**: the desktop app does not show it (the reason is given).
 
-Checked against ProSE of the pin (`native/OPENMS_COMMIT`: develop + #10641 + #10676) on the web app's example and the
-TOPP test data (`DatabaseSuitability_in_spec.mzML`, one and two inputs, closed and open search, with and without
-Percolator and PeptDeep).
+Checked against ProSE of the pin (`native/OPENMS_COMMIT`: develop + #10641 + #10676) on the app's example (OpenMS'
+`Ecoli_MS2_small.mzML`, LTQ Orbitrap XL CID, as two inputs, with Percolator and PeptDeep), the web app's example
+(`DatabaseSuitability_in_spec.mzML`, simulated, one and two inputs) and the TOPP test data (closed and open search, with
+and without Percolator and PeptDeep). On the app's example the reader's result equals the web app's but for the size of
+the fragment index (`indexedPeptides`, `indexedFragments`: the native tool indexes the whole database once for both
+inputs, the web module only the peptides the precursor windows reach).
 
 **The app reads only QPX** (the user's decision, 2026-10-21): the QPX psm, mz, pg, run and provenance views ProSE writes
 with `-out_qpx` and its `-qpx_extended` (#10676), with optional columns. QPX readers ignore columns and keys they do
@@ -126,9 +129,13 @@ Rows: the PSM rows of `ResultTables.psms` are the rows of `quantms.psm.parquet` 
 each). A PSM's prediction is the same row of its input's psm file (checked: `psm_id`); its spectrum the row of the
 input's mz view whose `id` is its `spectrum_reference` (checked): the mz rows are in the order of each spectrum's
 first PSM, so the reader counts them; if the view has another number of rows (a spectrum not found), or the counted
-row has another id, it finds them by their ids (once per input). A row whose `scan_start_time` is not the PSM's RT
-(the first of several spectra of the PSM's native ID) is not the PSM's: it has no spectrum. Both are read by row group (256 rows) when the PSM view opens a PSM, and the last four row groups of each
-are kept (`src/lib/results/read.ts`, `SearchResult.spectra.load`). Nothing of them is read when the search opens.
+row has another id, it finds them by their ids (once per input; a second load of the input that was already under way
+retries with them too). A PSM whose `spectrum_reference` is null has no stored spectrum: ProSE leaves it null for a
+second spectrum of a native ID, whose mz row is the first's (the PSM view says so); such a PSM is never matched by
+another key (`run_file_name`, `scan`). A row whose `scan_start_time` is not the PSM's RT (the first of several spectra
+of the PSM's native ID) is not the PSM's either. Both are read by row group (256 rows) when the PSM view opens a PSM,
+and the last four row groups of each are kept (`src/lib/results/read.ts`, `SearchResult.spectra.load`). Nothing of
+them is read when the search opens.
 
 ## ResultTables
 
@@ -179,7 +186,7 @@ input's mz view with the PSM's spectrum, and the PredictedSpectra of the row gro
 | Field | Source | Verdict |
 | --- | --- | --- |
 | `psmSpectrum` | one spectrum per mz row (`LoadedSpectra.spectrumRow` is the PSM's; PSMs of one spectrum share it) | **added in #10676** (mz view) |
-| `offsets`, `mz`, `intensity` | mz `mz`, `intensity` (float32, by m/z, as the input file has them, **filtered**: the 100 most intense peaks per 100 m/z and every annotated peak; no row when the spectrum was not found, no view when the file could not be read again). The PSM view says so ("Top 100 peaks per 100 m/z shown, and every peak ProSE annotated", from the mz view's footer `prose_peak_top` and `prose_peak_window`; `LoadedSpectra.peakFilter`). On the example (at most 77 peaks per spectrum) nothing is filtered | **added in #10676** (mz view) |
+| `offsets`, `mz`, `intensity` | mz `mz`, `intensity` (float32, by m/z, as the input file has them, **filtered**: the 100 most intense peaks per 100 m/z and every annotated peak; no row when the spectrum was not found, no view when the file could not be read again). The PSM view says so ("Showing the top 100 peaks per 100 m/z, plus every peak ProSE annotated", from the mz view's footer `prose_peak_top` and `prose_peak_window`; `LoadedSpectra.peakFilter`). On the examples nothing is filtered (the web app's: at most 77 peaks per spectrum; the app's E. coli run: at most 543, never 100 within 100 m/z) | **added in #10676** (mz view) |
 | `precursorMz` | mz `precursors[0].selected_ion_mz` (float32; else the PSM's `observed_mz`) | available |
 | `collisionEnergy` | — (the reader fills NaN) | not needed: the web app used it only as a fallback NCE for predicting in the browser; the desktop app shows ProSE's prediction, made at the file's `peptdeep_nce` |
 
@@ -200,8 +207,9 @@ intense, > 0.01, by m/z, precursor charges 1–6 — the same rule as the web ap
 every written PSM, also without PeptDeep rescoring (with it, recomputed at the NCE the rescoring used); null where the
 prediction failed or without ONNX Runtime. The fragment annotation of ProSE's own scoring stays in QPX `mz_array`,
 `intensity_array`, `charge_array`, `ion_type_array`. The reader gives them as `PredictedSpectra` (`src/lib/results/types.ts`:
-one range per PSM row of the row group, the ions named as the web app names them, `b3+` → `b3`); on the web app's example they equal its
-`predictMS2()` of each PSM's peptide at the file's NCE within 1e-5 (intensity) and float32 (m/z), ion for ion.
+one range per PSM row of the row group, the ions named as the web app names them, `b3+` → `b3`); on both examples they
+equal the web app's `predictMS2()` of each PSM's peptide at the file's NCE within 1e-5 (intensity) and float32 (m/z),
+ion for ion.
 
 ## ProSEMultiSummary
 

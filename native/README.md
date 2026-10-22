@@ -269,10 +269,10 @@ Windows OpenMS does not probe its install prefix at all (`File.cpp`: CMake's def
 1. The package is opened as a user would: the `.dmg` is mounted and `ProSE.app` copied out; the installer is
    run silently (`/S /D=<folder>`). The bundle inside is verified (`macho-verify`, `pe-verify`).
 2. The bundled ProSE prints its version from an empty environment (Windows: only Windows' folders on `PATH`).
-3. It searches the example from the command line, in a folder with a space in its name, with Percolator and
-   PeptDeep: exit 0, the outputs the app reads, the `[PeptDeepRescoring] Predicted features added` line, and
-   more than 500 target PSMs at 1 % FDR (895 with these settings). The same in a folder named `Größe ü` has
-   to give the same number.
+3. It searches the example (`Ecoli_MS2_small.mzML`, `Ecoli_K12_proteome.fasta`) from the command line, in a folder
+   with a space in its name, with the example's settings, Percolator and PeptDeep: exit 0, the outputs the app
+   reads, the `[PeptDeepRescoring] Predicted features added` line, and more than 40 target PSMs at 1 % FDR (69
+   with these settings). The same in a folder named `Größe ü` has to give the same number.
 4. The app starts with `--smoke-test` (`src-tauri/src/lib.rs`): when its page has loaded it prints
    `{"page", "tool"}` (`tool_info`) and exits. The tool has to be the package's own, with ONNX, and of the
    version of step 2.
@@ -287,8 +287,10 @@ macOS, and on Windows it needs msedgedriver of the runner's WebView2 version.
   the inputs' stems differ (ignoring case, as NTFS does; `.mzML` and `.mzML.gz` of one name clash). Inputs that
   share a stem go in as hard links `<n>__<name>` in the search folder, which works on the volume of the app's
   data only and is removed when the search ends; on another volume the search is refused with a message asking
-  to rename one of the files. Nothing is ever copied (`args.rs`, `InputLinks`, `input_placements`). The app's
-  own example is a hard link, or a copy where the app is on another drive than its data.
+  to rename one of the files. An input of stem `quantms` goes in as such a link as well: ProSE refuses it, since
+  its merged QPX views are `quantms.*.parquet`. Nothing is ever copied (`args.rs`, `InputLinks`,
+  `input_placements`). The app's own example is a hard link, or a copy where the app is on another drive than its
+  data.
 - **Cancel** ends a job object the tool runs in (`run.rs`): Windows has no SIGTERM for a console tool; the job
   takes every process the tool starts, and it is closed with the app (`KILL_ON_JOB_CLOSE`), so ProSE ends with
   the app however the app ends. The tool runs without a console window.
@@ -331,7 +333,7 @@ native/scripts/smoke-appimage.sh src-tauri/target/release/bundle/appimage/ProSE_
 ```
 
 The AppImage runs with `--appimage-extract-and-run` under `xvfb-run` and is driven through WebDriver
-(`e2e/appimage.smoke.ts`): the example with PeptDeep gives 1,790 PSMs and the PeptDeep mirror. tauri-driver and
+(`e2e/appimage.smoke.ts`): the example with PeptDeep gives 120 PSMs and the PeptDeep mirror. tauri-driver and
 WebKitWebDriver are not in the AppImage; they run from the toolchain (here `in-env.sh`, in CI the runner's
 packages) and drive the AppImage's own webview over WebKit's automation protocol, which release builds allow when
 `TAURI_WEBVIEW_AUTOMATION=true` (tauri-driver sets it). The application tauri-driver starts is
