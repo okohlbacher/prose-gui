@@ -5,8 +5,9 @@
 //   node scripts/results-fixture-native.mjs <case> <ProSE>        (case: example, mods, open, empty)
 //
 // The fixture keeps what the app reads: inputs.json (with the paths of the inputs replaced by
-// /data/<name>), database.fasta (with the contaminants, as the shim writes it; without, the search reads
-// the user's FASTA, kept as user/<name>), qpx/ and mods/. Not kept: the links to the inputs, prose.log,
+// /data/<name>), database.fasta (with the contaminants, as the shim writes it, but only the entries of the proteins
+// the result names and the targets of its decoys: the reader needs no other; FULL_DATABASE=1 keeps all; without
+// contaminants the search reads the user's FASTA, kept as user/<name>), qpx/ and mods/. Not kept: the links to the inputs, prose.log,
 // database.json and the idXML.
 // OUT=<dir> writes it elsewhere, KEEP=1 keeps the search folder.
 
@@ -14,6 +15,8 @@ import { spawnSync } from 'node:child_process'
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
+import { zstdDecompressSync } from 'node:zlib'
+import { parquetReadObjects } from 'hyparquet'
 import { CRAP, getCase, PEAK_TOP, PEAK_WINDOW } from './results-example.mjs'
 
 const [caseName, prose] = process.argv.slice(2)
@@ -22,6 +25,32 @@ if (!caseName || !prose) {
   process.exit(2)
 }
 const search = getCase(caseName)
+
+/** The accessions a search's QPX views name (PSMs and protein groups), with the targets of its decoys. */
+async function accessionsOf(qpx) {
+  const names = new Set()
+  for (const file of readdirSync(qpx)) {
+    const column = file.endsWith('.psm.parquet') ? 'protein_accessions' : file.endsWith('.pg.parquet') ? 'pg_accessions' : null
+    if (!column) continue
+    const bytes = readFileSync(join(qpx, file))
+    const rows = await parquetReadObjects({
+      file: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      columns: [column],
+      compressors: { ZSTD: (input) => new Uint8Array(zstdDecompressSync(input)) },
+    })
+    for (const row of rows) for (const a of row[column] ?? []) names.add(a)
+  }
+  for (const a of [...names]) if (a.startsWith('DECOY_')) names.add(a.slice('DECOY_'.length))
+  return names
+}
+
+/** The entries of a FASTA text whose accession (the header's first word) is in `keep`. */
+function fastaEntries(text, keep) {
+  return text
+    .split(/^(?=>)/m)
+    .filter((entry) => keep.has(entry.slice(1).split(/\s/, 1)[0]))
+    .join('')
+}
 const here = new URL('..', import.meta.url).pathname
 const fixture = process.env.OUT ?? join(here, 'src/lib/results/fixtures', caseName)
 
@@ -86,7 +115,10 @@ try {
   mkdirSync(fixture, { recursive: true })
   const kept = records.map((r) => ({ ...r, path: `/data/${r.name}` }))
   writeFileSync(join(fixture, 'inputs.json'), JSON.stringify(kept, null, 2) + '\n')
-  if (search.contaminants) cpSync(database, join(fixture, 'database.fasta'))
+  if (search.contaminants) {
+    const text = readFileSync(database, 'utf8')
+    writeFileSync(join(fixture, 'database.fasta'), process.env.FULL_DATABASE ? text : fastaEntries(text, await accessionsOf(join(dir, 'qpx'))))
+  }
   else cpSync(database, join(fixture, 'user', basename(database)), { recursive: true })
   for (const sub of ['qpx', 'mods']) {
     let files

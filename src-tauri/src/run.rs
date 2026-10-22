@@ -31,8 +31,9 @@
 //!   handler), at the end of its current step; a later start of the app sweeps the folder.
 
 use crate::args::{
-    build_args_with, humanize, input_placements, input_records_with, with_contaminants, InputLinks,
-    InputRecord, Placement, SearchRequest, DATABASE_FILE, DATABASE_RECORD,
+    build_args_with, humanize, input_placements, input_records_with, reserved_stem,
+    with_contaminants, InputLinks, InputRecord, Placement, SearchRequest, DATABASE_FILE,
+    DATABASE_RECORD,
 };
 use crate::history::{finish_partial, lock_partial, remove_partial, with_backoff};
 use crate::progress::{ProgressTracker, STARTING};
@@ -764,6 +765,17 @@ fn prepare_folder(
             })?,
             // (Windows) a hard link works on the folder's own volume only; nothing is ever copied
             Placement::HardLink => fs::hard_link(&original, &link).map_err(|e| {
+                if reserved_stem(&record.name) {
+                    return format!(
+                        "ProSE cannot search a file named {} under that name, because its own result files are \
+                         called quantms. The app links such a file into the search folder under another name, but \
+                         Windows can make that link only on the drive of the app's data ({}) and on NTFS. {} cannot \
+                         be linked there ({e}). Rename the file and start the search again.",
+                        record.name,
+                        dir.parent().unwrap_or(dir).display(),
+                        file.path
+                    );
+                }
                 format!(
                     "Two inputs are named {}. ProSE names its results after the files, so files of one \
                      name are searched together only through links in the search folder, which Windows \

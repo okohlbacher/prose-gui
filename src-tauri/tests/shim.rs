@@ -1076,6 +1076,23 @@ fn the_tools_version_is_read_from_its_help() {
     assert_eq!(tool::parse_version("nothing"), None);
 }
 
+/// `tool::probe` of a script this test process has just written. Another test's child, forked while the script was
+/// open for writing, holds that descriptor until its own exec; meanwhile exec of the script fails with ETXTBSY ("Text
+/// file busy", os error 26). A test-only race (the app never runs a file it wrote): retried for up to 2 s.
+fn probe_written_script(script: &Path) -> Result<tool::ToolInfo, String> {
+    let mut result = tool::probe(script);
+    for _ in 0..100 {
+        match &result {
+            Err(e) if e.contains("os error 26") => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                result = tool::probe(script);
+            }
+            _ => break,
+        }
+    }
+    result
+}
+
 #[test]
 fn probing_a_tool_reports_its_version_path_and_onnx_support() {
     let dir = TempDir::new("probe");
@@ -1086,7 +1103,7 @@ fn probing_a_tool_reports_its_version_path_and_onnx_support() {
     fs::write(&script, "#!/bin/sh\necho 'Version: 9.9.9 Oct 20 2026'\n").unwrap();
     #[cfg(not(unix))]
     let script = fake_prose_exe();
-    let info = tool::probe(&script).unwrap();
+    let info = probe_written_script(&script).unwrap();
     assert_eq!(info.version, "9.9.9");
     assert_eq!(info.path, script.to_string_lossy());
     assert!(!info.onnx, "a tool without a build manifest has no ONNX");
@@ -1522,6 +1539,19 @@ fn inputs_of_one_name_on_another_volume_are_refused() {
         run.listing().is_empty(),
         "no folder is left: {:?}",
         run.listing()
+    );
+    // a lone input of stem quantms on the other volume: its own reason
+    let reserved = elsewhere.join("QuantMS.mzML");
+    fs::create_dir_all(&elsewhere).unwrap();
+    fs::write(&reserved, "<mzML/>").unwrap();
+    let (result, _rx) = run.start(request(&[&reserved], &i.fasta, false, json!({})), None);
+    let err = result.unwrap_err();
+    let _ = fs::remove_dir_all(&elsewhere);
+    assert!(
+        err.contains("ProSE cannot search a file named QuantMS.mzML")
+            && err.contains("Rename the file")
+            && !err.contains("Two inputs"),
+        "{err}"
     );
 }
 

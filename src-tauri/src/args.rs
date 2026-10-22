@@ -251,6 +251,11 @@ pub enum Placement {
 /// The stem ProSE refuses for an input with `-out_qpx` (the merged views are `quantms.*.parquet`).
 const RESERVED_STEM: &str = "quantms";
 
+/// Whether ProSE refuses an input of this name as it is (its stem is `quantms`, ignoring case).
+pub fn reserved_stem(name: &str) -> bool {
+    stem_key(name) == RESERVED_STEM
+}
+
 /// The stem ProSE gives an input of this name, compared as NTFS compares names.
 fn stem_key(name: &str) -> String {
     input_stem(name).to_lowercase()

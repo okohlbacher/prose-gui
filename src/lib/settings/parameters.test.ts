@@ -84,7 +84,9 @@ describe('the "All parameters" dialog and the shim', () => {
     if (e.type === 'bool') return 'Flag'
     if (e.type === 'int') return 'Int'
     if (e.type === 'double') return 'Float'
-    if (e.type.endsWith('[]')) return 'List'
+    // the shim's List takes strings only; ParameterField sends numbers for int[] and double[], which no Kind takes
+    if (e.type === 'string[]') return 'List'
+    if (e.type.endsWith('[]')) return `${e.type} (a list of numbers: no shim Kind)`
     return e.validStrings && e.validStrings.length > 0 ? 'Choice' : 'Text'
   }
 
