@@ -332,7 +332,7 @@ into the AppDir with the relative helper path the GTK plugin writes on a normal 
 ## AppImage smoke test
 
 ```bash
-native/scripts/smoke-appimage.sh src-tauri/target/release/bundle/appimage/ProSE_0.1.1_amd64.AppImage \
+native/scripts/smoke-appimage.sh src-tauri/target/release/bundle/appimage/ProSE_0.1.2_amd64.AppImage \
   --hide-openms /scratch/sachsenb/openms-desktop/build
 ```
 
