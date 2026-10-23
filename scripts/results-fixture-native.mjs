@@ -26,13 +26,14 @@ if (!caseName || !prose) {
 }
 const search = getCase(caseName)
 
-/** The accessions a search's QPX views name (PSMs and protein groups), with the targets of its decoys. */
+/** The accessions a search's QPX views name (PSMs and protein groups; the aggregate and qpx/runs/), with the targets of its decoys. */
 async function accessionsOf(qpx) {
   const names = new Set()
-  for (const file of readdirSync(qpx)) {
-    const column = file.endsWith('.psm.parquet') ? 'protein_accessions' : file.endsWith('.pg.parquet') ? 'pg_accessions' : null
+  const files = [...readdirSync(qpx).map((f) => join(qpx, f)), ...readdirSync(join(qpx, 'runs')).map((f) => join(qpx, 'runs', f))]
+  for (const path of files) {
+    const column = path.endsWith('.psm.parquet') ? 'protein_accessions' : path.endsWith('.pg.parquet') ? 'pg_accessions' : null
     if (!column) continue
-    const bytes = readFileSync(join(qpx, file))
+    const bytes = readFileSync(path)
     const rows = await parquetReadObjects({
       file: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
       columns: [column],
@@ -121,16 +122,13 @@ try {
   }
   else cpSync(database, join(fixture, 'user', basename(database)), { recursive: true })
   for (const sub of ['qpx', 'mods']) {
-    let files
     try {
-      files = readdirSync(join(dir, sub))
+      readdirSync(join(dir, sub))
     } catch {
       continue
     }
-    mkdirSync(join(fixture, sub))
-    for (const file of files) {
-      cpSync(join(dir, sub, file), join(fixture, sub, file))
-    }
+    // qpx/ with its runs/ (the per-input files)
+    cpSync(join(dir, sub), join(fixture, sub), { recursive: true })
   }
   console.log(`fixture written to ${fixture}`)
 } finally {

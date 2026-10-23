@@ -207,7 +207,7 @@ describe('annotatePeaks', () => {
     { fixture: 'example', input: '1__Ecoli_1', tolerance: 0.5, unit: 'Da' as const, minIons: 500, minRows: 50 },
   ])("agrees with ProSE's own annotations for b/y ($fixture, $tolerance $unit)", { timeout: 60_000 }, async ({ fixture, input, tolerance, unit, minIons, minRows }) => {
     const r = await search(fixture)
-    const bytes = readFileSync(join(results, `${fixture}/qpx/${input}.psm.parquet`))
+    const bytes = readFileSync(join(results, `${fixture}/qpx/runs/${input}.psm.parquet`))
     const file = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
     const rows = (await parquetReadObjects({
       file,

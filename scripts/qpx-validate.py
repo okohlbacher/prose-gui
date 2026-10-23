@@ -1,6 +1,6 @@
 # Validates ProSE's QPX output folders with bigbio/qpx's own validator, as its `qpxc validate` does
 # (load_schema(view).validate_full(table, strict=True)): every <prefix>.<view>.parquet of a view qpx knows (psm, pg,
-# mz, run, sample, provenance). Prints each file's errors and warnings; exits 1 if any file has an error.
+# mz, run, sample, provenance), in the folder and in its runs/ subfolder (the per-input files). Prints each file's errors and warnings; exits 1 if any file has an error.
 #
 #   python -I scripts/qpx-validate.py <qpx folder>...
 #
@@ -17,7 +17,7 @@ VIEWS = ['psm', 'pg', 'mz', 'run', 'sample', 'provenance']
 failed = False
 checked = 0
 for folder in sys.argv[1:]:
-    for path in sorted(Path(folder).glob('*.parquet')):
+    for path in sorted([*Path(folder).glob('*.parquet'), *Path(folder).glob('runs/*.parquet')]):
         view = path.name.split('.')[-2]
         if view not in VIEWS:
             continue

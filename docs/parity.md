@@ -39,16 +39,20 @@ ProSE -in <files…> -database <fasta (+ cRAP)> -threads <n> -Search:… (form)
 
 | Short name | File | Content |
 | --- | --- | --- |
-| psm | `qpx/<stem>.psm.parquet` (per input) | one row per written PSM (best hit of a spectrum): the QPX psm view, with the columns of `-qpx_extended` (below) including PeptDeep's prediction; written as soon as its input is done, in row groups of 256 rows (the PSM view reads the row group of the PSM it opens) |
-| mz | `qpx/<stem>.mz.parquet` (per input) | the QPX mz view of the MS2 spectra of the input's written PSMs only, one row per spectrum in the order of its first PSM and one per native ID (the view's key: of several spectra of one native ID only the first's, so the PSMs of the others have none), with **filtered peaks** (below); row groups of 256 rows; its footer has the filter (`prose_peak_window`, `prose_peak_top`, `prose_peak_annotated` "kept") |
+| psm | `qpx/runs/<stem>.psm.parquet` (per input) | one row per written PSM (best hit of a spectrum): the QPX psm view, with the columns of `-qpx_extended` (below) including PeptDeep's prediction; written as soon as its input is done, in row groups of 256 rows (the PSM view reads the row group of the PSM it opens) |
+| mz | `qpx/runs/<stem>.mz.parquet` (per input) | the QPX mz view of the MS2 spectra of the input's written PSMs only, one row per spectrum in the order of its first PSM and one per native ID (the view's key: of several spectra of one native ID only the first's, so the PSMs of the others have none), with **filtered peaks** (below); row groups of 256 rows; its footer has the filter (`prose_peak_window`, `prose_peak_top`, `prose_peak_annotated` "kept") |
 | merged psm | `qpx/quantms.psm.parquet` | the rows of all inputs (whose files were written), in input order, without the prediction columns: the reader's PSM rows |
 | run | `qpx/quantms.run.parquet` | the QPX run view: one row per input, in input order, with ProSE's optional columns (below) |
 | provenance | `qpx/quantms.provenance.parquet` | the QPX provenance view: one row per step of the search (`peptide_search`, `spectrum_prediction`, `psm_rescoring`, `target_decoy_fdr`, `protein_grouping`) with curated `parameters`; the complete ProSE parameters as JSON in the `config` of the search step |
 | sample | `qpx/quantms.sample.parquet` | the QPX sample view: one sample per input (its stem; organism and organism part "not available", which ProSE does not know); the reader does not read it |
-| pg | `qpx/quantms.pg.parquet` | the protein groups: of one input its own (`<stem>.pg.parquet`); of several the pooled inference of `-out_merged` (with its protein FDR, decoys kept by `-keep_decoys`); without protein inference one group per protein |
+| pg | `qpx/quantms.pg.parquet` | the protein groups: of one input its own (`qpx/runs/<stem>.pg.parquet`); of several the pooled inference of `-out_merged` (with its protein FDR, decoys kept by `-keep_decoys`); without protein inference one group per protein |
 | footer | the Parquet footer key-value metadata of the per-input files | what describes their optional content: of the psm file `prose_prediction_ms2_model`, `prose_prediction_instrument`; of the mz view the peak filter |
 | mod TSV | `mods/<the provenance's mod_analysis_delta_masses>`, `…_ptms` | open-search modification analysis (header lines `# Total PSMs: …` and a table) |
 | FASTA | `proteins.fasta`, `database.fasta`, or the database the provenance names (`database_file`) | protein descriptions and sequences |
+
+The per-input files are in `qpx/runs/` (ProSE of OpenMS 3.7 puts them there; `quantms.*` stay in `qpx/`). Searches saved by app
+0.1.x have them next to `quantms.*` (`qpx/<stem>.psm.parquet`, `.mz.parquet`): the reader decides per input from its psm file
+(`qpx/runs/<stem>.psm.parquet`, else `qpx/<stem>.psm.parquet`) and takes the input's mz file from the same folder.
 
 The columns `-qpx_extended` adds to the psm view: `additional_scores` with **every** numeric score and meta value of
 the PSM in snake_case (`global_qvalue`: the PSM-level q-value, computed over the PSMs of its input file; `ln_hyperscore`;
@@ -59,7 +63,7 @@ known; `spectrum_reference` (the native ID); `isotope_error` (int16, observed mi
 at a protein terminus); and in the per-input files
 `predicted_ion_type_array`/`predicted_mz_array`/`predicted_intensity_array` (PeptDeep, below; QPX has no place for a
 prediction). The observed peaks are in the QPX mz view (the spec's preferred place for spectra, `mz.md`), not in the
-psm view: per input `<stem>.mz.parquet` with the spec's columns (`id` the native ID = the psm's
+psm view: per input `qpx/runs/<stem>.mz.parquet` with the spec's columns (`id` the native ID = the psm's
 `spectrum_reference`, `run_file_name`, `scan`, `ms_level`, `centroid`, `scan_start_time` in minutes,
 `inverse_ion_mobility`, `ion_injection_time` (null if unknown), `total_ion_current` of all its peaks, `precursors`,
 `cv_params` (null)) and `mz`/`intensity` (float32, by m/z) **filtered**: the 100 most intense peaks per 100 m/z

@@ -6,9 +6,9 @@
 // quantms.psm.parquet (the PSM rows of all inputs, in input order, with the optional columns but without the
 // spectra), quantms.run.parquet (one row per input: its statistics and its rows in quantms.psm.parquet),
 // quantms.provenance.parquet (the steps of the search with their parameters), quantms.pg.parquet (the protein
-// groups: of several inputs the pooled inference), and of each input <stem>.psm.parquet (the same rows with
-// PeptDeep's prediction) and <stem>.mz.parquet (the QPX mz view of the spectra of its PSMs, filtered peaks), read
-// by row group when a PSM is opened; mods/ (open search: the
+// groups: of several inputs the pooled inference), and of each input in qpx/runs/ <stem>.psm.parquet (the same rows
+// with PeptDeep's prediction) and <stem>.mz.parquet (the QPX mz view of the spectra of its PSMs, filtered peaks), read
+// by row group when a PSM is opened (a search of app 0.1.x has them in qpx/, next to quantms.*); mods/ (open search: the
 // tables the provenance names), and database.fasta (with the contaminants). Without contaminants ProSE
 // searched the user's FASTA: the reader asks for the path the provenance records (`database_file`), an
 // absolute path, which the `files` callback has to serve too. The protein sequences and descriptions come
@@ -890,8 +890,9 @@ function groupOf(layout: Layout, row: number): [number, number] {
 
 /**
  * The PsmSpectra of the PSM rows: the rows of input k are from[k] .. from[k + 1] of the PSM rows and the rows of
- * its psm file `qpx/<stems[k]>.psm.parquet`, in order; its spectra are the rows of `qpx/<stems[k]>.mz.parquet`, one per
- * spectrum in the order of its first PSM (else found by their ids).
+ * its psm file `qpx/runs/<stems[k]>.psm.parquet`, in order; its spectra are the rows of `qpx/runs/<stems[k]>.mz.parquet`,
+ * one per spectrum in the order of its first PSM (else found by their ids). A search of app 0.1.x has these files next
+ * to quantms.* (`qpx/<stems[k]>.*`): decided per input by its psm file, and used for its mz file too.
  */
 function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: RowIdentity, predictions: boolean): PsmSpectra {
   const layouts = new Map<string, Promise<Layout>>()
@@ -900,8 +901,11 @@ function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: R
   /** the inputs whose mz rows are found by their ids (the order of the PSMs did not give them) */
   const byIds = new Set<number>()
   const mzRows = new Map<number, Promise<Int32Array>>()
-  const psmName = (k: number) => `qpx/${stems[k]}.psm.parquet`
-  const mzName = (k: number) => `qpx/${stems[k]}.mz.parquet`
+  /** The folder of input k's files ('qpx/runs/' or, of app 0.1.x, 'qpx/'), once `folderOf(k)` has resolved. */
+  const folders = new Map<number, string>()
+  const folderPromises = new Map<number, Promise<string>>()
+  const psmName = (k: number) => `${folders.get(k) ?? 'qpx/runs/'}${stems[k]}.psm.parquet`
+  const mzName = (k: number) => `${folders.get(k) ?? 'qpx/runs/'}${stems[k]}.mz.parquet`
 
   /** A value made once, kept until it fails. */
   const once = <K, T>(map: Map<K, Promise<T>>, key: K, make: () => Promise<T>): Promise<T> => {
@@ -926,6 +930,31 @@ function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: R
         return { metadata, starts }
       }),
     )
+
+  /**
+   * Where input k's files are: qpx/runs/ if its psm file is there, else (app 0.1.x) qpx/. Decided once, from the tail
+   * of the psm file (read anyway); if neither exists, the runs/ name is the one reported.
+   */
+  const folderOf = (k: number) =>
+    once(folderPromises, k, async () => {
+      const notFound = (e: unknown) => isNotFound((e as { cause?: unknown }).cause ?? e)
+      const psm = (folder: string) => `${folder}${stems[k]}.psm.parquet`
+      let folder = 'qpx/runs/'
+      try {
+        await layoutOf(psm(folder))
+      } catch (e) {
+        if (!notFound(e)) throw e
+        try {
+          await layoutOf(psm('qpx/'))
+          folder = 'qpx/'
+        } catch (old) {
+          if (!notFound(old)) throw old
+          throw e
+        }
+      }
+      folders.set(k, folder)
+      return folder
+    })
 
   /** The columns `columns` of row group g of the file `name` (one byte range for all of them). */
   const groupFile = async (name: string, layout: Layout, g: number, columns: string[]) => {
@@ -1072,6 +1101,7 @@ function psmSpectra(files: SearchFiles, stems: string[], from: number[], rows: R
       const local = row - from[k]
 
       // the prediction: the same row of the input's psm file (whose psm_id has to be the row's)
+      await folderOf(k)
       const psmLayout = await layoutOf(psmName(k))
       if (psmLayout.starts[psmLayout.starts.length - 1] !== from[k + 1] - from[k]) {
         throw new Error(`${psmName(k)}: ${psmLayout.starts[psmLayout.starts.length - 1]} rows, but ${MERGED_PSMS} has ${from[k + 1] - from[k]} of this input`)

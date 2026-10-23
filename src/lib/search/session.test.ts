@@ -242,13 +242,13 @@ describe('runSearch', () => {
 
   it('results that cannot be read fail the run, saying so', async () => {
     const search = started()
-    fake.read.mockRejectedValue(new Error('qpx/1__a.psm.parquet: not a Parquet file'))
+    fake.read.mockRejectedValue(new Error('qpx/runs/1__a.psm.parquet: not a Parquet file'))
     const run = runSearch(request, meta)
     await settle()
     search.done.resolve({ folder: '/x' })
     expect(await run).toBeNull()
     // (the search is kept: SearchError offers to open it again)
-    expect(searchRun.failure).toEqual({ context: 'While reading the results', summary: 'qpx/1__a.psm.parquet: not a Parquet file', detail: null, searchId: '17-0' })
+    expect(searchRun.failure).toEqual({ context: 'While reading the results', summary: 'qpx/runs/1__a.psm.parquet: not a Parquet file', detail: null, searchId: '17-0' })
   })
 
   it('once ProSE has ended, Cancel does nothing: the done won, and the search is read and opened', async () => {

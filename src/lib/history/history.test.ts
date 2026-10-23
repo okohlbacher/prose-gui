@@ -320,7 +320,7 @@ describe('project files', () => {
       methods.set(new TextDecoder().decode(bytes.subarray(at + 30, at + 30 + nameLength)), method)
       at += 30 + nameLength + extra + compressed
     }
-    expect(methods.get('qpx/1__Ecoli_1.psm.parquet')).toBe(0)
+    expect(methods.get('qpx/runs/1__Ecoli_1.psm.parquet')).toBe(0)
     expect(methods.get('inputs.json')).toBe(8)
   })
 

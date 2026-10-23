@@ -5,7 +5,7 @@
 // The cases are in scripts/results-example.mjs. Where the two legitimately differ, the test says why.
 
 import { readFileSync } from 'node:fs'
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, cpSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, cpSync, readdirSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { zstdCompressSync } from 'node:zlib'
@@ -370,10 +370,10 @@ describe('peaks and predictions belong to their PSM', () => {
     const read = ranges.filter((r) => !r.name.startsWith('qpx/quantms.'))
     const tails = read.filter((r) => 'tail' in r.range)
     expect(tails.map((r) => r.name)).toEqual([
-      'qpx/1__DatabaseSuitability_1.psm.parquet',
-      'qpx/1__DatabaseSuitability_1.mz.parquet',
-      'qpx/2__DatabaseSuitability_2.psm.parquet',
-      'qpx/2__DatabaseSuitability_2.mz.parquet',
+      'qpx/runs/1__DatabaseSuitability_1.psm.parquet',
+      'qpx/runs/1__DatabaseSuitability_1.mz.parquet',
+      'qpx/runs/2__DatabaseSuitability_2.psm.parquet',
+      'qpx/runs/2__DatabaseSuitability_2.mz.parquet',
     ])
     // 896 PSMs and spectra of each input in row groups of 256: 4 of the psm file, 4 of the mz view
     expect(read.length - tails.length).toBe(16)
@@ -420,7 +420,7 @@ describe('peaks and predictions belong to their PSM', () => {
     const example = await readSearch(folder(join(fixtures, 'suitability')).files)
     expect((await example.spectra.load(0)).peakFilter).toEqual({ top: 100, window: 100 })
     await withCopy('mods', async (dir) => {
-      const path = join(dir, 'qpx', '1__SimpleSearchEngine_1.mz.parquet')
+      const path = join(dir, 'qpx', 'runs', '1__SimpleSearchEngine_1.mz.parquet')
       writeFileSync(path, await withFooter(new Uint8Array(readFileSync(path)), (f) => f.set('prose_peak_top', '0')))
       expect((await (await readSearch(folder(dir).files)).spectra.load(0)).peakFilter).toBeNull()
     })
@@ -431,7 +431,7 @@ describe('peaks and predictions belong to their PSM', () => {
     await withCopy('suitability', async (dir) => {
       // the spectrum of PSM row 1 left out: the rows are no longer in the order of the PSMs
       const left = (await readSearch(folder(dir).files)).tables.psms.nativeId[1]
-      await changeRows(dir, 'qpx/1__DatabaseSuitability_1.mz.parquet', (rows) => rows.filter((r) => r.id !== left))
+      await changeRows(dir, 'qpx/runs/1__DatabaseSuitability_1.mz.parquet', (rows) => rows.filter((r) => r.id !== left))
       const { spectra } = await readSearch(folder(dir).files)
       expect((await spectra.load(1)).spectrumRow).toBe(-1)
       for (const row of [0, 2, 500, 895]) {
@@ -446,12 +446,12 @@ describe('peaks and predictions belong to their PSM', () => {
   test('an input\'s psm file of other rows fails the PSM, not the search', async () => {
     await withCopy('suitability', async (dir) => {
       // the psm files of the two inputs swapped: as many rows, other PSMs (psm_id)
-      const [a, b] = ['1__DatabaseSuitability_1', '2__DatabaseSuitability_2'].map((stem) => join(dir, 'qpx', `${stem}.psm.parquet`))
+      const [a, b] = ['1__DatabaseSuitability_1', '2__DatabaseSuitability_2'].map((stem) => join(dir, 'qpx', 'runs', `${stem}.psm.parquet`))
       const bytes = readFileSync(a)
       cpSync(b, a)
       writeFileSync(b, bytes)
       const { spectra } = await readSearch(folder(dir).files)
-      await expect(spectra.load(0)).rejects.toThrow('qpx/1__DatabaseSuitability_1.psm.parquet: its row 0 is another PSM than the search\'s (psm_id)')
+      await expect(spectra.load(0)).rejects.toThrow('qpx/runs/1__DatabaseSuitability_1.psm.parquet: its row 0 is another PSM than the search\'s (psm_id)')
     })
   })
 
@@ -459,7 +459,7 @@ describe('peaks and predictions belong to their PSM', () => {
     const { spectra: own, tables } = await readSearch(folder(join(fixtures, 'suitability')).files)
     await withCopy('suitability', async (dir) => {
       // as many rows as spectra, in another order: the order of the PSMs gives the wrong rows, the ids the right ones
-      await changeRows(dir, 'qpx/2__DatabaseSuitability_2.mz.parquet', (rows) => rows.reverse())
+      await changeRows(dir, 'qpx/runs/2__DatabaseSuitability_2.mz.parquet', (rows) => rows.reverse())
       const { spectra } = await readSearch(folder(dir).files)
       for (const row of [896, 897, 1500, tables.psms.count - 1]) {
         const [a, b] = [await spectra.load(row), await own.load(row)]
@@ -473,7 +473,7 @@ describe('peaks and predictions belong to their PSM', () => {
   test('two loads at once of an input whose mz rows are not in the PSMs\' order both find their spectra', async () => {
     const { spectra: own } = await readSearch(folder(join(fixtures, 'suitability')).files)
     await withCopy('suitability', async (dir) => {
-      await changeRows(dir, 'qpx/2__DatabaseSuitability_2.mz.parquet', (rows) => rows.reverse())
+      await changeRows(dir, 'qpx/runs/2__DatabaseSuitability_2.mz.parquet', (rows) => rows.reverse())
       const { spectra } = await readSearch(folder(dir).files)
       // (the first PSMs of the input, opened one after the other while the earlier loads still run)
       const rows = Array.from({ length: 8 }, (_, i) => 896 + i)
@@ -495,7 +495,7 @@ describe('peaks and predictions belong to their PSM', () => {
       await changeRows(dir, 'qpx/quantms.psm.parquet', (rows) => {
         rows[1].spectrum_reference = null
       })
-      await changeRows(dir, 'qpx/1__DatabaseSuitability_1.mz.parquet', (rows) => rows.filter((r) => r.id !== id))
+      await changeRows(dir, 'qpx/runs/1__DatabaseSuitability_1.mz.parquet', (rows) => rows.filter((r) => r.id !== id))
       const { spectra, tables } = await readSearch(folder(dir).files)
       expect(tables.psms.nativeId[1]).toBe('')
       expect((await spectra.load(1)).spectrumRow).toBe(-1)
@@ -524,18 +524,49 @@ describe('peaks and predictions belong to their PSM', () => {
     })
   })
 
+  test('a search of app 0.1.x (per-input files next to quantms.*) reads its peaks and predictions', async () => {
+    // what a PSM opens: its peaks, precursor and prediction
+    const opened = async (files: ReturnType<typeof folder>['files']) => {
+      const { spectra, tables } = await readSearch(files)
+      const out: unknown[] = []
+      for (let i = 0; i < tables.psms.count; i++) {
+        const { spectra: sp, spectrumRow, predicted, row } = await spectra.load(i)
+        const s = sp.psmSpectrum[spectrumRow] ?? -1
+        const [from, to] = [predicted.psmOffsets[row], predicted.psmOffsets[row + 1]]
+        out.push({
+          peaks: s >= 0 ? peaks(sp, s) : null,
+          precursorMz: s >= 0 ? sp.precursorMz[s] : null,
+          ion: predicted.ion.slice(from, to),
+          mz: Array.from(predicted.mz.slice(from, to)),
+          intensity: Array.from(predicted.intensity.slice(from, to)),
+        })
+      }
+      return out
+    }
+    const expected = await opened(folder(join(fixtures, 'example')).files)
+    expect(expected.length).toBeGreaterThan(0)
+    await withCopy('example', async (dir) => {
+      // the layout of 0.1.x: the per-input files next to quantms.*, no runs/
+      for (const f of readdirSync(join(dir, 'qpx', 'runs'))) renameSync(join(dir, 'qpx', 'runs', f), join(dir, 'qpx', f))
+      rmSync(join(dir, 'qpx', 'runs'), { recursive: true })
+      const { files, asked } = folder(dir)
+      expect(await opened(files)).toEqual(expected)
+      expect(asked.some((n) => /^qpx\/[12]__.*\.(psm|mz)\.parquet$/.test(n))).toBe(true)
+    })
+  })
+
   test('an input\'s psm file that is missing or of other rows fails the PSM, not the search', async () => {
     await withCopy('suitability', async (dir) => {
-      rmSync(join(dir, 'qpx', '2__DatabaseSuitability_2.psm.parquet'))
-      cpSync(join(dir, 'qpx', 'quantms.pg.parquet'), join(dir, 'qpx', '1__DatabaseSuitability_1.psm.parquet'))
+      rmSync(join(dir, 'qpx', 'runs', '2__DatabaseSuitability_2.psm.parquet'))
+      cpSync(join(dir, 'qpx', 'quantms.pg.parquet'), join(dir, 'qpx', 'runs', '1__DatabaseSuitability_1.psm.parquet'))
       const { spectra, tables } = await readSearch(folder(dir).files)
       expect(tables.psms.count).toBe(1792)
-      await expect(spectra.load(1000)).rejects.toThrow('qpx/2__DatabaseSuitability_2.psm.parquet does not exist')
-      await expect(spectra.load(0)).rejects.toThrow(/qpx\/1__DatabaseSuitability_1.psm.parquet: \d+ rows, but qpx\/quantms.psm.parquet has 896 of this input/)
+      await expect(spectra.load(1000)).rejects.toThrow('qpx/runs/2__DatabaseSuitability_2.psm.parquet does not exist')
+      await expect(spectra.load(0)).rejects.toThrow(/qpx\/runs\/1__DatabaseSuitability_1.psm.parquet: \d+ rows, but qpx\/quantms.psm.parquet has 896 of this input/)
       await expect(spectra.load(5000)).rejects.toThrow('There is no PSM row 5000.')
       // without its mz view (its spectra could not be read again) a PSM has its prediction, no peaks
-      cpSync(join(fixtures, 'suitability', 'qpx', '1__DatabaseSuitability_1.psm.parquet'), join(dir, 'qpx', '1__DatabaseSuitability_1.psm.parquet'))
-      rmSync(join(dir, 'qpx', '1__DatabaseSuitability_1.mz.parquet'))
+      cpSync(join(fixtures, 'suitability', 'qpx', 'runs', '1__DatabaseSuitability_1.psm.parquet'), join(dir, 'qpx', 'runs', '1__DatabaseSuitability_1.psm.parquet'))
+      rmSync(join(dir, 'qpx', 'runs', '1__DatabaseSuitability_1.mz.parquet'))
       const loaded = await (await readSearch(folder(dir).files)).spectra.load(0)
       expect(loaded.spectrumRow).toBe(-1)
       expect(loaded.predicted.psmOffsets[loaded.row + 1]).toBeGreaterThan(loaded.predicted.psmOffsets[loaded.row])
@@ -649,7 +680,8 @@ describe('missing and broken files', () => {
       rmSync(join(dir, 'qpx', 'quantms.provenance.parquet'))
       await expect(readSearch(folder(dir).files)).rejects.toThrow(OldLayoutError)
       // summary.yaml without any QPX psm file
-      for (const f of ['quantms.psm.parquet', '1__SimpleSearchEngine_1.psm.parquet']) rmSync(join(dir, 'qpx', f))
+      rmSync(join(dir, 'qpx', 'quantms.psm.parquet'))
+      rmSync(join(dir, 'qpx', 'runs', '1__SimpleSearchEngine_1.psm.parquet'))
       writeFileSync(join(dir, 'summary.yaml'), 'shared:\n  enzyme: "Trypsin"\nper_file: []\n')
       await expect(readSearch(folder(dir).files)).rejects.toThrow('saved by an earlier version of ProSE Desktop')
       // no results at all
@@ -664,7 +696,7 @@ describe('missing and broken files', () => {
         Object.assign(rows[1], { search_status: 'INPUT_FILE_EMPTY', psm_rows: 0n, identified_spectra_count: 0n, decoy_psm_count: 0n })
       })
       await changeRows(dir, 'qpx/quantms.psm.parquet', (rows) => rows.slice(0, 896))
-      rmSync(join(dir, 'qpx', `${example[1]}.psm.parquet`))
+      rmSync(join(dir, 'qpx', 'runs', `${example[1]}.psm.parquet`))
       const { tables, summary, warnings } = await readSearch(folder(dir).files)
       expect(tables.psms.count).toBe(896)
       expect(Array.from(tables.psms.file).every((f) => f === 0)).toBe(true)
@@ -679,7 +711,7 @@ describe('missing and broken files', () => {
         for (const r of rows) Object.assign(r, { search_status: 'UNKNOWN_ERROR', psm_rows: 0n, identified_spectra_count: 0n })
       })
       await changeRows(dir, 'qpx/quantms.psm.parquet', () => [])
-      for (const e of example) rmSync(join(dir, 'qpx', `${e}.psm.parquet`))
+      for (const e of example) rmSync(join(dir, 'qpx', 'runs', `${e}.psm.parquet`))
       const { tables, summary } = await readSearch(folder(dir).files)
       expect(tables.psms.count).toBe(0)
       expect(summary.files.map((f) => f.status)).toEqual(['UNKNOWN_ERROR', 'UNKNOWN_ERROR'])
@@ -910,14 +942,14 @@ async function writeLargeFolder(dir: string, n: number): Promise<void> {
       }
     })
   }
-  mkdirSync(join(dir, 'qpx'), { recursive: true })
+  mkdirSync(join(dir, 'qpx', 'runs'), { recursive: true })
   writeFileSync(join(dir, 'qpx/quantms.psm.parquet'), rewrite(read('qpx/quantms.psm.parquet'), await many('qpx/quantms.psm.parquet')))
-  writeFileSync(join(dir, `qpx/${stem}.psm.parquet`), rewrite(read(`qpx/${stem}.psm.parquet`), await many(`qpx/${stem}.psm.parquet`), () => {}, 256))
+  writeFileSync(join(dir, `qpx/runs/${stem}.psm.parquet`), rewrite(read(`qpx/runs/${stem}.psm.parquet`), await many(`qpx/runs/${stem}.psm.parquet`), () => {}, 256))
   const runs = (await rowsOf(read('qpx/quantms.run.parquet'))).slice(0, 1)
   Object.assign(runs[0], { psm_rows: BigInt(n), identified_spectra_count: BigInt(n) })
   writeFileSync(join(dir, 'qpx/quantms.run.parquet'), rewrite(read('qpx/quantms.run.parquet'), runs))
   // (the spectra of the repeated PSMs: the web app's example's, as their native IDs repeat)
-  for (const f of ['qpx/quantms.pg.parquet', 'qpx/quantms.provenance.parquet', `qpx/${stem}.mz.parquet`, 'database.fasta']) {
+  for (const f of ['qpx/quantms.pg.parquet', 'qpx/quantms.provenance.parquet', `qpx/runs/${stem}.mz.parquet`, 'database.fasta']) {
     cpSync(join(source, f), join(dir, f))
   }
   await setParameters(dir, 'target_decoy_fdr', { protein_fdr_applied: 'false' })
@@ -938,7 +970,7 @@ describe('performance', () => {
         if (!cache.has(name)) cache.set(name, await own(name))
         return bytesOfRange(cache.get(name)!, range)
       }
-      await files('qpx/1__DatabaseSuitability_1.psm.parquet')
+      await files('qpx/runs/1__DatabaseSuitability_1.psm.parquet')
       const started = performance.now()
       const { tables, spectra } = await readSearch(files)
       const seconds = (performance.now() - started) / 1000
@@ -971,7 +1003,7 @@ describe('performance', () => {
       if (!cache.has(name)) cache.set(name, await own(name))
       return bytesOfRange(cache.get(name)!, range)
     }
-    await files(`qpx/${JSON.parse(readFileSync(join(process.env.PROSE_SEARCH_DIR!, 'inputs.json'), 'utf8'))[0].stem}.psm.parquet`)
+    await files(`qpx/runs/${JSON.parse(readFileSync(join(process.env.PROSE_SEARCH_DIR!, 'inputs.json'), 'utf8'))[0].stem}.psm.parquet`)
     let started = performance.now()
     const { tables, spectra } = await readSearch(files)
     console.log(
