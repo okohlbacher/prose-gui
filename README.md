@@ -108,10 +108,12 @@ most 3 GB (larger searches are refused with a message; they stay in History).
 "Try the example" in New search loads OpenMS' example run `Ecoli_MS2_small.mzML` (E. coli, LTQ Orbitrap XL, CID,
 139 MS2 spectra, 1.2 MB) twice, as two replicates of one condition, and the 4,136 E. coli K-12 proteins (targets
 only: ProSE adds the decoys, the app the cRAP contaminants). The settings are the default preset with a fragment
-tolerance of 0.5 Da for the ion-trap fragments. The search takes a few seconds and finds 60 target PSMs at 1 % FDR
-in each replicate (54 peptides, 52 proteins), with precursor errors between −6 and +8 ppm (median 3.9 ppm) and a few
-isotope errors. The run is small: no decoy PSM passes 1 %, so ProSE applies no protein FDR (Overview says "not
-applied"), and Percolator falls back to its best single feature (Overview says why).
+tolerance of 0.5 Da for the ion-trap fragments and the protein FDR off: the run is too small for a protein FDR, so
+its proteins are listed without one (Overview says "not applied"). Leaving the example (other files or another
+database, Remove all, Start over) gives both settings back to the preset's, unless you changed them. The search takes
+a few seconds and finds 60 target PSMs at 1 % FDR in each replicate (54 peptides, 52 proteins), with precursor errors
+between −6 and +8 ppm (median 3.9 ppm) and a few isotope errors. The run also has too few PSMs for Percolator's full
+model: Percolator falls back to its best single feature (Overview says why).
 
 ## Licence
 

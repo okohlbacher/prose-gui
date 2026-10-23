@@ -82,14 +82,16 @@ describe('the example search', () => {
     // the two files in the design table, the database counted
     await expect($('[data-testid="design-summary"]')).toHaveText('2 files → 2 samples · 1 condition')
     await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
-    // the example's fragment tolerance for its ion-trap spectra
+    // the example's fragment tolerance for its ion-trap spectra, and its protein FDR off (the run is too small for one)
     await expect($('#fragment-tolerance')).toHaveValue('0.5')
+    await expect($('#protein-fdr')).toHaveValue('off')
+    await expect($('button=Off')).toHaveAttribute('aria-pressed', 'true')
     // (textContent: the footer line is cut to the window's width)
     expect(await $('[data-testid="search-plan"]').getProperty('textContent')).toBe('2 files in 2 samples · 4,136 proteins + 116 cRAP + decoys')
     // the example's note, on a line of its own that wraps (not cut)
     // (textContent: WebKitWebDriver reads no visible text of a line-clamped box)
     expect(await $('[data-testid="search-note"]').getProperty('textContent')).toBe(
-      "Ion-trap example with a 0.5 Da fragment tolerance. It has too few PSMs for Percolator's full model or a protein FDR.",
+      "Ion-trap example with a 0.5 Da fragment tolerance and no protein FDR: the run is too small for one. It has too few PSMs for Percolator's full model.",
     )
     const clipped = await browser.execute(() => {
       const note = document.querySelector('[data-testid="search-note"]') as HTMLElement
@@ -128,25 +130,33 @@ describe('the example search', () => {
     expect(strip.unaligned).toEqual([])
   })
 
-  it('Remove all and Start over empty the form, give back the preset\'s tolerance, and can be undone', async () => {
+  it('Remove all and Start over empty the form, give back the preset\'s tolerance and protein FDR, and can be undone', async () => {
     await freshForm()
     await $('button=Try the example').click()
     await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
     await expect($('#fragment-tolerance')).toHaveValue('0.5')
+    await expect($('#protein-fdr')).toHaveValue('off')
+    await expect($('button=Start over')).toHaveAttribute(
+      'title',
+      "Removes the spectra and the database. Your settings stay, but the example's fragment tolerance and protein FDR go back to the preset's.",
+    )
     await $('button=Remove all').click()
     await expect($('button=Try the example')).toBeDisplayed()
     await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
-    // the example's 0.5 Da does not stay for the next files
+    // the example's 0.5 Da and its protein FDR off do not stay for the next files
     await expect($('#fragment-tolerance')).toHaveValue('20')
+    await expect($('#protein-fdr')).toHaveValue('1')
     await expect($('[data-testid="removed-note"]')).toHaveText(expect.stringContaining('Removed 2 files.'))
     await $('[data-testid="removed-note"]').$('button=Undo').click()
     await expect($('[data-testid="design-summary"]')).toHaveText('2 files → 2 samples · 1 condition')
     await expect($('#fragment-tolerance')).toHaveValue('0.5')
+    await expect($('#protein-fdr')).toHaveValue('off')
     await $('button=Start over').click()
     await expect($('button=Try the example')).toBeDisplayed()
     await expect($('#fasta-chosen')).toHaveText('Choose a FASTA file…')
     expect(await $('[data-testid="search-plan"]').getProperty('textContent')).toBe('No spectra yet')
     await expect($('#fragment-tolerance')).toHaveValue('20')
+    await expect($('#protein-fdr')).toHaveValue('1')
     await expect($('[data-testid="removed-note"]')).toHaveText(expect.stringContaining('Removed 2 files and the database.'))
     await expect($('button=Start over')).not.toBeExisting()
   })

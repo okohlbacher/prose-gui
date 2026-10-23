@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fdrChoices, formatPercent, formatQ, parsePercent, percentNumber } from './fdr'
+import { fdrChoices, formatPercent, formatQ, parsePercent, parsePercentOrOff, percentNumber } from './fdr'
 
 describe('parsePercent', () => {
   it('is explicit about percent', () => {
@@ -21,6 +21,19 @@ describe('parsePercent', () => {
   it('rejects junk, empty, negative and zero', () => {
     for (const input of ['', ' ', 'abc', '1 2', '1 %%', '%', '-1', '0', '0 %', '100.5', '1,2,3', 'q ≤ 0.01', 'NaN', 'Infinity']) {
       expect(parsePercent(input), JSON.stringify(input)).toBeNull()
+    }
+  })
+})
+
+describe('parsePercentOrOff', () => {
+  it('reads "off" and zero as 0 (no cutoff), everything else as parsePercent', () => {
+    for (const input of ['off', 'Off', ' OFF ', '0', '0 %', '0%', '0.0', '0,0 %', '00']) {
+      expect(parsePercentOrOff(input), JSON.stringify(input)).toBe(0)
+    }
+    expect(parsePercentOrOff('1')).toBe(0.01)
+    expect(parsePercentOrOff('0.5 %')).toBe(0.005)
+    for (const input of ['', ' ', '%', 'of', 'offf', '-0', '150', 'abc']) {
+      expect(parsePercentOrOff(input), JSON.stringify(input)).toBeNull()
     }
   })
 })

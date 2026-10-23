@@ -14,6 +14,16 @@
 
   let dragging = $state(false)
 
+  // Start over's tooltip names the example's own settings that go back to the preset's
+  const startOverTitle = $derived.by(() => {
+    const back = form.exampleSettingsInForce
+    if (back.length === 0) return 'Removes the spectra and the database. Your settings stay.'
+    return (
+      `Removes the spectra and the database. Your settings stay, but the example's ${back.join(' and ')} ` +
+      `${back.length === 1 ? 'goes' : 'go'} back to the preset's.`
+    )
+  })
+
   $effect(() => {
     let stop: (() => void) | null = null
     let gone = false
@@ -40,9 +50,7 @@
         variant="outline"
         size="sm"
         disabled={form.busy}
-        title={form.exampleSettingsActive
-          ? "Removes the spectra and the database. Your settings stay, but the example's fragment tolerance goes back to the preset's."
-          : 'Removes the spectra and the database. Your settings stay.'}
+        title={startOverTitle}
         onclick={() => form.startOver()}>Start over</Button>
     {/if}
   </div>

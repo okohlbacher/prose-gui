@@ -47,7 +47,8 @@
     {/if}
     <p class="text-xs text-muted-foreground">
       The example is a small E. coli run with 139 spectra. It is searched twice, as two replicates, against the E. coli
-      proteome. It has too few PSMs for Percolator's full model and for a protein FDR, so the results note both.
+      proteome. The run is too small for a protein FDR, so its proteins are listed without one. It also has too few PSMs
+      for Percolator's full model, which the results note.
     </p>
     <NoticeList items={form.notices.map((message, k) => ({ message, onDismiss: () => form.notices.splice(k, 1) }))} />
   </Card.Content>

@@ -18,14 +18,19 @@
 
   const psmFdr = $derived(`${formatPercent(m.psmFdr)}, ${formatQ(m.psmFdr)}`)
   const proteinFdr = $derived(`${formatPercent(m.proteinFdr)}, ${formatQ(m.proteinFdr)}`)
+  // a search without a protein FDR (off, or one ProSE did not apply) has no protein cutoff to name
+  const proteinFdrApplied = $derived(view.result.outcome.summary.proteinFdrApplied)
   const titles = $derived({
     psms: `Target PSMs at the search's PSM FDR (${psmFdr}). Contaminants are included, decoys are not.`,
     peptides:
       `Distinct peptide sequences with a target PSM at the search's PSM FDR (${psmFdr}). A sequence and its modified forms count once, ` +
       `like the protein counts. The Peptides tab lists each modified form in its own row. Condition rows and the All samples row count each sequence once.`,
     proteins:
-      `Protein groups at the search's protein FDR (${proteinFdr}) with a PSM in the sample. Proteins that cannot be told apart count once, ` +
-      `as in the key figures. The Proteins tab lists every protein. Condition rows and the All samples row count each group once.`,
+      (proteinFdrApplied
+        ? `Protein groups at the search's protein FDR (${proteinFdr}) with a PSM in the sample. `
+        : 'Protein groups with a PSM in the sample (the search applied no protein FDR). ') +
+      `Proteins that cannot be told apart count once, as in the key figures. The Proteins tab lists every protein. ` +
+      `Condition rows and the All samples row count each group once.`,
   })
 
   const head = 'h-auto border-b px-2.5 py-1.5 text-right font-medium text-muted-foreground'
@@ -42,8 +47,9 @@
 <div class="flex flex-col gap-3 pb-6">
   <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
     <p class="text-xs text-muted-foreground" data-testid="samples-note">
-      Counts use target PSMs at the search's PSM FDR ({psmFdr}). Peptides are distinct sequences, and proteins are protein groups at the
-      protein FDR. The key figures count peptide forms and protein groups. The totals here count distinct sequences and the groups with a PSM.
+      Counts use target PSMs at the search's PSM FDR ({psmFdr}). Peptides are distinct sequences, and proteins are protein groups{proteinFdrApplied
+        ? ' at the protein FDR'
+        : ''}. The key figures count peptide forms and protein groups. The totals here count distinct sequences and the groups with a PSM.
     </p>
     {#if view.hasTechReplicates}
       <!-- the same setting as the Columns menu of the Proteins and Peptides tabs -->

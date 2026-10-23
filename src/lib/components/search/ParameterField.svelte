@@ -47,9 +47,10 @@
 </script>
 
 {#if FDR.includes(entry.name)}
-  <!-- a q-value cutoff: always as a percentage with the q-value beside it -->
+  <!-- a q-value cutoff: always as a percentage with the q-value beside it; the protein FDR can be off (0) -->
   <FdrInput
     {id}
+    off={entry.name === 'FDR:protein'}
     class="[&>div:first-child]:h-8 [&>div:first-child]:bg-background [&>div:first-child]:shadow-none"
     bind:value={() => Number(value), (v) => onChange(v)} />
 {:else if entry.type === 'bool'}

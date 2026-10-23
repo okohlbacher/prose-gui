@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { fdrChoices, formatPercent, formatQ, parsePercent, percentNumber } from '$lib/format/fdr'
+  import { fdrChoices, formatPercent, formatQ, parsePercent, parsePercentOrOff, percentNumber } from '$lib/format/fdr'
   import { cn } from '$lib/utils'
 
   let {
     value = $bindable(0.01),
     max,
+    off = false,
     id,
     'aria-label': ariaLabel,
     class: className,
@@ -13,6 +14,8 @@
     value?: number
     /** the largest cutoff allowed (a q-value): longer values are rejected and their chips disabled */
     max?: number
+    /** 0 is allowed and means no cutoff (the protein FDR: ProSE applies none): the field says "off", with an Off chip */
+    off?: boolean
     id?: string
     'aria-label'?: string
     class?: string
@@ -22,17 +25,25 @@
   let draft = $state<string | null>(null)
   let input = $state<HTMLInputElement | null>(null)
 
-  const text = $derived(draft ?? percentNumber(value))
-  const typed = $derived(draft === null ? value : parsePercent(draft))
+  const parse = (typedText: string) => (off ? parsePercentOrOff(typedText) : parsePercent(typedText))
+  const text = $derived(draft ?? (off && value === 0 ? 'off' : percentNumber(value)))
+  const typed = $derived(draft === null ? value : parse(draft))
   const tooLarge = (q: number) => max !== undefined && q > max * (1 + 1e-9)
   const invalid = $derived(typed === null || tooLarge(typed))
-  const hint = $derived(
-    typed === null ? '> 0 – 100 %' : tooLarge(typed) ? `at most ${formatPercent(max!)}` : formatQ(typed),
-  )
+  /** the field holds the word "off" (no percent sign then) */
+  const saysOff = $derived(/^\s*off\s*$/i.test(text))
+  function hintOf(q: number | null): string {
+    if (q === null) return off ? 'off, or > 0 – 100 %' : '> 0 – 100 %'
+    if (tooLarge(q)) return `at most ${formatPercent(max!)}`
+    // off has no q-value; a typed 0 gets the word beside it
+    if (q === 0) return saysOff ? '' : 'off'
+    return formatQ(q)
+  }
+  const hint = $derived(hintOf(typed))
 
   function edit(event: Event & { currentTarget: HTMLInputElement }) {
     draft = event.currentTarget.value
-    const q = parsePercent(draft)
+    const q = parse(draft)
     if (q !== null && !tooLarge(q)) value = q
   }
 
@@ -62,12 +73,14 @@
       value={text}
       oninput={edit}
       onblur={() => (draft = null)} />
-    <span class="text-[13px]">%</span>
+    {#if !saysOff}
+      <span class="text-[13px]">%</span>
+    {/if}
     <span class={cn('ml-auto pl-2 text-[13px] whitespace-nowrap tabular-nums', invalid ? 'text-destructive' : 'text-muted-foreground')}
       >{hint}</span>
   </div>
   <div class="flex gap-1.5">
-    {#each fdrChoices as q (q)}
+    {#each off ? [0, ...fdrChoices] : fdrChoices as q (q)}
       {@const active = value === q}
       <button
         type="button"
@@ -77,7 +90,7 @@
         )}
         aria-pressed={active}
         disabled={tooLarge(q)}
-        onclick={() => choose(q)}>{formatPercent(q)}</button
+        onclick={() => choose(q)}>{q === 0 ? 'Off' : formatPercent(q)}</button
       >
     {/each}
   </div>

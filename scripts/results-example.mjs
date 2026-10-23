@@ -47,7 +47,10 @@ export const CASES = {
   // The app's example (src/lib/search/form.svelte.ts `EXAMPLE`, src-tauri/src/files.rs): OpenMS' Ecoli_MS2_small.mzML
   // (LTQ Orbitrap XL, CID) searched as two replicates, the E. coli K-12 proteins with the contaminants (the form's
   // default), the default preset with the example's fragment tolerance of 0.5 Da, decoys generated (the FASTA has
-  // none), Percolator and PeptDeep.
+  // none), Percolator and PeptDeep. The app's example also turns the protein FDR off (FDR:protein 0); the fixture keeps
+  // the preset's 1 %, with which it was made: the pinned ProSE (cbcb70beee) skips that FDR here (no decoy protein in
+  // the merged result), and a search with 0 gives the same PSMs, proteins and groups, only the provenance records 0.
+  // A later pin that applies it would find no protein at 1 %: then add 'FDR:protein': 0 and make both fixtures again.
   example: {
     mzML: resolve(RESOURCES, 'example/Ecoli_MS2_small.mzML'),
     names: ['Ecoli_1.mzML', 'Ecoli_2.mzML'],

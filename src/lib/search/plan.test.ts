@@ -40,6 +40,7 @@ vi.mock('../desktop', () => ({
 
 const { searchForm: form } = await import('./form.svelte')
 const { searchPlan, searchRequest, startSearch } = await import('./plan.svelte')
+const { runSearch } = await import('./session.svelte')
 const { toolState } = await import('./tool.svelte')
 
 /** The names the shim lets through (src-tauri/src/args.rs `PARAMETERS`). */
@@ -77,18 +78,23 @@ describe('the search request', () => {
     await form.loadExample()
     await settle()
     expect(form.isExample).toBe(true)
+    // the example's protein FDR is off (0), and shown so
+    expect(form.value('FDR:protein')).toBe(0)
+    expect(searchPlan.problem).toBeNull()
     const r = await request()
-    // the Orbitrap HCD preset, on ProSE's defaults: what differs is sent, by the shim's names
+    // the Orbitrap HCD preset, on ProSE's defaults: what differs is sent, by the shim's names (the protein FDR off is
+    // ProSE's default, 0, so it is not sent)
     expect(r.settings.parameters).toEqual({
       enzyme: 'Trypsin/P',
       'modifications:variable': ['Oxidation (M)', 'Acetyl (Protein N-term)'],
       'FDR:PSM': 0.01,
-      'FDR:protein': 0.01,
       'peptide:missed_cleavages': 2,
       // the example's ion-trap fragments
       'fragment:mass_tolerance': 0.5,
       'fragment:mass_tolerance_unit': 'Da',
     })
+    // the result's protein cutoff: none (every protein counts)
+    expect(vi.mocked(runSearch).mock.calls.at(-1)![1]).toMatchObject({ psmFdr: 0.01, proteinFdr: 1 })
     for (const name of Object.keys(r.settings.parameters)) expect(allowlist.has(name), name).toBe(true)
     expect(r.settings).toMatchObject({ rescore: true, peptdeep: false, threads: 0 })
     expect(r.contaminants).toBe(true)
@@ -96,8 +102,15 @@ describe('the search request', () => {
       '2 files in 2 samples · 4,136 proteins + 116 cRAP + decoys',
     )
     expect(searchPlan.note).toBe(
-      "Ion-trap example with a 0.5 Da fragment tolerance. It has too few PSMs for Percolator's full model or a protein FDR.",
+      "Ion-trap example with a 0.5 Da fragment tolerance and no protein FDR: the run is too small for one. It has too few PSMs for Percolator's full model.",
     )
+    // a protein FDR the user sets on the example is sent, and the note no longer says there is none
+    form.setParam('FDR:protein', 0.05)
+    expect(searchPlan.note).toBe(
+      "Ion-trap example with a 0.5 Da fragment tolerance. The run is too small for a protein FDR and for Percolator's full model.",
+    )
+    expect((await request()).settings.parameters['FDR:protein']).toBe(0.05)
+    expect(vi.mocked(runSearch).mock.calls.at(-1)![1]).toMatchObject({ proteinFdr: 0.05 })
   })
 
   test('a search request carries paths, not file contents', async () => {
@@ -174,6 +187,12 @@ describe('the footer', () => {
     expect(searchPlan.problem).toMatch(/^Unknown modification: Nonsense \(Q\)\. ProSE does not know this name/)
     form.setParam('modifications:variable', ['Phospho (S)'])
     expect(searchPlan.problem).toBeNull()
+    // the protein FDR off (0) is a setting, not a problem; the PSM FDR cannot be off
+    form.setParam('FDR:protein', 0)
+    expect(searchPlan.problem).toBeNull()
+    form.setParam('FDR:PSM', 0)
+    expect(searchPlan.problem).toBe('Set a PSM FDR above 0 %.')
+    form.setParam('FDR:PSM', 0.01)
     Object.assign(toolState, { status: 'failed', info: null, error: 'PROSE_BIN is set to /x, which is not a file.' })
     expect(searchPlan.problem).toBe('ProSE cannot be run: PROSE_BIN is set to /x, which is not a file.')
   })
@@ -200,41 +219,64 @@ describe('the footer', () => {
     form.peptdeep = false
   })
 
-  test("the example's fragment tolerance goes back to the preset's when its files go, and its protein FDR is the preset's", async () => {
+  test("the example's fragment tolerance and protein FDR go back to the preset's when its files go", async () => {
+    const own = () => [form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit'), form.value('FDR:protein')]
+    // the example's protein FDR is off, whatever it was
     form.setParam('FDR:protein', 0.05)
     await form.loadExample()
     await settle()
-    expect(form.value('FDR:protein')).toBe(0.01)
-    expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit')]).toEqual([0.5, 'Da'])
-    // Start over: the preset's 20 ppm again (the other settings stay)
+    expect(own()).toEqual([0.5, 'Da', 0])
+    // Start over: the preset's 20 ppm and 1 % again (the other settings stay)
     form.peptdeep = true
     form.startOver()
-    expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit')]).toEqual([20, 'ppm'])
+    expect(own()).toEqual([20, 'ppm', 0.01])
     expect(form.peptdeep).toBe(true)
     form.peptdeep = false
-    // Undo brings back the files, the database and the example's tolerance
+    // Undo brings back the files, the database and the example's tolerance and protein FDR
     expect(form.removed?.files).toHaveLength(2)
     form.undoRemove()
     await settle()
     expect(form.isExample).toBe(true)
-    expect(form.value('fragment:mass_tolerance')).toBe(0.5)
+    expect(own()).toEqual([0.5, 'Da', 0])
     expect(form.removed).toBeNull()
     // own files added to the example's: the example's settings end
     await form.addFiles(['/runs/mine.mzML'])
-    expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit')]).toEqual([20, 'ppm'])
-    // a tolerance the user set after loading the example stays (and Start over's tooltip does not say otherwise)
+    expect(own()).toEqual([20, 'ppm', 0.01])
+    // a tolerance the user set after loading the example stays, the protein FDR still goes back (and Start over's
+    // tooltip names only what goes back)
     await form.loadExample()
     await settle()
-    expect(form.exampleSettingsActive).toBe(true)
+    expect(form.exampleSettingsInForce).toEqual(['fragment tolerance', 'protein FDR'])
     form.setParam('fragment:mass_tolerance', 0.3)
-    expect(form.exampleSettingsActive).toBe(false)
+    expect(form.exampleSettingsInForce).toEqual(['protein FDR'])
     form.removeAllFiles()
-    expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit')]).toEqual([0.3, 'Da'])
+    expect(own()).toEqual([0.3, 'Da', 0.01])
+    expect(form.exampleSettingsInForce).toEqual([])
+    // a protein FDR the user set stays, the tolerance goes back
+    await form.loadExample()
+    await settle()
+    form.setParam('FDR:protein', 0.05)
+    expect(form.exampleSettingsInForce).toEqual(['fragment tolerance'])
+    form.removeAllFiles()
+    expect(own()).toEqual([20, 'ppm', 0.05])
     // another database ends them too
     await form.loadExample()
     await settle()
     await form.setDatabase('/db/human.fasta')
-    expect(form.value('fragment:mass_tolerance')).toBe(20)
+    expect(own()).toEqual([20, 'ppm', 0.01])
+  })
+
+  test("leaving the example gives back the preset's protein FDR, or ProSE's default when the preset has none", async () => {
+    // a preset without a protein FDR (a user preset saved from the defaults): ProSE's 0, off
+    form.presets = [...form.presets, { id: 'mine', name: 'Mine', builtin: false, parameters: { 'FDR:PSM': 0.01 } }]
+    form.choosePreset('mine')
+    await form.loadExample()
+    await settle()
+    expect(form.value('FDR:protein')).toBe(0)
+    form.startOver()
+    expect(form.value('FDR:protein')).toBe(0)
+    expect('FDR:protein' in form.overrides).toBe(false)
+    form.presets = form.presets.filter((p) => p.id !== 'mine')
   })
 
   test('the example stays the example when nothing joins; Undo keeps a tolerance set after the removal', async () => {
@@ -250,15 +292,27 @@ describe('the footer', () => {
     await form.addFiles(['/r/broken.mzML'])
     expect(form.isExample).toBe(true)
     expect(form.value('fragment:mass_tolerance')).toBe(0.5)
-    expect(form.exampleSettingsActive).toBe(true)
-    // Start over, then the user sets 10 ppm, then Undo: the files come back, the user's 10 ppm stays
+    expect(form.exampleSettingsInForce).toEqual(['fragment tolerance', 'protein FDR'])
+    // Start over, then the user sets 10 ppm, then Undo: the files come back, the user's 10 ppm stays, the example's
+    // protein FDR (off) comes back
     form.startOver()
-    expect(form.exampleSettingsActive).toBe(false)
+    expect(form.exampleSettingsInForce).toEqual([])
+    expect(form.value('FDR:protein')).toBe(0.01)
     form.setParam('fragment:mass_tolerance', 10)
     form.undoRemove()
     await settle()
     expect(form.isExample).toBe(true)
     expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit')]).toEqual([10, 'ppm'])
+    expect(form.value('FDR:protein')).toBe(0)
+    expect(form.exampleSettingsInForce).toEqual(['protein FDR'])
+    // and the other way round: a protein FDR set after the removal stays, the example's tolerance comes back
+    await form.loadExample()
+    await settle()
+    form.startOver()
+    form.setParam('FDR:protein', 0.001)
+    form.undoRemove()
+    await settle()
+    expect([form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit'), form.value('FDR:protein')]).toEqual([0.5, 'Da', 0.001])
   })
 
   test('Undo counts a database again whose count the removal cut short', async () => {

@@ -41,15 +41,17 @@ class SearchPlan {
   })
 
   /**
-   * The example's note, a line of its own under the plan (it wraps): its tolerance, and why its results say that
-   * Percolator fell back and that no protein FDR was applied.
+   * The example's note, a line of its own under the plan (it wraps): its tolerance and its protein FDR (off unless
+   * the user set one), and why its results list the proteins without a protein FDR and say that Percolator fell back.
    */
-  note = $derived(
-    form.isExample
-      ? `Ion-trap example with a ${form.value('fragment:mass_tolerance')} ${form.value('fragment:mass_tolerance_unit')} fragment tolerance. ` +
-          "It has too few PSMs for Percolator's full model or a protein FDR."
-      : null,
-  )
+  note = $derived.by(() => {
+    if (!form.isExample) return null
+    const tolerance = `${form.value('fragment:mass_tolerance')} ${form.value('fragment:mass_tolerance_unit')}`
+    return Number(form.value('FDR:protein')) > 0
+      ? `Ion-trap example with a ${tolerance} fragment tolerance. The run is too small for a protein FDR and for Percolator's full model.`
+      : `Ion-trap example with a ${tolerance} fragment tolerance and no protein FDR: the run is too small for one. ` +
+          "It has too few PSMs for Percolator's full model."
+  })
 
   /** Modification names ProSE does not know. */
   unknownMods = $derived(unknownModifications(form.values, PROSE_PARAMETERS))
@@ -60,7 +62,6 @@ class SearchPlan {
     if (!form.database) return 'Choose a FASTA database to start.'
     if (form.database.error) return `${form.database.file.name} cannot be read (${form.database.error}). Choose it again, or another FASTA file.`
     if (!(Number(form.value('FDR:PSM')) > 0)) return 'Set a PSM FDR above 0 %.'
-    if (!(Number(form.value('FDR:protein')) > 0)) return 'Set a protein FDR above 0 %.'
     if (this.unknownMods.length > 0) return unknownMessage(this.unknownMods)
     if (toolState.status === 'failed') return `ProSE cannot be run: ${toolState.error}`
     return null
@@ -103,7 +104,8 @@ export async function startSearch(): Promise<void> {
   const id = await runSearch(request, {
     design: $state.snapshot(form.design),
     psmFdr: Number(values['FDR:PSM']),
-    proteinFdr: Number(values['FDR:protein']),
+    // the protein FDR off (0): no protein cutoff, every protein counts (the results' cutoffs are q-values above 0)
+    proteinFdr: Number(values['FDR:protein']) || 1,
     settings: {
       parameters: request.settings.parameters,
       fixedMods: (values['modifications:fixed'] as string[] | undefined) ?? [],

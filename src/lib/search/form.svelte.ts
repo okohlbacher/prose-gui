@@ -32,14 +32,20 @@ export const CRAP_RESIDUES = 38459
 /**
  * The example: OpenMS' small E. coli run (Ecoli_MS2_small.mzML: LTQ Orbitrap XL, CID, 139 MS2 spectra) searched
  * twice as two replicates of condition "example", against the E. coli K-12 proteins (targets only: ProSE makes
- * the decoys). The shim gives the bundled run under the two names. Its fragments are measured in the ion trap,
- * so the example sets the fragment tolerance to 0.5 Da; everything else is the preset's.
+ * the decoys). The shim gives the bundled run under the two names. Its own settings (`settings`), each group of
+ * which goes back to the preset's on its own when the example is left (`#leaveExample`): its fragments are measured
+ * in the ion trap, so the fragment tolerance is 0.5 Da; the run is too small for a protein FDR (about 55 proteins:
+ * none would pass 1 %), so the protein FDR is off (0) and its proteins are listed without one. Everything else is
+ * the preset's.
  */
 export const EXAMPLE = {
   names: ['Ecoli_1.mzML', 'Ecoli_2.mzML'],
   fasta: 'Ecoli_K12_proteome.fasta',
   condition: 'example',
-  parameters: { 'fragment:mass_tolerance': 0.5, 'fragment:mass_tolerance_unit': 'Da' },
+  settings: [
+    { label: 'fragment tolerance', parameters: { 'fragment:mass_tolerance': 0.5, 'fragment:mass_tolerance_unit': 'Da' } },
+    { label: 'protein FDR', parameters: { 'FDR:protein': 0 } },
+  ],
 } as const
 
 /** What "Remove all" or "Start over" removed: the rows, the database (Start over), the notices, the example's settings. */
@@ -94,14 +100,21 @@ class SearchForm {
   busy = $derived(this.adding > 0 || this.exampleLoading)
   /** What the last "Remove all" or "Start over" removed, for its Undo (until files or a database are chosen again). */
   removed = $state<Removed | null>(null)
-  /** The example's settings (EXAMPLE.parameters) are in force: set by loadExample, the example's files still there. */
+  /** The example's settings (EXAMPLE.settings) are in force: set by loadExample (or an Undo), the example's files still there. */
   #exampleSettings = $state(false)
   /**
-   * The example's own settings are in force and unchanged, so that leaving the example gives back the preset's (Start
-   * over's tooltip says so); a tolerance the user set since stays (`#leaveExample`).
+   * The example's own settings that are in force and unchanged, by their labels ('fragment tolerance', 'protein
+   * FDR'): leaving the example gives them back to the preset's (Start over's tooltip says so); one the user set since
+   * stays (`#leaveExample`).
    */
-  get exampleSettingsActive(): boolean {
-    return this.#exampleSettings && Object.entries(EXAMPLE.parameters).every(([name, value]) => sameValue(this.values[name], value))
+  get exampleSettingsInForce(): string[] {
+    if (!this.#exampleSettings) return []
+    return EXAMPLE.settings.filter((group) => this.#holds(group.parameters)).map((group) => group.label)
+  }
+
+  /** The values of `parameters` are the form's. */
+  #holds(parameters: Record<string, unknown>): boolean {
+    return Object.entries(parameters).every(([name, value]) => sameValue(this.values[name], value))
   }
 
   /** Threads of the search (Advanced); null: all cores. */
@@ -214,7 +227,7 @@ class SearchForm {
 
   /**
    * "Start over": no files and no database; the settings (preset, parameters, rescoring) as they are, but for the
-   * example's own (its fragment tolerance), which go back to the preset's. Undo brings everything back.
+   * example's own (its fragment tolerance, its protein FDR), which go back to the preset's. Undo brings everything back.
    */
   startOver() {
     if (this.busy) return
@@ -246,9 +259,10 @@ class SearchForm {
       // a database whose count the removal cut short is counted again
       if (r.database.proteins === null && r.database.error === null) void this.setDatabase(r.database.file.path, { example: true })
     }
-    // the example's settings come back unless the user set others since the removal
-    const names = Object.keys(r.parameters)
-    if (names.length > 0 && names.every((name) => sameValue(this.values[name], r.replacedWith[name]))) {
+    // the example's settings come back, each group unless the user set others since the removal
+    for (const group of EXAMPLE.settings) {
+      const names = Object.keys(group.parameters).filter((name) => name in r.parameters)
+      if (names.length === 0 || !names.every((name) => sameValue(this.values[name], r.replacedWith[name]))) continue
       for (const name of names) this.overrides[name] = copyValue(r.parameters[name])
       this.#exampleSettings = true
     }
@@ -263,20 +277,21 @@ class SearchForm {
 
   /**
    * The example's files are gone or joined by others: its own settings go back to the preset's (or ProSE's
-   * defaults), unless the user changed one of them since (then they are the user's: a tolerance and its unit go
-   * together). Returns the example's values it replaced.
+   * defaults), each group unless the user changed it since (then it is the user's: a tolerance and its unit go
+   * together, the protein FDR on its own). Returns the example's values it replaced.
    */
   #leaveExample(): Record<string, unknown> {
     if (!this.#exampleSettings) return {}
     this.#exampleSettings = false
-    const example = Object.entries(EXAMPLE.parameters)
-    if (!example.every(([name, value]) => sameValue(this.values[name], value))) return {}
     const preset = this.preset?.parameters ?? {}
     const replaced: Record<string, unknown> = {}
-    for (const [name, value] of example) {
-      replaced[name] = value
-      if (name in preset) this.overrides[name] = copyValue(preset[name])
-      else delete this.overrides[name]
+    for (const group of EXAMPLE.settings) {
+      if (!this.#holds(group.parameters)) continue
+      for (const [name, value] of Object.entries(group.parameters)) {
+        replaced[name] = value
+        if (name in preset) this.overrides[name] = copyValue(preset[name])
+        else delete this.overrides[name]
+      }
     }
     return replaced
   }
@@ -319,7 +334,7 @@ class SearchForm {
     else this.database = { file: { ...file, size: facts.size }, proteins: facts.proteins, residues: facts.residues, error: null }
   }
 
-  /** Loads the example (two replicates of one file and its FASTA, its fragment tolerance) in place of the current files. */
+  /** Loads the example (two replicates of one file and its FASTA, its own settings) in place of the current files. */
   async loadExample() {
     if (this.exampleLoading) return
     this.exampleLoading = true
@@ -333,10 +348,8 @@ class SearchForm {
       this.removed = null
       for (const f of facts) this.#addRow(f, { condition: EXAMPLE.condition })
       void this.setDatabase(example.database, { example: true })
-      // the example's own settings, and the protein FDR of the preset (or ProSE's default) whatever it was
-      for (const [name, value] of Object.entries(EXAMPLE.parameters)) this.setParam(name, value)
-      const preset = this.preset?.parameters ?? {}
-      this.setParam('FDR:protein', 'FDR:protein' in preset ? preset['FDR:protein'] : this.defaults['FDR:protein'])
+      // the example's own settings (its fragment tolerance, the protein FDR off), whatever they were
+      for (const group of EXAMPLE.settings) for (const [name, value] of Object.entries(group.parameters)) this.setParam(name, value)
       this.#exampleSettings = true
     } catch (e) {
       this.notices.push(`The example could not be loaded (${errorText(e).replace(/\.$/, '')}).`)

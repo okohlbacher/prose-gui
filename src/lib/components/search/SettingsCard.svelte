@@ -145,8 +145,10 @@
     </div>
     <div class="grid min-w-0 content-start gap-1">
       <Label for="protein-fdr" class="text-xs">Protein FDR</Label>
+      <!-- off (0): ProSE applies no protein FDR (the example's setting) -->
       <FdrInput
         id="protein-fdr"
+        off
         class="[&>div:first-child]:h-8 [&>div:first-child]:bg-background [&>div:first-child]:shadow-none"
         bind:value={() => form.value<number>('FDR:protein'), (v) => form.setParam('FDR:protein', v)} />
     </div>

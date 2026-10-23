@@ -18,6 +18,17 @@ export function parsePercent(input: string): number | null {
   return Number((percent / 100).toPrecision(12)) // 0.07 / 100 is not 0.0007 in binary floating point
 }
 
+// "off", or zero with an optional decimal point or comma and "%"
+const offPattern = /^(?:off|0+(?:[.,]0*)?\s*%?)$/i
+
+/**
+ * The q-value of a typed FDR of a field that can be off (the protein FDR: 0 applies none): "off", "0" and "0 %"
+ * are 0, everything else as `parsePercent`.
+ */
+export function parsePercentOrOff(input: string): number | null {
+  return offPattern.test(input.trim()) ? 0 : parsePercent(input)
+}
+
 /** The number of a q-value's percentage, without the sign: 0.01 is "1", 0.001 is "0.1". */
 export function percentNumber(q: number): string {
   return String(Number((q * 100).toPrecision(6)))
