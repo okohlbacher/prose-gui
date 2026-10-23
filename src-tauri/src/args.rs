@@ -312,7 +312,7 @@ fn seen_name(index: usize, path: &str, placement: Placement) -> String {
     }
 }
 
-/// What ProSE calls an input in its outputs (`<stem>.psm.parquet`): the link's name without `.gz`
+/// What ProSE calls an input in its outputs (`runs/<stem>.psm.parquet`): the link's name without `.gz`
 /// and `.mzML`, ignoring ASCII case (OpenMS's `File::stemName`).
 pub fn input_stem(link: &str) -> String {
     let mut stem = link;

@@ -528,7 +528,7 @@ describe('peaks and predictions belong to their PSM', () => {
     // what a PSM opens: its peaks, precursor and prediction
     const opened = async (files: ReturnType<typeof folder>['files']) => {
       const { spectra, tables } = await readSearch(files)
-      const out: unknown[] = []
+      const out: { peaks: unknown; precursorMz: unknown; ion: unknown[]; mz: number[]; intensity: number[] }[] = []
       for (let i = 0; i < tables.psms.count; i++) {
         const { spectra: sp, spectrumRow, predicted, row } = await spectra.load(i)
         const s = sp.psmSpectrum[spectrumRow] ?? -1
@@ -545,6 +545,9 @@ describe('peaks and predictions belong to their PSM', () => {
     }
     const expected = await opened(folder(join(fixtures, 'example')).files)
     expect(expected.length).toBeGreaterThan(0)
+    // the fixture has peaks (mz file) and predictions (psm file) to compare, so the fallback must find both files
+    expect(expected.some((e) => e.peaks !== null)).toBe(true)
+    expect(expected.some((e) => e.ion.length > 0)).toBe(true)
     await withCopy('example', async (dir) => {
       // the layout of 0.1.x: the per-input files next to quantms.*, no runs/
       for (const f of readdirSync(join(dir, 'qpx', 'runs'))) renameSync(join(dir, 'qpx', 'runs', f), join(dir, 'qpx', f))
