@@ -1369,8 +1369,8 @@ fn two_inputs_with_the_same_name_from_different_folders_are_both_searched() {
         "{resolved}"
     );
     assert!(
-        folder.join("qpx/1__sample.psm.parquet").is_file()
-            && folder.join("qpx/2__sample.psm.parquet").is_file()
+        folder.join("qpx/runs/1__sample.psm.parquet").is_file()
+            && folder.join("qpx/runs/2__sample.psm.parquet").is_file()
     );
 
     // links, not copies; the mapping is recorded for the results
@@ -1412,7 +1412,7 @@ fn gz_inputs_keep_their_suffix_in_the_link() {
         .unwrap()
         .file_type()
         .is_symlink());
-    assert!(folder.join("qpx/1__x.psm.parquet").is_file());
+    assert!(folder.join("qpx/runs/1__x.psm.parquet").is_file());
     let mapping: Value =
         serde_json::from_str(&fs::read_to_string(folder.join("inputs.json")).unwrap()).unwrap();
     assert_eq!(mapping[0]["link"], "1__x.mzML.gz");
@@ -1438,7 +1438,7 @@ fn inputs_of_different_names_go_to_the_tool_by_their_own_paths() {
         "{argv}"
     );
     assert!(
-        folder.join("qpx/a.psm.parquet").is_file() && folder.join("qpx/b.psm.parquet").is_file()
+        folder.join("qpx/runs/a.psm.parquet").is_file() && folder.join("qpx/runs/b.psm.parquet").is_file()
     );
     let mapping: Value =
         serde_json::from_str(&fs::read_to_string(folder.join("inputs.json")).unwrap()).unwrap();
@@ -1488,8 +1488,8 @@ fn inputs_of_one_name_go_as_hard_links_that_the_finished_search_drops() {
         assert!(!folder.join(name).exists(), "{name} is gone");
     }
     assert!(
-        folder.join("qpx/1__sample.psm.parquet").is_file()
-            && folder.join("qpx/2__Sample.psm.parquet").is_file()
+        folder.join("qpx/runs/1__sample.psm.parquet").is_file()
+            && folder.join("qpx/runs/2__Sample.psm.parquet").is_file()
     );
     assert_eq!(fs::read_to_string(&first).unwrap(), "<mzML>first</mzML>");
     assert_eq!(fs::read_to_string(&second).unwrap(), "<mzML>second</mzML>");

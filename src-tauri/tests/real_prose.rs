@@ -2,7 +2,7 @@
 //!
 //! Gated: set `PROSE_BIN` to the tool to run these tests: the bundled pin
 //! (`src-tauri/resources/prose/bin/ProSE`, made by `native/scripts/bundle-prose.sh`; with PeptDeep) or the
-//! pin in its build tree (for example `/scratch/sachsenb/openms-desktop/build/bin/ProSE`; it has no build
+//! pin in its build tree (for example `/scratch/sachsenb/openms-desktop-next/build/bin/ProSE`; it has no build
 //! manifest, so it counts as without ONNX and the searches run without PeptDeep); without it each test prints
 //! a skip message (shown with `--nocapture`) and passes. `PROSE_EXAMPLE_DIR` names the folder with
 //! `Ecoli_MS2_small.mzML` and `Ecoli_K12_proteome.fasta` (default: the app's `resources/example`); a missing
@@ -150,10 +150,10 @@ fn the_example_is_searched_through_start_search() {
         "qpx/quantms.run.parquet",
         "qpx/quantms.provenance.parquet",
         "qpx/quantms.sample.parquet",
-        "qpx/1__Ecoli_MS2_small.psm.parquet",
-        "qpx/2__Ecoli_MS2_small.psm.parquet",
-        "qpx/1__Ecoli_MS2_small.mz.parquet",
-        "qpx/2__Ecoli_MS2_small.mz.parquet",
+        "qpx/runs/1__Ecoli_MS2_small.psm.parquet",
+        "qpx/runs/2__Ecoli_MS2_small.psm.parquet",
+        "qpx/runs/1__Ecoli_MS2_small.mz.parquet",
+        "qpx/runs/2__Ecoli_MS2_small.mz.parquet",
     ] {
         assert!(parquet(&folder.join(file)), "{file} is a Parquet file");
     }
@@ -169,7 +169,7 @@ fn the_example_is_searched_through_start_search() {
         .contains(">CON__sp|ALBU_BOVIN|"));
     // the footer of an input's QPX mz view has the peak filter (the Parquet footer is not compressed); the
     // statistics of the search are in the run and provenance views
-    let mz = fs::read(folder.join("qpx/1__Ecoli_MS2_small.mz.parquet")).unwrap();
+    let mz = fs::read(folder.join("qpx/runs/1__Ecoli_MS2_small.mz.parquet")).unwrap();
     for key in ["prose_peak_top", "prose_peak_window"] {
         assert!(
             mz.windows(key.len()).any(|w| w == key.as_bytes()),

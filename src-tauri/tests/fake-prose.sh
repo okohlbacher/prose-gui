@@ -11,7 +11,7 @@
 #
 # Next to the -out_qpx folder it leaves argv.txt (one argument per line), inputs.txt (every -in path with
 # the file it resolves to), prose.pid and, for hang and stubborn, children.pid; in it, a psm file per input
-# and quantms.psm.parquet (stand-ins: not Parquet).
+# (in runs/) and quantms.psm.parquet (stand-ins: not Parquet).
 set -u
 
 inputs=()
@@ -76,7 +76,7 @@ case "$stem" in
     ;;
 esac
 
-mkdir -p "$qpx"
+mkdir -p "$qpx/runs"
 k=0
 for f in "${inputs[@]}"; do
   k=$((k + 1))
@@ -85,7 +85,7 @@ for f in "${inputs[@]}"; do
   name=$(basename "$f")
   name=${name%.gz}
   name=${name%.mzML}
-  echo psm > "$qpx/$name.psm.parquet"
+  echo psm > "$qpx/runs/$name.psm.parquet"
 done
 echo psm > "$qpx/quantms.psm.parquet"
 echo "[ProSE] ===================== Search Report ====================="

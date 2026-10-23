@@ -14,7 +14,7 @@
 //!
 //! Next to the -out_qpx folder it leaves argv.txt (one argument per line), inputs.txt (every -in path with
 //! the file it resolves to), prose.pid and, for hang and stubborn, children.pid; in it, a psm file per input
-//! and quantms.psm.parquet (stand-ins: not Parquet). `--help` prints a version line; `--sleep` (the children)
+//! (in runs/) and quantms.psm.parquet (stand-ins: not Parquet). `--help` prints a version line; `--sleep` (the children)
 //! sleeps five minutes.
 
 use std::fs;
@@ -168,14 +168,14 @@ fn main() {
         _ => {}
     }
 
-    fs::create_dir_all(&qpx).unwrap();
+    fs::create_dir_all(qpx.join("runs")).unwrap();
     for (k, f) in inputs.iter().enumerate() {
         say(format!("[ProSE] [{}/{count}] Searching {f}", k + 1));
         say("[ProSE] Rescoring the PSMs with Percolator...".to_string());
         let name = base(f);
         let name = name.strip_suffix(".gz").unwrap_or(&name);
         let name = name.strip_suffix(".mzML").unwrap_or(name);
-        fs::write(qpx.join(format!("{name}.psm.parquet")), "psm\n").unwrap();
+        fs::write(qpx.join("runs").join(format!("{name}.psm.parquet")), "psm\n").unwrap();
     }
     fs::write(qpx.join("quantms.psm.parquet"), "psm\n").unwrap();
     say("[ProSE] ===================== Search Report =====================".to_string());
