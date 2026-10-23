@@ -392,10 +392,9 @@ pin's when the pin moves). Pull requests read the branch's caches; their own sav
 A tag `desktop-native-v*` builds nothing (a tag run cannot read the branch's caches and would build OpenMS and its
 dependencies from scratch): its release job looks up the successful `prose-desktop` run of the tagged commit,
 downloads that run's packages, the ones its tests, smoke test and start tests passed on, and makes a draft release
-of them. All five packages are required (the AppImage and the `.deb` of Linux x64 and of arm64, the `.dmg`, the
-Windows installer), each from its platform's artifact; the release also carries them under names without the
-version (`ProSE-linux-x64.AppImage`, `ProSE-linux-x64.deb`, `ProSE-linux-arm64.AppImage`,
-`ProSE-linux-arm64.deb`, `ProSE-macos-arm64.dmg`, `ProSE-windows-x64-setup.exe`), which the web app's
-`releases/latest/download/...` links name. It fails with a message when there is no such run (tag a commit of
+of them. All six packages are required (the AppImage and the `.deb` of Linux x64 and of arm64, the `.dmg`, the
+Windows installer), each from its platform's artifact; the release carries them under their versioned names only
+(`ProSE_0.1.2_x64-setup.exe`, `ProSE_0.1.2_aarch64.dmg`, ...), and the web app links to the page of the latest
+release (`releases/latest`). It fails with a message when there is no such run (tag a commit of
 `prose-desktop` whose run passed), a package is missing or its artifact has expired (`gh run rerun <run>`, then
 re-run the release job).

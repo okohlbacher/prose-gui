@@ -794,8 +794,8 @@ jobs:
   # A draft release of the packages, for a tag desktop-native-v* only; publishing it is a person's step. The
   # packages are those of the successful prose-desktop run of the tagged commit, the build that ran the unit
   # tests, the smoke test and the start tests (artifacts are kept 14 days; an older run can be re-run with
-  # `gh run rerun`). All five packages are required: the AppImage and the .deb for Linux x64 and arm64, the
-  # .dmg and the Windows installer.
+  # `gh run rerun`). All six packages are required: the AppImage and the .deb for Linux x64 and arm64, the
+  # .dmg and the Windows installer. The release carries them under their versioned names only.
   release:
     name: Draft release
     if: startsWith(github.ref, 'refs/tags/desktop-native-v')
@@ -877,16 +877,8 @@ jobs:
           files of one name can be searched together only when they are on the drive of the app's data (usually
           C:); otherwise the app asks to rename one of them.
           NOTES
-          # the packages also under names without the version, which the web app's download links name
-          # (releases/latest/download/ProSE-<platform>...): those links then always give the latest release
-          mkdir stable
-          cp "$(find packages -type f -name '*-setup.exe')" stable/ProSE-windows-x64-setup.exe
-          cp "$(find packages -type f -name '*.dmg')" stable/ProSE-macos-arm64.dmg
-          cp "$(find packages/linux -type f -name '*.AppImage')" stable/ProSE-linux-x64.AppImage
-          cp "$(find packages/linux -type f -name '*.deb')" stable/ProSE-linux-x64.deb
-          cp "$(find packages/linux-arm64 -type f -name '*.AppImage')" stable/ProSE-linux-arm64.AppImage
-          cp "$(find packages/linux-arm64 -type f -name '*.deb')" stable/ProSE-linux-arm64.deb
+          # the packages under the names Tauri gives them, with the version (ProSE_0.1.2_x64-setup.exe, ...);
+          # the web app links to the latest release's page
           gh release create "$TAG" --draft --verify-tag --title "ProSE desktop (native) ${TAG#desktop-native-v}" \
             --notes-file notes.md \
-            $(find packages -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' -o -name '*-setup.exe' \)) \
-            stable/*
+            $(find packages -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' -o -name '*-setup.exe' \))
