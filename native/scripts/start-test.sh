@@ -120,7 +120,7 @@ fi
 seconds=$(( $(date +%s) - started ))
 grep -E '^\[PeptDeepRescoring\] Predicted features added' "$data/out.txt" \
   || die "the search did not rescore with PeptDeep: $(grep -i peptdeep "$data/out.txt" | tail -n 5)"
-for f in qpx/Ecoli_MS2_small.psm.parquet qpx/Ecoli_MS2_small.mz.parquet qpx/quantms.psm.parquet qpx/quantms.pg.parquet qpx/quantms.run.parquet qpx/quantms.provenance.parquet; do
+for f in qpx/runs/Ecoli_MS2_small.psm.parquet qpx/runs/Ecoli_MS2_small.mz.parquet qpx/quantms.psm.parquet qpx/quantms.pg.parquet qpx/quantms.run.parquet qpx/quantms.provenance.parquet; do
   [ -s "$data/$f" ] || die "the search wrote no $f"
 done
 # the target PSMs of the end-of-search report ("[ProSE] Target/decoy : 69 target / 0 decoy PSMs")
