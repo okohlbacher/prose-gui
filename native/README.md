@@ -368,7 +368,7 @@ repository and evicts the least recently used beyond that; ccache's objects are 
 adds an entry (Windows' vcpkg cache alone is about 2.6 GB): delete the superseded ones (`gh cache list`,
 `gh cache delete`) when the total nears the limit.
 
-The `linux` job of `.github/workflows/desktop.yml` (branch `prose-desktop` of timosachsenberg/prose-web) is a
+The `linux` job of `.github/workflows/desktop.yml` (branch `main` of timosachsenberg/prose-gui) is a
 matrix of two architectures with the same steps: x64 on `ubuntu-22.04` (vcpkg triplet `x64-linux-dynamic`,
 artifact `prose-desktop-linux`) and arm64 on `ubuntu-22.04-arm`, GitHub's arm64 runner for public repositories
 (`arm64-linux-dynamic`, OpenMS's own arm64 triplet, which builds OpenBLAS for any ARMv8 CPU; artifact
@@ -384,17 +384,17 @@ its AppImage plugin and AppRun for the machine's architecture (none of them chec
 architecture: Tauri's own downloads).
 
 Caches (`actions/cache`) belong to the ref that saved them and are readable from that ref and the default branch
-(`main`) only. The runs of the branch `prose-desktop` share them, per runner and triplet: the bundled ProSE (key:
+(`main`) only. The runs of `main` share them, per runner and triplet: the bundled ProSE (key:
 the pin, the triplet and the two scripts), so OpenMS is only built when one of them changes, and vcpkg's binary cache (key: the pin and the
 triplet, plus the hash of its content, so the packages built before a failure are kept; restored from an earlier
-pin's when the pin moves). Pull requests read the branch's caches; their own saves stay with the pull request.
+pin's when the pin moves). Pull requests read `main`'s caches; their own saves stay with the pull request.
 
-A tag `desktop-native-v*` builds nothing (a tag run cannot read the branch's caches and would build OpenMS and its
-dependencies from scratch): its release job looks up the successful `prose-desktop` run of the tagged commit,
+A tag `desktop-native-v*` builds nothing (it releases the packages that were built and tested on `main`): its
+release job looks up the successful `main` run of the tagged commit,
 downloads that run's packages, the ones its tests, smoke test and start tests passed on, and makes a draft release
 of them. All six packages are required (the AppImage and the `.deb` of Linux x64 and of arm64, the `.dmg`, the
 Windows installer), each from its platform's artifact; the release carries them under their versioned names only
 (`ProSE_0.1.2_x64-setup.exe`, `ProSE_0.1.2_aarch64.dmg`, ...), and the web app links to the page of the latest
-release (`releases/latest`). It fails with a message when there is no such run (tag a commit of
-`prose-desktop` whose run passed), a package is missing or its artifact has expired (`gh run rerun <run>`, then
+release (`https://github.com/timosachsenberg/prose-gui/releases/latest`). It fails with a message when there is no
+such run (tag a commit of `main` whose run passed), a package is missing or its artifact has expired (`gh run rerun <run>`, then
 re-run the release job).

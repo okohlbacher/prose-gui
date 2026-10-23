@@ -6,9 +6,8 @@
 #   searches the example from the command line with PeptDeep, the packaged app starts, finds its ProSE and
 #   exits); the real_prose tests with the bundled tool.
 # - shim: the shim's tests (cargo test) on macOS and Windows, which need no OpenMS, for quick answers.
-# A tag desktop-native-v* makes a draft release with the packages of the tested prose-desktop run of the
-# tagged commit (a tag run builds nothing: the caches below belong to the branch, and a tag run cannot read
-# them, so it would build OpenMS and its dependencies from scratch).
+# A tag desktop-native-v* makes a draft release with the packages of the tested main run of the tagged
+# commit (a tag run builds nothing: it releases the packages that main's run built and tested).
 #
 # Caches (actions/cache), per platform: the bundled ProSE (src-tauri/resources/prose), keyed by the pin and
 # the scripts and licence files that make it, so OpenMS is built only when one of them changes; vcpkg's binary cache, keyed by
@@ -22,10 +21,10 @@ name: desktop
 
 on:
   push:
-    branches: [prose-desktop]
+    branches: [main]
     tags: ['desktop-native-v*']
   pull_request:
-    branches: [prose-desktop]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -792,7 +791,7 @@ jobs:
           retention-days: 14
 
   # A draft release of the packages, for a tag desktop-native-v* only; publishing it is a person's step. The
-  # packages are those of the successful prose-desktop run of the tagged commit, the build that ran the unit
+  # packages are those of the successful main run of the tagged commit, the build that ran the unit
   # tests, the smoke test and the start tests (artifacts are kept 14 days; an older run can be re-run with
   # `gh run rerun`). All six packages are required: the AppImage and the .deb for Linux x64 and arm64, the
   # .dmg and the Windows installer. The release carries them under their versioned names only.
@@ -827,10 +826,10 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           # (a push of the branch: a pull request from a fork's branch of that name is not the tested build)
-          run=$(gh run list --workflow desktop.yml --branch prose-desktop --event push --commit "$SHA" --status success \
+          run=$(gh run list --workflow desktop.yml --branch main --event push --commit "$SHA" --status success \
             --limit 1 --json databaseId --jq '.[0].databaseId // empty')
           if [ -z "$run" ]; then
-            echo "::error::No successful run of desktop.yml on prose-desktop for $SHA. Tag a commit of prose-desktop whose run passed (or wait for its run to finish)."
+            echo "::error::No successful run of desktop.yml on main for $SHA. Tag a commit of main whose run passed (or wait for its run to finish)."
             exit 1
           fi
           echo "packages of run $GITHUB_SERVER_URL/$GH_REPO/actions/runs/$run"

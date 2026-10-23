@@ -1,6 +1,7 @@
 # ProSE desktop: design
 
 Date: 2026-10-20. Branch `prose-desktop` of timosachsenberg/prose-web (an orphan branch: no history of the web app).
+Since 2026-10-23 the app lives in its own repository, timosachsenberg/prose-gui (branch `main`, the same history).
 Status: design, not built. Builder check done; the user's answer (PeptDeep prediction for every PSM) is in.
 
 ## 1. Intent

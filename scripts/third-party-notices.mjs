@@ -248,7 +248,7 @@ const notices = [
 const debian = [
   'Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/',
   'Upstream-Name: ProSE',
-  'Source: https://github.com/timosachsenberg/prose-web/tree/prose-desktop',
+  'Source: https://github.com/timosachsenberg/prose-gui',
   'Comment: The software bundled with ProSE and its licences: /usr/lib/ProSE/resources/notices/THIRD-PARTY-NOTICES.txt',
   ' (the Rust crates, JavaScript packages, fonts and OpenMS logo of the app), /usr/lib/ProSE/resources/prose/share/OpenMS/LICENSES',
   ' (the ProSE tool and its libraries) and /usr/lib/ProSE/resources/prose/share/OpenMS/models (the PeptDeep models).',
