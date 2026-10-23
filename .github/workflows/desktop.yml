@@ -16,7 +16,7 @@
 # its dependencies; on macOS and Windows ccache's objects of OpenMS, so a rebuild after a change of the
 # bundling scripts (or a build cut short) compiles little. They are saved right after the step that fills
 # them, also when it failed, so a later failure (tests, packaging) or a time-out does not lose hours of
-# building. On macOS and Windows the vcpkg dependencies are built in a step of their own (configure), saved,
+# building. On every platform the vcpkg dependencies are built in a step of their own (configure), saved,
 # and OpenMS is built after: a first run that runs out of time keeps the dependencies.
 name: desktop
 
@@ -865,10 +865,10 @@ jobs:
 
           **Linux** x64 and arm64 (Ubuntu 22.04 or later, or another distribution with glibc 2.35 or later; arm64:
           for example a Raspberry Pi 5 with a 64-bit system, ARM servers and laptops): the AppImage runs as is, the
-          .deb (package `prose`) installs with apt; the file names say the architecture (x86_64/amd64,
-          aarch64/arm64). The AppImage needs the system's OpenGL ES library, libGLESv2.so.2 (the .deb pulls it in with
-          WebKitGTK). Desktop installations have it; without it the app exits at once (exit code 127, "Couldn't
-          open libGLESv2.so.2"). Install it with
+          .deb (package `prose`) installs with apt; the file names say the architecture (x64: amd64;
+          arm64: aarch64 for the AppImage, arm64 for the .deb). The AppImage needs the system's OpenGL ES
+          library, libGLESv2.so.2 (the .deb pulls it in with WebKitGTK). Desktop installations have it; without
+          it the app exits at once (exit code 127, "Couldn't open libGLESv2.so.2"). Install it with
           - Ubuntu, Debian: `sudo apt install libgles2`
           - Fedora: `sudo dnf install libglvnd-gles`
 
