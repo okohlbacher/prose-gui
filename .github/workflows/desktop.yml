@@ -829,6 +829,14 @@ jobs:
           files of one name can be searched together only when they are on the drive of the app's data (usually
           C:); otherwise the app asks to rename one of them.
           NOTES
-          gh release create "$TAG" --draft --verify-tag --title "ProSE desktop ${TAG#desktop-native-v}" \
+          # the packages also under names without the version, which the web app's download links name
+          # (releases/latest/download/ProSE-<platform>...): those links then always give the latest release
+          mkdir stable
+          cp "$(find packages -type f -name '*-setup.exe')" stable/ProSE-windows-x64-setup.exe
+          cp "$(find packages -type f -name '*.dmg')" stable/ProSE-macos-arm64.dmg
+          cp "$(find packages -type f -name '*.AppImage')" stable/ProSE-linux-x64.AppImage
+          cp "$(find packages -type f -name '*.deb')" stable/ProSE-linux-x64.deb
+          gh release create "$TAG" --draft --verify-tag --title "ProSE desktop (native) ${TAG#desktop-native-v}" \
             --notes-file notes.md \
-            $(find packages -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' -o -name '*-setup.exe' \))
+            $(find packages -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' -o -name '*-setup.exe' \)) \
+            stable/*
