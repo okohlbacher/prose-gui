@@ -24,9 +24,11 @@ way: open it once (it is refused), then System Settings > Privacy & Security > "
 without administrator rights. It is not signed: SmartScreen asks once ("More info" > "Run anyway"). The app uses
 Microsoft Edge WebView2, which Windows 11 and an updated Windows 10 have (the installer fetches it otherwise).
 
-**Linux** x64, Ubuntu 22.04 or later (and other distributions of that age): the AppImage runs as it is
-(`chmod +x ProSE_<version>_amd64.AppImage`), or the `.deb` installs with `sudo apt install ./ProSE_<version>_amd64.deb`
-(package `prose`). The AppImage needs one library of the system: OpenGL ES, `libGLESv2.so.2`, which desktop
+**Linux** x64 or arm64 (64-bit ARM: for example a Raspberry Pi 5 with a 64-bit system, ARM servers, ARM laptops),
+Ubuntu 22.04 or later (and other distributions with glibc 2.35 or later): the AppImage runs as it is
+(`chmod +x ProSE_<version>_amd64.AppImage`; on arm64 `ProSE_<version>_aarch64.AppImage`), or the `.deb` installs
+with `sudo apt install ./ProSE_<version>_amd64.deb` (on arm64 `ProSE_<version>_arm64.deb`; package `prose`). The
+AppImage needs one library of the system: OpenGL ES, `libGLESv2.so.2`, which desktop
 installations have (the `.deb` pulls it in with WebKitGTK). Without it the app exits at once with exit code 127
 ("Couldn't open libGLESv2.so.2"). Install it with `sudo apt install libgles2` (Ubuntu, Debian) or `sudo dnf install
 libglvnd-gles` (Fedora).

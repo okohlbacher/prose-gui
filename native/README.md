@@ -354,7 +354,7 @@ the script supplies the sysroot's `libGLESv2.so.2`, alone in a folder of its own
 
 ## CI
 
-Jobs: `linux` (below), `macos` and `windows` (see "macOS and Windows": each builds OpenMS when its bundle is not
+Jobs: `linux` (x64 and arm64, below), `macos` and `windows` (see "macOS and Windows": each builds OpenMS when its bundle is not
 cached, with vcpkg's binary cache and ccache; the vcpkg dependencies are built by a configure step of their own
 and saved before OpenMS is built, so a first run that runs out of time keeps them), `shim` (`cargo test` on
 macOS and Windows, minutes after a push) and `release`. Concurrency is per job and platform: a push waits for
@@ -364,23 +364,34 @@ repository and evicts the least recently used beyond that; ccache's objects are 
 adds an entry (Windows' vcpkg cache alone is about 2.6 GB): delete the superseded ones (`gh cache list`,
 `gh cache delete`) when the total nears the limit.
 
-The `linux` job of `.github/workflows/desktop.yml` (branch `prose-desktop` of timosachsenberg/prose-web) runs on
-`ubuntu-22.04`:
-it checks out OpenMS at `OPENMS_COMMIT`, builds libOpenMS and ProSE with GCC 13 (toolchain PPA) through
-`build-openms.sh`, with GNU as 2.42 built from source for it (ONNX Runtime's AVX-NE-CONVERT code needs as >= 2.40,
-Ubuntu 22.04 has 2.38; GCC gets it through `COMPILER_PATH`), bundles ProSE, runs svelte-check, vitest and
-`cargo test` (with the bundled ProSE, so the `real_prose` tests run too), builds the packages with
-`package-linux.sh`, runs the smoke test and uploads the AppImage and the `.deb` (kept 14 days).
+The `linux` job of `.github/workflows/desktop.yml` (branch `prose-desktop` of timosachsenberg/prose-web) is a
+matrix of two architectures with the same steps: x64 on `ubuntu-22.04` (vcpkg triplet `x64-linux-dynamic`,
+artifact `prose-desktop-linux`) and arm64 on `ubuntu-22.04-arm`, GitHub's arm64 runner for public repositories
+(`arm64-linux-dynamic`, OpenMS's own arm64 triplet, which builds OpenBLAS for any ARMv8 CPU; artifact
+`prose-desktop-linux-arm64`). Both are Ubuntu 22.04, so both packages need glibc 2.35. Each job
+checks out OpenMS at `OPENMS_COMMIT`, builds the vcpkg dependencies (a configure step of their own, saved before
+OpenMS is built, as on macOS and Windows) and libOpenMS and ProSE with GCC 13 (toolchain PPA) through
+`build-openms.sh`, on x64 with GNU as 2.42 built from source for it (ONNX Runtime's AVX-NE-CONVERT code needs
+as >= 2.40, Ubuntu 22.04 has 2.38; GCC gets it through `COMPILER_PATH`; MLAS's arm64 code needs nothing newer),
+bundles ProSE, runs svelte-check, vitest and `cargo test` (with the bundled ProSE, so the `real_prose` tests run
+too), builds the packages with `package-linux.sh`, runs the smoke test and uploads the AppImage and the `.deb`
+(kept 14 days). ONNX Runtime is vcpkg's port, built from source for each triplet; Tauri downloads linuxdeploy,
+its AppImage plugin and AppRun for the machine's architecture (none of them checksum-verified, on either
+architecture: Tauri's own downloads).
 
 Caches (`actions/cache`) belong to the ref that saved them and are readable from that ref and the default branch
-(`main`) only. The runs of the branch `prose-desktop` share them: the bundled ProSE (key: the pin, the triplet and
-the two scripts), so OpenMS is only built when one of them changes, and vcpkg's binary cache (key: the pin and the
+(`main`) only. The runs of the branch `prose-desktop` share them, per runner and triplet: the bundled ProSE (key:
+the pin, the triplet and the two scripts), so OpenMS is only built when one of them changes, and vcpkg's binary cache (key: the pin and the
 triplet, plus the hash of its content, so the packages built before a failure are kept; restored from an earlier
 pin's when the pin moves). Pull requests read the branch's caches; their own saves stay with the pull request.
 
 A tag `desktop-native-v*` builds nothing (a tag run cannot read the branch's caches and would build OpenMS and its
 dependencies from scratch): its release job looks up the successful `prose-desktop` run of the tagged commit,
 downloads that run's packages, the ones its tests, smoke test and start tests passed on, and makes a draft release
-of them: the Linux packages always, the macOS and Windows ones when that run has them (otherwise a warning). It
-fails with a message when there is no such run (tag a commit of `prose-desktop` whose run passed) or its artifact
-has expired (`gh run rerun <run>`, then re-run the release job).
+of them. All five packages are required (the AppImage and the `.deb` of Linux x64 and of arm64, the `.dmg`, the
+Windows installer), each from its platform's artifact; the release also carries them under names without the
+version (`ProSE-linux-x64.AppImage`, `ProSE-linux-x64.deb`, `ProSE-linux-arm64.AppImage`,
+`ProSE-linux-arm64.deb`, `ProSE-macos-arm64.dmg`, `ProSE-windows-x64-setup.exe`), which the web app's
+`releases/latest/download/...` links name. It fails with a message when there is no such run (tag a commit of
+`prose-desktop` whose run passed), a package is missing or its artifact has expired (`gh run rerun <run>`, then
+re-run the release job).

@@ -10,6 +10,14 @@ import { appReady, clearSearches, dataHome, invoke, openFirstPsm, runExample } f
 
 const forbidden = (process.env.SMOKE_FORBIDDEN ?? '').split(':').filter(Boolean)
 
+/** The machine's glibc loader and Debian multiarch triple (the AppImages for x64 and arm64). */
+const { loader, multiarch } =
+  process.arch === 'arm64'
+    ? { loader: 'ld-linux-aarch64.so.1', multiarch: 'aarch64-linux-gnu' }
+    : { loader: 'ld-linux-x86-64.so.2', multiarch: 'x86_64-linux-gnu' }
+const loaderStem = loader.replace(/\.so\.\d+$/, '')
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 /** The files a process has mapped (libraries, the executable), or [] once it has ended. */
 function mappedFiles(pid: number): string[] {
   try {
@@ -49,7 +57,7 @@ const bundledStack = /(webkit|javascriptcore|soup|gtk-3|gdk-3|glib|gio|gobject)/
  */
 const hostAllowed = [
   // glibc, the GCC runtime
-  /^(ld-linux-x86-64|libc|libm|libmvec|libdl|libpthread|librt|libresolv|libutil|libstdc\+\+|libgcc_s)$/,
+  new RegExp(`^(${escape(loaderStem)}|libc|libm|libmvec|libdl|libpthread|librt|libresolv|libutil|libstdc\\+\\+|libgcc_s)$`),
   // GL: glvnd, Mesa (its drivers, LLVM and what they link), libdrm
   /^(libGL|libGLX|libGLX_mesa|libEGL|libEGL_mesa|libGLESv2|libGLdispatch|libOpenGL|libglapi|libgbm|libgallium-.*|.*_dri|libdrm(_[a-z]+)?|libLLVM.*|libpciaccess|libsensors|libedit|libtinfo|libelf|libxshmfence|libXxf86vm|libvulkan)$/,
   // the X11, xcb and Wayland client libraries
@@ -133,7 +141,7 @@ describe('the AppImage', () => {
     // every library outside the bundle is glibc's (bundle-prose.sh's exclude list), or one of its gconv
     // charset modules
     for (const f of libs.filter((f) => !f.startsWith(bundleLib) && !/\/gconv\/[^/]+\.so$/.test(f))) {
-      expect(f.split('/').pop()).toMatch(/^(ld-linux-x86-64\.so\.2|lib(c|m|mvec|dl|pthread|rt|resolv)\.so\.\d+)$/)
+      expect(f.split('/').pop()).toMatch(new RegExp(`^(${escape(loader)}|lib(c|m|mvec|dl|pthread|rt|resolv)\\.so\\.\\d+)$`))
     }
     expect(offending([...proseMaps])).toEqual([])
   })
@@ -168,6 +176,6 @@ describe('the AppImage', () => {
         notAllowed: [],
       })
     }
-    expect(existsSync(`${appRoot}/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess`)).toBe(true)
+    expect(existsSync(`${appRoot}/usr/lib/${multiarch}/webkit2gtk-4.1/WebKitWebProcess`)).toBe(true)
   })
 })

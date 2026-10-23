@@ -1,7 +1,7 @@
-# The ProSE desktop app on Linux, macOS (arm64) and Windows (x64): the pinned OpenMS (native/OPENMS_COMMIT)
-# built and bundled, the app's unit tests and packages.
-# - linux: the .deb and the AppImage, and the AppImage's smoke test (the example with PeptDeep through
-#   WebDriver).
+# The ProSE desktop app on Linux (x64, arm64), macOS (arm64) and Windows (x64): the pinned OpenMS
+# (native/OPENMS_COMMIT) built and bundled, the app's unit tests and packages.
+# - linux (x64 and arm64, a matrix): the .deb and the AppImage, and the AppImage's smoke test (the example with
+#   PeptDeep through WebDriver).
 # - macos, windows: the .dmg and the NSIS installer, and their start test (start-test.sh: the bundled ProSE
 #   searches the example from the command line with PeptDeep, the packaged app starts, finds its ProSE and
 #   exits); the real_prose tests with the bundled tool.
@@ -35,18 +35,36 @@ permissions:
 # of cancelling it, and a quick job of another platform does not wait for it)
 
 jobs:
+  # Linux x64 and arm64: one job per architecture, the same steps (the matrix below); each has caches of its
+  # own (their keys name the runner and the triplet). arm64 runs on GitHub's arm64 runner for public
+  # repositories, on Ubuntu 22.04 as x64, so both need glibc 2.35.
   linux:
-    name: Linux (ubuntu-22.04)
+    name: ${{ matrix.name }}
     # a tag takes the packages of the branch run instead (the release job)
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux (ubuntu-22.04)
+            runner: ubuntu-22.04
+            arch: x64
+            triplet: x64-linux-dynamic
+            artifact: prose-desktop-linux
+          - name: Linux (arm64, ubuntu-22.04-arm)
+            runner: ubuntu-22.04-arm
+            arch: arm64
+            # OpenMS's overlay triplet (vcpkg-overlays/triplets), as its own arm64 CI: OpenBLAS for any ARMv8
+            triplet: arm64-linux-dynamic
+            artifact: prose-desktop-linux-arm64
+    runs-on: ${{ matrix.runner }}
     # the first run builds vcpkg's dependencies (Arrow, the AWS SDK, ONNX Runtime, ...) and OpenMS
     timeout-minutes: 360
     concurrency:
-      group: desktop-linux-${{ github.ref }}
+      group: desktop-linux-${{ matrix.arch }}-${{ github.ref }}
       cancel-in-progress: false
     env:
-      TRIPLET: x64-linux-dynamic
+      TRIPLET: ${{ matrix.triplet }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -64,7 +82,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: src-tauri/resources/prose
-          key: prose-bundle-v1-ubuntu-22.04-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-${{ hashFiles('native/scripts/build-openms.sh', 'native/scripts/bundle-prose.sh', 'native/licenses/**') }}
+          key: prose-bundle-v1-${{ matrix.runner }}-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-${{ hashFiles('native/scripts/build-openms.sh', 'native/scripts/bundle-prose.sh', 'native/licenses/**') }}
 
       - name: System packages
         run: |
@@ -100,14 +118,18 @@ jobs:
             echo "::warning::GCC 13 from the toolchain PPA failed (attempt $attempt); trying again in 5 minutes"
             sleep 300
           done
+          uname -m
+          nproc
+          free -g
           cmake --version
           gcc-13 --version
 
       # ONNX Runtime's MLAS has AVX-NE-CONVERT code (cvtfp16Avx.S) that needs GNU as >= 2.40; Ubuntu 22.04
       # has binutils 2.38. Only the assembler is built (2.42, as on Ubuntu 24.04) and given to GCC through
-      # COMPILER_PATH; the linker stays the system's.
+      # COMPILER_PATH; the linker stays the system's. (x64 only: MLAS's arm64 assembly, NEON, dot product,
+      # i8mm and bf16, is within binutils 2.38.)
       - name: GNU as 2.42
-        if: steps.bundle.outputs.cache-hit != 'true'
+        if: steps.bundle.outputs.cache-hit != 'true' && matrix.arch == 'x64'
         run: |
           cd "$RUNNER_TEMP"
           # (ftpmirror.gnu.org redirects to a random mirror, one of which had an expired certificate: several
@@ -152,13 +174,42 @@ jobs:
         with:
           path: vcpkg-bincache
           # saved below as <this key>-<hash of the content>: the newest cache of the pin, else of an earlier pin
-          key: vcpkg-v1-ubuntu-22.04-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}
+          key: vcpkg-v1-${{ matrix.runner }}-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}
           restore-keys: |
-            vcpkg-v1-ubuntu-22.04-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-
-            vcpkg-v1-ubuntu-22.04-${{ env.TRIPLET }}-
+            vcpkg-v1-${{ matrix.runner }}-${{ env.TRIPLET }}-${{ steps.pin.outputs.commit }}-
+            vcpkg-v1-${{ matrix.runner }}-${{ env.TRIPLET }}-
+
+      # configure builds the vcpkg dependencies, which are saved before the long OpenMS build: a first run that
+      # runs out of time keeps them (as on macOS and Windows)
+      - name: The vcpkg dependencies (OpenMS's configure)
+        if: steps.bundle.outputs.cache-hit != 'true'
+        id: configure
+        timeout-minutes: 300
+        env:
+          CC: gcc-13
+          CXX: g++-13
+          JOBS: 4
+          VCPKG_MAX_CONCURRENCY: 4
+          VCPKG_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
+          VCPKG_INSTALL_OPTIONS: --clean-after-build
+          VCPKG_TRIPLET: ${{ env.TRIPLET }}
+          OPENMS_CONFIGURE_ONLY: 1
+        run: |
+          [ ! -x "$RUNNER_TEMP/gas/as" ] || export COMPILER_PATH=$RUNNER_TEMP/gas PATH=$RUNNER_TEMP/gas:$PATH
+          native/scripts/build-openms.sh openms openms/build
+          df -h /
+
+      # saved whatever happened to the configure, with the hash of its content in the key: the packages vcpkg
+      # built are kept even if a later one failed, and an unchanged cache is not saved again
+      - name: Save vcpkg's binary cache
+        if: always() && steps.bundle.outputs.cache-hit != 'true' && hashFiles('vcpkg-bincache/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: vcpkg-bincache
+          key: ${{ steps.vcpkg.outputs.cache-primary-key }}-${{ hashFiles('vcpkg-bincache/**') }}
 
       - name: Build OpenMS (libOpenMS and ProSE)
-        if: steps.bundle.outputs.cache-hit != 'true'
+        if: steps.bundle.outputs.cache-hit != 'true' && steps.configure.outcome == 'success'
         id: openms
         env:
           CC: gcc-13
@@ -167,20 +218,12 @@ jobs:
           VCPKG_MAX_CONCURRENCY: 4
           VCPKG_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
           VCPKG_INSTALL_OPTIONS: --clean-after-build
+          VCPKG_TRIPLET: ${{ env.TRIPLET }}
           OPENMS_TARGETS: OpenMS ProSE
         run: |
-          export COMPILER_PATH=$RUNNER_TEMP/gas PATH=$RUNNER_TEMP/gas:$PATH
+          [ ! -x "$RUNNER_TEMP/gas/as" ] || export COMPILER_PATH=$RUNNER_TEMP/gas PATH=$RUNNER_TEMP/gas:$PATH
           native/scripts/build-openms.sh openms openms/build
           df -h /
-
-      # saved whatever happened to OpenMS, with the hash of its content in the key: the packages vcpkg built
-      # are kept even if a later one or OpenMS failed, and an unchanged cache is not saved again
-      - name: Save vcpkg's binary cache
-        if: always() && steps.bundle.outputs.cache-hit != 'true' && hashFiles('vcpkg-bincache/**') != ''
-        uses: actions/cache/save@v6
-        with:
-          path: vcpkg-bincache
-          key: ${{ steps.vcpkg.outputs.cache-primary-key }}-${{ hashFiles('vcpkg-bincache/**') }}
 
       - name: Bundle ProSE
         if: steps.bundle.outputs.cache-hit != 'true'
@@ -254,7 +297,7 @@ jobs:
         if: always()
         run: |
           {
-            echo '### Packages'
+            echo '### Packages (Linux ${{ matrix.arch }})'
             echo
             echo '| file | size |'
             echo '| --- | --- |'
@@ -268,7 +311,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: prose-desktop-linux
+          name: ${{ matrix.artifact }}
           path: |
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/deb/*.deb
@@ -751,8 +794,8 @@ jobs:
   # A draft release of the packages, for a tag desktop-native-v* only; publishing it is a person's step. The
   # packages are those of the successful prose-desktop run of the tagged commit, the build that ran the unit
   # tests, the smoke test and the start tests (artifacts are kept 14 days; an older run can be re-run with
-  # `gh run rerun`). All three platforms' packages are required: the AppImage, the .deb, the .dmg and the
-  # Windows installer.
+  # `gh run rerun`). All five packages are required: the AppImage and the .deb for Linux x64 and arm64, the
+  # .dmg and the Windows installer.
   release:
     name: Draft release
     if: startsWith(github.ref, 'refs/tags/desktop-native-v')
@@ -791,16 +834,19 @@ jobs:
             exit 1
           fi
           echo "packages of run $GITHUB_SERVER_URL/$GH_REPO/actions/runs/$run"
-          for platform in linux macos windows; do
+          for platform in linux linux-arm64 macos windows; do
             if ! gh run download "$run" --name "prose-desktop-$platform" --dir "packages/$platform"; then
               echo "::error::Run $run has no artifact prose-desktop-$platform (expired after 14 days?): re-run it with 'gh run rerun $run', then this job."
               exit 1
             fi
           done
           find packages -type f -printf '%s\t%p\n'
-          for pattern in '*.AppImage' '*.deb' '*.dmg' '*-setup.exe'; do
-            [ -n "$(find packages -type f -name "$pattern")" ] \
-              || { echo "::error::run $run's artifacts lack the $pattern package"; exit 1; }
+          # exactly one of each, in the artifact of its platform
+          for want in 'linux *.AppImage' 'linux *.deb' 'linux-arm64 *.AppImage' 'linux-arm64 *.deb' \
+            'macos *.dmg' 'windows *-setup.exe'; do
+            read -r platform pattern <<<"$want"
+            [ "$(find "packages/$platform" -type f -name "$pattern" | wc -l)" -eq 1 ] \
+              || { echo "::error::run $run's artifact prose-desktop-$platform does not hold exactly one $pattern package"; exit 1; }
           done
       - name: Draft release
         env:
@@ -817,8 +863,10 @@ jobs:
           The app is not signed with a Developer ID nor notarized, so macOS refuses to open it until then
           (System Settings > Privacy & Security > "Open Anyway" also works after a first attempt).
 
-          **Linux** x64 (Ubuntu 22.04 or later): the AppImage runs as is, the .deb (package `prose`) installs with
-          apt. The AppImage needs the system's OpenGL ES library, libGLESv2.so.2 (the .deb pulls it in with
+          **Linux** x64 and arm64 (Ubuntu 22.04 or later, or another distribution with glibc 2.35 or later; arm64:
+          for example a Raspberry Pi 5 with a 64-bit system, ARM servers and laptops): the AppImage runs as is, the
+          .deb (package `prose`) installs with apt; the file names say the architecture (x86_64/amd64,
+          aarch64/arm64). The AppImage needs the system's OpenGL ES library, libGLESv2.so.2 (the .deb pulls it in with
           WebKitGTK). Desktop installations have it; without it the app exits at once (exit code 127, "Couldn't
           open libGLESv2.so.2"). Install it with
           - Ubuntu, Debian: `sudo apt install libgles2`
@@ -834,8 +882,10 @@ jobs:
           mkdir stable
           cp "$(find packages -type f -name '*-setup.exe')" stable/ProSE-windows-x64-setup.exe
           cp "$(find packages -type f -name '*.dmg')" stable/ProSE-macos-arm64.dmg
-          cp "$(find packages -type f -name '*.AppImage')" stable/ProSE-linux-x64.AppImage
-          cp "$(find packages -type f -name '*.deb')" stable/ProSE-linux-x64.deb
+          cp "$(find packages/linux -type f -name '*.AppImage')" stable/ProSE-linux-x64.AppImage
+          cp "$(find packages/linux -type f -name '*.deb')" stable/ProSE-linux-x64.deb
+          cp "$(find packages/linux-arm64 -type f -name '*.AppImage')" stable/ProSE-linux-arm64.AppImage
+          cp "$(find packages/linux-arm64 -type f -name '*.deb')" stable/ProSE-linux-arm64.deb
           gh release create "$TAG" --draft --verify-tag --title "ProSE desktop (native) ${TAG#desktop-native-v}" \
             --notes-file notes.md \
             $(find packages -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' -o -name '*-setup.exe' \)) \

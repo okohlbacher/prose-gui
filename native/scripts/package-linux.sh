@@ -3,8 +3,9 @@
 #
 #   package-linux.sh        (src-tauri/resources/prose has to be filled first: bundle-prose.sh)
 #
-# CI (ubuntu-22.04, WebKitGTK installed as packages) and the development machine (WebKitGTK from the
-# sysroot of in-env.sh, which this script enters by itself when the sysroot exists) use the same script.
+# CI (ubuntu-22.04 and ubuntu-22.04-arm: x64 and arm64, WebKitGTK installed as packages) and the development
+# machine (x64, WebKitGTK from the sysroot of in-env.sh, which this script enters by itself when the sysroot
+# exists) use the same script.
 # PACKAGE_SKIP_BUILD=1 skips `tauri build --no-bundle` (the release binary is up to date).
 #
 # Both get the third-party notices (scripts/third-party-notices.mjs, into resources/notices) and the font
@@ -134,7 +135,8 @@ fi
 plugin=$TOOLS/linuxdeploy-plugin-appimage.AppImage
 [ -x "$plugin" ] || die "$plugin is missing (tauri bundle downloads it)"
 rm -f "$appimage"
-(cd "$BUNDLE_DIR/appimage" && APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 LDAI_OUTPUT="$appimage" OUTPUT="$appimage" \
+# (ARCH: the AppImage runtime's architecture, x86_64 or aarch64, as Tauri's own AppImage step sets it)
+(cd "$BUNDLE_DIR/appimage" && APPIMAGE_EXTRACT_AND_RUN=1 ARCH="$(uname -m)" LDAI_OUTPUT="$appimage" OUTPUT="$appimage" \
   "$plugin" --appimage-extract-and-run --appdir "$appdir")
 [ -f "$appimage" ] || die "the AppImage plugin wrote no $appimage"
 chmod +x "$appimage"
@@ -153,6 +155,10 @@ for exe in "$resources/prose/bin/ProSE" "$work/deb/usr/lib/$product/resources/pr
   [ -x "$exe" ] || die "$exe is missing or not executable"
   readelf -d "$exe" | grep -q 'RPATH.*\[\$ORIGIN/\.\./lib\]' || die "$exe lost its RPATH \$ORIGIN/../lib"
 done
+# glibc is the system's (bundle-prose.sh's exclude list): neither its loader (ld-linux-x86-64.so.2,
+# ld-linux-aarch64.so.1) nor libc may be in the bundle
+glibc=$(find "$resources/prose/lib" \( -name 'ld-linux*' -o -name 'libc.so*' -o -name 'libm.so*' -o -name 'libpthread.so*' \) -printf '%f ')
+[ -z "$glibc" ] || die "the bundled ProSE holds glibc's libraries: $glibc"
 for lib in libOpenMS.so libonnxruntime.so.1 libarrow.so.2400 libgomp.so.1; do
   [ ! -e "$appdir/usr/lib/$lib" ] || die "$lib was deployed into the AppDir's usr/lib (ProSE's closure belongs to resources/prose)"
 done
