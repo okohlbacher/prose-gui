@@ -48,12 +48,8 @@ const MZML: &str = "Ecoli_MS2_small.mzML";
 const FASTA: &str = "Ecoli_K12_proteome.fasta";
 
 /// The app's example: the same mzML twice (here from two folders, under one name), the orbitrap preset with
-/// the example's fragment tolerance of 0.5 Da, contaminants, Percolator and PeptDeep.
-fn example_request(real: &Real, work: &TempDir, peptdeep: bool) -> SearchRequest {
-    example_request_with(real, work, peptdeep, json!({}))
-}
-
-/// As `example_request`, with `extra` parameters on top of the preset.
+/// the example's fragment tolerance of 0.5 Da, contaminants, Percolator and PeptDeep, with `extra` parameters on top of
+/// the preset.
 fn example_request_with(
     real: &Real,
     work: &TempDir,
@@ -125,7 +121,9 @@ fn the_example_is_searched_through_start_search() {
     let Some(real) = real() else { return };
     let work = TempDir::new("real");
     let onnx = tool::probe(&real.bin).unwrap().onnx;
-    let request = example_request(&real, &work, onnx);
+    // as the app's example, without a protein FDR: since OpenMS #10707 ProSE applies the preset's 1 % to this small run,
+    // no protein passes it, and a result without protein groups has no quantms.pg.parquet
+    let request = example_request_with(&real, &work, onnx, json!({ "FDR:protein": 0 }));
     let originals: Vec<String> = request.files.iter().map(|f| f.path.clone()).collect();
     let searches = Arc::new(Searches::default());
     let (sink, rx) = channel_sink();

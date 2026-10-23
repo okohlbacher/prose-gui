@@ -950,6 +950,32 @@ fn fixture_lines(name: &str) -> Vec<String> {
 }
 
 #[test]
+fn a_chunked_search_pools_on_the_protein_inference_line_of_current_prose() {
+    // Since OpenMS #10707 the pooled protein inference and FDR logs "[ProSE] Protein inference on …" (the recorded runs
+    // have the earlier "[ProSE] Merged protein inference + FDR …"): the same steps
+    let fixture_name = "prose-chunked-two-files-peptdeep.stdout.txt";
+    let mut tracker = ProgressTracker::new(CHUNK_NAMES.iter().map(|n| n.to_string()).collect());
+    let mut steps = Vec::new();
+    let mut replaced = 0;
+    for line in fixture_lines(fixture_name) {
+        let line = if line.starts_with("[ProSE] Merged protein inference") {
+            replaced += 1;
+            "[ProSE] Protein inference on 1792 PSMs (2 of them up to FDR:protein_inference_PSM, not reported), protein \
+             score PEP: 51 target and 3 decoy proteins."
+                .to_string()
+        } else {
+            line
+        };
+        if let Some(p) = tracker.feed(&line) {
+            steps.push((p.label, p.file, p.fraction));
+        }
+    }
+    assert_eq!(replaced, 1);
+    assert_eq!(steps, steps_of(fixture_name, &CHUNK_NAMES));
+    assert!(labels(&steps).contains(&"Pooling the files..."));
+}
+
+#[test]
 fn progress_reports_the_calibration_pass() {
     let steps = steps_of(
         "prose-calibration-one-file.stdout.txt",

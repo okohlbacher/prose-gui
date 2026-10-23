@@ -6,39 +6,39 @@
   "description": "The enzyme used for peptide digestion.",
   "tags": [],
   "validStrings": [
-   "no cleavage",
+   "glutamyl endopeptidase",
    "elastase-trypsin-chymotrypsin",
+   "no cleavage",
    "Clostripain/P",
    "cyanogen-bromide",
    "PepsinA + P",
-   "glutamyl endopeptidase",
    "Glu-C+P",
-   "Alpha-lytic protease",
-   "unspecific cleavage",
    "proline-endopeptidase/HKR",
-   "Arg-C",
-   "Asp-N/B",
-   "Asp-N_ambic",
+   "unspecific cleavage",
+   "Alpha-lytic protease",
    "Chymotrypsin",
+   "2-iodobenzoate",
+   "Trypsin",
+   "iodosobenzoate",
    "Chymotrypsin/P",
    "CNBr",
    "V8-E",
    "Formic_acid",
-   "Arg-C/P",
-   "proline endopeptidase",
-   "2-iodobenzoate",
-   "leukocyte elastase",
-   "iodosobenzoate",
-   "Asp-N",
    "staphylococcal protease/D",
+   "Arg-C",
+   "leukocyte elastase",
    "Lys-C",
+   "Arg-C/P",
+   "Asp-N_ambic",
    "Lys-N",
+   "Asp-N",
+   "Asp-N/B",
    "Lys-C/P",
    "PepsinA",
    "TrypChymo",
    "Trypsin/P",
    "V8-DE",
-   "Trypsin"
+   "proline endopeptidase"
   ]
  },
  {
@@ -608,8 +608,19 @@
   "name": "FDR:protein",
   "value": 0,
   "type": "double",
-  "description": "Filter proteins based on picked-protein FDR q-value (e.g., 0.01 = 1% protein FDR, set to 0 to disable). Applied after PSM-level FDR on a complete protein set (single file, or the -out_merged aggregate). Setting this > 0 finalizes the result: identified decoys are removed. With 0, decoys are retained for downstream/merged FDR. Uses the picked-protein approach (Savitski et al. 2015) which pairs target and decoy proteins by accession. Needs decoys ('decoys' auto or generate).",
+  "description": "Filter proteins based on picked-protein FDR q-value (e.g., 0.01 = 1% protein FDR, set to 0 to disable). Applied after PSM-level FDR on a complete protein set (single file, or the -out_merged aggregate). Setting this > 0 finalizes the result: identified decoys are removed. With 0, decoys are retained for downstream/merged FDR. Uses the picked-protein approach (Savitski et al. 2015) which pairs target and decoy proteins by accession. The protein inference and the picked-protein FDR use the PSMs up to FDR:protein_inference_PSM, and a protein scores with the best posterior error probability of its PSMs (Percolator's, with 'rescore'; without it the best search engine score). Proteins without a reported PSM (one that passes FDR:PSM) are removed afterwards. Needs decoys ('decoys' auto or generate).",
   "tags": [],
+  "min": 0,
+  "max": 1
+ },
+ {
+  "name": "FDR:protein_inference_PSM",
+  "value": 0.1,
+  "type": "double",
+  "description": "q-value cutoff of the PSMs that protein inference and the protein FDR (FDR:protein) use; FDR:PSM still filters the reported PSMs. The q-values are those FDR:PSM filters on (Percolator's with 'rescore', else see FDR:PSM_groups). A looser cutoff than FDR:PSM leaves more decoy proteins for the picked-protein FDR, as ProteomicsLFQ infers proteins on PSMs at a looser q-value than its PSM FDR. Values at or below FDR:PSM use the PSMs of FDR:PSM; with FDR:PSM 0 (no PSM filter) all PSMs are used.",
+  "tags": [
+   "advanced"
+  ],
   "min": 0,
   "max": 1
  },
@@ -755,6 +766,45 @@
   "value": 0,
   "type": "int",
   "description": "Split the protein database into chunks of at most this many proteins for fragment index building. 0 = disabled (load entire database at once). Enable for very large databases (e.g. MHC-II immunopeptidomics with variants) that exceed available memory. Each chunk builds its own fragment index; results are merged across chunks before post-processing. Calibration (when enabled) runs on a strided, size-bounded sample of the full decoy-augmented database — sample size is tied to chunk_size so calibration memory respects the same budget as main-search chunks. In multi-file mode (-in a.mzML b.mzML), the chunk-major path builds each chunk's fragment index once and scores all files against it before moving to the next chunk. Note that chunk_size bounds only the fragment-index memory: the chunk-major schedule holds ALL input files' preprocessed MS2 spectra in memory for the whole search, so budget for their sum as well, or split very large cohorts across separate ProSE invocations.",
+  "tags": [],
+  "min": 0
+ },
+ {
+  "name": "chimeric:enabled",
+  "value": false,
+  "type": "bool",
+  "description": "Also identify precursors co-isolated with the selected one (after the andes chimeric cascade). The survey scan of each MS2 spectrum is searched for isotope envelopes in its isolation window that fit averagine (needs centroided MS1 spectra in the input and isolation windows on the precursors). After the search, the peaks the best hit of the spectrum explains are removed, and the rest is searched for each co-isolated precursor in turn, at its m/z and charge; the best hit of each removes the peaks it explains before the next is searched. The best hit's peptide is not a hit of a co-isolated precursor, and a co-isolated precursor whose best hit repeats a PSM of the spectrum (same peptide and charge) is dropped. These PSMs get the spectrum reference of their spectrum and the PSM meta value 'chimeric_rank' 2 (the others 1). Not with database:chunk_size > 0.",
+  "tags": []
+ },
+ {
+  "name": "chimeric:max_coisolated",
+  "value": 4,
+  "type": "int",
+  "description": "At most this many co-isolated precursors per spectrum, the most intense first.",
+  "tags": [],
+  "min": 1
+ },
+ {
+  "name": "chimeric:max_kl",
+  "value": 0.3,
+  "type": "double",
+  "description": "Largest Kullback-Leibler divergence of an isotope envelope in the survey scan from averagine (first four isotope peaks) to accept it as a co-isolated precursor.",
+  "tags": [],
+  "min": 0
+ },
+ {
+  "name": "chimeric:top_hits",
+  "value": 3,
+  "type": "int",
+  "description": "At most this many hits of a co-isolated precursor are reported (and at most report:top_hits). Each takes about as much memory as a hit of a spectrum.",
+  "tags": [],
+  "min": 1
+ },
+ {
+  "name": "chimeric:mz_tolerance",
+  "value": 10,
+  "type": "double",
+  "description": "Tolerance (ppm) for the m/z of the isotope peaks in the survey scan.",
   "tags": [],
   "min": 0
  }

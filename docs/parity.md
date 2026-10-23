@@ -7,11 +7,11 @@ where it comes from, and a verdict:
 
 - **available**: a column or key of a ProSE output holds it as it is (or as a plain unit or index change);
 - **derived in the UI**: the reader computes it from available values (the derivation is given);
-- **added in #10676**: no output had it; OpenMS PR [#10676](https://github.com/OpenMS/OpenMS/pull/10676) (draft, to
+- **added in #10676**: no output had it; OpenMS PR [#10676](https://github.com/OpenMS/OpenMS/pull/10676) (merged into
   `develop`, in the pin `native/OPENMS_COMMIT`) adds it;
 - **not needed**: the desktop app does not show it (the reason is given).
 
-Checked against ProSE of the pin (`native/OPENMS_COMMIT`: develop + #10641 + #10676) on the app's example (OpenMS'
+Checked against ProSE of the pin (`native/OPENMS_COMMIT`: develop + #10641 + #10676; the fixtures are of develop with all three merged) on the app's example (OpenMS'
 `Ecoli_MS2_small.mzML`, LTQ Orbitrap XL CID, as two inputs, with Percolator and PeptDeep), the web app's example
 (`DatabaseSuitability_in_spec.mzML`, simulated, one and two inputs) and the TOPP test data (closed and open search, with
 and without Percolator and PeptDeep). On the app's example the reader's result equals the web app's but for the size of

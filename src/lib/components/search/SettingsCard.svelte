@@ -1,13 +1,15 @@
 <script lang="ts">
   // Search settings: the preset, the ten common parameters (in the mockup's order), "Advanced": the
-  // threads (all cores by default) and the database chunks, and the web app's "All N parameters" dialog
+  // threads (all cores by default), the database chunks and co-isolated precursors, and the web app's "All N parameters" dialog
   // (AllParametersDialog), made from the pinned ProSE's parameter list.
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right'
   import FdrInput from '$lib/components/FdrInput.svelte'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
   import { Label } from '$lib/components/ui/label'
+  import { Switch } from '$lib/components/ui/switch'
   import { searchForm as form } from '$lib/search/form.svelte'
+  import { searchPlan } from '$lib/search/plan.svelte'
   import { dialogEntries } from '$lib/settings/parameters'
   import AllParametersDialog from './AllParametersDialog.svelte'
   import ChoiceSelect from './ChoiceSelect.svelte'
@@ -200,6 +202,24 @@
             value={form.value<number>('database:chunk_size')}
             onChange={(v) => form.setParam('database:chunk_size', v)} />
           <p class="text-xs text-muted-foreground">How many proteins go into each part of the fragment index. 0 indexes the whole database at once.</p>
+        </div>
+        <div class="col-span-2 flex items-start gap-3">
+          <Switch
+            id="chimeric"
+            class="mt-0.5"
+            checked={form.value('chimeric:enabled') === true && !searchPlan.chimericBlocked}
+            disabled={searchPlan.chimericBlocked}
+            onCheckedChange={(c) => form.setParam('chimeric:enabled', c)}
+            aria-describedby="chimeric-hint" />
+          <div class="min-w-0">
+            <Label for="chimeric" class="text-xs">Co-isolated precursors</Label>
+            <p id="chimeric-hint" class="mt-0.5 text-xs text-muted-foreground">
+              Also identifies the other precursors in each MS2 spectrum's isolation window, found in its survey scan.
+              {#if searchPlan.chimericBlocked}
+                <span class="text-foreground">Set the database chunk size to 0 to use it.</span>
+              {/if}
+            </p>
+          </div>
         </div>
       </div>
     {/if}

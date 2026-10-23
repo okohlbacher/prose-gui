@@ -22,6 +22,9 @@ class SearchPlan {
   /** PeptDeep features need Percolator and a ProSE with ONNX Runtime (unknown while the tool is asked). */
   peptdeep = $derived(form.rescore && form.peptdeep && (toolState.info?.onnx ?? true))
 
+  /** ProSE looks for co-isolated precursors (chimeric:enabled) only without database chunks; it ignores the switch then. */
+  chimericBlocked = $derived(Number(form.value('database:chunk_size')) > 0)
+
   /** "6 files in 3 samples · 20,652 proteins + 116 cRAP + decoys" */
   line = $derived.by(() => {
     const n = form.files.length
@@ -83,12 +86,14 @@ export const searchPlan = new SearchPlan()
 export function searchRequest(): SearchRequest | null {
   if (!form.database || form.files.length === 0) return null
   const values = $state.snapshot(form.values) as Record<string, unknown>
+  const parameters = requestParameters(values, form.defaults)
+  if (searchPlan.chimericBlocked) delete parameters['chimeric:enabled']
   return {
     files: form.files.map((r) => ({ id: r.id, path: r.file.path })),
     database: form.database.file.path,
     contaminants: form.contaminants,
     settings: {
-      parameters: requestParameters(values, form.defaults),
+      parameters,
       rescore: form.rescore,
       peptdeep: searchPlan.peptdeep,
       threads: form.threads ?? 0,

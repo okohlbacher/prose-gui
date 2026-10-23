@@ -37,7 +37,7 @@
 //! | `[PeptDeepRescoring] …` (first before a mapping)     | `Adding PeptDeep rescoring features...`     | j    | file j's part of the rest         |
 //! | `Mapping n peptides to p proteins.`                  | `Mapping peptides to proteins...`           | j    | (j = the mappings seen before)    |
 //! | `[ProSE] Rescoring the PSMs with Percolator...`      | `Rescoring with Percolator...`              | j    |                                   |
-//! | `[ProSE] Merged protein inference + FDR …` (M > 1)   | `Pooling the files...`                      | -1   | 0.95                              |
+//! | `[ProSE] Protein inference on …` (M > 1; before OpenMS #10707 `[ProSE] Merged protein inference + FDR …`) | `Pooling the files...` | -1 | 0.95 |
 //!
 //! The rescoring of the files comes after all chunks, file by file, so those steps are attributed to
 //! file 0, 1, … by counting the mapping lines; they share [0.5, 0.95] of the bar. The index lines of the
@@ -256,7 +256,11 @@ impl ProgressTracker {
                 0.7,
             ));
         }
-        if rest.starts_with("Merged protein inference") && self.count > 1 {
+        // the pooled protein inference with its protein FDR (with several files only the pooled set has one)
+        if (rest.starts_with("Protein inference on")
+            || rest.starts_with("Merged protein inference"))
+            && self.count > 1
+        {
             return Some(self.report_at(POOLING.to_string(), -1, FILES_SHARE));
         }
         // the other lines (the report, the modification analysis) are the file-by-file rules'

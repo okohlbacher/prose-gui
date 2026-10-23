@@ -269,8 +269,9 @@ describe('readSearch', () => {
     expectTables(tables, w.tables, w.names, { score: PEPTDEEP_SCORE_TOLERANCE })
     // A known difference, not of the reader: the native tool indexes the whole database once for both inputs
     // (948,239 peptides), the web app's module only the peptides that the spectra's precursor windows reach
-    // (12,223). The PSMs, scores and proteins are the same (above).
-    expectSummary(summary, w.summary, 'differs')
+    // (12,223). The PSMs, scores and proteins are the same (above). The fixture asked for no protein FDR (FDR:protein 0,
+    // as the app's example), the web app's for 1 %, which it skipped: neither applied one (proteinFdrApplied false).
+    expectSummary(summary, { ...w.summary, proteinFdr: 0 }, 'differs')
     expect(summary.files.map((f) => f.path)).toEqual(tables.files)
     expect(asked.filter((n) => n.startsWith('/'))).toEqual([])
     expect(asked).toContain('database.fasta')

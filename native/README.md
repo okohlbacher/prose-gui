@@ -139,26 +139,21 @@ ctest --test-dir /scratch/sachsenb/openms-pr10564/build/native-release \
 
 ## The OpenMS pin
 
-`OPENMS_COMMIT` holds the full hash of the OpenMS commit the app's ProSE is built from: the pin branch
-`claude/prose-desktop-pin` (kept locally as `claude/prose-desktop-pin-next` in the worktree
-`/scratch/sachsenb/openms-desktop-next` of the clone `/scratch/sachsenb/openms-pr10564`), which is `develop` (with #10677,
-a search in which no PSM passes the FDR ends with empty outputs) and #10641 (`claude/peptdeep-onnx-memory`, PeptDeep
-memory and NCE selection) and #10676 as split into pull requests: PR 1-3 (`claude/prose-out-runs-folder`: the per-input
-files in `runs/`; `claude/prose-protein-fdr-applied`; `claude/qpx-dataset-export`: the `QPXDatasetExport` class) and
-#10676 itself (`claude/prose-qpx-spectra`: `-qpx_extended`, the optional columns and footer metadata of the QPX psm view
-the app reads (all scores, native ID, isotope error, protein mappings, the filtered peaks and PeptDeep's predictions, the
-run's statistics), the pooled and singleton protein groups, `-keep_decoys`; see `docs/parity.md`), merged as the local
-branch `claude/prose-qpx-split`. The per-input QPX files are in `qpx/runs/`; the reader also reads the layout of app 0.1.x
-(per-input files next to `quantms.*`). The pin branch is pushed to OpenMS/OpenMS (a branch, no pull request), so CI can
-fetch the commit; CI never builds from local state. Build it with
+`OPENMS_COMMIT` holds the full hash of the OpenMS commit the app's ProSE is built from: a commit of `develop`, which
+since #10676 (`-qpx_extended`, the optional columns and footer metadata of the QPX psm view the app reads: all scores,
+native ID, isotope error, protein mappings, the filtered peaks and PeptDeep's predictions, the run's statistics; the
+pooled and singleton protein groups, `-keep_decoys`; see `docs/parity.md`) has everything the app needs. Before, the pin
+was the branch `claude/prose-desktop-pin` (develop with the pull requests not merged yet). The per-input QPX files are in
+`qpx/runs/`; the reader also reads the layout of app 0.1.x (per-input files next to `quantms.*`). CI checks the commit out
+of OpenMS/OpenMS; it never builds from local state. Build it with
 
 ```bash
-native/scripts/build-openms.sh /scratch/sachsenb/openms-desktop-next /scratch/sachsenb/openms-desktop-next/build
+native/scripts/build-openms.sh <OpenMS checkout at the pin> <OpenMS checkout>/build
 ```
 
-and check it with `ctest --test-dir /scratch/sachsenb/openms-desktop-next/build -R "ProSE|PeptDeep|QPX|Percolator_test|ArrowIOHelpers_test|ArrowSchemaRegistry_test"`
-(191 tests with the default targets plus `ArrowSchemaRegistry_test` and `QPXDatasetExport_test`). Update the file whenever
-the pin branch moves.
+and check it with `ctest --test-dir <OpenMS checkout>/build -R "ProSE|PeptDeep|QPX|Percolator_test|ArrowIOHelpers_test|ArrowSchemaRegistry_test"`
+(with the default targets plus `ArrowSchemaRegistry_test` and `QPXDatasetExport_test`). Then make the parameter table
+(`scripts/prose-parameters.mjs`) and the reader's fixtures (`scripts/results-fixture-native.mjs`) with its ProSE again.
 
 ## Bundling ProSE
 

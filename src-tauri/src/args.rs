@@ -127,6 +127,7 @@ pub const PARAMETERS: &[(&str, Kind)] = &[
     ("FDR:PSM", Float),
     ("FDR:PSM_groups", Choice),
     ("FDR:protein", Float),
+    ("FDR:protein_inference_PSM", Float),
     ("scoring:max_candidates_per_spectrum", Int),
     ("scoring:fragment_charges", Choice),
     ("scoring:method", Choice),
@@ -143,6 +144,11 @@ pub const PARAMETERS: &[(&str, Kind)] = &[
     ("calibration:subset_ratio", Float),
     ("calibration:min_psms", Int),
     ("database:chunk_size", Int),
+    ("chimeric:enabled", Flag),
+    ("chimeric:max_coisolated", Int),
+    ("chimeric:max_kl", Float),
+    ("chimeric:top_hits", Int),
+    ("chimeric:mz_tolerance", Float),
 ];
 
 /// The name of the database in the search folder when contaminants are appended.

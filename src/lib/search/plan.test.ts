@@ -151,6 +151,22 @@ describe('the search request', () => {
     expect('threads' in r.settings.parameters).toBe(false)
   })
 
+  test('co-isolated precursors: sent when on, not with database chunks (ProSE would ignore them)', async () => {
+    await form.addFiles(['/r/run.mzML', '/db/db.fasta'])
+    await settle()
+    expect('chimeric:enabled' in searchRequest()!.settings.parameters).toBe(false)
+    form.setParam('chimeric:enabled', true)
+    expect(searchPlan.chimericBlocked).toBe(false)
+    expect(searchRequest()!.settings.parameters['chimeric:enabled']).toBe(true)
+    form.setParam('database:chunk_size', 2000)
+    expect(searchPlan.chimericBlocked).toBe(true)
+    expect('chimeric:enabled' in searchRequest()!.settings.parameters).toBe(false)
+    // the switch stays on: without chunks it is sent again
+    form.setParam('database:chunk_size', 0)
+    expect(searchRequest()!.settings.parameters['chimeric:enabled']).toBe(true)
+    for (const name of Object.keys(searchRequest()!.settings.parameters)) expect(allowlist.has(name), name).toBe(true)
+  })
+
   test('PeptDeep needs Percolator and a ProSE with ONNX Runtime', async () => {
     await form.addFiles(['/r/run.mzML', '/db/db.fasta'])
     await settle()
