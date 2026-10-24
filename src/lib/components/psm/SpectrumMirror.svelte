@@ -29,7 +29,7 @@
   import { signedNumber } from '$lib/format/number'
   import type { PeakMatch } from '$lib/results/types'
   import { errorStats, errorTickDigits, fragmentError, ionColor, ionLabel, COLORS, type PeakGroup, type Tolerance } from '$lib/psm/psm'
-  import { clipMarks, mzDomain, nearest, niceTicks, placeLabels, px, scale, stickGroups, stickPath, stripFits, textWidth } from '$lib/psm/plot'
+  import { clipMarks, mzDomain, nearest, niceTicks, placeLabels, placeLegend, px, scale, stickGroups, stickPath, stripFits, textWidth, wrapParts } from '$lib/psm/plot'
 
   let {
     mz,
@@ -64,30 +64,57 @@
   /** The plot's own height; the strip below it has the bottom label and, if it does not fit beside it, a line for the similarity. */
   const plotHeight = 320
   const M = { left: 46, right: 14 }
+  /** The lines of text above the plot, under it and over the error strip are 15 px apart. */
+  const line = 15
+  let width = $state(800)
+
+  /** What the upper half is, at the top left. */
+  const topLabel = $derived(`Observed · 100 % = ${reference.text}`)
+  /**
+   * The legend: the series that show, in a fixed order; beside the top label when both fit, else on
+   * lines of their own under it (a narrow view), which move the plot down.
+   */
+  const legend = $derived.by(() => {
+    const items: { color: string; text: string }[] = [
+      { color: COLORS.b, text: 'b ions' },
+      { color: COLORS.y, text: 'y ions' },
+    ]
+    if (groups.some((g) => g.type !== 'b' && g.type !== 'y') || bottomIons.some((b) => b.type !== 'b' && b.type !== 'y')) {
+      items.push({ color: COLORS.other, text: 'other ions' })
+    }
+    if (groups.length < mz.length) items.push({ color: COLORS.unmatched, text: 'unmatched' })
+    // each item: the swatch (10 px), 5 px, the text, 7 px to the next
+    const widths = items.map((item) => textWidth(item.text, 11) + 22)
+    const placed = placeLegend(textWidth(topLabel, 11), widths, M.left, width - M.right)
+    return { items: items.map((item, i) => ({ ...item, ...placed.items[i] })), lines: placed.lines }
+  })
   /** The strip above the plot (what the upper half is, the legend) and the one below the axis labels. */
-  const plotTop = 24
-  const plotBottom = plotHeight - 42
-  const mid = (plotTop + plotBottom) / 2
+  const plotTop = $derived(24 + legend.lines * line)
+  const plotBottom = $derived(plotTop + plotHeight - 66)
+  const mid = $derived((plotTop + plotBottom) / 2)
   const font = "'Inter Variable', ui-sans-serif, system-ui, sans-serif"
   // the theme's colours (app.css); the SVG export resolves them in the light theme
   const ink = 'var(--plot-ink)'
   const muted = 'var(--plot-muted)'
   const halo = 'var(--plot-halo)'
 
-  let width = $state(800)
+  /** The lower half's label, broken into lines between its parts where the view is too narrow for it. */
+  const bottomLines = $derived(wrapParts(bottom.label.split(' · '), width - M.left - M.right))
   /** The similarity moves to a line of its own when the label and it would meet (a narrow view). */
-  const stacked = $derived(!stripFits(bottom.label, similarity, width - M.left - M.right))
+  const stacked = $derived(bottomLines.length > 1 || !stripFits(bottom.label, similarity, width - M.left - M.right))
+  /** The lines the label and the similarity take below their first. */
+  const bottomExtra = $derived((bottomLines.length - 1 + (similarity && stacked ? 1 : 0)) * line)
   /**
    * The lower half's label (and the similarity, on its own line when narrow): with the error strip right under the
    * lower half, else under the m/z labels.
    */
   const bottomLabelY = $derived(errors ? plotBottom + 16 : plotBottom + 36)
-  /** The error strip: its header line, then its plot (errorTop to errorBottom). */
-  const errorTop = $derived(bottomLabelY + (stacked ? 15 : 0) + 30)
+  /** The error strip: its header (one line or more), then its plot (errorTop to errorBottom). */
+  const errorTop = $derived.by(() => bottomLabelY + bottomExtra + 30 + (errorLines.length - 1) * line)
   const errorBottom = $derived(errorTop + 84)
   /** The m/z labels sit below the lowest part: the lower half, or the error strip. */
   const axisBase = $derived(errors ? errorBottom : plotBottom)
-  const H = $derived(errors ? axisBase + 24 : axisBase + 42 + (stacked ? 15 : 0))
+  const H = $derived(errors ? axisBase + 24 : axisBase + 42 + bottomExtra)
   let svg = $state<SVGSVGElement | null>(null)
 
   /** The SVG (for "Export spectrum (SVG)"). */
@@ -100,9 +127,9 @@
   const x = $derived(scale(domain, [M.left, Math.max(M.left + 10, width - M.right)]))
   const ref = $derived(reference.intensity > 0 ? reference.intensity : 1)
   /** Upper half: the ratio to the reference (0–1) to y, with room for the labels of the tallest peaks. */
-  const upper = (r: number) => mid - r * (mid - plotTop - 18)
+  const upper = $derived((r: number) => mid - r * (mid - plotTop - 18))
   /** Lower half: 0–1 to y. */
-  const lower = (r: number) => mid + r * (plotBottom - mid - 6)
+  const lower = $derived((r: number) => mid + r * (plotBottom - mid - 6))
 
   const groupOf = $derived(new Map(groups.map((g) => [g.peak, g])))
 
@@ -184,6 +211,16 @@
         ? 'Fragment mass error · no matched ions'
         : `Fragment mass error · mean ${errorText(stats.mean)}${Number.isFinite(stats.sd) ? ` · SD ${errorText(stats.sd).replace(/^[+−-]/, '')}` : ''} · dot size = intensity`,
   )
+  const toleranceText = $derived(errors ? `tolerance ±${errors.tolerance.value} ${unit}` : '')
+  /**
+   * The header over the error strip: the tolerance at the right of the line when both fit, else the
+   * header and the tolerance as one text broken into lines (a narrow view).
+   */
+  const errorLines = $derived(
+    !errors || stripFits(errorHeader, toleranceText, width - M.left - M.right)
+      ? [errorHeader]
+      : wrapParts([...errorHeader.split(' · '), toleranceText], width - M.left - M.right),
+  )
   /** The strip for screen readers, in sentences. */
   const errorDescription = $derived(
     !errors
@@ -193,25 +230,6 @@
         : ` Below it, the mass error in ${unit} of each of the ${errors.matches.length} matched ions is shown under its peak, within the tolerance of ±${errors.tolerance.value} ${unit}.` +
           ` The mean error is ${errorText(stats.mean)}${Number.isFinite(stats.sd) ? `, the standard deviation ${errorText(stats.sd).replace(/^[+−-]/, '')}` : ''}.`,
   )
-
-  /** The legend at the top right: the series that show, in a fixed order. */
-  const legend = $derived.by(() => {
-    const items: { color: string; text: string }[] = [
-      { color: COLORS.b, text: 'b ions' },
-      { color: COLORS.y, text: 'y ions' },
-    ]
-    if (groups.some((g) => g.type !== 'b' && g.type !== 'y') || bottomIons.some((b) => b.type !== 'b' && b.type !== 'y')) {
-      items.push({ color: COLORS.other, text: 'other ions' })
-    }
-    if (groups.length < mz.length) items.push({ color: COLORS.unmatched, text: 'unmatched' })
-    let right = width - M.right
-    const placed = items.map((item) => ({ ...item, w: textWidth(item.text, 11) + 22, x: 0 }))
-    for (let i = placed.length - 1; i >= 0; i--) {
-      right -= placed[i].w
-      placed[i].x = right
-    }
-    return placed
-  })
 
   // hover: the peak (or predicted ion) under the pointer, the most intense within 6 px
   let tip = $state<{ x: number; y: number; lines: string[] } | null>(null)
@@ -321,9 +339,11 @@
     <!-- the fragment mass errors, under their peaks -->
     {#if errors}
       <g data-testid="mass-error">
-        <text x={M.left} y={errorTop - 10} font-size="11" fill={muted} data-testid="error-stats">{errorHeader}</text>
-        <text x={width - M.right} y={errorTop - 10} text-anchor="end" font-size="10" fill={muted}
-          >tolerance ±{errors.tolerance.value} {unit}</text>
+        <text x={M.left} y={errorTop - 10} font-size="11" fill={muted} data-testid="error-stats"
+          >{#each errorLines as text, i (i)}<tspan x={M.left} y={errorTop - 10 - (errorLines.length - 1 - i) * line}>{text}</tspan>{/each}</text>
+        {#if errorLines.length === 1}
+          <text x={width - M.right} y={errorTop - 10} text-anchor="end" font-size="10" fill={muted}>{toleranceText}</text>
+        {/if}
         <rect
           x={M.left}
           y={px(ey(errors.tolerance.value))}
@@ -391,10 +411,12 @@
     {/each}
 
     <!-- above: what the upper half is and the legend; below: what the lower half is, the similarity -->
-    <text x={M.left} y="14" font-size="11" fill={muted} data-testid="top-label">Observed · 100 % = {reference.text}</text>
-    {#each legend as item (item.text)}
-      <rect x={px(item.x)} y="5" width="10" height="10" rx="2" fill={item.color} />
-      <text x={px(item.x + 15)} y="14" font-size="11" fill={ink}>{item.text}</text>
+    <text x={M.left} y="14" font-size="11" fill={muted} data-testid="top-label">{topLabel}</text>
+    {#each legend.items as item (item.text)}
+      <g data-testid="legend-item" data-line={item.line}>
+        <rect x={px(item.x)} y={5 + item.line * line} width="10" height="10" rx="2" fill={item.color} />
+        <text x={px(item.x + 15)} y={14 + item.line * line} font-size="11" fill={ink}>{item.text}</text>
+      </g>
     {/each}
     <text
       x={M.left}
@@ -402,11 +424,12 @@
       font-size="11"
       fill={muted}
       data-testid="bottom-label"
-      data-no-export={bottom.kind === 'status' ? '' : undefined}>{bottom.label}</text>
+      data-no-export={bottom.kind === 'status' ? '' : undefined}
+      >{#each bottomLines as text, i (i)}<tspan x={M.left} y={bottomLabelY + i * line}>{text}</tspan>{/each}</text>
     {#if similarity}
       <text
         x={stacked ? M.left : width - M.right}
-        y={bottomLabelY + (stacked ? 15 : 0)}
+        y={bottomLabelY + (stacked ? bottomLines.length * line : 0)}
         text-anchor={stacked ? 'start' : 'end'}
         font-size="11"
         fill={muted}
