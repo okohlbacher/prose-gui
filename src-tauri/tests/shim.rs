@@ -1756,10 +1756,15 @@ fn an_input_of_a_255_byte_name_is_searched_and_maps_back_to_its_file() {
     assert_eq!(mapping[0]["path"], long.to_str().unwrap());
     assert_eq!(stem, input_stem(&link));
     assert!(link.len() <= 255 && stem.len() == MAX_STEM, "{link}");
-    assert!(fs::symlink_metadata(folder.join(&link))
-        .unwrap()
-        .file_type()
-        .is_symlink());
+    if cfg!(windows) {
+        // a hard link (the name is too long for ProSE's outputs), which the finished search drops
+        assert!(!folder.join(&link).exists(), "{link} is gone");
+    } else {
+        assert!(fs::symlink_metadata(folder.join(&link))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
     // the reader finds the input's outputs by the stem inputs.json records
     assert!(folder
         .join(format!("qpx/runs/{stem}.psm.parquet"))
@@ -1956,6 +1961,25 @@ fn humanize_gives_the_users_names_and_drops_the_search_folder() {
             &records
         ),
         "Reading /other/a.mzML; writing qpx/runs/a.pg.parquet: row 3 reuses run 'a'; a.mzML; 11__a stays"
+    );
+    // a Windows search folder, as ProSE may write it: with '\\', with '/' (a path it put together), mixed, and
+    // the drive letter in the other case
+    let dir = Path::new(r"C:\Users\u\AppData\Roaming\prose\searches\1-0.partial");
+    let req = request(
+        // (the inputs with '/', which is a separator on every platform)
+        &[Path::new("D:/data/a.mzML"), Path::new("D:/other/a.mzML")],
+        Path::new("D:/data/db.fasta"),
+        false,
+        json!({}),
+    );
+    let records = input_records_with(&req, InputLinks::PathsOrHardLinks);
+    assert_eq!(
+        humanize(
+            r"Reading C:\Users\u\AppData\Roaming\prose\searches\1-0.partial\2__a.mzML; Reading c:/Users/u/AppData/Roaming/prose/searches/1-0.partial/1__a.mzML; writing C:\Users\u\AppData\Roaming\prose\searches\1-0.partial\qpx/runs/2__a.pg.parquet and C:/Users/u/AppData/Roaming/prose/searches/1-0.partial/merged.idXML",
+            dir,
+            &records
+        ),
+        "Reading D:/other/a.mzML; Reading D:/data/a.mzML; writing qpx/runs/a.pg.parquet and merged.idXML"
     );
 }
 

@@ -15,7 +15,7 @@ use serde_json::{Map, Value};
 use std::ffi::OsString;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// One input file: the front end's id for it and its path.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -826,15 +826,22 @@ pub fn input_records_with(req: &SearchRequest, links: InputLinks) -> Vec<InputRe
 /// outputs after by the user's (`qpx/runs/1__a.psm.parquet` -> `qpx/runs/a.psm.parquet`). The path of an
 /// output in the search folder `dir` loses the folder (`<dir>/merged.idXML` -> `merged.idXML`): the folder
 /// of a search that failed is gone. Only whole names are replaced (`1__a.mzML` inside `11__a.mzML` stays).
+/// The folder is recognised in each way a tool may write it (Windows: `\\` or `/` after any part, the drive
+/// letter in either case), whatever the platform.
 pub fn humanize(text: &str, dir: &Path, records: &[InputRecord]) -> String {
     let mut text = text.to_string();
+    let folders = path_forms(&dir.to_string_lossy());
     for r in records {
-        let full: PathBuf = dir.join(&r.link);
-        text = replace_whole(&text, &full.to_string_lossy(), &r.path);
+        for folder in &folders {
+            for sep in ['/', '\\'] {
+                text = replace_whole(&text, &format!("{folder}{sep}{}", r.link), &r.path);
+            }
+        }
     }
-    let folder = dir.to_string_lossy();
-    if !folder.is_empty() {
-        text = text.replace(&format!("{folder}{}", std::path::MAIN_SEPARATOR), "");
+    for folder in &folders {
+        for sep in ['/', '\\'] {
+            text = text.replace(&format!("{folder}{sep}"), "");
+        }
     }
     for r in records {
         text = replace_whole(&text, &r.link, &r.name);
@@ -843,6 +850,40 @@ pub fn humanize(text: &str, dir: &Path, records: &[InputRecord]) -> String {
         }
     }
     text
+}
+
+/// The ways a path can be written: as it is, with `/` or `\\` between all its parts, and with a drive letter
+/// (`C:`) in the other case too; without a trailing separator. None for an empty path.
+fn path_forms(path: &str) -> Vec<String> {
+    let path = path.trim_end_matches(['/', '\\']);
+    if path.is_empty() {
+        return Vec::new();
+    }
+    let mut forms = Vec::new();
+    for form in [
+        path.to_string(),
+        path.replace('\\', "/"),
+        path.replace('/', "\\"),
+    ] {
+        let mut chars = form.chars();
+        let other_drive = match (chars.next(), chars.next()) {
+            (Some(letter), Some(':')) if letter.is_ascii_alphabetic() => {
+                let flipped = if letter.is_ascii_uppercase() {
+                    letter.to_ascii_lowercase()
+                } else {
+                    letter.to_ascii_uppercase()
+                };
+                Some(format!("{flipped}{}", &form[1..]))
+            }
+            _ => None,
+        };
+        for f in std::iter::once(form).chain(other_drive) {
+            if !forms.contains(&f) {
+                forms.push(f);
+            }
+        }
+    }
+    forms
 }
 
 fn replace_whole(text: &str, from: &str, to: &str) -> String {
