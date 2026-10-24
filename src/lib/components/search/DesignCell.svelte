@@ -1,9 +1,10 @@
 <script lang="ts">
   // An editable cell of the design table: always drawn as an input. Empty, it shows the assumed value
-  // grey and italic (the placeholder); an entry that is not valid stays, marked, until it is corrected.
-  // Enter and the arrow keys move up and down the column, as in a spreadsheet.
+  // grey and italic (the placeholder); an entry that is not valid stays, marked, until it is corrected, and
+  // the search does not start meanwhile (`onInvalid`). Enter and the arrow keys move up and down the column,
+  // as in a spreadsheet.
   import { untrack } from 'svelte'
-  import { positiveInt } from '$lib/design/model'
+  import { parsePositiveInt } from '$lib/design/model'
   import { cn } from '$lib/utils'
 
   let {
@@ -15,6 +16,7 @@
     row,
     list,
     onChange,
+    onInvalid,
   }: {
     value: string | number | undefined
     kind: 'text' | 'int'
@@ -26,6 +28,8 @@
     row: number
     list?: string
     onChange: (value: string | number | undefined) => void
+    /** The text of the cell while it is not valid, else (and when the cell goes) null. */
+    onInvalid?: (text: string | null) => void
   } = $props()
 
   // What the user typed, while it differs from what the model holds: during typing, and after it for an
@@ -39,12 +43,19 @@
     })
   })
   const shown = $derived(draft !== null ? draft.text : value === undefined ? '' : String(value))
-  const invalid = $derived(kind === 'int' && shown.trim() !== '' && positiveInt(Number(shown.trim())) === undefined)
+  const invalid = $derived(kind === 'int' && parsePositiveInt(shown) === null)
+
+  // (the model holds "not entered" for a cell that is not valid: the form learns of it here)
+  $effect(() => {
+    const report = onInvalid
+    report?.(invalid ? shown.trim() : null)
+    return () => report?.(null)
+  })
 
   function edit(event: Event & { currentTarget: HTMLInputElement }) {
     const text = event.currentTarget.value
     const t = text.trim()
-    const next = t === '' ? undefined : kind === 'text' ? text : positiveInt(Number(t))
+    const next = t === '' ? undefined : kind === 'text' ? text : (parsePositiveInt(t) ?? undefined)
     draft = { text, value: next }
     onChange(next)
   }

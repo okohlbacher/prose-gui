@@ -90,6 +90,9 @@
     ...(saveError ? [{ message: saveError, onDismiss: () => (saveError = null) }] : []),
   ])
 
+  /** The files ProSE cannot search (`FileRow.problem`), as the Spectra card lists them. */
+  const problems = $derived(form.files.filter((r) => r.problem).map((r) => `${r.problem} Remove it to start the search.`))
+
   const headerButton = 'h-7 px-2.5 text-xs'
   // the header stays visible over long tables: it sticks to the top of the table's own scroll box
   const th = 'sticky top-0 z-10 bg-card px-2.5 py-2 align-bottom font-medium shadow-[inset_0_-1px_0_var(--border)]'
@@ -179,7 +182,7 @@
             {@const resolved = design.rows[i]}
             {@const name = file.file.name}
             {@const folder = folderOf(file.file.path)}
-            <tr class="border-b last:border-b-0">
+            <tr class={cn('border-b last:border-b-0', file.problem && 'bg-destructive/5')} data-problem={file.problem ? '' : undefined}>
               <th scope="row" class="truncate px-2.5 py-1.5 text-left font-normal" title={file.file.path}
                 ><span class="font-mono text-[12.5px]">{name}</span>{#if folder}<span
                     class="ml-2 text-xs text-muted-foreground"
@@ -204,7 +207,8 @@
                     label="Replicate of {name}"
                     placeholder={resolved.assumed.replicate ? String(resolved.replicate) : ''}
                     value={file.replicate}
-                    onChange={(v) => form.setField(file.id, 'replicate', v as number | undefined)} />
+                    onChange={(v) => form.setField(file.id, 'replicate', v as number | undefined)}
+                    onInvalid={(t) => form.setInvalidCell(file.id, 'replicate', `Replicate of ${name}`, t)} />
                 </td>
                 <td class="px-2.5 py-1.5">
                   <DesignCell
@@ -214,7 +218,8 @@
                     label="Fraction of {name}"
                     placeholder="–"
                     value={file.fraction}
-                    onChange={(v) => form.setField(file.id, 'fraction', v as number | undefined)} />
+                    onChange={(v) => form.setField(file.id, 'fraction', v as number | undefined)}
+                    onInvalid={(t) => form.setInvalidCell(file.id, 'fraction', `Fraction of ${name}`, t)} />
                 </td>
                 {#if form.advanced}
                   <td class="px-2.5 py-1.5">
@@ -225,14 +230,19 @@
                       label="Technical replicate of {name}"
                       placeholder={String(resolved.techReplicate)}
                       value={file.techReplicate}
-                      onChange={(v) => form.setField(file.id, 'techReplicate', v as number | undefined)} />
+                      onChange={(v) => form.setField(file.id, 'techReplicate', v as number | undefined)}
+                      onInvalid={(t) => form.setInvalidCell(file.id, 'techReplicate', `Technical replicate of ${name}`, t)} />
                   </td>
                   <td class="px-2.5 py-1.5 text-right">{resolved.fractionGroup}</td>
                   {@const sample = design.samples[resolved.sample]?.label ?? ''}
                   <td class="truncate px-2.5 py-1.5" title={sample}>{sample}</td>
                 {/if}
               {/if}
-              <td class="px-2.5 py-1.5 text-right">{file.spectra?.toLocaleString('en-US') ?? '–'}</td>
+              {#if file.problem}
+                <td class="px-2.5 py-1.5 text-right text-xs whitespace-nowrap text-destructive" title={file.problem}>cannot be searched</td>
+              {:else}
+                <td class="px-2.5 py-1.5 text-right">{file.spectra?.toLocaleString('en-US') ?? '–'}</td>
+              {/if}
               <td class="px-2.5 py-1.5 text-right whitespace-nowrap">{formatBytes(file.file.size)}</td>
               <td class="px-1 py-1.5 text-center">
                 <Button variant="ghost" size="icon-xs" class="text-muted-foreground" aria-label="Remove {name}" onclick={() => form.removeFile(file.id)}
@@ -253,6 +263,12 @@
       </p>
     {/if}
 
+    {#if problems.length > 0}
+      <!-- what ProSE cannot search: the search does not start until these files are removed -->
+      <ul class="flex flex-col gap-1 text-[12.5px] text-destructive" data-testid="file-problems">
+        {#each problems as problem, k (k)}<li>{problem}</li>{/each}
+      </ul>
+    {/if}
     <NoticeList items={notices} />
   </Card.Content>
 </Card.Root>

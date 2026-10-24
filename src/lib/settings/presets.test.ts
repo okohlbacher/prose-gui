@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { changedParameters, SWITCH_PARAMETERS } from './parameters'
-import { applyPreset, BUILTIN_PRESETS, DEFAULT_PRESET_ID, loadPresets, PRESETS_KEY, savePreset, type PresetStorage } from './presets'
+import {
+  applyPreset,
+  BUILTIN_PRESETS,
+  DEFAULT_PRESET_ID,
+  deletePreset,
+  loadPresets,
+  presetNamed,
+  PRESETS_KEY,
+  renamePreset,
+  savePreset,
+  type PresetStorage,
+} from './presets'
 
 /** localStorage in memory. */
 function memoryStorage(initial: Record<string, string> = {}): PresetStorage & { data: Map<string, string> } {
@@ -98,5 +109,36 @@ describe('presets', () => {
     const storage = memoryStorage()
     const saved = savePreset('mine', { enzyme: 'Lys-C', rescore: false, 'peptdeep:enable': true }, storage)
     expect(saved.parameters).toEqual({ enzyme: 'Lys-C' })
+  })
+
+  it('renames and deletes user presets, never built-in ones', () => {
+    const storage = memoryStorage()
+    const lysc = savePreset('Lys-C', { enzyme: 'Lys-C' }, storage)
+    const mine = savePreset('mine', { enzyme: 'Arg-C' }, storage)
+
+    // renamed: the id and the parameters stay
+    expect(renamePreset(lysc.id, '  Lys-C, 3 missed  ', storage)).toBe(true)
+    expect(presetNamed(loadPresets(storage), 'Lys-C, 3 missed')).toMatchObject({ id: lysc.id, parameters: { enzyme: 'Lys-C' } })
+    // its own name again is fine; another preset's name, an empty name or a built-in preset is refused
+    expect(renamePreset(lysc.id, 'Lys-C, 3 missed', storage)).toBe(true)
+    expect(renamePreset(lysc.id, 'mine', storage)).toBe(false)
+    expect(renamePreset(lysc.id, BUILTIN_PRESETS[0].name, storage)).toBe(false)
+    expect(renamePreset(lysc.id, ' ', storage)).toBe(false)
+    expect(renamePreset(DEFAULT_PRESET_ID, 'Orbitrap', storage)).toBe(false)
+    expect(loadPresets(storage).filter((p) => !p.builtin).map((p) => p.name)).toEqual(['Lys-C, 3 missed', 'mine'])
+
+    expect(deletePreset(DEFAULT_PRESET_ID, storage)).toBe(false)
+    expect(deletePreset(lysc.id, storage)).toBe(true)
+    expect(deletePreset(lysc.id, storage)).toBe(false)
+    expect(loadPresets(storage).filter((p) => !p.builtin).map((p) => p.id)).toEqual([mine.id])
+    expect(loadPresets(storage).slice(0, BUILTIN_PRESETS.length)).toEqual(BUILTIN_PRESETS)
+  })
+
+  it('finds a preset by the name it would be saved under', () => {
+    const storage = memoryStorage()
+    savePreset('mine', {}, storage)
+    expect(presetNamed(loadPresets(storage), ' mine ')?.name).toBe('mine')
+    expect(presetNamed(loadPresets(storage), BUILTIN_PRESETS[1].name)?.builtin).toBe(true)
+    expect(presetNamed(loadPresets(storage), 'other')).toBeNull()
   })
 })

@@ -1,7 +1,7 @@
 // The ProSE tool the app runs (`tool_info`): asked once at start, for the rescoring card (whether it has
 // ONNX Runtime for PeptDeep) and the search's problem line (a tool that cannot be found).
 
-import { errorText, toolInfo, type ToolInfo } from '../desktop'
+import { cpuCount, errorText, toolInfo, type ToolInfo } from '../desktop'
 
 export const toolState = $state<{ status: 'loading' | 'ready' | 'failed'; info: ToolInfo | null; error: string | null }>({
   status: 'loading',
@@ -24,4 +24,19 @@ export function loadTool(): Promise<ToolInfo | null> {
     },
   )
   return asked
+}
+
+/** This computer's cores, the threads' default ("all"): from the shim (the webview caps its own count at 8). */
+export const machine = $state<{ cores: number | null }>({ cores: null })
+
+let coresAsked = false
+
+/** Asks the shim for the cores (once); without the shim (a plain browser), the webview's count. */
+export function loadCores(): void {
+  if (coresAsked) return
+  coresAsked = true
+  cpuCount().then(
+    (n) => (machine.cores = n),
+    () => (machine.cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || null : null),
+  )
 }

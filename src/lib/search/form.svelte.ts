@@ -7,7 +7,7 @@ import { resolveDesign, type DesignInput } from '../design/model'
 import type { DesignFields, DesignUpdate } from '../design/paste'
 import { errorText, exampleFiles, inspectFiles, type FileFacts, type InputFile } from '../desktop'
 import { changedParameters, copyValue, copyValues, defaultsOf, sameValue, type ParamEntry } from '../settings/parameters'
-import { BUILTIN_PRESETS, DEFAULT_PRESET_ID, loadPresets, savePreset, type Preset } from '../settings/presets'
+import { BUILTIN_PRESETS, DEFAULT_PRESET_ID, deletePreset, loadPresets, renamePreset, savePreset, type Preset } from '../settings/presets'
 import { PROSE_PARAMETERS } from '../settings/prose'
 import { formatBytes } from '../format/bytes'
 import { isFasta, isMzML } from './files'
@@ -15,15 +15,28 @@ import { isFasta, isMzML } from './files'
 export type FileRow = DesignFields & {
   id: string
   file: InputFile
-  /** From the mzML header; null if the header does not say (and for .mzML.gz). */
+  /** From the mzML header; null if the header does not say. */
   spectra: number | null
+  /** Why ProSE cannot search the file (cut off, not mzML, no spectra: `FileFacts.problem`); the search cannot start. */
+  problem: string | null
 }
 
 /**
  * The database: its proteins and residues once counted (null while counting), or why it could not be
- * read (`error`; the search cannot start then).
+ * read (`error`), or why ProSE cannot search it (`problem`: no entries, an accession twice, ...); the search
+ * cannot start with either. `warnings`: what ProSE may mishandle (a byte-order mark, lowercase residues).
  */
-export type DatabaseChoice = { file: InputFile; proteins: number | null; residues: number | null; error: string | null }
+export type DatabaseChoice = {
+  file: InputFile
+  proteins: number | null
+  residues: number | null
+  error: string | null
+  problem: string | null
+  warnings: string[]
+}
+
+/** A cell of the design table whose text is not valid (`DesignCell`): the search cannot start until it is corrected. */
+export type InvalidCell = { row: string; label: string; text: string }
 
 /** The entries of the bundled cRAP FASTA (`src-tauri/resources/fasta/crap.fasta`), and their residues. */
 export const CRAP_PROTEINS = 116
@@ -96,6 +109,10 @@ class SearchForm {
   exampleLoading = $state(false)
   /** Paths being inspected (the rows come when their sizes and counts are known). */
   adding = $state(0)
+  /** The paths of the files being inspected (one that is added again meanwhile is the same file). */
+  #pending = new Set<string>()
+  /** The cells of the design table whose text is not valid, by row and column. */
+  invalidCells = $state<Record<string, InvalidCell>>({})
   /** Files are being added or the example is loading: Remove all and Start over wait. */
   busy = $derived(this.adding > 0 || this.exampleLoading)
   /** What the last "Remove all" or "Start over" removed, for its Undo (until files or a database are chosen again). */
@@ -134,13 +151,32 @@ class SearchForm {
       this.database?.file.name === EXAMPLE.fasta,
   )
   preset = $derived(this.presets.find((p) => p.id === this.presetId) ?? null)
-  /** The settings differ from the preset's. */
-  modified = $derived.by(() => {
+  /** The parameters whose values differ from the preset's. */
+  modifiedNames = $derived.by(() => {
     const preset = this.preset?.parameters ?? {}
-    return Object.keys({ ...preset, ...this.overrides }).some(
+    return Object.keys({ ...preset, ...this.overrides }).filter(
       (name) => !sameValue(this.values[name], name in preset ? preset[name] : this.defaults[name]),
     )
   })
+  /** The settings differ from the preset's. */
+  modified = $derived(this.modifiedNames.length > 0)
+  /**
+   * The user changed settings of the preset: another preset would discard them (the example's own settings
+   * in force are not the user's, and go with its files anyway).
+   */
+  get edited(): boolean {
+    const example = new Set(
+      EXAMPLE.settings.filter((g) => this.exampleSettingsInForce.includes(g.label)).flatMap((g) => Object.keys(g.parameters)),
+    )
+    return this.modifiedNames.some((name) => !example.has(name))
+  }
+  /** The cells of the design table that are not valid, of rows that are there, in table order. */
+  get invalidCellList(): InvalidCell[] {
+    const order = new Map(this.files.map((r, i) => [r.id, i]))
+    return Object.values(this.invalidCells)
+      .filter((c) => order.has(c.row))
+      .sort((a, b) => order.get(a.row)! - order.get(b.row)!)
+  }
 
   entry(name: string): ParamEntry | undefined {
     return this.entries.get(name)
@@ -173,24 +209,70 @@ class SearchForm {
     return preset
   }
 
+  /** Renames the user preset `id` (the settings stay as they are). */
+  renamePreset(id: string, name: string) {
+    renamePreset(id, name)
+    this.presets = loadPresets()
+  }
 
   /**
-   * Adds mzML files (by path) to the table; a FASTA becomes the database; anything else is reported.
-   * Resolves when the rows are there.
+   * Deletes the user preset `id`. The settings stay as they are; the preset they are shown against becomes the
+   * default one if it was the deleted one (they are then "modified" if they differ from it).
+   */
+  deletePreset(id: string) {
+    deletePreset(id)
+    this.presets = loadPresets()
+    if (this.presetId === id) this.presetId = DEFAULT_PRESET_ID
+  }
+
+  /** Marks the cell `column` of row `row` as not valid with `text` (`label` names it), or as valid (null). */
+  setInvalidCell(row: string, column: string, label: string, text: string | null) {
+    const key = `${row}\0${column}`
+    if (text === null) {
+      if (key in this.invalidCells) delete this.invalidCells[key]
+    } else if (this.invalidCells[key]?.text !== text) {
+      this.invalidCells[key] = { row, label, text }
+    }
+  }
+
+
+  /**
+   * Adds mzML files (by path) to the table; a FASTA becomes the database; anything else is reported. A path
+   * that is in the table already (or twice in `paths`) is added once: the same file would be searched twice, as
+   * two samples. Files ProSE cannot search (cut off, not mzML) join the table marked, and the search cannot
+   * start with them. Resolves when the rows are there.
    */
   async addFiles(paths: Iterable<string>) {
     const list = [...paths]
     const skipped = list.filter((p) => !isMzML(fileName(p)) && !isFasta(fileName(p))).map(fileName)
-    const spectra = list.filter((p) => isMzML(fileName(p)))
     const database = list.filter((p) => isFasta(fileName(p))).pop()
+    const listed = new Set([...this.files.map((r) => r.file.path), ...this.#pending])
+    const spectra: string[] = []
+    const again: string[] = []
+    for (const p of list.filter((p) => isMzML(fileName(p)))) {
+      if (listed.has(p)) again.push(fileName(p))
+      else {
+        listed.add(p)
+        spectra.push(p)
+      }
+    }
     if (skipped.length > 0) {
       this.notices.push(
         `Not an mzML file: ${skipped.join(', ')}. Convert vendor files to mzML first, e.g. with ProteoWizard msconvert.`,
       )
     }
+    if (again.length > 0) {
+      const names = [...new Set(again)]
+      this.notices.push(
+        names.length === 1
+          ? `${names[0]} is in the list already, so it was not added again: one file is searched once.`
+          : `${names.join(', ')} are in the list already, so they were not added again: one file is searched once.`,
+      )
+    }
     if (database !== undefined) void this.setDatabase(database)
     if (spectra.length === 0) return
     this.adding++
+    for (const p of spectra) this.#pending.add(p)
     try {
       const facts = await inspectFiles(spectra)
       const unreadable = facts.filter((f) => f.error !== null)
@@ -204,6 +286,7 @@ class SearchForm {
     } catch (e) {
       this.notices.push(`The files could not be added (${errorText(e)}).`)
     } finally {
+      for (const p of spectra) this.#pending.delete(p)
       this.adding--
     }
   }
@@ -211,7 +294,7 @@ class SearchForm {
   #addRow(facts: FileFacts, fields: DesignFields) {
     const id = `f${++nextId}`
     const file: InputFile = { path: facts.path, name: facts.name, size: facts.size }
-    this.files.push({ id, file, spectra: facts.spectra, ...fields })
+    this.files.push({ id, file, spectra: facts.spectra, problem: facts.problem ?? null, ...fields })
   }
 
   removeFile(id: string) {
@@ -234,12 +317,20 @@ class SearchForm {
     this.#remove(true)
   }
 
+  /**
+   * A removal whose Undo is still offered is part of the next one: "Remove all" then "Start over" removed the
+   * files and then the database, and Undo brings back both.
+   */
   #remove(database: boolean) {
+    const earlier = this.removed
+    const left = this.#leaveExampleWithUndo()
     const removed: Removed = {
-      files: this.files,
-      database: database ? this.database : null,
-      notices: this.notices,
-      ...this.#leaveExampleWithUndo(),
+      files: [...(earlier?.files ?? []), ...this.files],
+      database: (database ? this.database : null) ?? earlier?.database ?? null,
+      notices: [...(earlier?.notices ?? []), ...this.notices],
+      // (the example's values that the earlier removal replaced are those to bring back)
+      parameters: { ...left.parameters, ...earlier?.parameters },
+      replacedWith: { ...left.replacedWith, ...earlier?.replacedWith },
     }
     if (removed.files.length > 0 || removed.database) this.removed = removed
     this.files = []
@@ -317,7 +408,7 @@ class SearchForm {
     if (!options.example) this.#leaveExample()
     this.removed = null
     const file: InputFile = { path, name: fileName(path), size: 0 }
-    const choice: DatabaseChoice = { file, proteins: null, residues: null, error: null }
+    const choice: DatabaseChoice = { file, proteins: null, residues: null, error: null, problem: null, warnings: [] }
     this.database = choice
     let error: string | null = null
     let facts: FileFacts | null = null
@@ -331,7 +422,15 @@ class SearchForm {
     if (this.database?.file.path !== path) return
     // (without a final period: it goes into the app's own sentence)
     if (error !== null || !facts) this.database = { ...choice, error: (error ?? 'unknown').replace(/\.$/, '') }
-    else this.database = { file: { ...file, size: facts.size }, proteins: facts.proteins, residues: facts.residues, error: null }
+    else
+      this.database = {
+        file: { ...file, size: facts.size },
+        proteins: facts.proteins,
+        residues: facts.residues,
+        error: null,
+        problem: facts.problem ?? null,
+        warnings: facts.warnings ?? [],
+      }
   }
 
   /** Loads the example (two replicates of one file and its FASTA, its own settings) in place of the current files. */

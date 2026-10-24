@@ -7,6 +7,7 @@ import { navigate } from '../route.svelte'
 import { unknownModifications } from '../settings/modifications'
 import { copyValues, requestParameters } from '../settings/parameters'
 import { PROSE_PARAMETERS } from '../settings/prose'
+import { invertedRanges, rangeMessage } from '../settings/ranges'
 import { CRAP_PROTEINS, searchForm as form } from './form.svelte'
 import { runSearch, searchRun } from './session.svelte'
 import { toolState } from './tool.svelte'
@@ -59,11 +60,26 @@ class SearchPlan {
   /** Modification names ProSE does not know. */
   unknownMods = $derived(unknownModifications(form.values, PROSE_PARAMETERS))
 
+  /** Ranges of the settings whose lowest value is above the highest (charges 5–2): marked, and the search waits. */
+  inverted = $derived(invertedRanges(form.values))
+
   /** Why the search cannot start yet. */
   problem = $derived.by(() => {
     if (form.files.length === 0) return 'Add mzML files to start.'
+    if (form.adding > 0) return 'Adding files…'
+    const unsearchable = form.files.filter((r) => r.problem)
+    if (unsearchable.length === 1) return `${unsearchable[0].problem} Remove it to start the search.`
+    if (unsearchable.length > 1) return `${unsearchable.length} files cannot be searched (see Spectra). Remove them to start the search.`
+    const cells = form.invalidCellList
+    if (cells.length > 0) {
+      const more = cells.length > 1 ? ` (and ${cells.length - 1} more)` : ''
+      return `${cells[0].label}${more}: “${cells[0].text}” is not a whole number of at least 1. Correct it, or empty the cell.`
+    }
     if (!form.database) return 'Choose a FASTA database to start.'
     if (form.database.error) return `${form.database.file.name} cannot be read (${form.database.error}). Choose it again, or another FASTA file.`
+    if (form.database.proteins === null) return 'Counting the proteins of the database…'
+    if (form.database.problem) return `${form.database.problem} Choose another FASTA file.`
+    if (this.inverted.length > 0) return rangeMessage(this.inverted[0], form.values)
     if (!(Number(form.value('FDR:PSM')) > 0)) return 'Set a PSM FDR above 0 %.'
     if (this.unknownMods.length > 0) return unknownMessage(this.unknownMods)
     if (toolState.status === 'failed') return `ProSE cannot be run: ${toolState.error}`

@@ -27,6 +27,8 @@ const facts = (path: string): FileFacts => {
     proteins: fasta ? 4136 : null,
     residues: fasta ? 1306000 : null,
     error: null,
+    problem: null,
+    warnings: [],
   }
 }
 vi.mock('../desktop', () => ({
@@ -303,7 +305,7 @@ describe('the footer', () => {
     expect(form.value('fragment:mass_tolerance')).toBe(0.5)
     const facts = vi.mocked((await import('../desktop')).inspectFiles)
     facts.mockImplementationOnce(async (paths: string[]) =>
-      paths.map((p) => ({ path: p, name: p.split('/').pop()!, size: 0, spectra: null, proteins: null, residues: null, error: 'not an mzML' })),
+      paths.map((p) => ({ path: p, name: p.split('/').pop()!, size: 0, spectra: null, proteins: null, residues: null, error: 'not an mzML', problem: null, warnings: [] })),
     )
     await form.addFiles(['/r/broken.mzML'])
     expect(form.isExample).toBe(true)
