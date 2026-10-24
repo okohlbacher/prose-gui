@@ -81,6 +81,14 @@ pub struct Closing {
     confirmed: bool,
 }
 
+impl Closing {
+    /// A search starts: a question about an earlier one that was never answered (the page could not answer, or
+    /// the search ended meanwhile) is forgotten, so that closing the window during this one asks again.
+    pub fn search_started(&mut self) {
+        self.asked = false;
+    }
+}
+
 /// What a close request of the window does: `true` lets the window close; `false` keeps it and asks the
 /// page to confirm (`app://close-requested`). Without a running search it closes as always. While the
 /// page has not answered, a second request closes too: the user insists (or the page cannot answer).
@@ -138,6 +146,7 @@ async fn start_search(
     state: State<'_, AppState>,
     request: SearchRequest,
 ) -> Result<StartResult, String> {
+    state.closing.lock().unwrap().search_started();
     let resources = resource_dir(&app);
     let tool_path = tool::resolve(resources.as_deref())?;
     let searches_dir = searches_dir(&app)?;
@@ -632,6 +641,20 @@ mod tests {
             confirmed: true,
         };
         assert!(close_requested(&mut closing, true));
+    }
+
+    #[test]
+    fn a_question_left_open_does_not_outlive_its_search() {
+        // asked, never answered (the search ended as the dialog was open, and the page could not answer)
+        let mut closing = Closing::default();
+        assert!(!close_requested(&mut closing, true));
+        assert!(closing.asked);
+        // no search runs: the window just closes
+        assert!(close_requested(&mut closing.clone(), false));
+        // the next search asks again (and does not close at the first request)
+        closing.search_started();
+        assert!(!close_requested(&mut closing, true));
+        assert!(closing.asked && !closing.confirmed);
     }
 
     #[test]
