@@ -1,6 +1,6 @@
 <script lang="ts">
   // The peptide with its fragment ladder (mockup 3): the residues in large monospace, a modified one
-  // marked (the colour #1baf7a and a short label below it, as in the tables), and at each cleavage a
+  // marked (the colour --mod and a short label below it, as in the tables), and at each cleavage a
   // mark above it where an N-terminal ion explains it (b blue, a or c dark grey) and below it where a
   // C-terminal ion does (y orange, x or z dark grey). Long peptides get smaller to fit the width.
   import { modTitle, type PeptideView } from '$lib/format/peptide'
@@ -78,11 +78,11 @@
     flex: none;
   }
   .aa.mod .letter {
-    background: #d7f5ea;
-    color: #065f46;
+    background: var(--mod-bg);
+    color: var(--mod-fg);
     border-radius: 4px;
     padding: 0 3px;
-    box-shadow: inset 0 -2px 0 #1baf7a;
+    box-shadow: inset 0 -2px 0 var(--mod);
   }
   .label {
     position: absolute;
@@ -93,7 +93,7 @@
     font-size: 10px;
     line-height: 10px;
     font-weight: 600;
-    color: #065f46;
+    color: var(--mod-fg);
   }
   .term {
     align-self: flex-start;
@@ -101,7 +101,7 @@
     font-family: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
     font-size: 11px;
     font-weight: 600;
-    color: #065f46;
+    color: var(--mod-fg);
   }
   .shift {
     margin-right: 8px;

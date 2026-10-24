@@ -7,6 +7,7 @@ import { exportSpectrumSvg } from './svg-export'
 function pageSvg(): SVGSVGElement {
   document.head.innerHTML = `<style>
     :root { --ion-b: #2a78d6 }
+    .dark { --ion-b: #3987e5 }
     .chart { font-family: 'Inter Variable', sans-serif; color: #3f3f46 }
     .peak-b { stroke: var(--ion-b); stroke-width: 1.75px }
     .muted { fill: #71717a }
@@ -59,6 +60,20 @@ describe('exportSpectrumSvg', () => {
     const out = exportSpectrumSvg(svg)
     expect(out).not.toContain('Predicting')
     expect(out).toContain('>b2</text>')
+  })
+
+  it('has the light colours when the page is dark, and leaves the page dark', () => {
+    const svg = pageSvg()
+    document.documentElement.classList.add('dark')
+    try {
+      expect(getComputedStyle(svg.querySelector('path')!).stroke).toBe('#3987e5')
+      const out = exportSpectrumSvg(svg)
+      expect(out).toMatch(/<path[^>]*style="[^"]*stroke: ?#2a78d6/)
+      expect(out).not.toContain('#3987e5')
+      expect(document.documentElement.classList.contains('dark')).toBe(true)
+    } finally {
+      document.documentElement.classList.remove('dark')
+    }
   })
 
   it('leaves the SVG on the page as it is', () => {

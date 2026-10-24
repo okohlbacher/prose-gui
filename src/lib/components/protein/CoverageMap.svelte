@@ -1,6 +1,6 @@
 <script lang="ts">
   // The protein's sequence as text: blocks of 10 residues, 40 per row, the residues that peptides with
-  // PSMs cover shaded and the modified residues dotted (#1baf7a, with the modification on hover).
+  // PSMs cover shaded and the modified residues dotted (--mod, with the modification on hover).
   // Each row is made of a few runs of residues (covered or not, modified), not one node per residue,
   // and is only laid out when it is near the screen.
   import { formatCount } from '$lib/results/display'
@@ -82,14 +82,14 @@
     padding: 2px 0;
   }
   .cov {
-    background: #dbeafe;
-    color: #1e3a8a;
+    background: var(--coverage-bg);
+    color: var(--coverage-fg);
   }
   /* the modified residue: the modified-residue colours, and a dot above it */
   .mod {
-    background: #d7f5ea;
-    color: #065f46;
-    box-shadow: inset 0 -1.5px 0 #1baf7a;
+    background: var(--mod-bg);
+    color: var(--mod-fg);
+    box-shadow: inset 0 -1.5px 0 var(--mod);
   }
   .mod::after {
     content: '';
@@ -100,6 +100,6 @@
     height: 5px;
     margin-left: -3px;
     border-radius: 50%;
-    background: #1baf7a;
+    background: var(--mod);
   }
 </style>

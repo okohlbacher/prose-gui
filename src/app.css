@@ -74,6 +74,41 @@
 	--sidebar-accent-foreground: oklch(0.21 0.006 285.885);
 	--sidebar-border: oklch(0.92 0.004 286.32);
 	--sidebar-ring: oklch(0.705 0.015 286.067);
+	/* The colours of the charts, the spectrum and the sequences (dark: below). The ion series are the
+	   palette's b blue and y orange (src/lib/psm/psm.ts); a modified residue is aqua. These light values
+	   are also those of "Export spectrum (SVG)", whatever the theme (src/lib/psm/svg-export.ts). */
+	--ion-b: #2a78d6;
+	--ion-y: #eb6834;
+	--ion-other: #52525b;
+	--ion-unmatched: #a1a1aa;
+	--mod: #1baf7a;
+	/* tints with a text colour of their own (matched ions in the ion table, a modified residue, coverage) */
+	--ion-b-bg: #eff6ff;
+	--ion-b-fg: #1e40af;
+	--ion-y-bg: #fff7ed;
+	--ion-y-fg: #9a3412;
+	--ion-other-bg: #f4f4f5;
+	--ion-other-fg: #27272a;
+	--mod-bg: #d7f5ea;
+	--mod-fg: #065f46;
+	--mod-border: #a7e9cf;
+	--coverage-bg: #dbeafe;
+	--coverage-fg: #1e3a8a;
+	--coverage-light: #93c5fd;
+	/* the charts' ink (labels), muted text (ticks, axis titles), hairlines and bands, from faint to strong;
+	   the halo is the ring around labels and dots, the surface the charts stand on (--background, in hex:
+	   the SVG export writes it as it is, and not every program reads oklch) */
+	--plot-ink: #3f3f46;
+	--plot-muted: #71717a;
+	--plot-grid: #f1f1f3;
+	--plot-band: #f4f4f5;
+	--plot-rule: #e4e4e7;
+	--plot-axis: #d4d4d8;
+	--plot-zero: #a1a1aa;
+	--plot-halo: #ffffff;
+	/* a placeholder ("–") in the tables; the rows of a protein's PSMs */
+	--faint: #d4d4d8;
+	--subtle: #fafafa;
 }
 
 .dark {
@@ -108,6 +143,34 @@
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.552 0.016 285.938);
+	/* the same hues, stepped for the dark card (the palette's dark steps; the neutrals swap ends) */
+	--ion-b: #3987e5;
+	--ion-y: #e8693a;
+	--ion-other: #d4d4d8;
+	--ion-unmatched: #63636b;
+	--mod: #22b583;
+	--ion-b-bg: #172a4a;
+	--ion-b-fg: #a8cbf7;
+	--ion-y-bg: #3d2114;
+	--ion-y-fg: #fcbf94;
+	--ion-other-bg: #2c2c31;
+	--ion-other-fg: #e4e4e7;
+	--mod-bg: #0f3b2d;
+	--mod-fg: #8be6c3;
+	--mod-border: #1d5c47;
+	--coverage-bg: #1b3358;
+	--coverage-fg: #c3dafa;
+	--coverage-light: #2f5a94;
+	--plot-ink: #d4d4d8;
+	--plot-muted: #a1a1aa;
+	--plot-grid: #2a2a2f;
+	--plot-band: #26262b;
+	--plot-rule: #3a3a40;
+	--plot-axis: #46464d;
+	--plot-zero: #71717a;
+	--plot-halo: #09090b;
+	--faint: #52525b;
+	--subtle: oklch(0.185 0.006 285.885);
 }
 
 @theme inline {
@@ -124,6 +187,15 @@
 	--color-sidebar-primary: var(--sidebar-primary);
 	--color-sidebar-foreground: var(--sidebar-foreground);
 	--color-sidebar: var(--sidebar);
+	--color-ion-b: var(--ion-b);
+	--color-ion-y: var(--ion-y);
+	--color-mod: var(--mod);
+	--color-mod-bg: var(--mod-bg);
+	--color-mod-fg: var(--mod-fg);
+	--color-mod-border: var(--mod-border);
+	--color-coverage-light: var(--coverage-light);
+	--color-faint: var(--faint);
+	--color-subtle: var(--subtle);
 	--color-chart-5: var(--chart-5);
 	--color-chart-4: var(--chart-4);
 	--color-chart-3: var(--chart-3);

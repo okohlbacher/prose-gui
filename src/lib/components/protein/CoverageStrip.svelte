@@ -1,6 +1,6 @@
 <script lang="ts">
   // The protein's sequence as one strip: its peptides along it (light blue), the selected peptide below
-  // (blue) and a dot on every modified residue (#1baf7a, the colour of a modified residue everywhere).
+  // (blue) and a dot on every modified residue (--mod, the colour of a modified residue everywhere).
   // Positions are percentages of the sequence, so the strip is as wide as the panel. It is a picture:
   // the Coverage tab has the same as text, and the Peptides tab lists the peptides.
   import { formatCount } from '$lib/results/display'
@@ -61,14 +61,14 @@
       {#each blocks as span (`${span.start}:${span.end}`)}
         <i
           data-testid="coverage-block"
-          class="absolute top-1 h-2.5 min-w-[2px] rounded-[2px] bg-[#93c5fd]"
+          class="absolute top-1 h-2.5 min-w-[2px] rounded-[2px] bg-coverage-light"
           style:left={left(span.start)}
           style:width={width(span)}></i>
       {/each}
       {#each selected as span (`${span.start}:${span.end}`)}
         <i
           data-testid="selected-block"
-          class="absolute top-[18px] h-3 min-w-[2px] rounded-[2px] bg-[#2a78d6]"
+          class="absolute top-[18px] h-3 min-w-[2px] rounded-[2px] bg-ion-b"
           style:left={left(span.start)}
           style:width={width(span)}></i>
       {/each}
@@ -76,7 +76,7 @@
         <b
           data-testid="mod-dot"
           title={siteTitle(site)}
-          class="absolute -top-[5px] -ml-[3.5px] size-[7px] rounded-full border-[1.5px] border-white bg-[#1baf7a]"
+          class="absolute -top-[5px] -ml-[3.5px] size-[7px] rounded-full border-[1.5px] border-card bg-mod"
           style:left={left(site.position + 0.5)}></b>
       {/each}
     {/if}
@@ -85,7 +85,7 @@
     <span>1</span>
     <span class="text-center"
       >peptides along the sequence{#if selected.length > 0}&nbsp;· selected peptide below{/if}&nbsp;· <b
-        class="mr-0.5 inline-block size-2 rounded-full bg-[#1baf7a] align-[-0.5px]"></b>modified site</span>
+        class="mr-0.5 inline-block size-2 rounded-full bg-mod align-[-0.5px]"></b>modified site</span>
     <span>{formatCount(length)}</span>
   </div>
 </div>

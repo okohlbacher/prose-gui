@@ -103,7 +103,7 @@
       >{formatCount(detail.sequences)} {detail.sequences === 1 ? 'peptide' : 'peptides'}</span>
     <span class={badge} data-testid="panel-psms">{formatCount(detail.psms)} PSMs</span>
     <span
-      class="{badge} {detail.sites.length > 0 ? 'border-[#a7e9cf] bg-[#d7f5ea] text-[#065f46]' : 'text-muted-foreground'}"
+      class="{badge} {detail.sites.length > 0 ? 'border-mod-border bg-mod-bg text-mod-fg' : 'text-muted-foreground'}"
       data-testid="panel-sites"
       title="Residues with a modification in peptides with PSMs. Fixed modifications are not counted."
       >{detail.sites.length} modified {detail.sites.length === 1 ? 'site' : 'sites'}</span>
@@ -160,11 +160,11 @@
 <style>
   .legend-mod {
     font-family: var(--font-sequence);
-    background: #d7f5ea;
-    color: #065f46;
+    background: var(--mod-bg);
+    color: var(--mod-fg);
     border-radius: 3px;
     padding: 0 1px;
-    box-shadow: inset 0 -1.5px 0 #1baf7a;
+    box-shadow: inset 0 -1.5px 0 var(--mod);
   }
   .legend-mod sup {
     font-size: 9px;

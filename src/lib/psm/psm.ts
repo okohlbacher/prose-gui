@@ -25,16 +25,17 @@ const N_TERMINAL = new Set(['a', 'b', 'c'])
 export const isNTerminal = (type: string) => N_TERMINAL.has(type)
 
 /**
- * The colours of the ion series: b and y as validated with the palette (b #2a78d6, y #eb6834); the
- * other series (a, c, x, z, the precursor) share a dark neutral, so that the chart keeps two hues and
- * their labels tell them apart; unmatched peaks are a light grey.
+ * The colours of the ion series: b and y as validated with the palette (light b #2a78d6, y #eb6834;
+ * dark b #3987e5, y #e8693a); the other series (a, c, x, z, the precursor) share a strong neutral, so
+ * that the chart keeps two hues and their labels tell them apart; unmatched peaks are a faint grey.
+ * CSS variables of app.css, so that both themes have their own steps (and the SVG export the light ones).
  */
 export const COLORS = {
-  b: '#2a78d6',
-  y: '#eb6834',
-  other: '#52525b',
-  unmatched: '#a1a1aa',
-  mod: '#1baf7a',
+  b: 'var(--ion-b)',
+  y: 'var(--ion-y)',
+  other: 'var(--ion-other)',
+  unmatched: 'var(--ion-unmatched)',
+  mod: 'var(--mod)',
 } as const
 
 export function ionColor(type: string): string {

@@ -51,7 +51,7 @@
         Start search
         <kbd
           aria-hidden="true"
-          class="ml-1 rounded-[4px] border border-zinc-700 bg-zinc-800 px-1 font-sans text-[11px] text-zinc-400"
+          class="ml-1 rounded-[4px] border border-primary-foreground/20 bg-primary-foreground/10 px-1 font-sans text-[11px] text-primary-foreground/65"
           >{mac ? '⌘' : 'Ctrl'} ↵</kbd>
       </Button>
     {/if}

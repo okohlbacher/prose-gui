@@ -92,6 +92,6 @@
     if (!invalid) draft = null
   }}
   class={cn(
-    'h-7 w-full rounded-[5px] border border-input bg-background px-2 text-[13px] transition-colors outline-none placeholder:text-muted-foreground placeholder:italic hover:border-ring/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
-    invalid && 'border-destructive bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/20',
+    'h-7 w-full rounded-[5px] border border-input bg-background px-2 dark:bg-input/30 text-[13px] transition-colors outline-none placeholder:text-muted-foreground placeholder:italic hover:border-ring/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+    invalid && 'border-destructive bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/20 dark:bg-destructive/10',
   )} />

@@ -2,6 +2,10 @@
 // (classes, CSS variables, `currentColor`, the font of an ancestor) is written into inline styles, and
 // nothing in the file refers to the page or the network: no classes, no stylesheet, no links, no images.
 // Elements marked `data-no-export` (states of the page, like a prediction on its way) are left out.
+// The file has the light theme's colours whatever the page shows (print-ready, on its white background):
+// the styles are read with the light theme on the page.
+
+import { withLightTheme } from '../theme/theme'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -46,6 +50,11 @@ function resolveColor(value: string, color: string): string {
  * inline and without external references. The SVG on the page is not changed.
  */
 export function exportSpectrumSvg(svg: SVGSVGElement): string {
+  // (computed styles are live: everything that reads them runs within)
+  return withLightTheme(svg.ownerDocument.documentElement, () => exportLight(svg))
+}
+
+function exportLight(svg: SVGSVGElement): string {
   const view = svg.ownerDocument.defaultView
   const styleOf = (el: Element) => view!.getComputedStyle(el)
   const clone = svg.cloneNode(true) as SVGSVGElement

@@ -69,8 +69,10 @@
   const plotBottom = plotHeight - 42
   const mid = (plotTop + plotBottom) / 2
   const font = "'Inter Variable', ui-sans-serif, system-ui, sans-serif"
-  const ink = '#3f3f46'
-  const muted = '#71717a'
+  // the theme's colours (app.css); the SVG export resolves them in the light theme
+  const ink = 'var(--plot-ink)'
+  const muted = 'var(--plot-muted)'
+  const halo = 'var(--plot-halo)'
 
   let width = $state(800)
   /** The similarity moves to a line of its own when the label and it would meet (a narrow view). */
@@ -275,8 +277,8 @@
 
     <!-- grid: hairlines at the m/z ticks, in the spectrum and in the error strip -->
     {#each xTicks as t (t)}
-      <line x1={px(x(t))} x2={px(x(t))} y1={plotTop} y2={plotBottom} stroke="#f4f4f5" stroke-width="1" />
-      {#if errors}<line x1={px(x(t))} x2={px(x(t))} y1={errorTop} y2={errorBottom} stroke="#f4f4f5" stroke-width="1" />{/if}
+      <line x1={px(x(t))} x2={px(x(t))} y1={plotTop} y2={plotBottom} stroke="var(--plot-band)" stroke-width="1" />
+      {#if errors}<line x1={px(x(t))} x2={px(x(t))} y1={errorTop} y2={errorBottom} stroke="var(--plot-band)" stroke-width="1" />{/if}
     {/each}
 
     <!-- the observed peaks: unmatched light grey and thin, matched in their series' colour -->
@@ -327,11 +329,11 @@
           y={px(ey(errors.tolerance.value))}
           width={Math.max(0, width - M.right - M.left)}
           height={Math.max(0, ey(-errors.tolerance.value) - ey(errors.tolerance.value))}
-          fill="#f4f4f5"
+          fill="var(--plot-band)"
           fill-opacity="0.8"
           data-testid="tolerance-band" />
         {#each [errors.tolerance.value, 0, -errors.tolerance.value] as t (t)}
-          <line x1={M.left} x2={width - M.right} y1={px(ey(t))} y2={px(ey(t))} stroke={t === 0 ? '#a1a1aa' : '#e4e4e7'} stroke-width="1" />
+          <line x1={M.left} x2={width - M.right} y1={px(ey(t))} y2={px(ey(t))} stroke={t === 0 ? 'var(--plot-zero)' : 'var(--plot-rule)'} stroke-width="1" />
           <text x={M.left - 6} y={px(ey(t) + 3.5)} text-anchor="end" font-size="10" fill={muted}>{errorTick(t)}</text>
         {/each}
         <text x={M.left - 6} y={errorTop - 10} text-anchor="end" font-size="10" fill={muted} data-testid="error-unit">{unit}</text>
@@ -341,7 +343,7 @@
             cy={px(ey(d.error))}
             r={px(d.r)}
             fill={ionColor(d.m.type)}
-            stroke="#ffffff"
+            stroke={halo}
             stroke-width="1.25"
             data-testid="error-dot"
             data-type={d.m.type}
@@ -380,7 +382,7 @@
         font-size="11"
         font-weight="600"
         fill={ink}
-        stroke="#ffffff"
+        stroke={halo}
         stroke-width="3"
         stroke-linejoin="round"
         paint-order="stroke"

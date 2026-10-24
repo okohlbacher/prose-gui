@@ -35,7 +35,7 @@
         id="fasta-file"
         type="button"
         aria-describedby="fasta-chosen"
-        class="flex h-8 w-full min-w-0 items-center gap-2 rounded-md border border-input bg-background px-2.5 text-left transition-[color,box-shadow] outline-none hover:bg-muted/40 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        class="flex h-8 w-full min-w-0 items-center gap-2 rounded-md border border-input bg-background px-2.5 text-left dark:bg-input/30 transition-[color,box-shadow] outline-none hover:bg-muted/40 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         title={form.database?.file.path}
         onclick={choose}>
         {#if form.database}
