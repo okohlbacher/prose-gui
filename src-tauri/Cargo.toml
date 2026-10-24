@@ -18,6 +18,8 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# (already in the tree through the icons' png): the check of an .mzML.gz
+flate2 = "1"
 
 [features]
 # `tauri build` turns this on: the app then serves the built frontend instead of the dev server

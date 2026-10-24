@@ -8,12 +8,14 @@
 //!   user's files) are not readable through this. A file that does not exist rejects with
 //!   `{ notFound: true, message }`, which the results reader takes for a missing output.
 //! - [`inspect`]: what the New search page shows of an input it was given by path (size, the spectrum
-//!   count of an mzML's header, the proteins and residues of a FASTA): numbers, never contents, and
-//!   only of absolute paths with the suffixes the shim searches (`.mzML`, `.mzML.gz`, `.fasta`, `.fa`,
-//!   `.faa`); any other path is refused before the disk is asked.
+//!   count of an mzML's header, the proteins and residues of a FASTA, and what in them ProSE cannot search:
+//!   `content`): numbers and short messages, never contents, and only of absolute paths with the suffixes
+//!   the shim searches (`.mzML`, `.mzML.gz`, `.fasta`, `.fa`, `.faa`); any other path is refused before
+//!   the disk is asked.
 //! - [`example_files`]: the bundled example, as the two named runs the web app searches.
 
 use crate::args::{is_fasta_file, is_input_link, is_spectrum_file, suffix_start, DATABASE_RECORD};
+use crate::content;
 use serde::Serialize;
 use std::fs;
 use std::io::{self, Read};
@@ -271,66 +273,20 @@ pub struct FileFacts {
     pub name: String,
     /// Bytes (0 with an error).
     pub size: u64,
-    /// The `count` of an mzML's `<spectrumList>` (all spectra); None for `.mzML.gz` and other files,
-    /// or if the header does not say.
+    /// The `count` of an mzML's `<spectrumList>` (all spectra; of a `.mzML.gz` decompressed); None if the
+    /// header does not say.
     pub spectra: Option<u64>,
     /// The entries of a FASTA file and the residues (letters) of their sequences.
     pub proteins: Option<u64>,
     pub residues: Option<u64>,
     /// Why the file cannot be used (not absolute, missing, a folder, unreadable).
     pub error: Option<String>,
-}
-
-/// The part of an mzML read for its spectrum list; the header before it is usually a few kB.
-const MZML_HEAD: u64 = 1 << 20;
-
-fn spectrum_count(path: &Path) -> io::Result<Option<u64>> {
-    let mut head = Vec::new();
-    fs::File::open(path)?
-        .take(MZML_HEAD)
-        .read_to_end(&mut head)?;
-    let text = String::from_utf8_lossy(&head);
-    let Some(at) = text.find("<spectrumList") else {
-        return Ok(None);
-    };
-    let tag = &text[at..];
-    let tag = &tag[..tag.find('>').unwrap_or(tag.len())];
-    let Some(count) = tag.find("count=\"") else {
-        return Ok(None);
-    };
-    let digits: String = tag[count + 7..]
-        .chars()
-        .take_while(char::is_ascii_digit)
-        .collect();
-    Ok(digits.parse().ok())
-}
-
-/// The entries (lines starting with `>`) and residues (letters of the other lines) of a FASTA, read
-/// in pieces, as the web app's `countFasta`.
-fn fasta_counts(path: &Path) -> io::Result<(u64, u64)> {
-    let mut file = fs::File::open(path)?;
-    let mut buffer = vec![0u8; 1 << 20];
-    let (mut proteins, mut residues) = (0u64, 0u64);
-    let (mut line_start, mut header) = (true, false);
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        for &b in &buffer[..read] {
-            if line_start && b == b'>' {
-                proteins += 1;
-                header = true;
-            } else if !header && b.is_ascii_alphabetic() {
-                residues += 1;
-            }
-            line_start = b == b'\n' || b == b'\r';
-            if line_start {
-                header = false;
-            }
-        }
-    }
-    Ok((proteins, residues))
+    /// Why ProSE cannot search the file, which is there and readable (`content`): an mzML that is not one, is
+    /// cut off or has no spectra; a FASTA without entries, with an accession twice, a protein too long to index,
+    /// ... New search does not start with it. Sentences, the file named.
+    pub problem: Option<String>,
+    /// What ProSE may mishandle (a FASTA's byte-order mark, lowercase residues): shown, not blocking.
+    pub warnings: Vec<String>,
 }
 
 /// The facts of the file at `path` (an absolute path). Never fails: what goes wrong is in `error`.
@@ -347,6 +303,8 @@ pub fn inspect(path: &str) -> FileFacts {
         proteins: None,
         residues: None,
         error: None,
+        problem: None,
+        warnings: Vec::new(),
     };
     if !Path::new(path).is_absolute() {
         facts.error = Some(format!("{path} is not an absolute path."));
@@ -372,20 +330,51 @@ pub fn inspect(path: &str) -> FileFacts {
         }
     };
     facts.size = meta.len();
+    let file = Path::new(path);
     let counted = if is_fasta_file(&name) {
-        fasta_counts(Path::new(path)).map(|(p, r)| {
-            facts.proteins = Some(p);
-            facts.residues = Some(r);
+        content::fasta(file, &name).map(|f| {
+            facts.proteins = Some(f.proteins);
+            facts.residues = Some(f.residues);
+            facts.problem = (!f.problems.is_empty()).then(|| f.problems.join(" "));
+            facts.warnings = f.warnings;
         })
-    } else if suffix_start(&name, ".gz").is_none() {
-        spectrum_count(Path::new(path)).map(|n| facts.spectra = n)
     } else {
-        Ok(())
+        let mzml = if suffix_start(&name, ".gz").is_some() {
+            content::mzml_gz(file, &name)
+        } else {
+            content::mzml(file, &name)
+        };
+        mzml.map(|m| {
+            facts.spectra = m.spectra;
+            facts.problem = m.problem;
+        })
     };
     if let Err(e) = counted {
         facts.error = Some(format!("{path} cannot be read ({e})."));
     }
     facts
+}
+
+/// [`inspect`] of each path, in the order given, several at once (a `.mzML.gz` is decompressed to be checked).
+pub fn inspect_all(paths: &[String]) -> Vec<FileFacts> {
+    let workers = std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .clamp(1, 8)
+        .min(paths.len().max(1));
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let mut facts: Vec<Option<FileFacts>> = vec![None; paths.len()];
+    let slots = std::sync::Mutex::new(&mut facts);
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| loop {
+                let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let Some(path) = paths.get(i) else { break };
+                let f = inspect(path);
+                slots.lock().unwrap()[i] = Some(f);
+            });
+        }
+    });
+    facts.into_iter().flatten().collect()
 }
 
 /// The bundled example: OpenMS' example run `share/OpenMS/examples/ID/Ecoli_MS2_small.mzML` (LTQ Orbitrap XL, CID,

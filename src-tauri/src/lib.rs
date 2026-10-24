@@ -9,7 +9,8 @@
 //!   `{ searchId, folder }` and `search://failed` `{ searchId, message, stage, file?, ended?, detail?, log? }`
 //! - `read_search_file(searchId, name, tail?, offset?, length?)` -> the bytes of a file of the search's folder
 //!   (with `tail`: its last `tail` bytes; with `offset` and `length`: those bytes), or of the database its database.json records (`files`; rejects `{ notFound, message }`)
-//! - `inspect_files(paths)` -> `[{ path, name, size, spectra?, proteins?, residues?, error? }]`
+//! - `inspect_files(paths)` -> `[{ path, name, size, spectra?, proteins?, residues?, error?, problem?, warnings }]`
+//! - `cpu_count()` -> the cores the search's threads may use
 //! - `example_files()` -> `{ spectra: [path, path], database }`
 //! - `save_text(name, contents)` and `save_search_file(searchId, name, suggested)`: a save dialog of
 //!   the system, then the file written where the user chose (-> the path, or null if cancelled)
@@ -30,6 +31,7 @@
 //! makes the executable the watchdog of a search (macOS: [`watchdog`]).
 
 pub mod args;
+pub mod content;
 pub mod files;
 pub mod history;
 pub mod progress;
@@ -193,12 +195,20 @@ async fn read_search_file(
     Ok(Response::new(bytes))
 }
 
-/// What New search shows of the files it was given (sizes and counts; never contents).
+/// What New search shows of the files it was given (sizes, counts and what ProSE cannot search; never
+/// contents).
 #[tauri::command]
 async fn inspect_files(paths: Vec<String>) -> Result<Vec<files::FileFacts>, String> {
-    tauri::async_runtime::spawn_blocking(move || paths.iter().map(|p| files::inspect(p)).collect())
+    tauri::async_runtime::spawn_blocking(move || files::inspect_all(&paths))
         .await
         .map_err(|e| e.to_string())
+}
+
+/// The cores ProSE's threads may use: the threads' default ("all"). The webview's own count is capped
+/// (WebKit reports at most 8).
+#[tauri::command]
+fn cpu_count() -> usize {
+    std::thread::available_parallelism().map_or(1, |n| n.get())
 }
 
 #[tauri::command]
@@ -568,6 +578,7 @@ pub fn run() {
             cancel_search,
             read_search_file,
             inspect_files,
+            cpu_count,
             example_files,
             save_text,
             save_search_file,
