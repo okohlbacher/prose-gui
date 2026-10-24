@@ -14,6 +14,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { open } from '@tauri-apps/plugin-dialog'
 import type { HistoryBackend, HistoryEntry } from './history/history'
 import type { ByteRange, SearchFiles } from './results/read'
+import { errorText } from './format/error'
 
 /** The ProSE tool the app runs: its version, where it is, and whether it has ONNX Runtime (PeptDeep). */
 export type ToolInfo = { version: string; path: string; onnx: boolean }
@@ -249,8 +250,4 @@ export function answerClose(close: boolean): Promise<void> {
 }
 
 /** The text of a rejection of a command (a string, or an object with a message). */
-export function errorText(e: unknown): string {
-  if (typeof e === 'string') return e
-  if (e && typeof e === 'object' && 'message' in e) return String((e as { message: unknown }).message)
-  return String(e)
-}
+export { errorText }

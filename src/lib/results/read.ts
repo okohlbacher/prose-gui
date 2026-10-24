@@ -21,6 +21,7 @@
 // file's name in the message. A file that is there but cannot be read fails the read too, naming the file.
 
 import type { FileMetaData } from 'hyparquet'
+import { errorText } from '../format/error'
 import {
   C13C12_MASSDIFF_U,
   countEnzymatic,
@@ -147,7 +148,7 @@ async function inFile<T>(name: string, read: () => T | Promise<T>): Promise<T> {
   try {
     return await read()
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e)
+    const message = errorText(e)
     if (message.startsWith(`${name}:`)) throw e
     throw new Error(`${name}: ${message}`, { cause: e })
   }
@@ -351,7 +352,7 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
   const optional = (name: string, range?: ByteRange) =>
     files(name, range).catch((e: unknown) => {
       if (isNotFound(e)) return null
-      throw new Error(`${name}: ${e instanceof Error ? e.message : String(e)}`, { cause: e })
+      throw new Error(`${name}: ${errorText(e)}`, { cause: e })
     })
   const required = async (name: string) => {
     const bytes = await optional(name)
@@ -495,7 +496,7 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
         found = true
         break
       } catch (e) {
-        tried.push(isNotFound(e) ? `${name} (not found)` : `${name} (${e instanceof Error ? e.message : String(e)})`)
+        tried.push(isNotFound(e) ? `${name} (not found)` : `${name} (${errorText(e)})`)
       }
     }
     if (!found) {

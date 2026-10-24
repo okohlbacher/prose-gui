@@ -666,6 +666,14 @@ describe('missing and broken files', () => {
     await expect(readSearch(failing)).rejects.toThrow('qpx/quantms.pg.parquet: permission denied')
   })
 
+  test('a rejection that is no Error (a Tauri command error object) keeps its message', async () => {
+    const { files } = folder(join(fixtures, 'suitability'))
+    const failing = (name: string) => (name.endsWith('.pg.parquet') ? Promise.reject({ message: 'permission denied' }) : files(name))
+    await expect(readSearch(failing)).rejects.toThrow('qpx/quantms.pg.parquet: permission denied')
+    const odd = (name: string) => (name.endsWith('.pg.parquet') ? Promise.reject({ code: 13 }) : files(name))
+    await expect(readSearch(odd)).rejects.toThrow('qpx/quantms.pg.parquet: {"code":13}')
+  })
+
   test('a QPX psm file without the columns of -qpx_extended fails the read, naming the file', async () => {
     await withCopy('mods', async (dir) => {
       // a plain QPX psm view: no spectrum_reference, isotope_error, protein_mappings (two of its columns suffice here)
