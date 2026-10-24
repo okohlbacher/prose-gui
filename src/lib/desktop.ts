@@ -6,11 +6,13 @@
 // inspect_files, cpu_count, example_files, save_text, save_search_file, history_list, history_save_record,
 // history_save_proteins, history_rename, history_delete, history_files, history_import, open_project_file,
 // save_project_file, answer_close. Events: search://progress, search://done, search://failed,
-// project://progress, app://close-requested. The system's dialogs open one at a time (`oneDialog`).
+// project://progress, app://close-requested. The system's dialogs open one at a time (`oneDialog`). The window's
+// theme (`windowTheme`, `onWindowThemeChanged`, `setWindowTheme`).
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { open } from '@tauri-apps/plugin-dialog'
 import { oneDialog } from './dialogs'
 import type { HistoryBackend, HistoryEntry } from './history/history'
@@ -270,6 +272,35 @@ export const desktopBackend: HistoryBackend = {
 export async function onCloseRequested(handler: () => void): Promise<() => void> {
   if (!isDesktop()) return () => {}
   return listen('app://close-requested', () => handler())
+}
+
+/** The window's theme as the system gives it (null outside Tauri, or when it cannot be read). */
+export async function windowTheme(): Promise<'light' | 'dark' | null> {
+  if (!isDesktop()) return null
+  try {
+    return await getCurrentWindow().theme()
+  } catch {
+    return null
+  }
+}
+
+/** Changes of the window's theme (the system's, or the one `setWindowTheme` sets). Returns the way to stop listening. */
+export async function onWindowThemeChanged(handler: (theme: 'light' | 'dark') => void): Promise<() => void> {
+  if (!isDesktop()) return () => {}
+  return getCurrentWindow().onThemeChanged(({ payload }) => handler(payload))
+}
+
+/**
+ * The theme of the window itself (its title bar, the system's dialogs): light or dark, or null to follow
+ * the system again. A failure is ignored (the page has its theme either way).
+ */
+export async function setWindowTheme(theme: 'light' | 'dark' | null): Promise<void> {
+  if (!isDesktop()) return
+  try {
+    await getCurrentWindow().setTheme(theme)
+  } catch {
+    // e.g. a platform without it
+  }
 }
 
 /** The answer to a close request: close (the running search ends), or keep the window. */

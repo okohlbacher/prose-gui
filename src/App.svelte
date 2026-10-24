@@ -6,11 +6,14 @@
   import { initHistory } from '$lib/history/history.svelte'
   import { readHash, router } from '$lib/route.svelte'
   import { loadTool } from '$lib/search/tool.svelte'
+  import { initTheme } from '$lib/theme/theme.svelte'
   import History from './views/History.svelte'
   import NewSearch from './views/NewSearch.svelte'
   import Results from './views/Results.svelte'
 
   readHash()
+  // the colour theme follows the system, or the user's choice (public/theme.js set it before the first paint)
+  initTheme()
   // the ProSE tool: its version and whether it has ONNX Runtime (the search form needs it)
   void loadTool()
   // finished searches are saved to History; the list is read
