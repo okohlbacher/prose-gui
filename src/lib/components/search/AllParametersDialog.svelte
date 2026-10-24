@@ -11,6 +11,7 @@
   import { Label } from '$lib/components/ui/label'
   import { Switch } from '$lib/components/ui/switch'
   import { searchForm as form } from '$lib/search/form.svelte'
+  import { searchPlan } from '$lib/search/plan.svelte'
   import { dialogEntries, parameterSections, sameValue } from '$lib/settings/parameters'
   import ParameterField from './ParameterField.svelte'
 
@@ -42,6 +43,11 @@
   }
 
   const fieldId = (name: string) => `param-${name.replace(/[^A-Za-z0-9_-]/g, '-')}`
+  /** Why a parameter cannot be used with the other settings, as on the page (the request leaves it out then). */
+  const blockedReason = (name: string) =>
+    name === 'chimeric:enabled' && searchPlan.chimericBlocked
+      ? 'ProSE looks for co-isolated precursors only without database chunks. Set database:chunk_size to 0 to use it.'
+      : null
   const isChanged = (name: string) => !sameValue(form.values[name], form.defaults[name])
 </script>
 
@@ -101,6 +107,7 @@
                     {id}
                     labelId="{id}-label"
                     value={form.values[entry.name]}
+                    blocked={blockedReason(entry.name)}
                     onChange={(v) => form.setParam(entry.name, v)} />
                   <p class="text-xs whitespace-pre-line text-muted-foreground {long && !full ? 'line-clamp-2' : ''}">
                     {entry.description}
