@@ -822,14 +822,25 @@ pub fn input_records_with(req: &SearchRequest, links: InputLinks) -> Vec<InputRe
 }
 
 /// `text` with the search folder's names for the inputs replaced by the user's: the path of a link by
-/// the user's path, the bare name of a link by the user's file name. Only whole names are replaced
-/// (`1__a.mzML` inside `11__a.mzML` stays).
+/// the user's path, the bare name of a link by the user's file name, the stem ProSE names an input's
+/// outputs after by the user's (`qpx/runs/1__a.psm.parquet` -> `qpx/runs/a.psm.parquet`). The path of an
+/// output in the search folder `dir` loses the folder (`<dir>/merged.idXML` -> `merged.idXML`): the folder
+/// of a search that failed is gone. Only whole names are replaced (`1__a.mzML` inside `11__a.mzML` stays).
 pub fn humanize(text: &str, dir: &Path, records: &[InputRecord]) -> String {
     let mut text = text.to_string();
     for r in records {
         let full: PathBuf = dir.join(&r.link);
         text = replace_whole(&text, &full.to_string_lossy(), &r.path);
+    }
+    let folder = dir.to_string_lossy();
+    if !folder.is_empty() {
+        text = text.replace(&format!("{folder}{}", std::path::MAIN_SEPARATOR), "");
+    }
+    for r in records {
         text = replace_whole(&text, &r.link, &r.name);
+        if r.link != r.name {
+            text = replace_whole(&text, &r.stem, &input_stem(&r.name));
+        }
     }
     text
 }

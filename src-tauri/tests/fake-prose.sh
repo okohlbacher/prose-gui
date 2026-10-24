@@ -7,6 +7,7 @@
 #   stubborn  as hang, but ignores SIGTERM (children too): only SIGKILL ends it
 #   crash     prints two steps, writes a message to stderr and exits with code 3
 #   segv      prints a step and a line to stderr, then ends with SIGSEGV
+#   diskfull  writes ProSE's lines of a full disk (outputs in the search folder) and exits with code 12
 #   <other>   searches every input and exits 0
 #
 # Next to the -out_qpx folder it leaves argv.txt (one argument per line), inputs.txt (every -in path with
@@ -67,6 +68,15 @@ case "$stem" in
     echo "Schema error: Trying to register schema with name Abs" >&2
     echo "Error: Unable to read file (the input broke ${inputs[0]})" >&2
     exit 3
+    ;;
+  diskfull)
+    echo "[ProSE] [1/$count] Searching ${inputs[0]}"
+    run=$(basename "${inputs[0]}")
+    run=${run%.mzML}
+    echo "ArrowIOHelpers: Failed to write $qpx/runs/$run.psm.parquet: IOError: Error writing bytes to file. Detail: [errno 28] No space left on device" >&2
+    echo "Failed to write the QPX psm view -> $qpx/runs/$run.psm.parquet" >&2
+    echo "ProSE finished with 1 file(s) failing out of 1." >&2
+    exit 12
     ;;
   segv)
     echo "[ProSE] [1/$count] Searching ${inputs[0]}"
