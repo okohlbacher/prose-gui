@@ -35,6 +35,7 @@ use crate::args::{
     with_contaminants, InputLinks, InputRecord, Placement, SearchRequest, DATABASE_FILE,
     DATABASE_RECORD,
 };
+use crate::decoys::DecoyRules;
 use crate::history::{finish_partial, lock_partial, remove_partial, with_backoff};
 use crate::progress::{ProgressTracker, STARTING};
 use crate::tool;
@@ -794,8 +795,18 @@ fn prepare_folder(
     if request.contaminants {
         let crap =
             crap.ok_or("The contaminant database (cRAP) is not available in this installation.")?;
-        with_contaminants(Path::new(&request.database), crap, &dir.join(DATABASE_FILE))
-            .map_err(|e| format!("The database with contaminants cannot be written ({e})."))?;
+        let rules = DecoyRules::of(&request.settings.parameters);
+        with_contaminants(
+            Path::new(&request.database),
+            crap,
+            &dir.join(DATABASE_FILE),
+            &rules,
+        )
+        .map_err(|e| match e.kind() {
+            // (the user's database: the message says what is wrong with it)
+            std::io::ErrorKind::InvalidData => e.to_string(),
+            _ => format!("The database with contaminants cannot be written ({e})."),
+        })?;
     } else {
         // the one file outside the folder that the results reader may read (files::resolve_search_file)
         let record = serde_json::json!({ "path": request.database }).to_string();

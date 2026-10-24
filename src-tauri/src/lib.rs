@@ -30,6 +30,7 @@
 //! makes the executable the watchdog of a search (macOS: [`watchdog`]).
 
 pub mod args;
+pub mod decoys;
 pub mod files;
 pub mod history;
 pub mod progress;
