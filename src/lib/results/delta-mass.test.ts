@@ -106,6 +106,45 @@ describe('ptmRows peptides', () => {
 
 describe('shiftSummary', () => {
   it('says how many PSMs carry a shift and how many are unmodified', () => {
-    expect(shiftSummary(analysis)).toEqual({ total: 1000, shifted: 200, unmodified: 800, shareShifted: 0.2, unassigned: 60, mapped: 140 })
+    expect(shiftSummary(analysis)).toEqual({ total: 1000, shifted: 200, unmodified: 800, shareShifted: 0.2, unassigned: 60, mapped: 140, targetsOnly: false })
+  })
+
+  it('counts the target PSMs it is given, not the decoys the engine counts', () => {
+    // unmodified (|shift| ≤ 0.05 Da), oxidised, phosphorylated, an unknown shift, one without a shift (NaN)
+    const shifts = [0.001, -0.05, 15.9951, 15.98, 79.9663, -57.0215, NaN]
+    const s = shiftSummary(analysis, shifts)
+    expect(s).toEqual({ total: 7, shifted: 4, unmodified: 2, shareShifted: 4 / 7, mapped: 3, unassigned: 1, targetsOnly: true })
+    expect(shiftSummary(analysis, [])).toMatchObject({ total: 0, shifted: 0, shareShifted: 0, targetsOnly: true })
+  })
+
+  it("maps a shift to an isotope variant ('+1Da') by its base modification's mass, else by its observed mass", () => {
+    const variants: NonNullable<ModificationAnalysis> = {
+      ...analysis,
+      ptms: {
+        ...analysis.ptms,
+        entries: [
+          analysis.ptms.entries[0],
+          { ...analysis.ptms.entries[0], name: 'Oxidation+1Da+1Da', theoreticalMass: 0, observedMass: 17.9 },
+          { ...analysis.ptms.entries[0], name: 'Unknown thing+1Da', theoreticalMass: 0, observedMass: 31.5 },
+        ],
+      },
+    }
+    // 15.9949 + 2 = 17.9949; 17.9 (the observed mean) is too far; 31.51 is near the observed mass of the last
+    expect(shiftSummary(variants, [17.99, 17.9, 31.51])).toMatchObject({ shifted: 3, mapped: 2, unassigned: 1 })
+  })
+
+  it("reproduces the engine's counts of a real open search (iPRG2015 subset): 4,874 target PSMs of 4,922", async () => {
+    // the engine's own counts with the decoys: 4,922 PSMs, 1,898 shifted, 1,162 mapped, 736 not; computing them from
+    // all PSMs gives the same, so from the targets alone they are right too
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const { parseModificationAnalysis } = await import('./summary')
+    const dir = join(__dirname, 'fixtures', 'open-search-shifts')
+    const a = parseModificationAnalysis(readFileSync(join(dir, 'DeltaMassStats.tsv'), 'utf8'), readFileSync(join(dir, 'PTMStats.tsv'), 'utf8'))
+    const psms = readFileSync(join(dir, 'shifts.tsv'), 'utf8').trim().split('\n').map((l) => l.split('\t'))
+    const all = shiftSummary(a, psms.map(([d]) => Number(d)))
+    expect(all).toMatchObject({ total: a.deltaMasses.totalPSMs, shifted: a.deltaMasses.modifiedPSMs, mapped: a.ptms.totalModifiedPSMs, unassigned: a.ptms.unknownModificationPSMs })
+    const targets = shiftSummary(a, psms.filter(([, decoy]) => decoy === '0').map(([d]) => Number(d)))
+    expect(targets).toMatchObject({ total: 4874, shifted: 1852, unmodified: 3022, mapped: 1151, unassigned: 701 })
   })
 })

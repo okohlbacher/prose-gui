@@ -5,6 +5,7 @@
   import * as Table from '$lib/components/ui/table'
   import { formatPercent, formatQ } from '$lib/format/fdr'
   import { formatCount } from '$lib/results/display'
+  import { levelRows } from '$lib/results/figures'
   import { fileRows, formatSeconds, totalsOf, type EngineNote } from '$lib/results/overview'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { toolState } from '$lib/search/tool.svelte'
@@ -18,6 +19,12 @@
   const rows = $derived(fileRows(view.model, summary))
   const totals = $derived(totalsOf(rows))
   const showNce = $derived(rows.some((r) => r.nce !== null))
+  // the mass shifts of the target PSMs at the search's FDR (the engine's analysis counts the decoys too)
+  const targetShifts = $derived.by(() => {
+    if (!summary.openSearch) return undefined
+    const deltaMass = view.model.tables.psms.deltaMass
+    return Float64Array.from(levelRows(view.model, 'psms', false), (i) => deltaMass[i])
+  })
 
   const fdr = (q: number) => `${formatPercent(q)} (${formatQ(q)})`
   const rescoring = $derived.by(() => {
@@ -136,7 +143,7 @@
 
   {#if summary.openSearch}
     {#if summary.modificationAnalysis}
-      <DeltaMassPanel analysis={summary.modificationAnalysis} />
+      <DeltaMassPanel analysis={summary.modificationAnalysis} {targetShifts} />
     {:else}
       <section data-testid="delta-mass-missing" aria-labelledby="delta-mass-heading">
         <h2 id="delta-mass-heading" class="mb-1 text-[13px] font-semibold">Mass shifts (open search)</h2>
