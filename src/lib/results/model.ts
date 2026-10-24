@@ -111,6 +111,16 @@ export function qLimit(maxQ: number, cutoff: number): number {
   return maxQ <= cutoff ? maxQ : cutoff // false for NaN, too
 }
 
+/**
+ * Whether a q-value passes `limit` (`qLimit` of the filter) at a level whose search cutoff is `cutoff`. A row
+ * without a q-value (NaN: the search did not apply the FDR to it, e.g. the PSMs of a file without decoy PSMs, or the
+ * proteins of a search without protein FDR) passes the search's own cutoff, which did not filter it, but no tighter
+ * one: nothing shows that it would pass.
+ */
+export function passesQ(q: number, limit: number, cutoff: number): boolean {
+  return q === q ? q <= limit : limit >= cutoff
+}
+
 /** The biological samples with a count in the row `base / nS`: columns of one sample are adjacent. */
 function samplesFound(counts: Uint32Array, base: number, nS: number, columnSample: Uint16Array): number {
   let found = 0
@@ -124,15 +134,18 @@ function samplesFound(counts: Uint32Array, base: number, nS: number, columnSampl
   return found
 }
 
-/** The peptides' PSMs at q ≤ `limit` (a missing q-value counts), in total, per column and as samples found. */
-function countPsms(t: ResultTables, psmSample: Uint16Array, columnSample: Uint16Array, limit: number): PeptideCounts {
+/**
+ * The peptides' PSMs at q ≤ `limit` (a missing q-value counts at the search's cutoff `cutoff` only: `passesQ`), in
+ * total, per column and as samples found.
+ */
+function countPsms(t: ResultTables, psmSample: Uint16Array, columnSample: Uint16Array, limit: number, cutoff: number): PeptideCounts {
   const nPep = t.peptides.count
   const nS = columnSample.length
   const psms = new Uint32Array(nPep)
   const perSample = new Uint32Array(nPep * nS)
   const { peptide, qValue } = t.psms
   for (let i = 0; i < t.psms.count; i++) {
-    if (qValue[i] > limit) continue
+    if (!passesQ(qValue[i], limit, cutoff)) continue
     const k = peptide[i]
     psms[k]++
     perSample[k * nS + psmSample[i]]++
@@ -159,7 +172,7 @@ export function peptideCounts(m: ResultModel, maxQ: number): PeptideCounts {
   if (!cache) countsCache.set(m, (cache = new Map()))
   let counts = cache.get(limit)
   if (!counts) {
-    counts = countPsms(m.tables, m.psmSample, m.columnSample, limit)
+    counts = countPsms(m.tables, m.psmSample, m.columnSample, limit, m.psmFdr)
     if (cache.size >= cachedCutoffs) cache.delete(cache.keys().next().value!)
     cache.set(limit, counts)
   }
@@ -252,7 +265,7 @@ export function buildModel(
     if (q === q && !(q >= bestQ[k])) bestQ[k] = q // the first q-value replaces NaN
   }
   // a PSM above the search's cutoff is no evidence
-  const { psms: pepPsms, perSample: pepPer, foundIn: pepFoundIn } = countPsms(t, psmSample, columnSample, psmFdr)
+  const { psms: pepPsms, perSample: pepPer, foundIn: pepFoundIn } = countPsms(t, psmSample, columnSample, psmFdr, psmFdr)
 
   const refOffsets = pt.proteinOffsets
   const nRefs = refOffsets[nPep]

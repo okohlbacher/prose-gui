@@ -837,7 +837,13 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
       )
     }
   }
-  const summary = toSummary(meta, paths, modificationAnalysis)
+  // whether some PSM of each input has a q-value: a ProSE that does not report whether it applied the PSM FDR
+  // skipped it for an input without
+  const hasQValues = inputs.map((_, k) => {
+    for (let i = from[k]; i < from[k + 1]; i++) if (!Number.isNaN(qValue[i])) return true
+    return false
+  })
+  const summary = toSummary(meta, paths, modificationAnalysis, hasQValues)
   return { summary, tables, spectra, warnings, proteinsSaved }
 }
 

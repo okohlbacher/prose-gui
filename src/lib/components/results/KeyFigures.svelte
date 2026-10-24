@@ -17,6 +17,17 @@
   // can have several PSMs)
   const share = $derived(figures.identifiedShareOfMs2 === null ? null : `${(figures.identifiedShareOfMs2 * 100).toFixed(0)} % of MS2`)
   const severalPerSpectrum = $derived(figures.spectra !== figures.psms)
+  // PSMs of files whose PSM FDR was skipped (no decoy PSM): no q-value, not FDR-controlled
+  const noFdr = $derived(figures.psms > 0 && figures.psmsWithoutFdr === figures.psms)
+  const someWithoutFdr = $derived(figures.psmsWithoutFdr > 0 && !noFdr)
+  const fdrNote = $derived(noFdr ? 'no PSM FDR' : someWithoutFdr ? `${formatCount(figures.psmsWithoutFdr)} without FDR` : null)
+  const fdrTitle = $derived(
+    noFdr
+      ? ' The PSM FDR was not applied: no PSM matched a decoy, so the PSMs have no q-value and are not FDR-controlled.'
+      : someWithoutFdr
+        ? ` ${formatCount(figures.psmsWithoutFdr)} of them have no q-value: the PSM FDR was not applied to their files (no PSM matched a decoy), so they are not FDR-controlled.`
+        : '',
+  )
   const stats = $derived([
     {
       value: formatCount(figures.proteinGroups),
@@ -31,17 +42,19 @@
       title: groupTitle,
       testid: 'protein-count',
     },
-    { value: formatCount(figures.peptides), note: 'peptides', title: 'Target peptides at the PSM FDR. Each modified form counts as its own peptide.', testid: 'peptide-count' },
+    {
+      value: formatCount(figures.peptides),
+      note: noFdr ? 'peptides · no PSM FDR' : 'peptides',
+      title: `Target peptides at the PSM FDR. Each modified form counts as its own peptide.${noFdr ? fdrTitle : ''}`,
+      testid: 'peptide-count',
+    },
     {
       value: formatCount(figures.psms),
-      note: severalPerSpectrum
-        ? ['PSMs', `${formatCount(figures.spectra)} spectra`, share].filter(Boolean).join(' · ')
-        : share
-          ? `PSMs · ${share}`
-          : 'PSMs',
-      title: severalPerSpectrum
-        ? `Target PSMs at the PSM FDR. They identify ${formatCount(figures.spectra)} of the ${formatCount(figures.ms2)} MS2 spectra: with co-isolated precursors a spectrum can have several PSMs.`
-        : `Target PSMs at the PSM FDR, out of ${formatCount(figures.ms2)} MS2 spectra`,
+      note: ['PSMs', fdrNote, severalPerSpectrum ? `${formatCount(figures.spectra)} spectra` : null, share].filter(Boolean).join(' · '),
+      title:
+        (severalPerSpectrum
+          ? `Target PSMs at the PSM FDR. They identify ${formatCount(figures.spectra)} of the ${formatCount(figures.ms2)} MS2 spectra: with co-isolated precursors a spectrum can have several PSMs.`
+          : `Target PSMs at the PSM FDR, out of ${formatCount(figures.ms2)} MS2 spectra.`) + fdrTitle,
       testid: 'psm-count',
     },
     {

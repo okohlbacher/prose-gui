@@ -28,6 +28,12 @@ export interface RunRow {
   fragment_error_mad_ppm: number | null
   fragment_tolerance_recommended_ppm: number | null
   search_seconds: number
+  /**
+   * The PSM FDR (FDR:PSM) was applied to the run's PSMs; false: it was requested but skipped (no decoy PSM to
+   * estimate it, so the PSMs have no q-value and are not filtered); null: none was requested. Undefined: the run view
+   * has no such column (ProSE before it), see `toSummary`.
+   */
+  psm_fdr_applied?: boolean | null
 }
 
 /** The parameters of a step of the provenance view, by key. */
@@ -62,6 +68,9 @@ const RUN_COLUMNS: (keyof RunRow)[] = [
   'search_seconds',
 ]
 
+/** The columns of the run view that a later ProSE added: read when it has them. */
+const OPTIONAL_RUN_COLUMNS: (keyof RunRow)[] = ['psm_fdr_applied']
+
 /** A number of a view (int64 as bigint); `fallback` if it is null. */
 const asNumber = (v: unknown, fallback: number): number => (typeof v === 'bigint' ? Number(v) : typeof v === 'number' ? v : fallback)
 
@@ -71,7 +80,8 @@ export async function readRuns(bytes: Uint8Array): Promise<RunRow[]> {
   const names = new Set(file.tree.children.map((c) => c.element.name))
   const missing = RUN_COLUMNS.filter((c) => !names.has(c))
   if (missing.length > 0) throw new Error(`the run view has not the columns of ProSE's -qpx_extended (${missing.join(', ')})`)
-  const rows = await readObjects(file, RUN_COLUMNS)
+  const optional = OPTIONAL_RUN_COLUMNS.filter((c) => names.has(c))
+  const rows = await readObjects(file, [...RUN_COLUMNS, ...optional])
   return rows.map((r) => ({
     run_accession: String(r.run_accession ?? ''),
     search_status: typeof r.search_status === 'string' ? r.search_status : null,
@@ -92,6 +102,7 @@ export async function readRuns(bytes: Uint8Array): Promise<RunRow[]> {
     fragment_tolerance_recommended_ppm:
       r.fragment_tolerance_recommended_ppm === null ? null : asNumber(r.fragment_tolerance_recommended_ppm, NaN),
     search_seconds: asNumber(r.search_seconds, 0),
+    ...(optional.includes('psm_fdr_applied') ? { psm_fdr_applied: typeof r.psm_fdr_applied === 'boolean' ? r.psm_fdr_applied : null } : {}),
   }))
 }
 
@@ -143,10 +154,32 @@ function percolator(r: RunRow): ProSEFileSummary['percolator'] {
 }
 
 /**
- * The summary of the search: `paths` are the app's inputs (in order; the run view has their stems),
- * `modificationAnalysis` the parsed TSVs (null: closed search).
+ * Whether ProSE applied the PSM FDR to run `r` (`ProSEFileSummary.psmFdrApplied`): the run view's psm_fdr_applied,
+ * else the provenance's (target_decoy_fdr: psm_fdr_applied, of the whole search: false if some run had it skipped),
+ * else, for a ProSE that reports neither, inferred: a PSM FDR was requested and no PSM of the run has a q-value
+ * (`hasQValues`; ProSE skips the PSM FDR of a run without decoy PSMs and leaves the q-values out). Null: no PSM FDR
+ * was requested.
  */
-export function toSummary(meta: SearchMeta, paths: string[], modificationAnalysis: ProSESummary['modificationAnalysis']): ProSEMultiSummary {
+function psmFdrAppliedOf(r: RunRow, meta: SearchMeta, hasQValues: boolean | undefined): boolean | null {
+  if (r.psm_fdr_applied !== undefined) return r.psm_fdr_applied
+  if (!(parameterNumber(meta.fdr, 'psm_fdr') > 0)) return null
+  // (true for the search: true for every run; false: not for some, which the PSMs tell)
+  if (meta.fdr.get('psm_fdr_applied') === 'true') return true
+  // (a run without PSM rows has nothing to tell, and nothing that the PSM FDR could have filtered)
+  return r.psm_rows === 0 ? true : (hasQValues ?? true)
+}
+
+/**
+ * The summary of the search: `paths` are the app's inputs (in order; the run view has their stems),
+ * `modificationAnalysis` the parsed TSVs (null: closed search), `hasQValues` per run whether some PSM of it has a
+ * q-value (for a ProSE that does not report whether it applied the PSM FDR; omitted: assumed).
+ */
+export function toSummary(
+  meta: SearchMeta,
+  paths: string[],
+  modificationAnalysis: ProSESummary['modificationAnalysis'],
+  hasQValues?: boolean[],
+): ProSEMultiSummary {
   const s = meta.search
   const files: ProSEFileSummary[] = meta.runs.map((r, i) => ({
     path: paths[i] ?? r.run_accession,
@@ -159,6 +192,7 @@ export function toSummary(meta: SearchMeta, paths: string[], modificationAnalysi
     precursorError: massError(r.precursor_error_median_ppm, r.precursor_error_mad_ppm, r.precursor_tolerance_recommended_ppm),
     fragmentError: massError(r.fragment_error_median_ppm, r.fragment_error_mad_ppm, r.fragment_tolerance_recommended_ppm),
     secondsSearch: r.search_seconds,
+    psmFdrApplied: psmFdrAppliedOf(r, meta, hasQValues?.[i]),
   }))
   const openSearch = parameterFlag(s, 'open_search')
   return {

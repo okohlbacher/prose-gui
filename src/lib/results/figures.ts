@@ -47,6 +47,11 @@ export type KeyFigures = {
    * several PSMs, so this can be less than `psms`.
    */
   spectra: number
+  /**
+   * Of `psms`, those without a q-value: the search did not apply the PSM FDR to their files (no decoy PSM), so they
+   * are not FDR-controlled.
+   */
+  psmsWithoutFdr: number
   /** MS2 spectra in the searched files. */
   ms2: number
   /** `spectra / ms2` (identified spectra, not PSMs: at most 1), or null without MS2 counts. */
@@ -74,10 +79,12 @@ export function keyFigures(m: ResultModel, summary: ProSEMultiSummary): KeyFigur
 
   const errors = new Float64Array(psms.length)
   let n = 0
-  const ppm = m.tables.psms.precursorErrorPpm
+  let withoutFdr = 0
+  const { precursorErrorPpm: ppm, qValue } = m.tables.psms
   for (const i of psms) {
     const e = ppm[i]
     if (e === e) errors[n++] = Math.abs(e)
+    if (qValue[i] !== qValue[i]) withoutFdr++
   }
   const sorted = errors.subarray(0, n).sort()
   const median = n === 0 ? null : n % 2 === 1 ? sorted[n >> 1] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2
@@ -87,6 +94,7 @@ export function keyFigures(m: ResultModel, summary: ProSEMultiSummary): KeyFigur
     proteins: proteins.length,
     peptides: levelTotal(m, 'peptides', false),
     psms: psms.length,
+    psmsWithoutFdr: withoutFdr,
     ms2,
     spectra,
     identifiedShareOfMs2: ms2 > 0 ? Math.min(1, spectra / ms2) : null,

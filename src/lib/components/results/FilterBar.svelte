@@ -14,7 +14,13 @@
   import SearchIcon from '@lucide/svelte/icons/search'
   import XIcon from '@lucide/svelte/icons/x'
 
-  let { view, level, proteinFdrApplied }: { view: ResultsView; level: LevelState; proteinFdrApplied: boolean } = $props()
+  // psmFdrApplied: false when the search applied the PSM FDR to none of its PSMs (no decoy PSM): no q-values to filter by
+  let {
+    view,
+    level,
+    proteinFdrApplied,
+    psmFdrApplied = true,
+  }: { view: ResultsView; level: LevelState; proteinFdrApplied: boolean; psmFdrApplied?: boolean } = $props()
 
   const names = {
     proteins: { filter: 'Filter proteins', placeholder: 'Accession, gene, name, peptide…', q: 'Protein FDR' },
@@ -93,17 +99,19 @@
       onkeydown={(e) => e.key === 'Escape' && draft && (e.preventDefault(), clearText())} />
   </label>
 
-  {#if level.level === 'proteins' && !proteinFdrApplied}
+  {#if (level.level === 'proteins' && !proteinFdrApplied) || (level.level !== 'proteins' && !psmFdrApplied)}
     <!-- aria-disabled, not disabled: it stays focusable, so that the tooltip says why -->
     <Tooltip.Root>
       <Tooltip.Trigger>
         {#snippet child({ props })}
           <button {...props} type="button" class={cn(selectLike, 'cursor-not-allowed text-muted-foreground opacity-60')} aria-disabled="true"
-            >Protein FDR: not available</button>
+            >{level.level === 'proteins' ? 'Protein FDR' : 'PSM FDR'}: not available</button>
         {/snippet}
       </Tooltip.Trigger>
       <Tooltip.Content class="max-w-xs" role="tooltip"
-        >This search did not apply a protein FDR, so the proteins have no q-values to filter by.</Tooltip.Content>
+        >{level.level === 'proteins'
+          ? 'This search did not apply a protein FDR, so the proteins have no q-values to filter by.'
+          : 'This search did not apply the PSM FDR (no PSM matched a decoy), so the PSMs have no q-values to filter by.'}</Tooltip.Content>
     </Tooltip.Root>
   {:else}
     <Popover.Root>

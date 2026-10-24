@@ -78,6 +78,16 @@ describe('keyFigures', () => {
     expect(keyFigures(m, summary([20, 15])).spectra).toBe(7)
   })
 
+  it('counts the PSMs without a q-value (the PSM FDR was not applied to their file)', () => {
+    const tables = sampleTables()
+    expect(keyFigures(buildModel(tables, sampleDesign(), { showTechReplicates: false, psmFdr: 0.01, proteinFdr: 0.01 }), summary([20, 15])).psmsWithoutFdr).toBe(0)
+    // file 1 had no decoy PSM: PSMs 2 4 5 6 7 have no q-value, and count at the search's cutoff (PSM 2 too, now)
+    for (const i of [2, 4, 5, 6, 7]) tables.psms.qValue[i] = NaN
+    const f = keyFigures(buildModel(tables, sampleDesign(), { showTechReplicates: false, psmFdr: 0.01, proteinFdr: 0.01 }), summary([20, 15]))
+    expect(f.psms).toBe(8)
+    expect(f.psmsWithoutFdr).toBe(5)
+  })
+
   it('has no share without MS2 counts and no error without errors', () => {
     const tables = sampleTables()
     tables.psms.precursorErrorPpm.fill(NaN)
@@ -92,7 +102,8 @@ describe('levelTotal', () => {
   it("counts a level's rows at the search's cutoff, with or without decoys", () => {
     const m = buildModel(sampleTables(), sampleDesign(), { showTechReplicates: false, psmFdr: 0.01, proteinFdr: 1 })
     expect(levelTotal(m, 'proteins', false)).toBe(3)
-    expect(levelTotal(m, 'proteins', true)).toBe(4)
+    expect(levelTotal(m, 'proteins', true)).toBe(3) // the decoy protein's only PSM is at q 0.03: no identification
+    expect(levelTotal(buildModel(sampleTables(), sampleDesign(), { showTechReplicates: false, psmFdr: 0.05, proteinFdr: 1 }), 'proteins', true)).toBe(4)
     expect(levelTotal(m, 'psms', false)).toBe(7)
     expect(levelTotal(m, 'peptides', true)).toBe(4) // the decoy peptide's PSM is at q 0.03
   })

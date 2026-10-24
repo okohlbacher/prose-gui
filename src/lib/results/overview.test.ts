@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 import type { ProSEFileSummary, ProSEMultiSummary } from '../results/types'
 import { sampleDesign, sampleTables } from './fixtures'
 import { buildModel } from './model'
-import { engineNote, fileRows, fileStatus, formatSeconds, percolatorStatus, totalsOf } from './overview'
+import {
+  engineNote,
+  fileRows,
+  fileStatus,
+  formatSeconds,
+  percolatorStatus,
+  psmFdrAppliedToNone,
+  psmFdrFact,
+  psmFdrNotice,
+  totalsOf,
+} from './overview'
 
 const file = (path: string, more: Partial<ProSEFileSummary> = {}): ProSEFileSummary => ({
   path,
@@ -114,5 +124,45 @@ describe('totalsOf', () => {
     const m = buildModel(sampleTables(), sampleDesign(), { showTechReplicates: false, psmFdr: 0.01, proteinFdr: 0.01 })
     const rows = fileRows(m, summary([file('/input/0/ctrl_a.mzML'), file('/input/1/egf_a.mzML', { ms2Spectra: 500, targetPSMs: 100, decoyPSMs: 1, secondsSearch: 1 })]))
     expect(totalsOf(rows)).toEqual({ ms2: 1500, targets: 500, decoys: 5, seconds: 13.34 })
+  })
+})
+
+describe('the PSM FDR that ProSE skipped', () => {
+  const skipped = { psmFdrApplied: false, decoyPSMs: 0 }
+  const a = file('/input/0/ctrl_a.mzML', { psmFdrApplied: true })
+  const b = file('/input/1/egf_a.mzML', skipped)
+
+  it('is the cutoff where it was applied (or a summary says nothing of it: the web app)', () => {
+    for (const s of [summary([a, file('/input/1/egf_a.mzML')]), summary([file('/x.mzML', { psmFdrApplied: null })])]) {
+      expect(psmFdrFact(s).value).toBe('1 % (q ≤ 0.01)')
+      expect(psmFdrNotice(s)).toBeNull()
+      expect(psmFdrAppliedToNone(s)).toBe(false)
+    }
+  })
+
+  it('says it was not applied, to which files, and that their PSMs are not FDR-controlled', () => {
+    const some = summary([a, b])
+    expect(psmFdrFact(some).value).toBe('1 % (q ≤ 0.01), not applied to 1 of 2 files')
+    expect(psmFdrFact(some).title).toContain('Not applied to egf_a.mzML.')
+    expect(psmFdrNotice(some)).toBe(
+      'The PSM FDR of 1 % was not applied to egf_a.mzML: no PSM matched a decoy, so ProSE could not estimate the FDR. ' +
+        'Their PSMs have no q-value and are not FDR-controlled: treat them with care, or search with decoys (and more spectra).',
+    )
+    expect(psmFdrAppliedToNone(some)).toBe(false)
+    const m = buildModel(sampleTables(), sampleDesign(), { showTechReplicates: false, psmFdr: 0.01, proteinFdr: 0.01 })
+    expect(fileRows(m, some).map((r) => r.psmFdrSkipped)).toEqual([false, true])
+
+    const none = summary([file('/input/0/ctrl_a.mzML', skipped), b])
+    expect(psmFdrFact(none).value).toBe('not applied (no decoy PSMs)')
+    expect(psmFdrNotice(none)).toMatch(/^The PSM FDR of 1 % was not applied to the search: .* The PSMs have no q-value/)
+    expect(psmFdrAppliedToNone(none)).toBe(true)
+  })
+
+  it('needs no notice for a file without PSMs, which has nothing the FDR could have filtered', () => {
+    const empty = summary([a, file('/input/1/egf_a.mzML', { ...skipped, targetPSMs: 0 })])
+    expect(psmFdrNotice(empty)).toBeNull()
+    // a file without any PSM does not count for "applied to none"
+    expect(psmFdrAppliedToNone(summary([file('/a.mzML', skipped), file('/b.mzML', { psmFdrApplied: false, targetPSMs: 0, decoyPSMs: 0 })]))).toBe(true)
+    expect(psmFdrAppliedToNone(summary([file('/a.mzML', { psmFdrApplied: false, targetPSMs: 0, decoyPSMs: 0 })]))).toBe(false)
   })
 })

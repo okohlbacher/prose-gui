@@ -199,8 +199,11 @@ function expectSummary(s: ProSEMultiSummary, w: ProSEMultiSummary, index?: 'diff
   expect(s.files.map((f) => basename(f.path))).toEqual(w.files.map((f) => basename(f.path)))
   s.files.forEach((f, i) => {
     const e = w.files[i]
-    expect({ ...f, path: '', secondsSearch: 0, precursorError: null, fragmentError: null }).toEqual({
+    // (psmFdrApplied: the app's; the web app has none, for applied)
+    expect(f.psmFdrApplied).toBe(e.psmFdrApplied ?? true)
+    expect({ ...f, path: '', secondsSearch: 0, precursorError: null, fragmentError: null, psmFdrApplied: undefined }).toEqual({
       ...e,
+      psmFdrApplied: undefined,
       path: '',
       secondsSearch: 0,
       precursorError: null,
@@ -787,6 +790,57 @@ describe('missing and broken files', () => {
     ])
     expect(summary.proteinFdrApplied).toBe(false)
     expect(warnings).toEqual([])
+  })
+
+  test('a search whose PSM FDR ProSE skipped (no decoy PSM) says so, also from a ProSE that does not report it', async () => {
+    // fixtures/no-psm-fdr: the app's example run against three random proteins, PSM FDR 1 %: one PSM, no decoy PSM,
+    // so ProSE skipped the PSM FDR and the PSM has no q-value (the pin: no psm_fdr_applied, inferred from that)
+    const { tables, summary } = await readSearch(folder(join(fixtures, 'no-psm-fdr')).files)
+    expect(tables.psms.count).toBe(1)
+    expect(tables.psms.qValue[0]).toBeNaN()
+    expect(summary.psmFdr).toBe(0.01)
+    expect(summary.files.map((f) => f.psmFdrApplied)).toEqual([false])
+    // a search that applied it: every input has q-values
+    const applied = await readSearch(folder(join(fixtures, 'suitability')).files)
+    expect(applied.summary.files.map((f) => f.psmFdrApplied)).toEqual([true, true])
+  })
+
+  test("the run view's psm_fdr_applied, else the provenance's, says whether the PSM FDR was applied", async () => {
+    /** the run view of `dir` with the column psm_fdr_applied (a later ProSE's) */
+    const withColumn = async (dir: string, values: (boolean | null)[]) => {
+      const path = join(dir, RUN_VIEW)
+      const bytes = new Uint8Array(readFileSync(path))
+      const metadata = parquetMetadata(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer)
+      const rows = await rowsOf(bytes)
+      const schema = [{ ...metadata.schema[0], num_children: (metadata.schema[0].num_children ?? 0) + 1 }, ...metadata.schema.slice(1)]
+      schema.push({ name: 'psm_fdr_applied', type: 'BOOLEAN', repetition_type: 'OPTIONAL' })
+      const columnData = topColumns(metadata).map((name) => ({ name, data: rows.map((r) => r[name]) as never[] }))
+      columnData.push({ name: 'psm_fdr_applied', data: values as never[] })
+      const compressors = { ZSTD: (input: Uint8Array) => new Uint8Array(zstdCompressSync(input)) }
+      writeFileSync(path, new Uint8Array(parquetWriteBuffer({ columnData, schema, codec: 'ZSTD', compressors })))
+    }
+    const RUN_VIEW = 'qpx/quantms.run.parquet'
+    // the column wins over the PSMs' q-values (and its null: no PSM FDR requested)
+    for (const value of [true, null]) {
+      await withCopy('no-psm-fdr', async (dir) => {
+        await withColumn(dir, [value])
+        expect((await readSearch(folder(dir).files)).summary.files[0].psmFdrApplied).toBe(value)
+      })
+    }
+    await withCopy('suitability', async (dir) => {
+      await withColumn(dir, [false, true])
+      expect((await readSearch(folder(dir).files)).summary.files.map((f) => f.psmFdrApplied)).toEqual([false, true])
+    })
+    // without the column: the provenance's (true for the search), else inferred from the q-values
+    await withCopy('no-psm-fdr', async (dir) => {
+      await setParameters(dir, 'target_decoy_fdr', { psm_fdr_applied: 'true' })
+      expect((await readSearch(folder(dir).files)).summary.files[0].psmFdrApplied).toBe(true)
+      await setParameters(dir, 'target_decoy_fdr', { psm_fdr_applied: 'false' })
+      expect((await readSearch(folder(dir).files)).summary.files[0].psmFdrApplied).toBe(false)
+      // no PSM FDR requested
+      await setParameters(dir, 'target_decoy_fdr', { psm_fdr: '0' })
+      expect((await readSearch(folder(dir).files)).summary.files[0].psmFdrApplied).toBeNull()
+    })
   })
 
   test('an open search without its mod-analysis folder reads, without the analysis', async () => {
