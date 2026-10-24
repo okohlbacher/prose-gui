@@ -36,6 +36,10 @@ pub const SWEEP_GRACE: Duration = Duration::from_secs(600);
 /// The `error` of a finished search folder without a record.
 pub const NO_RECORD: &str = "This search was not saved. Its folder has no record (search.json), because the app \
      ended or the record could not be written when the search finished. Delete it to free the space.";
+/// The `error` of a folder of the searches folder whose name is no id the app gives a search.
+pub const NOT_A_SEARCH: &str =
+    "This folder is not a search of ProSE: its name is not one ProSE gives a search \
+     (only letters, digits, - and _), so it cannot be opened. Delete it to free the space.";
 /// The largest `search.json` (it holds the design; a few kB to a few MB).
 const MAX_RECORD: u64 = 64 << 20;
 /// The longest name of a search.
@@ -70,6 +74,12 @@ pub struct HistoryEntry {
     pub database: Option<String>,
     /// Target PSMs within the PSM FDR.
     pub psms: Option<u64>,
+    /// The search's cutoffs (q-values).
+    pub psm_fdr: Option<f64>,
+    pub protein_fdr: Option<f64>,
+    /// The record's `settings` as they are (the parameters that differ from ProSE's defaults, the preset, the
+    /// rescoring switches): History tells searches of the same name apart by them.
+    pub settings: Option<serde_json::Value>,
     /// What the folder takes on disk (its files, not the links to the inputs).
     pub bytes: u64,
     /// Why the folder cannot be opened (an unreadable or unknown record).
@@ -141,8 +151,9 @@ fn read_record(dir: &Path, id: &str) -> Result<String, String> {
     String::from_utf8(bytes).map_err(|_| format!("{RECORD} is not text."))
 }
 
-fn entry_of(dir: &Path, id: &str) -> HistoryEntry {
-    let mut entry = HistoryEntry {
+/// The entry of a folder that cannot be opened: its id, its size and why.
+fn broken_entry(id: &str, bytes: u64, error: &str) -> HistoryEntry {
+    HistoryEntry {
         id: id.to_string(),
         name: None,
         created_at: None,
@@ -151,9 +162,17 @@ fn entry_of(dir: &Path, id: &str) -> HistoryEntry {
         files: Vec::new(),
         database: None,
         psms: None,
-        bytes: folder_size(&dir.join(id), 0),
-        error: None,
-    };
+        psm_fdr: None,
+        protein_fdr: None,
+        settings: None,
+        bytes,
+        error: Some(error.to_string()),
+    }
+}
+
+fn entry_of(dir: &Path, id: &str) -> HistoryEntry {
+    let mut entry = broken_entry(id, folder_size(&dir.join(id), 0), "");
+    entry.error = None;
     let record = read_record(dir, id).and_then(|text| parse_record(&text));
     match record {
         Err(message) => entry.error = Some(message),
@@ -165,6 +184,9 @@ fn entry_of(dir: &Path, id: &str) -> HistoryEntry {
             entry.tool_version = text("toolVersion");
             entry.database = text("database");
             entry.psms = map.get("psms").and_then(|v| v.as_u64());
+            entry.psm_fdr = map.get("psmFdr").and_then(|v| v.as_f64());
+            entry.protein_fdr = map.get("proteinFdr").and_then(|v| v.as_f64());
+            entry.settings = map.get("settings").filter(|v| v.is_object()).cloned();
             if let Some(files) = map.get("files").and_then(|v| v.as_array()) {
                 entry.files = files
                     .iter()
@@ -176,9 +198,23 @@ fn entry_of(dir: &Path, id: &str) -> HistoryEntry {
     entry
 }
 
+/// A folder of the searches folder that is no search, by its name: not an id the app gives (a folder
+/// renamed or made by hand, "my search" or "a.b"), and not a partial folder of a running search or import
+/// (`<id>.partial`), a hidden one or anything with a path in it. [`list`] lists it with [`NOT_A_SEARCH`],
+/// so that it can be deleted ([`delete`]).
+fn stray_name(name: &str) -> bool {
+    !name.is_empty()
+        && !valid_id(name)
+        && !name.starts_with('.')
+        && !name.contains(['/', '\\', ':'])
+        && !name.chars().any(char::is_control)
+        && !name.strip_suffix(".partial").is_some_and(valid_id)
+}
+
 /// The searches of History, the newest first (those with an `error` last). Never fails: what is wrong
 /// with a folder is in its entry's `error`; a finished folder without a record is listed with
-/// [`NO_RECORD`] (a partial folder, a running search's, is not listed).
+/// [`NO_RECORD`], a folder whose name is no search's ([`stray_name`]) with [`NOT_A_SEARCH`] (a partial
+/// folder, a running search's, is not listed, nor is a link).
 pub fn list(dir: &Path) -> Vec<HistoryEntry> {
     let Ok(read) = fs::read_dir(dir) else {
         return Vec::new();
@@ -188,7 +224,8 @@ pub fn list(dir: &Path) -> Vec<HistoryEntry> {
         let Some(id) = item.file_name().to_str().map(str::to_string) else {
             continue;
         };
-        if !valid_id(&id) {
+        let stray = stray_name(&id);
+        if !valid_id(&id) && !stray {
             continue;
         }
         let Ok(meta) = fs::symlink_metadata(item.path()) else {
@@ -197,21 +234,18 @@ pub fn list(dir: &Path) -> Vec<HistoryEntry> {
         if !meta.is_dir() {
             continue;
         }
+        if stray {
+            entries.push(broken_entry(
+                &id,
+                folder_size(&item.path(), 0),
+                NOT_A_SEARCH,
+            ));
+            continue;
+        }
         // (a record that is a link or a folder is listed with its error; none: the folder of a search that
         // was not saved, listed with that as its error)
         if fs::symlink_metadata(item.path().join(RECORD)).is_err() {
-            entries.push(HistoryEntry {
-                id: id.clone(),
-                name: None,
-                created_at: None,
-                app_version: None,
-                tool_version: None,
-                files: Vec::new(),
-                database: None,
-                psms: None,
-                bytes: folder_size(&item.path(), 0),
-                error: Some(NO_RECORD.to_string()),
-            });
+            entries.push(broken_entry(&id, folder_size(&item.path(), 0), NO_RECORD));
             continue;
         }
         entries.push(entry_of(dir, &id));
@@ -345,9 +379,11 @@ pub fn rename(dir: &Path, id: &str, name: &str) -> Result<(), String> {
 }
 
 /// Removes the search's folder (any folder of the searches folder by its id: also one without a
-/// record). A search that is not there is fine. Links inside are removed, never followed.
+/// record, and one that [`list`] lists as no search by its name, [`stray_name`]). A search that is not
+/// there is fine. The folder has to be a folder itself, not a link; links inside are removed, never
+/// followed.
 pub fn delete(dir: &Path, id: &str) -> Result<(), String> {
-    if !valid_id(id) {
+    if !valid_id(id) && !stray_name(id) {
         return Err(format!("{id:?} is not a search."));
     }
     let folder = dir.join(id);

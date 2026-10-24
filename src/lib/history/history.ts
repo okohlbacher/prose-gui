@@ -75,7 +75,10 @@ export type SearchRecord = {
   imported?: boolean
 }
 
-/** What History lists of a search (`history_list`); a folder that cannot be opened has `error`. */
+/**
+ * What History lists of a search (`history_list`); a folder that cannot be opened has `error` (also one whose
+ * name is no search's: `history::NOT_A_SEARCH`).
+ */
 export type HistoryEntry = {
   id: string
   name: string | null
@@ -85,6 +88,11 @@ export type HistoryEntry = {
   files: string[]
   database: string | null
   psms: number | null
+  /** The search's cutoffs (q-values). */
+  psmFdr: number | null
+  proteinFdr: number | null
+  /** The record's settings as they are (History tells searches of one name apart by them: details.ts). */
+  settings: Partial<SearchRecord['settings']> | null
   /** What the folder takes on disk. */
   bytes: number
   error: string | null

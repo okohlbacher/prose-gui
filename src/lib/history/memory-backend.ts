@@ -59,7 +59,21 @@ export class MemoryBackend implements HistoryBackend {
     for (const [id, folder] of this.folders) {
       const record = folder.get('search.json')
       const bytes = [...folder.values()].reduce((n, f) => n + f.length, 0)
-      const entry: HistoryEntry = { id, name: null, createdAt: null, appVersion: null, toolVersion: null, files: [], database: null, psms: null, bytes, error: null }
+      const entry: HistoryEntry = {
+        id,
+        name: null,
+        createdAt: null,
+        appVersion: null,
+        toolVersion: null,
+        files: [],
+        database: null,
+        psms: null,
+        psmFdr: null,
+        proteinFdr: null,
+        settings: null,
+        bytes,
+        error: null,
+      }
       // (as `history::list`: a folder without a record is a search that was not saved)
       if (!record) {
         entries.push({ ...entry, error: NO_RECORD })
@@ -77,6 +91,9 @@ export class MemoryBackend implements HistoryBackend {
           files: json.files ?? [],
           database: json.database ?? null,
           psms: json.psms ?? null,
+          psmFdr: json.psmFdr ?? null,
+          proteinFdr: json.proteinFdr ?? null,
+          settings: json.settings ?? null,
         })
       } catch (e) {
         entry.error = (e as Error).message.startsWith('search.json') || (e as Error).message.startsWith('This') ? (e as Error).message : 'search.json is not valid JSON.'
