@@ -6,7 +6,8 @@ mod common;
 use common::*;
 use prose_desktop_lib::args::{
     build_args, build_args_with, humanize, input_placements, input_records_with, input_stem,
-    is_input_link, link_name, with_contaminants, InputLinks, Placement, SearchRequest, MAX_STEM,
+    is_input_link, link_name, max_stem, with_contaminants, InputLinks, Placement, SearchRequest,
+    MAX_STEM,
 };
 use prose_desktop_lib::decoys::DecoyRules;
 use prose_desktop_lib::progress::ProgressTracker;
@@ -746,9 +747,9 @@ fn on_windows_inputs_go_by_their_own_paths_unless_their_names_clash() {
     let plan = |files: &[&Path]| {
         let req = request(files, &fasta, false, json!({}));
         let args = build_args_with(&req, &out, windows).unwrap();
-        let records = input_records_with(&req, windows);
+        let records = input_records_with(&req, windows, &out);
         (
-            input_placements(&req, windows),
+            input_placements(&req, windows, &out),
             values_of(&args, "-in"),
             records
                 .iter()
@@ -811,7 +812,7 @@ fn on_windows_inputs_go_by_their_own_paths_unless_their_names_clash() {
     // elsewhere every input is a symbolic link
     let req = request(&[&a, &b], &fasta, false, json!({}));
     assert_eq!(
-        input_placements(&req, InputLinks::Symlinks),
+        input_placements(&req, InputLinks::Symlinks, &out),
         [Symlink, Symlink]
     );
     assert_eq!(
@@ -938,12 +939,13 @@ fn input_stems_of_names_whose_lower_case_has_another_length() {
         false,
         json!({}),
     );
-    let stems: Vec<String> = input_records_with(&req, InputLinks::Symlinks)
+    let folder = Path::new("/s/1-0.partial");
+    let stems: Vec<String> = input_records_with(&req, InputLinks::Symlinks, folder)
         .into_iter()
         .map(|r| r.stem)
         .collect();
     assert_eq!(stems, ["1__İstanbul_run", "2__Ⱥ", "3__ẞ"]);
-    let own: Vec<String> = input_records_with(&req, InputLinks::PathsOrHardLinks)
+    let own: Vec<String> = input_records_with(&req, InputLinks::PathsOrHardLinks, folder)
         .into_iter()
         .map(|r| r.stem)
         .collect();
@@ -1746,7 +1748,7 @@ fn an_input_of_a_255_byte_name_is_searched_and_maps_back_to_its_file() {
     let name = format!("{}.mzML", "n".repeat(250));
     let long = i.dir.write(&format!("long/{name}"), "<mzML/>");
     let (id, rx) = run.start(request(&[&long], &i.fasta, false, json!({})), None);
-    id.unwrap();
+    let id = id.unwrap();
     let folder = done_folder(&until_terminal(&rx, WAIT));
     let mapping: Value =
         serde_json::from_str(&fs::read_to_string(folder.join("inputs.json")).unwrap()).unwrap();
@@ -1755,7 +1757,15 @@ fn an_input_of_a_255_byte_name_is_searched_and_maps_back_to_its_file() {
     assert_eq!(mapping[0]["name"], name.as_str());
     assert_eq!(mapping[0]["path"], long.to_str().unwrap());
     assert_eq!(stem, input_stem(&link));
-    assert!(link.len() <= 255 && stem.len() == MAX_STEM, "{link}");
+    // the stem as long as the folder allows: MAX_STEM, on Windows less (MAX_PATH)
+    let partial = run.dir().join(format!("{id}.partial"));
+    let max = max_stem(InputLinks::PLATFORM, &partial);
+    assert!(max <= MAX_STEM && max > 20, "{max}");
+    assert!(link.len() <= 255 && stem.len() == max, "{link}");
+    assert!(
+        link.starts_with("1__nnn") && link.ends_with(".mzML"),
+        "{link}"
+    );
     if cfg!(windows) {
         // a hard link (the name is too long for ProSE's outputs), which the finished search drops
         assert!(!folder.join(&link).exists(), "{link} is gone");
@@ -1771,13 +1781,102 @@ fn an_input_of_a_255_byte_name_is_searched_and_maps_back_to_its_file() {
         .is_file());
     // Windows: such an input goes as a (shortened) link, not by its own path
     let req = request(&[&long, &i.mzml], &i.fasta, false, json!({}));
+    let windows =
+        Path::new(r"C:\Users\u\AppData\Roaming\org.openms.prose.desktop\searches\1-0.partial");
     assert_eq!(
-        input_placements(&req, InputLinks::PathsOrHardLinks),
+        input_placements(&req, InputLinks::PathsOrHardLinks, windows),
         vec![Placement::HardLink, Placement::OwnPath]
     );
-    let records = input_records_with(&req, InputLinks::PathsOrHardLinks);
-    assert_eq!(records[0].link, link);
+    let records = input_records_with(&req, InputLinks::PathsOrHardLinks, windows);
+    assert_eq!(
+        records[0].stem.len(),
+        max_stem(InputLinks::PathsOrHardLinks, windows)
+    );
+    assert!(records[0].link.starts_with("1__nnn") && records[0].link.ends_with(".mzML"));
     assert_eq!(records[1].link, "a.mzML");
+}
+
+/// Windows' MAX_PATH (259 characters): the stems of the links are as short as the search folder's path needs,
+/// so that ProSE's longest output (`mods\<stem>_ModificationAnalysis_DeltaMassStats.tsv`) and every link stay
+/// within it; a name that fits MAX_STEM but not the folder goes as a shortened link too; a folder of too long a
+/// path is refused before anything is made.
+#[test]
+fn on_windows_the_search_folders_paths_stay_within_max_path() {
+    let windows = InputLinks::PathsOrHardLinks;
+    let dir = TempDir::new("maxpath");
+    let fasta = dir.write("db.fasta", ">a\nMK\n");
+    // a name of 150 bytes: within MAX_STEM, too long under a folder of 100 characters
+    let name = format!("{}.mzML", "m".repeat(145));
+    let long = dir.write(&format!("in/{name}"), "<mzML/>");
+    let short = dir.write("in/b.mzML", "<mzML/>");
+    let twin = dir.write("other/b.mzML", "<mzML/>");
+    let req = request(&[&long, &short, &twin], &fasta, false, json!({}));
+    let folder = format!(
+        r"C:\{}\searches\1792841343610-0.partial",
+        "d".repeat(100 - 36)
+    );
+    let folder = Path::new(&folder);
+    assert_eq!(folder.as_os_str().len(), 100);
+    let max = max_stem(windows, folder);
+    assert_eq!(
+        max,
+        259 - 100 - r"\mods\".len() - "_ModificationAnalysis_DeltaMassStats.tsv".len()
+    );
+    // elsewhere only the file name limit counts
+    assert_eq!(max_stem(InputLinks::Symlinks, folder), MAX_STEM);
+    let records = input_records_with(&req, windows, folder);
+    assert_eq!(
+        input_placements(&req, windows, folder),
+        [
+            Placement::HardLink,
+            Placement::HardLink,
+            Placement::HardLink
+        ]
+    );
+    let links: Vec<&str> = records.iter().map(|r| r.link.as_str()).collect();
+    assert_eq!(links[1..], ["2__b.mzML", "3__b.mzML"]);
+    assert_eq!(records[0].stem.len(), max);
+    assert!(links[0].starts_with("1__mmm") && links[0].ends_with(".mzML"));
+    assert_eq!(records[0].name, name);
+    for r in &records {
+        let longest = format!(
+            r"{}\mods\{}_ModificationAnalysis_DeltaMassStats.tsv",
+            folder.display(),
+            r.stem
+        );
+        let link = format!(r"{}\{}", folder.display(), r.link);
+        assert!(
+            longest.encode_utf16().count() <= 259 && link.encode_utf16().count() <= 259,
+            "{longest}"
+        );
+    }
+    let args = build_args_with(&req, folder, windows).unwrap();
+    assert_eq!(
+        values_of(&args, "-in")[0],
+        folder.join(&records[0].link).into_os_string()
+    );
+    // a multi-byte name: the stem's bytes bound its UTF-16 units
+    let umlauts = dir.write(&format!("in/{}.mzML", "ä".repeat(100)), "<mzML/>");
+    let req = request(&[&umlauts], &fasta, false, json!({}));
+    let r = &input_records_with(&req, windows, folder)[0];
+    assert!(
+        r.stem.len() <= max && r.link.ends_with(".mzML"),
+        "{}",
+        r.link
+    );
+    // a name that fits stays the user's own path
+    let req = request(&[&short], &fasta, false, json!({}));
+    assert_eq!(
+        input_placements(&req, windows, folder),
+        [Placement::OwnPath]
+    );
+    // a folder that leaves no room for ProSE's outputs is refused
+    let deep = format!(r"C:\{}\1-0.partial", "d".repeat(220));
+    let err = build_args_with(&req, Path::new(&deep), windows).unwrap_err();
+    assert!(
+        err.contains("too long a path") && err.contains("259"),
+        "{err}"
+    );
 }
 
 /// Windows' way (`InputLinks::PathsOrHardLinks`), run on every platform: inputs of different names go to
@@ -1799,7 +1898,8 @@ fn inputs_of_different_names_go_to_the_tool_by_their_own_paths() {
         "{argv}"
     );
     assert!(
-        folder.join("qpx/runs/a.psm.parquet").is_file() && folder.join("qpx/runs/b.psm.parquet").is_file()
+        folder.join("qpx/runs/a.psm.parquet").is_file()
+            && folder.join("qpx/runs/b.psm.parquet").is_file()
     );
     let mapping: Value =
         serde_json::from_str(&fs::read_to_string(folder.join("inputs.json")).unwrap()).unwrap();
@@ -1914,6 +2014,19 @@ fn inputs_of_one_name_on_another_volume_are_refused() {
             && !err.contains("Two inputs"),
         "{err}"
     );
+    // a lone input whose name is too long for ProSE's outputs in the search folder: its own reason too
+    let long = elsewhere.join(format!("{}.mzML", "l".repeat(240)));
+    fs::create_dir_all(&elsewhere).unwrap();
+    fs::write(&long, "<mzML/>").unwrap();
+    let (result, _rx) = run.start(request(&[&long], &i.fasta, false, json!({})), None);
+    let err = result.unwrap_err();
+    let _ = fs::remove_dir_all(&elsewhere);
+    assert!(
+        err.contains("is too long for ProSE's result files")
+            && err.contains("Rename the file to a shorter name")
+            && !err.contains("Two inputs"),
+        "{err}"
+    );
 }
 
 /// ProSE's lines of a full disk: the first one is the message, with the outputs named as in the search folder
@@ -1952,7 +2065,7 @@ fn humanize_gives_the_users_names_and_drops_the_search_folder() {
         false,
         json!({}),
     );
-    let records = input_records_with(&req, InputLinks::Symlinks);
+    let records = input_records_with(&req, InputLinks::Symlinks, dir);
     assert_eq!(
         humanize(
             "Reading /s/1-0.partial/2__a.mzML; writing /s/1-0.partial/qpx/runs/2__a.pg.parquet: row 3 reuses run '1__a'; \
@@ -1972,7 +2085,7 @@ fn humanize_gives_the_users_names_and_drops_the_search_folder() {
         false,
         json!({}),
     );
-    let records = input_records_with(&req, InputLinks::PathsOrHardLinks);
+    let records = input_records_with(&req, InputLinks::PathsOrHardLinks, dir);
     assert_eq!(
         humanize(
             r"Reading C:\Users\u\AppData\Roaming\prose\searches\1-0.partial\2__a.mzML; Reading c:/Users/u/AppData/Roaming/prose/searches/1-0.partial/1__a.mzML; writing C:\Users\u\AppData\Roaming\prose\searches\1-0.partial\qpx/runs/2__a.pg.parquet and C:/Users/u/AppData/Roaming/prose/searches/1-0.partial/merged.idXML",

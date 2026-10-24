@@ -215,7 +215,39 @@ fn file_name(path: &str) -> String {
 /// The longest stem (bytes) an input may have where ProSE names outputs after it. Its longest output name is
 /// `<stem>_ModificationAnalysis_DeltaMassStats.tsv` (open search), and a file name has at most 255 bytes (Linux,
 /// macOS; NTFS 255 UTF-16 units, which are never more than the bytes).
-pub const MAX_STEM: usize = 255 - "_ModificationAnalysis_DeltaMassStats.tsv".len();
+pub const MAX_STEM: usize = 255 - LONGEST_OUTPUT_SUFFIX.len();
+
+/// The end of ProSE's longest output name after an input's stem (open search, in `mods/`).
+const LONGEST_OUTPUT_SUFFIX: &str = "_ModificationAnalysis_DeltaMassStats.tsv";
+/// The folder of that output in the search folder, with the separators around it (`mods\`, `qpx\runs\` is
+/// shorter with its `.psm.parquet`).
+const LONGEST_OUTPUT_FOLDER: &str = "\\mods\\";
+/// Windows' MAX_PATH: a path has at most 259 UTF-16 units (260 with its terminating null), unless the
+/// program opts into long paths, which ProSE (OpenMS, Arrow) is not known to do.
+const WINDOWS_MAX_PATH: usize = 259;
+
+/// The longest stem (bytes) an input may have in the search folder `folder` (its `.partial` path), for links
+/// `links`: [`MAX_STEM`]; on Windows ([`InputLinks::PathsOrHardLinks`]) also short enough that the path of
+/// ProSE's longest output in the folder (`<folder>\mods\<stem>_ModificationAnalysis_DeltaMassStats.tsv`) and of
+/// every link (`<folder>\<n>__<stem>.mzML.gz`, shorter) stays within MAX_PATH. A stem's UTF-16 units are never
+/// more than its bytes, so the bytes bound it. 0 if not even the fixed part of that path fits.
+pub fn max_stem(links: InputLinks, folder: &Path) -> usize {
+    match links {
+        InputLinks::Symlinks => MAX_STEM,
+        InputLinks::PathsOrHardLinks => {
+            let fixed = folder.as_os_str().to_string_lossy().encode_utf16().count()
+                + LONGEST_OUTPUT_FOLDER.len()
+                + LONGEST_OUTPUT_SUFFIX.len();
+            WINDOWS_MAX_PATH.saturating_sub(fixed).min(MAX_STEM)
+        }
+    }
+}
+
+/// The shortest stem limit that still gives the `count` inputs link names of their own (`<n>__` and a character
+/// of the name).
+fn shortest_stem(count: usize) -> usize {
+    format!("{count}__").len() + 1
+}
 
 /// The name of input `index` (0-based) in the search folder: `<n>__<name>` with `n` from 1. ProSE names
 /// its per-input outputs after the input and refuses two inputs of one name, so an input goes in as
@@ -223,21 +255,27 @@ pub const MAX_STEM: usize = 255 - "_ModificationAnalysis_DeltaMassStats.tsv".len
 /// whose stem would be longer than [`MAX_STEM`] is shortened (at a character) to that length: `<n>__`
 /// keeps the stems unique, `inputs.json` maps the link back to the user's file ([`InputRecord`]).
 pub fn link_name(index: usize, path: &str) -> String {
+    link_name_within(index, path, MAX_STEM)
+}
+
+/// As [`link_name`], the stem at most `max_stem` bytes ([`max_stem`]).
+pub fn link_name_within(index: usize, path: &str, max_stem: usize) -> String {
     let link = format!("{}__{}", index + 1, file_name(path));
     let stem = input_stem(&link).len();
-    if stem <= MAX_STEM {
+    if stem <= max_stem {
         return link;
     }
-    let mut end = MAX_STEM;
+    let mut end = max_stem;
     while !link.is_char_boundary(end) {
         end -= 1;
     }
     format!("{}{}", &link[..end], &link[stem..])
 }
 
-/// Whether ProSE's outputs of an input of this name would have names too long for the file system.
-fn stem_too_long(name: &str) -> bool {
-    input_stem(name).len() > MAX_STEM
+/// Whether ProSE's outputs of an input of this name would have names (or, on Windows, paths) too long for the
+/// file system, with stems of at most `max_stem` bytes.
+pub fn stem_too_long(name: &str, max_stem: usize) -> bool {
+    input_stem(name).len() > max_stem
 }
 
 /// Whether `name`, a name in the top level of a search folder, is one of the links to the inputs
@@ -298,8 +336,9 @@ fn all_unique(names: impl IntoIterator<Item = String>) -> bool {
     names.into_iter().all(|n| seen.insert(stem_key(&n)))
 }
 
-/// How each input of `req` reaches ProSE (in order).
-pub fn input_placements(req: &SearchRequest, links: InputLinks) -> Vec<Placement> {
+/// How each input of `req` reaches ProSE (in order), in the search folder `folder`.
+pub fn input_placements(req: &SearchRequest, links: InputLinks, folder: &Path) -> Vec<Placement> {
+    let max = max_stem(links, folder);
     match links {
         InputLinks::Symlinks => vec![Placement::Symlink; req.files.len()],
         InputLinks::PathsOrHardLinks => {
@@ -317,7 +356,7 @@ pub fn input_placements(req: &SearchRequest, links: InputLinks) -> Vec<Placement
                     // name is too long for ProSE's outputs (the link's is shortened)
                     if keys.iter().filter(|other| *other == k).count() > 1
                         || k == RESERVED_STEM
-                        || stem_too_long(&file_name(&f.path))
+                        || stem_too_long(&file_name(&f.path), max)
                     {
                         Placement::HardLink
                     } else {
@@ -331,7 +370,7 @@ pub fn input_placements(req: &SearchRequest, links: InputLinks) -> Vec<Placement
                 .iter()
                 .enumerate()
                 .zip(&placements)
-                .map(|((i, f), p)| seen_name(i, &f.path, *p));
+                .map(|((i, f), p)| seen_name(i, &f.path, *p, max));
             if all_unique(names) {
                 placements
             } else {
@@ -341,11 +380,11 @@ pub fn input_placements(req: &SearchRequest, links: InputLinks) -> Vec<Placement
     }
 }
 
-/// The name ProSE sees for input `index`: the link's, or the file's own.
-fn seen_name(index: usize, path: &str, placement: Placement) -> String {
+/// The name ProSE sees for input `index`: the link's (its stem at most `max_stem` bytes), or the file's own.
+fn seen_name(index: usize, path: &str, placement: Placement, max_stem: usize) -> String {
     match placement {
         Placement::OwnPath => file_name(path),
-        Placement::Symlink | Placement::HardLink => link_name(index, path),
+        Placement::Symlink | Placement::HardLink => link_name_within(index, path, max_stem),
     }
 }
 
@@ -574,17 +613,27 @@ pub fn build_args_with(
         }
     }
 
+    // (Windows) a search folder whose path leaves no room for ProSE's outputs within MAX_PATH
+    let max = max_stem(links, out_dir);
+    if max < shortest_stem(req.files.len()) {
+        return Err(format!(
+            "The app's data folder ({}) has too long a path: Windows limits a path to {WINDOWS_MAX_PATH} \
+             characters, and ProSE's result files in it would be longer. Move the app's data to a folder of a \
+             shorter path.",
+            out_dir.parent().unwrap_or(out_dir).display()
+        ));
+    }
     let mut args: Vec<OsString> = vec!["-in".into()];
     args.extend(
         req.files
             .iter()
-            .zip(input_placements(req, links))
+            .zip(input_placements(req, links, out_dir))
             .enumerate()
             .map(|(i, (f, placement))| match placement {
                 Placement::OwnPath => OsString::from(&f.path),
-                Placement::Symlink | Placement::HardLink => {
-                    out_dir.join(link_name(i, &f.path)).into_os_string()
-                }
+                Placement::Symlink | Placement::HardLink => out_dir
+                    .join(link_name_within(i, &f.path, max))
+                    .into_os_string(),
             }),
     );
     args.push("-database".into());
@@ -797,18 +846,20 @@ pub struct InputRecord {
     pub path: String,
 }
 
-pub fn input_records(req: &SearchRequest) -> Vec<InputRecord> {
-    input_records_with(req, InputLinks::PLATFORM)
-}
-
-pub fn input_records_with(req: &SearchRequest, links: InputLinks) -> Vec<InputRecord> {
-    let placements = input_placements(req, links);
+/// The records of `inputs.json` of the inputs of `req` in the search folder `folder` (its `.partial` path).
+pub fn input_records_with(
+    req: &SearchRequest,
+    links: InputLinks,
+    folder: &Path,
+) -> Vec<InputRecord> {
+    let max = max_stem(links, folder);
+    let placements = input_placements(req, links, folder);
     req.files
         .iter()
         .zip(placements)
         .enumerate()
         .map(|(index, (f, placement))| {
-            let link = seen_name(index, &f.path, placement);
+            let link = seen_name(index, &f.path, placement, max);
             InputRecord {
                 id: f.id.clone(),
                 index,

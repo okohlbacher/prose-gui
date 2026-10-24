@@ -1091,8 +1091,8 @@ impl Searches {
                 return Err(format!("The search folder cannot be locked ({e})."));
             }
         };
-        let records = input_records_with(&request, self.links);
-        let placements = input_placements(&request, self.links);
+        let records = input_records_with(&request, self.links, &partial);
+        let placements = input_placements(&request, self.links, &partial);
         if let Err(e) = prepare_folder(&partial, &request, &records, &placements, crap) {
             discard_partial(Some(lock), &partial, None);
             return Err(e);
@@ -1218,6 +1218,19 @@ fn prepare_folder(
             })?,
             // (Windows) a hard link works on the folder's own volume only; nothing is ever copied
             Placement::HardLink => fs::hard_link(&original, &link).map_err(|e| {
+                // (a name too long for ProSE's outputs in the search folder: its link's name is shortened)
+                if !record.link.ends_with(&record.name) && !reserved_stem(&record.name) {
+                    return format!(
+                        "The name of {} is too long for ProSE's result files in the app's data folder ({}), whose \
+                         names and paths it makes from the file's name. The app links such a file into the search \
+                         folder under a shorter name, but Windows can make that link only on the drive of the app's \
+                         data and on NTFS. {} cannot be linked there ({e}). Rename the file to a shorter name and \
+                         start the search again.",
+                        record.name,
+                        dir.parent().unwrap_or(dir).display(),
+                        file.path
+                    );
+                }
                 if reserved_stem(&record.name) {
                     return format!(
                         "ProSE cannot search a file named {} under that name, because its own result files are \
