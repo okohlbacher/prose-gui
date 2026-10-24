@@ -2,6 +2,7 @@
   // The Spectra card: the mzML files and, from two files on, the experimental design (File ·
   // Condition · Replicate · Fraction; Advanced: Tech. replicate, Fraction group, Sample). Assumed values
   // are greyed; notices go below the table, the summary above it.
+  import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert'
   import XIcon from '@lucide/svelte/icons/x'
   import { tick } from 'svelte'
   import { Button } from '$lib/components/ui/button'
@@ -239,7 +240,8 @@
                 {/if}
               {/if}
               {#if file.problem}
-                <td class="px-2.5 py-1.5 text-right text-xs whitespace-nowrap text-destructive" title={file.problem}>cannot be searched</td>
+                <td class="px-2.5 py-1.5 text-right text-xs whitespace-nowrap text-destructive" title={file.problem}
+                  ><TriangleAlertIcon class="mr-1 inline size-3.5 align-[-2px]" aria-hidden="true" />unusable</td>
               {:else}
                 <td class="px-2.5 py-1.5 text-right">{file.spectra?.toLocaleString('en-US') ?? '–'}</td>
               {/if}
