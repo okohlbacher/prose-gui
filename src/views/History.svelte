@@ -160,14 +160,15 @@
     </div>
   {:else}
     <!-- a fixed layout: the date, the counts and the buttons keep their width, the name and the files share the
-         rest and truncate (at the smallest window the buttons stay in view) -->
+         rest and truncate (at the smallest window the buttons stay in view); in a narrow window the files give their
+         room to the name (they are in the name's tooltip) -->
     <div class="rounded-lg border bg-background">
       <Table.Root class="table-fixed text-xs" aria-label="Saved searches" data-testid="history-table">
         <Table.Header>
           <Table.Row class="hover:bg-transparent">
             <Table.Head scope="col" class="{head} text-left">Name</Table.Head>
             <Table.Head scope="col" class="{head} w-[8.75rem] text-left">Finished</Table.Head>
-            <Table.Head scope="col" class="{head} text-left">Files</Table.Head>
+            <Table.Head scope="col" class="{head} text-left max-lg:hidden">Files</Table.Head>
             <Table.Head scope="col" class="{head} w-[4.5rem] text-right" title="Target PSMs that pass the search's PSM FDR">PSMs</Table.Head>
             <Table.Head scope="col" class="{head} w-[4.5rem] text-right" title="Disk space the search takes on this computer">Size</Table.Head>
             <Table.Head scope="col" class="{head} w-[13rem] text-right"><span class="sr-only">Actions</span></Table.Head>
@@ -196,7 +197,8 @@
                     onblur={() => commitRename(entry)} />
                 {:else}
                   {@const facts = details.get(entry.id) ?? []}
-                  <span class="block min-w-0 truncate" title={entry.name ?? entry.id} data-column="name">{entry.name ?? entry.id}</span>
+                  <span class="block min-w-0 truncate" title={[entry.name ?? entry.id, ...entry.files].join('\n')} data-column="name"
+                    >{entry.name ?? entry.id}</span>
                   {#if facts.length > 0}
                     <span
                       class="mt-0.5 block min-w-0 truncate text-[11px] font-normal text-muted-foreground"
@@ -214,7 +216,7 @@
               <Table.Cell class="{cell} whitespace-nowrap text-left" data-column="date">
                 {#if entry.createdAt}<time datetime={entry.createdAt}>{date(entry.createdAt)}</time>{/if}
               </Table.Cell>
-              <Table.Cell class="{cell} text-left" data-column="files">
+              <Table.Cell class="{cell} text-left max-lg:hidden" data-column="files">
                 <span class="block truncate" title={entry.files.join('\n')}>{filesText(entry.files)}</span>
               </Table.Cell>
               <Table.Cell class="{cell} text-right tabular-nums" data-column="psms">{entry.psms === null ? '' : formatCount(entry.psms)}</Table.Cell>
