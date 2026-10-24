@@ -837,19 +837,23 @@ fn progress_lines_become_events_with_file_and_fraction() {
             "Adding PeptDeep rescoring features...",
             "Mapping peptides to proteins...",
             "Rescoring with Percolator...",
+            // (a ProSE without -qpx_extended: the views' lines are not there)
+            "Preparing the spectrum view (file 1 of 2)...",
             "Pooling the files...",
             "Writing the results...",
         ]
     );
     let files: Vec<i32> = steps.iter().map(|s| s.1).collect();
-    assert_eq!(files, [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, -1, -1]);
+    assert_eq!(files, [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, -1, -1, -1]);
     assert_eq!(steps[0].2, 0.0, "the first file starts at 0");
-    // the second file's step starts where the first one's share ends: half of the 95 % for the files
-    assert!((steps[6].2 - 0.475).abs() < 1e-9, "{:?}", steps[6]);
+    // the second file's step starts where the first one's share ends: half of the 35 % for the files' search
+    assert!((steps[6].2 - 0.175).abs() < 1e-9, "{:?}", steps[6]);
+    // the spectrum views follow the files' search, not 95 %
+    assert!((steps[10].2 - 0.35).abs() < 1e-9, "{:?}", steps[10]);
     assert!(
-        (steps[10].2 - 0.95).abs() < 1e-9,
+        (steps[11].2 - 0.95).abs() < 1e-9,
         "pooling holds at 95 %: {:?}",
-        steps[10]
+        steps[11]
     );
     assert_monotone(&steps);
 }
@@ -898,9 +902,10 @@ fn progress_of_several_open_files_pools_after_the_last_modification_analysis() {
     let steps = steps_of("prose-open-two-files.stdout.txt", &["a.mzML", "b.mzML"]);
     let l = labels(&steps);
     assert_eq!(
-        &l[l.len() - 3..],
+        &l[l.len() - 4..],
         [
             "Analysing modifications...",
+            "Preparing the spectrum view (file 1 of 2)...",
             "Pooling the files...",
             "Writing the results..."
         ]
@@ -944,6 +949,7 @@ fn a_chunked_search_of_two_files_reports_its_chunks_and_each_files_rescoring() {
             "Adding PeptDeep rescoring features...",
             "Mapping peptides to proteins...",
             "Rescoring with Percolator...",
+            // (no end marker of the last file in a closed chunked search, and this ProSE had no -qpx_extended)
             "Pooling the files...",
             "Writing the results...",
         ]
@@ -959,16 +965,16 @@ fn a_chunked_search_of_two_files_reports_its_chunks_and_each_files_rescoring() {
         "reading and chunks are outside the files"
     );
     assert_eq!(files[18..], [0, 0, 0, 1, 1, 1, -1, -1]);
-    // the chunks take the first half of the bar, in 17 equal steps
+    // the chunks take the first half of the files' 35 % of the bar, in 17 equal steps
     assert_eq!(steps[1].2, 0.0);
     assert!(
-        (steps[17].2 - 16.0 / 17.0 * 0.5).abs() < 1e-9,
+        (steps[17].2 - 16.0 / 17.0 * 0.5 * 0.35).abs() < 1e-9,
         "{:?}",
         steps[17]
     );
     // the files' rescoring follows, file 1 after file 0
     assert!(
-        steps[18].2 >= 0.5 && steps[23].2 > steps[20].2 && steps[23].2 < 0.95,
+        steps[18].2 >= 0.175 && steps[23].2 > steps[20].2 && steps[23].2 < 0.35,
         "{steps:?}"
     );
     assert!((steps[24].2 - 0.95).abs() < 1e-9 && (steps[25].2 - 0.97).abs() < 1e-9);
@@ -1018,13 +1024,14 @@ fn a_chunked_open_search_pools_after_the_aggregate_modification_analysis() {
             "Rescoring with Percolator...",
             "Mapping peptides to proteins...",
             "Rescoring with Percolator...",
+            "Preparing the spectrum view (file 1 of 2)...",
             "Pooling the files...",
             "Writing the results...",
         ]
     );
     assert_eq!(
-        steps[5..11].iter().map(|s| s.1).collect::<Vec<_>>(),
-        [0, 0, 1, 1, -1, -1]
+        steps[5..12].iter().map(|s| s.1).collect::<Vec<_>>(),
+        [0, 0, 1, 1, -1, -1, -1]
     );
     assert_monotone(&steps);
 }
