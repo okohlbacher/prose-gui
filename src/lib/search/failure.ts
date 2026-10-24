@@ -69,6 +69,10 @@ function stageOf(stage: FailureStage, message: string): string {
     const database = /^(.+?) cannot be read \(/.exec(message)?.[1]
     return database ? `While counting the proteins of ${database}` : 'While counting the proteins'
   }
+  // the spectrum views of -qpx_extended, after the files' search (progress.rs): "Preparing the spectrum view (file 2
+  // of 3)"
+  const view = /^Preparing the spectrum view(?: \((file \d+ of \d+)\))?$/.exec(label)
+  if (view) return view[1] ? `While preparing the spectrum view of ${view[1]}` : 'While preparing the spectrum view'
   return steps.find(([pattern]) => pattern.test(label))?.[1] ?? (label ? `During “${label}”` : 'During the search')
 }
 

@@ -19,12 +19,15 @@
     labelId,
     value,
     onChange,
+    blocked = null,
   }: {
     entry: ParamEntry
     id: string
     labelId: string
     value: unknown
     onChange: (value: unknown) => void
+    /** Why the parameter cannot be used with the other settings (a switch is then off and disabled); null: it can. */
+    blocked?: string | null
   } = $props()
 
   const FDR = ['FDR:PSM', 'FDR:protein']
@@ -54,7 +57,16 @@
     class="[&>div:first-child]:h-8 [&>div:first-child]:bg-background [&>div:first-child]:shadow-none"
     bind:value={() => Number(value), (v) => onChange(v)} />
 {:else if entry.type === 'bool'}
-  <Switch {id} aria-labelledby={labelId} checked={value === true} onCheckedChange={(c) => onChange(c)} />
+  <Switch
+    {id}
+    aria-labelledby={labelId}
+    aria-describedby={blocked ? `${id}-blocked` : undefined}
+    checked={value === true && !blocked}
+    disabled={blocked !== null}
+    onCheckedChange={(c) => onChange(c)} />
+  {#if blocked}
+    <p id="{id}-blocked" class="text-xs text-foreground">{blocked}</p>
+  {/if}
 {:else if entry.type === 'string' && entry.validStrings}
   <ChoiceSelect
     {id}

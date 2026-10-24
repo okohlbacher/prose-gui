@@ -10,9 +10,11 @@
   import { formatCount } from '$lib/results/display'
   import { massShiftBars, massShiftRows, ptmRows, shiftSummary } from '$lib/results/delta-mass'
 
-  let { analysis }: { analysis: NonNullable<ModificationAnalysis> } = $props()
+  // targetShifts: the delta masses of the target PSMs at the search's FDR, which the summary counts (the engine's
+  // analysis, the histogram and the tables, counts the decoy PSMs too)
+  let { analysis, targetShifts }: { analysis: NonNullable<ModificationAnalysis>; targetShifts?: ArrayLike<number> } = $props()
 
-  const summary = $derived(shiftSummary(analysis))
+  const summary = $derived(shiftSummary(analysis, targetShifts))
   const bars = $derived(massShiftBars(analysis))
   const shifts = $derived(massShiftRows(analysis))
   const ptms = $derived(ptmRows(analysis))
@@ -20,7 +22,7 @@
   const description = $derived.by(() => {
     const top = [...bars].sort((a, b) => b.count - a.count)[0]
     return (
-      `${bars.length} delta-mass peaks of ${formatCount(summary.shifted)} PSMs with a mass shift above 0.05 Da, ` +
+      `${bars.length} delta-mass peaks of ${formatCount(analysis.deltaMasses.modifiedPSMs)} PSMs (targets and decoys) with a mass shift above 0.05 Da, ` +
       `from ${bars[0]?.label ?? ''} to ${bars.at(-1)?.label ?? ''} Da; ` +
       (top ? `the most frequent is ${top.label} with ${formatCount(top.count)} PSMs. ` : '') +
       `Bars of known modifications are green and carry the modification's name, the others are grey and carry their mass.`
@@ -35,10 +37,16 @@
   <div>
     <h2 id="delta-mass-heading" class="text-[13px] font-semibold">Mass shifts (open search)</h2>
     <p class="mt-0.5 text-xs text-muted-foreground" data-testid="shift-summary">
-      {formatCount(summary.shifted)} of {formatCount(summary.total)} PSMs ({(summary.shareShifted * 100).toFixed(1)} %) carry a mass shift above 0.05 Da, counting targets and decoys.
+      {formatCount(summary.shifted)} of {formatCount(summary.total)}
+      {summary.targetsOnly ? 'target PSMs at the PSM FDR' : 'PSMs'} ({(summary.shareShifted * 100).toFixed(1)} %) carry a mass shift above 0.05 Da{summary.targetsOnly
+        ? ''
+        : ', counting targets and decoys'}.
       {formatCount(summary.unmodified)} are unmodified.
       {#if summary.shifted > 0}
         Of the shifted PSMs, {formatCount(summary.mapped)} match a known modification and {formatCount(summary.unassigned)} do not.
+      {/if}
+      {#if summary.targetsOnly}
+        The chart and the tables are the engine's analysis, which counts the decoy PSMs too.
       {/if}
     </p>
   </div>
@@ -53,7 +61,7 @@
         <li class="flex items-center gap-1.5"><span class="inline-block size-2.5 rounded-[3px]" style:background={COLORS.mod} aria-hidden="true"></span>Known modification</li>
         <li class="flex items-center gap-1.5"><span class="inline-block size-2.5 rounded-[3px]" style:background="var(--plot-muted)" aria-hidden="true"></span>No known modification</li>
       </ul>
-      <ShiftChart title="PSMs by delta mass in the open search" {description} {bars} unmodified={summary.unmodified} />
+      <ShiftChart title="PSMs by delta mass in the open search" {description} {bars} unmodified={analysis.deltaMasses.unmodifiedPSMs} />
     </div>
 
     <div class="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">

@@ -25,6 +25,7 @@ import type { DesignResolution } from '../design/model'
 import { readSearch, RUNS, type ByteRange, type SearchFiles } from '../results/read'
 import type { ResultTables } from '../results/types'
 import { formatBytes } from '../format/bytes'
+import { errorText } from '../format/error'
 import { fileSafe, resultName } from '../results/display'
 import { readRuns, targetPsmsOf } from '../results/summary'
 import type { EndedSearch, OpenResult } from '../search/session.svelte'
@@ -208,7 +209,7 @@ export async function psmsOfSearch(backend: HistoryBackend, id: string): Promise
   try {
     return targetPsmsOf(await readRuns(bytes))
   } catch (e) {
-    throw new Error(`${RUNS}: ${e instanceof Error ? e.message : String(e)}`, { cause: e })
+    throw new Error(`${RUNS}: ${errorText(e)}`, { cause: e })
   }
 }
 

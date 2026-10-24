@@ -5,7 +5,8 @@
   import * as Table from '$lib/components/ui/table'
   import { formatPercent, formatQ } from '$lib/format/fdr'
   import { formatCount } from '$lib/results/display'
-  import { fileRows, formatSeconds, totalsOf, type EngineNote } from '$lib/results/overview'
+  import { levelRows } from '$lib/results/figures'
+  import { fileRows, formatSeconds, psmFdrFact, totalsOf, type EngineNote } from '$lib/results/overview'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { toolState } from '$lib/search/tool.svelte'
   import DeltaMassPanel from './DeltaMassPanel.svelte'
@@ -18,6 +19,12 @@
   const rows = $derived(fileRows(view.model, summary))
   const totals = $derived(totalsOf(rows))
   const showNce = $derived(rows.some((r) => r.nce !== null))
+  // the mass shifts of the target PSMs at the search's FDR (the engine's analysis counts the decoys too)
+  const targetShifts = $derived.by(() => {
+    if (!summary.openSearch) return undefined
+    const deltaMass = view.model.tables.psms.deltaMass
+    return Float64Array.from(levelRows(view.model, 'psms', false), (i) => deltaMass[i])
+  })
 
   const fdr = (q: number) => `${formatPercent(q)} (${formatQ(q)})`
   const rescoring = $derived.by(() => {
@@ -40,7 +47,7 @@
   const facts: { name: string; value: string; title?: string }[] = $derived([
     { name: 'Database', value: `${settings.database}${settings.contaminants ? ' + contaminants' : ''}` },
     { name: 'Search', value: summary.openSearch ? 'Open search (wide precursor window)' : 'Standard precursor window' },
-    { name: 'PSM FDR', value: fdr(summary.psmFdr) },
+    { name: 'PSM FDR', ...psmFdrFact(summary) },
     { name: 'Protein FDR', value: summary.proteinFdrApplied ? fdr(summary.proteinFdr) : 'not applied' },
     { name: 'Fixed modifications', value: settings.fixedMods.length > 0 ? settings.fixedMods.join(', ') : 'none' },
     { name: 'Rescoring', value: rescoring },
@@ -104,7 +111,13 @@
               <Table.Cell data-column="file" class="{cell} text-left font-medium">{r.file}</Table.Cell>
               <Table.Cell data-column="sample" class="{cell} text-left">{r.sample ?? '–'}</Table.Cell>
               <Table.Cell data-column="ms2" class="{cell} text-right">{r.ms2 === null ? '–' : formatCount(r.ms2)}</Table.Cell>
-              <Table.Cell data-column="targets" class="{cell} text-right">{r.targets === null ? '–' : formatCount(r.targets)}</Table.Cell>
+              <Table.Cell data-column="targets" class="{cell} text-right"
+                >{r.targets === null ? '–' : formatCount(r.targets)}{#if r.psmFdrSkipped}<span
+                    class="block font-normal text-amber-700"
+                    data-testid="no-psm-fdr"
+                    title="The PSM FDR was not applied to this file: no PSM matched a decoy, so its PSMs have no q-value and are not FDR-controlled."
+                    >no FDR</span
+                  >{/if}</Table.Cell>
               <Table.Cell data-column="decoys" class="{cell} text-right">{r.decoys === null ? '–' : formatCount(r.decoys)}</Table.Cell>
               <Table.Cell data-column="percolator" class="{cell} text-left whitespace-normal {r.percolator.kind === 'off' ? 'text-muted-foreground' : ''}">
                 {r.percolator.label}{#if r.percolator.detail}{@render engineNote(r.percolator.detail, false)}{/if}{#if r.percolator.warning}{@render engineNote(r.percolator.warning, true)}{/if}
@@ -136,7 +149,7 @@
 
   {#if summary.openSearch}
     {#if summary.modificationAnalysis}
-      <DeltaMassPanel analysis={summary.modificationAnalysis} />
+      <DeltaMassPanel analysis={summary.modificationAnalysis} {targetShifts} />
     {:else}
       <section data-testid="delta-mass-missing" aria-labelledby="delta-mass-heading">
         <h2 id="delta-mass-heading" class="mb-1 text-[13px] font-semibold">Mass shifts (open search)</h2>

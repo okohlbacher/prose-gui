@@ -5,9 +5,11 @@ mod common;
 
 use common::*;
 use prose_desktop_lib::args::{
-    build_args, build_args_with, input_placements, input_records_with, input_stem, is_input_link,
-    link_name, with_contaminants, InputLinks, Placement, SearchRequest,
+    build_args, build_args_with, humanize, input_placements, input_records_with, input_stem,
+    is_input_link, link_name, max_stem, with_contaminants, InputLinks, Placement, SearchRequest,
+    MAX_STEM,
 };
+use prose_desktop_lib::decoys::DecoyRules;
 use prose_desktop_lib::progress::ProgressTracker;
 use prose_desktop_lib::run::{SearchEvent, Searches};
 use prose_desktop_lib::tool;
@@ -325,6 +327,108 @@ fn parameter_values_of_the_wrong_type_are_refused() {
 }
 
 #[test]
+fn integers_beyond_proses_32_bits_and_absurd_threads_are_refused() {
+    let i = inputs();
+    let out = i.dir.path().join("o");
+    // ProSE reads its integers as 32-bit: 3000000000 made it print its 152 KB help and stop
+    for (params, words) in [
+        (
+            json!({ "precursor:max_charge": 3_000_000_000_u64 }),
+            "precursor:max_charge",
+        ),
+        (
+            json!({ "precursor:isotope_error_min": -2_147_483_649_i64 }),
+            "precursor:isotope_error_min",
+        ),
+        (
+            json!({ "peptide:missed_cleavages": 9.0e15 }),
+            "peptide:missed_cleavages",
+        ),
+        (json!({ "threads": 4_294_967_295_u64 }), "threads"),
+        (json!({ "threads": 1025 }), "threads"),
+    ] {
+        let err =
+            build_args(&request(&[&i.mzml], &i.fasta, false, params.clone()), &out).unwrap_err();
+        assert!(err.contains(words), "{params}: {err}");
+    }
+    let err = build_args(
+        &request(
+            &[&i.mzml],
+            &i.fasta,
+            false,
+            json!({ "precursor:max_charge": 3_000_000_000_u64 }),
+        ),
+        &out,
+    )
+    .unwrap_err();
+    assert!(
+        err.contains("2147483647"),
+        "the message names the range: {err}"
+    );
+    // the request's own field too
+    let mut req = request(&[&i.mzml], &i.fasta, false, json!({}));
+    req.settings.threads = 100_000;
+    assert!(build_args(&req, &out).unwrap_err().contains("1024"));
+    // the bounds themselves pass
+    let args = args_of(
+        &request(
+            &[&i.mzml],
+            &i.fasta,
+            false,
+            json!({ "precursor:max_charge": 2_147_483_647_i64, "precursor:isotope_error_min": -2_147_483_648_i64, "threads": 1024 }),
+        ),
+        &out,
+    );
+    assert_eq!(
+        values_of(&args, "-Search:precursor:max_charge"),
+        vec![OsString::from("2147483647")]
+    );
+    assert_eq!(
+        values_of(&args, "-Search:precursor:isotope_error_min"),
+        vec![OsString::from("-2147483648")]
+    );
+    assert_eq!(values_of(&args, "-threads"), vec![OsString::from("1024")]);
+}
+
+#[test]
+fn co_isolated_precursors_are_left_out_with_database_chunks() {
+    let i = inputs();
+    let out = i.dir.path().join("o");
+    let with = |chunk: i64| {
+        args_of(
+            &request(
+                &[&i.mzml],
+                &i.fasta,
+                false,
+                json!({ "chimeric:enabled": true, "database:chunk_size": chunk }),
+            ),
+            &out,
+        )
+    };
+    assert!(has(&with(0), "-Search:chimeric:enabled"));
+    let chunked = with(1000);
+    assert!(
+        !has(&chunked, "-Search:chimeric:enabled"),
+        "ProSE would ignore it"
+    );
+    assert_eq!(
+        values_of(&chunked, "-Search:database:chunk_size"),
+        vec![OsString::from("1000")]
+    );
+    // a wrong value is still refused
+    assert!(build_args(
+        &request(
+            &[&i.mzml],
+            &i.fasta,
+            false,
+            json!({ "chimeric:enabled": "yes", "database:chunk_size": 1000 })
+        ),
+        &out
+    )
+    .is_err());
+}
+
+#[test]
 fn the_psm_fdr_is_above_zero() {
     let i = inputs();
     let out = i.dir.path().join("o");
@@ -461,7 +565,7 @@ fn contaminants_are_appended_with_con_accessions() {
         ">sp|ALBU_BOVIN|\nMKWVT\nFISL\n>CON__kept\nAAAA\n>gi|2|keratin\nGGGG\n",
     );
     let dest = dir.path().join("database.fasta");
-    with_contaminants(&user, &crap, &dest).unwrap();
+    with_contaminants(&user, &crap, &dest, &DecoyRules::default()).unwrap();
     assert_eq!(
         fs::read_to_string(&dest).unwrap(),
         ">sp|P1|ONE desc\nMKWV\nTFIS\n>CON__sp|ALBU_BOVIN|\nMKWVT\nFISL\n>CON__kept\nAAAA\n>CON__gi|2|keratin\nGGGG\n"
@@ -472,7 +576,7 @@ fn contaminants_are_appended_with_con_accessions() {
         ">sp|P1|ONE desc\nMKWV\nTFIS"
     );
     let user2 = dir.write("user2.fasta", ">x\nMK\n");
-    with_contaminants(&user2, &crap, &dest).unwrap();
+    with_contaminants(&user2, &crap, &dest, &DecoyRules::default()).unwrap();
     assert!(fs::read_to_string(&dest)
         .unwrap()
         .starts_with(">x\nMK\n>CON__sp|ALBU_BOVIN|\n"));
@@ -484,12 +588,150 @@ fn the_bundled_crap_has_116_entries_and_gets_the_prefix() {
     let crap = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/fasta/crap.fasta");
     let user = dir.write("user.fasta", ">a\nMK\n");
     let dest = dir.path().join("database.fasta");
-    with_contaminants(&user, &crap, &dest).unwrap();
+    with_contaminants(&user, &crap, &dest, &DecoyRules::default()).unwrap();
     let text = fs::read_to_string(&dest).unwrap();
     let headers: Vec<&str> = text.lines().filter(|l| l.starts_with('>')).collect();
     assert_eq!(headers.len(), 117);
     assert_eq!(headers[0], ">a");
     assert!(headers[1..].iter().all(|h| h.starts_with(">CON__")));
+}
+
+fn bundled_crap() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/fasta/crap.fasta")
+}
+
+fn headers(text: &str) -> Vec<&str> {
+    text.lines().filter(|l| l.starts_with('>')).collect()
+}
+
+#[test]
+fn contaminants_the_database_has_already_are_not_appended_again() {
+    let dir = TempDir::new("crap-twice");
+    let crap = dir.write(
+        "crap.fasta",
+        ">sp|ALBU_BOVIN| serum albumin\nMKWVT\n>gi|2|keratin\nGGGG\n",
+    );
+    // one of them (with the prefix, and a description of its own) is in the user's FASTA
+    let user = dir.write(
+        "user.fasta",
+        ">sp|P1|ONE\nMKWV\n>CON__sp|ALBU_BOVIN| own text\r\nMKWVT\r\n",
+    );
+    let dest = dir.path().join("database.fasta");
+    with_contaminants(&user, &crap, &dest, &DecoyRules::default()).unwrap();
+    assert_eq!(
+        fs::read_to_string(&dest).unwrap(),
+        ">sp|P1|ONE\nMKWV\n>CON__sp|ALBU_BOVIN| own text\r\nMKWVT\r\n>CON__gi|2|keratin\nGGGG\n"
+    );
+    // the database.fasta of an earlier search, searched again with contaminants: nothing is added
+    let first = dir.path().join("first.fasta");
+    let again = dir.path().join("again.fasta");
+    let plain = dir.write("plain.fasta", ">a\nMK\n");
+    with_contaminants(&plain, &bundled_crap(), &first, &DecoyRules::default()).unwrap();
+    with_contaminants(&first, &bundled_crap(), &again, &DecoyRules::default()).unwrap();
+    assert_eq!(
+        fs::read_to_string(&again).unwrap(),
+        fs::read_to_string(&first).unwrap()
+    );
+    let text = fs::read_to_string(&again).unwrap();
+    let all = headers(&text);
+    let unique: std::collections::HashSet<&&str> = all.iter().collect();
+    assert_eq!((all.len(), unique.len()), (117, 117));
+}
+
+#[test]
+fn a_database_with_decoys_gets_decoys_of_the_contaminants_too() {
+    let dir = TempDir::new("crap-decoys");
+    let crap = dir.write("crap.fasta", ">sp|TRY|trypsin\nMABCKDE\n>CON__kept\nAKPR\n");
+    let dest = dir.path().join("database.fasta");
+    // a prefix as DecoyHelper knows it, spelled as the database spells it
+    let user = dir.write(
+        "decoys.fasta",
+        ">P1 one\nMKWV\n>P2\nAAAK\n>rev_P1 one\nMVWK\n>rev_P2\nAAAK\n",
+    );
+    with_contaminants(&user, &crap, &dest, &DecoyRules::default()).unwrap();
+    let text = fs::read_to_string(&dest).unwrap();
+    assert!(
+        text.ends_with(
+            ">CON__sp|TRY|trypsin\nMABCKDE\n>CON__kept\nAKPR\n>rev_CON__sp|TRY|trypsin\nMCBAKED\n>rev_CON__kept\nRPKA\n"
+        ),
+        "{text}"
+    );
+    // targets and decoys pair up again
+    let decoys = headers(&text)
+        .iter()
+        .filter(|h| h.starts_with(">rev_"))
+        .count();
+    assert_eq!(headers(&text).len(), 2 * decoys);
+    // a suffix, and Trypsin/P without keeping the initial Met
+    let suffixed = dir.write("suffixed.fasta", ">P1\nMK\n>P1_REVERSED\nKM\n");
+    let rules = DecoyRules::of(
+        json!({ "enzyme": "Trypsin/P", "peptide:clip_nterm_methionine": false })
+            .as_object()
+            .unwrap(),
+    );
+    with_contaminants(&suffixed, &crap, &dest, &rules).unwrap();
+    let text = fs::read_to_string(&dest).unwrap();
+    assert!(
+        text.ends_with(">CON__sp|TRY|trypsin_REVERSED\nCBAMKED\n>CON__kept_REVERSED\nAKRP\n"),
+        "{text}"
+    );
+    // ProSE removes the database's decoys and generates all of them (generate, ignore), or the database has
+    // none: no decoys from the app
+    for (db, params) in [
+        (&user, json!({ "decoys": "generate" })),
+        (&user, json!({ "decoys": "ignore" })),
+        (&dir.write("targets.fasta", ">P1\nMK\n>P2\nAK\n"), json!({})),
+    ] {
+        with_contaminants(
+            db,
+            &crap,
+            &dest,
+            &DecoyRules::of(params.as_object().unwrap()),
+        )
+        .unwrap();
+        let text = fs::read_to_string(&dest).unwrap();
+        assert!(
+            headers(&text)
+                .iter()
+                .all(|h| !h.contains("rev_CON") && !h.contains("REVERSED")),
+            "{params}: {text}"
+        );
+    }
+}
+
+#[test]
+fn a_database_without_proteins_is_refused_with_contaminants() {
+    let dir = TempDir::new("crap-empty");
+    let dest = dir.path().join("database.fasta");
+    for (name, contents) in [
+        ("empty.fasta", ""),
+        ("blank.fasta", "\n\n  \n"),
+        ("nohdr.fasta", "MKWVTFISLLK\n"),
+    ] {
+        let user = dir.write(name, contents);
+        let err =
+            with_contaminants(&user, &bundled_crap(), &dest, &DecoyRules::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData, "{name}");
+        assert!(err.to_string().contains("has no proteins"), "{name}: {err}");
+        assert!(!dest.exists(), "{name}: no half-written copy is left");
+    }
+    // a byte order mark before the first header is no problem
+    let bom = dir.write("bom.fasta", "\u{feff}>P1\nMK\n");
+    with_contaminants(&bom, &bundled_crap(), &dest, &DecoyRules::default()).unwrap();
+    // through start_search: refused, and nothing is left
+    let run = Run::new();
+    let i = inputs();
+    let empty = i.dir.write("data/empty.fasta", "");
+    let (id, _rx) = run.start(
+        request(&[&i.mzml], &empty, true, json!({})),
+        Some(&bundled_crap()),
+    );
+    let err = id.unwrap_err();
+    assert!(
+        err.contains("has no proteins") && err.contains("empty.fasta"),
+        "{err}"
+    );
+    assert!(run.listing().is_empty(), "{:?}", run.listing());
 }
 
 #[test]
@@ -505,9 +747,9 @@ fn on_windows_inputs_go_by_their_own_paths_unless_their_names_clash() {
     let plan = |files: &[&Path]| {
         let req = request(files, &fasta, false, json!({}));
         let args = build_args_with(&req, &out, windows).unwrap();
-        let records = input_records_with(&req, windows);
+        let records = input_records_with(&req, windows, &out);
         (
-            input_placements(&req, windows),
+            input_placements(&req, windows, &out),
             values_of(&args, "-in"),
             records
                 .iter()
@@ -570,7 +812,7 @@ fn on_windows_inputs_go_by_their_own_paths_unless_their_names_clash() {
     // elsewhere every input is a symbolic link
     let req = request(&[&a, &b], &fasta, false, json!({}));
     assert_eq!(
-        input_placements(&req, InputLinks::Symlinks),
+        input_placements(&req, InputLinks::Symlinks, &out),
         [Symlink, Symlink]
     );
     assert_eq!(
@@ -609,6 +851,52 @@ fn link_names_keep_the_name_and_the_gz_suffix() {
     assert_eq!(input_stem("1__x.mzML"), "1__x");
     assert_eq!(input_stem("10__x.mzML.gz"), "10__x");
     assert_eq!(input_stem("2__a.b.MZML.GZ"), "2__a.b");
+}
+
+#[test]
+fn link_names_of_long_file_names_are_shortened_to_a_unique_stem_with_the_suffix() {
+    // 255 bytes: the longest name a file can have, and `1__` makes the link too long for the file system
+    let long = format!("{}.mzML", "x".repeat(250));
+    let link = link_name(0, &format!("/data/{long}"));
+    assert!(
+        link.starts_with("1__xxx") && link.ends_with(".mzML"),
+        "{link}"
+    );
+    assert_eq!(input_stem(&link).len(), MAX_STEM, "{link}");
+    // ProSE's longest output name fits
+    assert!(
+        format!(
+            "{}_ModificationAnalysis_DeltaMassStats.tsv",
+            input_stem(&link)
+        )
+        .len()
+            <= 255
+    );
+    assert!(is_input_link(&link));
+    // `<n>__` keeps two such inputs apart, and the suffix stays as it is
+    let gz = link_name(11, &format!("/data/{}.MZML.GZ", "x".repeat(246)));
+    assert!(
+        gz.starts_with("12__xxx") && gz.ends_with(".MZML.GZ"),
+        "{gz}"
+    );
+    assert_ne!(
+        input_stem(&link),
+        input_stem(&link_name(1, &format!("/data/{long}")))
+    );
+    // shortened at a character, never inside one
+    let umlauts = link_name(0, &format!("/data/{}.mzML", "ä".repeat(125)));
+    assert!(
+        input_stem(&umlauts).len() <= MAX_STEM && umlauts.ends_with(".mzML"),
+        "{umlauts}"
+    );
+    assert!(umlauts
+        .trim_start_matches("1__")
+        .trim_end_matches(".mzML")
+        .chars()
+        .all(|c| c == 'ä'));
+    // a name that fits stays as it is
+    let fits = format!("{}.mzML", "y".repeat(MAX_STEM - 3));
+    assert_eq!(link_name(0, &format!("/data/{fits}")), format!("1__{fits}"));
 }
 
 /// Names whose lower-cased form has another length in bytes: `İ` (2 bytes, lower case 3), `Ⱥ` (2 -> 3),
@@ -651,12 +939,13 @@ fn input_stems_of_names_whose_lower_case_has_another_length() {
         false,
         json!({}),
     );
-    let stems: Vec<String> = input_records_with(&req, InputLinks::Symlinks)
+    let folder = Path::new("/s/1-0.partial");
+    let stems: Vec<String> = input_records_with(&req, InputLinks::Symlinks, folder)
         .into_iter()
         .map(|r| r.stem)
         .collect();
     assert_eq!(stems, ["1__İstanbul_run", "2__Ⱥ", "3__ẞ"]);
-    let own: Vec<String> = input_records_with(&req, InputLinks::PathsOrHardLinks)
+    let own: Vec<String> = input_records_with(&req, InputLinks::PathsOrHardLinks, folder)
         .into_iter()
         .map(|r| r.stem)
         .collect();
@@ -712,19 +1001,23 @@ fn progress_lines_become_events_with_file_and_fraction() {
             "Adding PeptDeep rescoring features...",
             "Mapping peptides to proteins...",
             "Rescoring with Percolator...",
+            // (a ProSE without -qpx_extended: the views' lines are not there)
+            "Preparing the spectrum view (file 1 of 2)...",
             "Pooling the files...",
             "Writing the results...",
         ]
     );
     let files: Vec<i32> = steps.iter().map(|s| s.1).collect();
-    assert_eq!(files, [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, -1, -1]);
+    assert_eq!(files, [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, -1, -1, -1]);
     assert_eq!(steps[0].2, 0.0, "the first file starts at 0");
-    // the second file's step starts where the first one's share ends: half of the 95 % for the files
-    assert!((steps[6].2 - 0.475).abs() < 1e-9, "{:?}", steps[6]);
+    // the second file's step starts where the first one's share ends: half of the 35 % for the files' search
+    assert!((steps[6].2 - 0.175).abs() < 1e-9, "{:?}", steps[6]);
+    // the spectrum views follow the files' search, not 95 %
+    assert!((steps[10].2 - 0.35).abs() < 1e-9, "{:?}", steps[10]);
     assert!(
-        (steps[10].2 - 0.95).abs() < 1e-9,
+        (steps[11].2 - 0.95).abs() < 1e-9,
         "pooling holds at 95 %: {:?}",
-        steps[10]
+        steps[11]
     );
     assert_monotone(&steps);
 }
@@ -773,9 +1066,10 @@ fn progress_of_several_open_files_pools_after_the_last_modification_analysis() {
     let steps = steps_of("prose-open-two-files.stdout.txt", &["a.mzML", "b.mzML"]);
     let l = labels(&steps);
     assert_eq!(
-        &l[l.len() - 3..],
+        &l[l.len() - 4..],
         [
             "Analysing modifications...",
+            "Preparing the spectrum view (file 1 of 2)...",
             "Pooling the files...",
             "Writing the results..."
         ]
@@ -819,6 +1113,7 @@ fn a_chunked_search_of_two_files_reports_its_chunks_and_each_files_rescoring() {
             "Adding PeptDeep rescoring features...",
             "Mapping peptides to proteins...",
             "Rescoring with Percolator...",
+            // (no end marker of the last file in a closed chunked search, and this ProSE had no -qpx_extended)
             "Pooling the files...",
             "Writing the results...",
         ]
@@ -834,16 +1129,16 @@ fn a_chunked_search_of_two_files_reports_its_chunks_and_each_files_rescoring() {
         "reading and chunks are outside the files"
     );
     assert_eq!(files[18..], [0, 0, 0, 1, 1, 1, -1, -1]);
-    // the chunks take the first half of the bar, in 17 equal steps
+    // the chunks take the first half of the files' 35 % of the bar, in 17 equal steps
     assert_eq!(steps[1].2, 0.0);
     assert!(
-        (steps[17].2 - 16.0 / 17.0 * 0.5).abs() < 1e-9,
+        (steps[17].2 - 16.0 / 17.0 * 0.5 * 0.35).abs() < 1e-9,
         "{:?}",
         steps[17]
     );
     // the files' rescoring follows, file 1 after file 0
     assert!(
-        steps[18].2 >= 0.5 && steps[23].2 > steps[20].2 && steps[23].2 < 0.95,
+        steps[18].2 >= 0.175 && steps[23].2 > steps[20].2 && steps[23].2 < 0.35,
         "{steps:?}"
     );
     assert!((steps[24].2 - 0.95).abs() < 1e-9 && (steps[25].2 - 0.97).abs() < 1e-9);
@@ -893,13 +1188,14 @@ fn a_chunked_open_search_pools_after_the_aggregate_modification_analysis() {
             "Rescoring with Percolator...",
             "Mapping peptides to proteins...",
             "Rescoring with Percolator...",
+            "Preparing the spectrum view (file 1 of 2)...",
             "Pooling the files...",
             "Writing the results...",
         ]
     );
     assert_eq!(
-        steps[5..11].iter().map(|s| s.1).collect::<Vec<_>>(),
-        [0, 0, 1, 1, -1, -1]
+        steps[5..12].iter().map(|s| s.1).collect::<Vec<_>>(),
+        [0, 0, 1, 1, -1, -1, -1]
     );
     assert_monotone(&steps);
 }
@@ -1445,6 +1741,144 @@ fn gz_inputs_keep_their_suffix_in_the_link() {
     assert_eq!(mapping[0]["name"], "x.mzML.gz");
 }
 
+#[test]
+fn an_input_of_a_255_byte_name_is_searched_and_maps_back_to_its_file() {
+    let run = Run::new();
+    let i = inputs();
+    let name = format!("{}.mzML", "n".repeat(250));
+    let long = i.dir.write(&format!("long/{name}"), "<mzML/>");
+    let (id, rx) = run.start(request(&[&long], &i.fasta, false, json!({})), None);
+    let id = id.unwrap();
+    let folder = done_folder(&until_terminal(&rx, WAIT));
+    let mapping: Value =
+        serde_json::from_str(&fs::read_to_string(folder.join("inputs.json")).unwrap()).unwrap();
+    let link = mapping[0]["link"].as_str().unwrap().to_string();
+    let stem = mapping[0]["stem"].as_str().unwrap().to_string();
+    assert_eq!(mapping[0]["name"], name.as_str());
+    assert_eq!(mapping[0]["path"], long.to_str().unwrap());
+    assert_eq!(stem, input_stem(&link));
+    // the stem as long as the folder allows: MAX_STEM, on Windows less (MAX_PATH)
+    let partial = run.dir().join(format!("{id}.partial"));
+    let max = max_stem(InputLinks::PLATFORM, &partial);
+    assert!(max <= MAX_STEM && max > 20, "{max}");
+    assert!(link.len() <= 255 && stem.len() == max, "{link}");
+    assert!(
+        link.starts_with("1__nnn") && link.ends_with(".mzML"),
+        "{link}"
+    );
+    if cfg!(windows) {
+        // a hard link (the name is too long for ProSE's outputs), which the finished search drops
+        assert!(!folder.join(&link).exists(), "{link} is gone");
+    } else {
+        assert!(fs::symlink_metadata(folder.join(&link))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
+    // the reader finds the input's outputs by the stem inputs.json records
+    assert!(folder
+        .join(format!("qpx/runs/{stem}.psm.parquet"))
+        .is_file());
+    // Windows: such an input goes as a (shortened) link, not by its own path
+    let req = request(&[&long, &i.mzml], &i.fasta, false, json!({}));
+    let windows =
+        Path::new(r"C:\Users\u\AppData\Roaming\org.openms.prose.desktop\searches\1-0.partial");
+    assert_eq!(
+        input_placements(&req, InputLinks::PathsOrHardLinks, windows),
+        vec![Placement::HardLink, Placement::OwnPath]
+    );
+    let records = input_records_with(&req, InputLinks::PathsOrHardLinks, windows);
+    assert_eq!(
+        records[0].stem.len(),
+        max_stem(InputLinks::PathsOrHardLinks, windows)
+    );
+    assert!(records[0].link.starts_with("1__nnn") && records[0].link.ends_with(".mzML"));
+    assert_eq!(records[1].link, "a.mzML");
+}
+
+/// Windows' MAX_PATH (259 characters): the stems of the links are as short as the search folder's path needs,
+/// so that ProSE's longest output (`mods\<stem>_ModificationAnalysis_DeltaMassStats.tsv`) and every link stay
+/// within it; a name that fits MAX_STEM but not the folder goes as a shortened link too; a folder of too long a
+/// path is refused before anything is made.
+#[test]
+fn on_windows_the_search_folders_paths_stay_within_max_path() {
+    let windows = InputLinks::PathsOrHardLinks;
+    let dir = TempDir::new("maxpath");
+    let fasta = dir.write("db.fasta", ">a\nMK\n");
+    // a name of 150 bytes: within MAX_STEM, too long under a folder of 100 characters
+    let name = format!("{}.mzML", "m".repeat(145));
+    let long = dir.write(&format!("in/{name}"), "<mzML/>");
+    let short = dir.write("in/b.mzML", "<mzML/>");
+    let twin = dir.write("other/b.mzML", "<mzML/>");
+    let req = request(&[&long, &short, &twin], &fasta, false, json!({}));
+    let folder = format!(
+        r"C:\{}\searches\1792841343610-0.partial",
+        "d".repeat(100 - 36)
+    );
+    let folder = Path::new(&folder);
+    assert_eq!(folder.as_os_str().len(), 100);
+    let max = max_stem(windows, folder);
+    assert_eq!(
+        max,
+        259 - 100 - r"\mods\".len() - "_ModificationAnalysis_DeltaMassStats.tsv".len()
+    );
+    // elsewhere only the file name limit counts
+    assert_eq!(max_stem(InputLinks::Symlinks, folder), MAX_STEM);
+    let records = input_records_with(&req, windows, folder);
+    assert_eq!(
+        input_placements(&req, windows, folder),
+        [
+            Placement::HardLink,
+            Placement::HardLink,
+            Placement::HardLink
+        ]
+    );
+    let links: Vec<&str> = records.iter().map(|r| r.link.as_str()).collect();
+    assert_eq!(links[1..], ["2__b.mzML", "3__b.mzML"]);
+    assert_eq!(records[0].stem.len(), max);
+    assert!(links[0].starts_with("1__mmm") && links[0].ends_with(".mzML"));
+    assert_eq!(records[0].name, name);
+    for r in &records {
+        let longest = format!(
+            r"{}\mods\{}_ModificationAnalysis_DeltaMassStats.tsv",
+            folder.display(),
+            r.stem
+        );
+        let link = format!(r"{}\{}", folder.display(), r.link);
+        assert!(
+            longest.encode_utf16().count() <= 259 && link.encode_utf16().count() <= 259,
+            "{longest}"
+        );
+    }
+    let args = build_args_with(&req, folder, windows).unwrap();
+    assert_eq!(
+        values_of(&args, "-in")[0],
+        folder.join(&records[0].link).into_os_string()
+    );
+    // a multi-byte name: the stem's bytes bound its UTF-16 units
+    let umlauts = dir.write(&format!("in/{}.mzML", "ä".repeat(100)), "<mzML/>");
+    let req = request(&[&umlauts], &fasta, false, json!({}));
+    let r = &input_records_with(&req, windows, folder)[0];
+    assert!(
+        r.stem.len() <= max && r.link.ends_with(".mzML"),
+        "{}",
+        r.link
+    );
+    // a name that fits stays the user's own path
+    let req = request(&[&short], &fasta, false, json!({}));
+    assert_eq!(
+        input_placements(&req, windows, folder),
+        [Placement::OwnPath]
+    );
+    // a folder that leaves no room for ProSE's outputs is refused
+    let deep = format!(r"C:\{}\1-0.partial", "d".repeat(220));
+    let err = build_args_with(&req, Path::new(&deep), windows).unwrap_err();
+    assert!(
+        err.contains("too long a path") && err.contains("259"),
+        "{err}"
+    );
+}
+
 /// Windows' way (`InputLinks::PathsOrHardLinks`), run on every platform: inputs of different names go to
 /// the tool by their own paths, and nothing of them is in the search folder.
 #[test]
@@ -1464,7 +1898,8 @@ fn inputs_of_different_names_go_to_the_tool_by_their_own_paths() {
         "{argv}"
     );
     assert!(
-        folder.join("qpx/runs/a.psm.parquet").is_file() && folder.join("qpx/runs/b.psm.parquet").is_file()
+        folder.join("qpx/runs/a.psm.parquet").is_file()
+            && folder.join("qpx/runs/b.psm.parquet").is_file()
     );
     let mapping: Value =
         serde_json::from_str(&fs::read_to_string(folder.join("inputs.json")).unwrap()).unwrap();
@@ -1579,6 +2014,86 @@ fn inputs_of_one_name_on_another_volume_are_refused() {
             && !err.contains("Two inputs"),
         "{err}"
     );
+    // a lone input whose name is too long for ProSE's outputs in the search folder: its own reason too
+    let long = elsewhere.join(format!("{}.mzML", "l".repeat(240)));
+    fs::create_dir_all(&elsewhere).unwrap();
+    fs::write(&long, "<mzML/>").unwrap();
+    let (result, _rx) = run.start(request(&[&long], &i.fasta, false, json!({})), None);
+    let err = result.unwrap_err();
+    let _ = fs::remove_dir_all(&elsewhere);
+    assert!(
+        err.contains("is too long for ProSE's result files")
+            && err.contains("Rename the file to a shorter name")
+            && !err.contains("Two inputs"),
+        "{err}"
+    );
+}
+
+/// ProSE's lines of a full disk: the first one is the message, with the outputs named as in the search folder
+/// (which is gone) and after the user's file.
+#[test]
+fn a_failure_names_the_cause_and_the_outputs_without_the_search_folder() {
+    let run = Run::new();
+    let i = inputs();
+    let full = i.dir.write("in/diskfull.mzML", "<mzML/>");
+    let (id, rx) = run.start(request(&[&full], &i.fasta, false, json!({})), None);
+    id.unwrap();
+    let events = until_terminal(&rx, WAIT);
+    let Some(SearchEvent::Failed(f)) = events.last() else {
+        panic!("{events:?}")
+    };
+    assert_eq!(
+        f.message,
+        "Failed to write qpx/runs/diskfull.psm.parquet: IOError: Error writing bytes to file. Detail: [errno 28] No \
+         space left on device"
+    );
+    assert_eq!(f.ended.as_deref(), Some("ProSE ended with exit code 12"));
+    let detail = f.detail.as_deref().unwrap();
+    assert!(
+        detail.ends_with("ProSE finished with 1 file(s) failing out of 1.")
+            && !detail.contains(".partial"),
+        "{detail}"
+    );
+}
+
+#[test]
+fn humanize_gives_the_users_names_and_drops_the_search_folder() {
+    let dir = Path::new("/s/1-0.partial");
+    let req = request(
+        &[Path::new("/data/a.mzML"), Path::new("/other/a.mzML")],
+        Path::new("/data/db.fasta"),
+        false,
+        json!({}),
+    );
+    let records = input_records_with(&req, InputLinks::Symlinks, dir);
+    assert_eq!(
+        humanize(
+            "Reading /s/1-0.partial/2__a.mzML; writing /s/1-0.partial/qpx/runs/2__a.pg.parquet: row 3 reuses run '1__a'; \
+             1__a.mzML; 11__a stays",
+            dir,
+            &records
+        ),
+        "Reading /other/a.mzML; writing qpx/runs/a.pg.parquet: row 3 reuses run 'a'; a.mzML; 11__a stays"
+    );
+    // a Windows search folder, as ProSE may write it: with '\\', with '/' (a path it put together), mixed, and
+    // the drive letter in the other case
+    let dir = Path::new(r"C:\Users\u\AppData\Roaming\prose\searches\1-0.partial");
+    let req = request(
+        // (the inputs with '/', which is a separator on every platform)
+        &[Path::new("D:/data/a.mzML"), Path::new("D:/other/a.mzML")],
+        Path::new("D:/data/db.fasta"),
+        false,
+        json!({}),
+    );
+    let records = input_records_with(&req, InputLinks::PathsOrHardLinks, dir);
+    assert_eq!(
+        humanize(
+            r"Reading C:\Users\u\AppData\Roaming\prose\searches\1-0.partial\2__a.mzML; Reading c:/Users/u/AppData/Roaming/prose/searches/1-0.partial/1__a.mzML; writing C:\Users\u\AppData\Roaming\prose\searches\1-0.partial\qpx/runs/2__a.pg.parquet and C:/Users/u/AppData/Roaming/prose/searches/1-0.partial/merged.idXML",
+            dir,
+            &records
+        ),
+        "Reading D:/other/a.mzML; Reading D:/data/a.mzML; writing qpx/runs/a.pg.parquet and merged.idXML"
+    );
 }
 
 #[test]
@@ -1653,12 +2168,13 @@ fn a_crash_by_a_signal_says_so_and_keeps_the_log_of_the_last_failure() {
         "ProSE crashed (signal 11, SIGSEGV)"
     };
     assert_eq!(f.ended.as_deref(), Some(expected));
+    // the last line of a crashed tool says nothing about the crash (Percolator's "Split 3:" after a SIGKILL):
+    // it is in the details only
+    assert_eq!(f.message, "", "no message of its own");
     assert_eq!(
-        f.message,
-        format!("Reading {} ...", segv.display()),
-        "the last line"
+        f.detail.as_deref(),
+        Some(format!("Reading {} ...", segv.display()).as_str())
     );
-    assert_eq!(f.detail.as_deref(), Some(f.message.as_str()));
     let text = fs::read_to_string(f.log.as_deref().unwrap()).unwrap();
     assert!(text.contains("segv.mzML"), "{text}");
     assert!(!text.contains("crash.mzML"), "the last failure's: {text}");

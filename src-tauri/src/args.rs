@@ -9,12 +9,13 @@
 //! it has in ProSE, so that nothing from the front end can become another option of the tool
 //! (`-in`, `-ini`, an output of its own choosing).
 
+use crate::decoys::{decoy_sequence, DecoyRules, DecoyStatistics};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::ffi::OsString;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// One input file: the front end's id for it and its path.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,6 +179,10 @@ pub const SINGLE_IDXML: &str = "search.idXML";
 /// leaves a search without q-values, which the results need.
 pub const DEFAULT_PSM_FDR: f64 = 0.01;
 
+/// The most threads a search may ask for (`-threads`): far beyond any computer the app runs on, but a typo of
+/// a few more digits is refused here, before ProSE starts that many OpenMP threads (or refuses the number).
+pub const MAX_THREADS: u32 = 1024;
+
 /// Where `suffix` (ASCII, with the dot) begins at the end of `name`, compared ignoring ASCII case as
 /// OpenMS compares extensions (`FileNameUtils`); None if `name` does not end with it. The original's own
 /// bytes are compared: a lower-cased copy can be longer or shorter (`İ`, `Ⱥ`, `ẞ`, the Kelvin sign), and
@@ -207,11 +212,70 @@ fn file_name(path: &str) -> String {
         .unwrap_or_default()
 }
 
+/// The longest stem (bytes) an input may have where ProSE names outputs after it. Its longest output name is
+/// `<stem>_ModificationAnalysis_DeltaMassStats.tsv` (open search), and a file name has at most 255 bytes (Linux,
+/// macOS; NTFS 255 UTF-16 units, which are never more than the bytes).
+pub const MAX_STEM: usize = 255 - LONGEST_OUTPUT_SUFFIX.len();
+
+/// The end of ProSE's longest output name after an input's stem (open search, in `mods/`).
+const LONGEST_OUTPUT_SUFFIX: &str = "_ModificationAnalysis_DeltaMassStats.tsv";
+/// The folder of that output in the search folder, with the separators around it (`mods\`, `qpx\runs\` is
+/// shorter with its `.psm.parquet`).
+const LONGEST_OUTPUT_FOLDER: &str = "\\mods\\";
+/// Windows' MAX_PATH: a path has at most 259 UTF-16 units (260 with its terminating null), unless the
+/// program opts into long paths, which ProSE (OpenMS, Arrow) is not known to do.
+const WINDOWS_MAX_PATH: usize = 259;
+
+/// The longest stem (bytes) an input may have in the search folder `folder` (its `.partial` path), for links
+/// `links`: [`MAX_STEM`]; on Windows ([`InputLinks::PathsOrHardLinks`]) also short enough that the path of
+/// ProSE's longest output in the folder (`<folder>\mods\<stem>_ModificationAnalysis_DeltaMassStats.tsv`) and of
+/// every link (`<folder>\<n>__<stem>.mzML.gz`, shorter) stays within MAX_PATH. A stem's UTF-16 units are never
+/// more than its bytes, so the bytes bound it. 0 if not even the fixed part of that path fits.
+pub fn max_stem(links: InputLinks, folder: &Path) -> usize {
+    match links {
+        InputLinks::Symlinks => MAX_STEM,
+        InputLinks::PathsOrHardLinks => {
+            let fixed = folder.as_os_str().to_string_lossy().encode_utf16().count()
+                + LONGEST_OUTPUT_FOLDER.len()
+                + LONGEST_OUTPUT_SUFFIX.len();
+            WINDOWS_MAX_PATH.saturating_sub(fixed).min(MAX_STEM)
+        }
+    }
+}
+
+/// The shortest stem limit that still gives the `count` inputs link names of their own (`<n>__` and a character
+/// of the name).
+fn shortest_stem(count: usize) -> usize {
+    format!("{count}__").len() + 1
+}
+
 /// The name of input `index` (0-based) in the search folder: `<n>__<name>` with `n` from 1. ProSE names
 /// its per-input outputs after the input and refuses two inputs of one name, so an input goes in as
-/// a link with a name of its own (see [`InputLinks`]); the suffix (`.mzML.gz`) stays as it is.
+/// a link with a name of its own (see [`InputLinks`]); the suffix (`.mzML.gz`) stays as it is. A name
+/// whose stem would be longer than [`MAX_STEM`] is shortened (at a character) to that length: `<n>__`
+/// keeps the stems unique, `inputs.json` maps the link back to the user's file ([`InputRecord`]).
 pub fn link_name(index: usize, path: &str) -> String {
-    format!("{}__{}", index + 1, file_name(path))
+    link_name_within(index, path, MAX_STEM)
+}
+
+/// As [`link_name`], the stem at most `max_stem` bytes ([`max_stem`]).
+pub fn link_name_within(index: usize, path: &str, max_stem: usize) -> String {
+    let link = format!("{}__{}", index + 1, file_name(path));
+    let stem = input_stem(&link).len();
+    if stem <= max_stem {
+        return link;
+    }
+    let mut end = max_stem;
+    while !link.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}{}", &link[..end], &link[stem..])
+}
+
+/// Whether ProSE's outputs of an input of this name would have names (or, on Windows, paths) too long for the
+/// file system, with stems of at most `max_stem` bytes.
+pub fn stem_too_long(name: &str, max_stem: usize) -> bool {
+    input_stem(name).len() > max_stem
 }
 
 /// Whether `name`, a name in the top level of a search folder, is one of the links to the inputs
@@ -272,8 +336,9 @@ fn all_unique(names: impl IntoIterator<Item = String>) -> bool {
     names.into_iter().all(|n| seen.insert(stem_key(&n)))
 }
 
-/// How each input of `req` reaches ProSE (in order).
-pub fn input_placements(req: &SearchRequest, links: InputLinks) -> Vec<Placement> {
+/// How each input of `req` reaches ProSE (in order), in the search folder `folder`.
+pub fn input_placements(req: &SearchRequest, links: InputLinks, folder: &Path) -> Vec<Placement> {
+    let max = max_stem(links, folder);
     match links {
         InputLinks::Symlinks => vec![Placement::Symlink; req.files.len()],
         InputLinks::PathsOrHardLinks => {
@@ -284,10 +349,15 @@ pub fn input_placements(req: &SearchRequest, links: InputLinks) -> Vec<Placement
                 .collect();
             let placements: Vec<Placement> = keys
                 .iter()
-                .map(|k| {
+                .zip(&req.files)
+                .map(|(k, f)| {
                     // ProSE refuses an input of stem `quantms` (its QPX outputs would clash with the merged
-                    // `quantms.*` views): such an input goes as a link `<n>__<name>` too
-                    if keys.iter().filter(|other| *other == k).count() > 1 || k == RESERVED_STEM {
+                    // `quantms.*` views): such an input goes as a link `<n>__<name>` too, as does one whose
+                    // name is too long for ProSE's outputs (the link's is shortened)
+                    if keys.iter().filter(|other| *other == k).count() > 1
+                        || k == RESERVED_STEM
+                        || stem_too_long(&file_name(&f.path), max)
+                    {
                         Placement::HardLink
                     } else {
                         Placement::OwnPath
@@ -300,7 +370,7 @@ pub fn input_placements(req: &SearchRequest, links: InputLinks) -> Vec<Placement
                 .iter()
                 .enumerate()
                 .zip(&placements)
-                .map(|((i, f), p)| seen_name(i, &f.path, *p));
+                .map(|((i, f), p)| seen_name(i, &f.path, *p, max));
             if all_unique(names) {
                 placements
             } else {
@@ -310,11 +380,11 @@ pub fn input_placements(req: &SearchRequest, links: InputLinks) -> Vec<Placement
     }
 }
 
-/// The name ProSE sees for input `index`: the link's, or the file's own.
-fn seen_name(index: usize, path: &str, placement: Placement) -> String {
+/// The name ProSE sees for input `index`: the link's (its stem at most `max_stem` bytes), or the file's own.
+fn seen_name(index: usize, path: &str, placement: Placement, max_stem: usize) -> String {
     match placement {
         Placement::OwnPath => file_name(path),
-        Placement::Symlink | Placement::HardLink => link_name(index, path),
+        Placement::Symlink | Placement::HardLink => link_name_within(index, path, max_stem),
     }
 }
 
@@ -387,12 +457,20 @@ fn parameter_args(name: &str, kind: Kind, value: &Value) -> Result<Vec<OsString>
     Ok(match kind {
         Int => {
             let f = number(name, value)?;
-            if f.fract() != 0.0 || f.abs() > 9.0e15 {
+            if f.fract() != 0.0 {
                 return Err(format!(
                     "The value of {name} must be a whole number, not {value}."
                 ));
             }
-            one(format!("{}", f as i64))
+            // ProSE's integers are 32-bit: a larger one makes it print its whole help and stop
+            if f < f64::from(i32::MIN) || f > f64::from(i32::MAX) {
+                return Err(format!(
+                    "The value of {name} is outside the range ProSE accepts: {value} (whole numbers from {} to {}).",
+                    i32::MIN,
+                    i32::MAX
+                ));
+            }
+            one(format!("{}", f as i32))
         }
         Float => one(format!("{}", number(name, value)?)),
         Choice => match value {
@@ -483,13 +561,19 @@ pub fn build_args_with(
     let mut params = req.settings.parameters.clone();
     let mut threads = req.settings.threads;
     let mut parameter_args_list: Vec<OsString> = Vec::new();
+    // ProSE ignores co-isolated precursors with database chunks (with a warning): the front end leaves the
+    // switch out then, and so does the shim, so that the record of the search does not claim them
+    let chunked = params
+        .get("database:chunk_size")
+        .and_then(Value::as_f64)
+        .is_some_and(|n| n > 0.0);
     // validate every parameter before using any of them, in the order the front end gave
     for (name, value) in &params {
         if name == "threads" {
             let n = number(name, value)?;
-            if n < 0.0 || n.fract() != 0.0 || n > f64::from(u32::MAX) {
+            if n < 0.0 || n.fract() != 0.0 || n > f64::from(MAX_THREADS) {
                 return Err(format!(
-                    "The value of threads must be a whole number of at least 0, not {value}."
+                    "The value of threads must be a whole number from 0 (all cores) to {MAX_THREADS}, not {value}."
                 ));
             }
             threads = n as u32;
@@ -500,7 +584,16 @@ pub fn build_args_with(
                 "The parameter {name} is not one of ProSE's search parameters the app sets."
             ));
         };
-        parameter_args_list.extend(parameter_args(name, *kind, value)?);
+        let args = parameter_args(name, *kind, value)?;
+        if chunked && name == "chimeric:enabled" {
+            continue;
+        }
+        parameter_args_list.extend(args);
+    }
+    if threads > MAX_THREADS {
+        return Err(format!(
+            "The value of threads must be a whole number from 0 (all cores) to {MAX_THREADS}, not {threads}."
+        ));
     }
     match params.get("FDR:PSM") {
         Some(v) => {
@@ -520,17 +613,27 @@ pub fn build_args_with(
         }
     }
 
+    // (Windows) a search folder whose path leaves no room for ProSE's outputs within MAX_PATH
+    let max = max_stem(links, out_dir);
+    if max < shortest_stem(req.files.len()) {
+        return Err(format!(
+            "The app's data folder ({}) has too long a path: Windows limits a path to {WINDOWS_MAX_PATH} \
+             characters, and ProSE's result files in it would be longer. Move the app's data to a folder of a \
+             shorter path.",
+            out_dir.parent().unwrap_or(out_dir).display()
+        ));
+    }
     let mut args: Vec<OsString> = vec!["-in".into()];
     args.extend(
         req.files
             .iter()
-            .zip(input_placements(req, links))
+            .zip(input_placements(req, links, out_dir))
             .enumerate()
             .map(|(i, (f, placement))| match placement {
                 Placement::OwnPath => OsString::from(&f.path),
-                Placement::Symlink | Placement::HardLink => {
-                    out_dir.join(link_name(i, &f.path)).into_os_string()
-                }
+                Placement::Symlink | Placement::HardLink => out_dir
+                    .join(link_name_within(i, &f.path, max))
+                    .into_os_string(),
             }),
     );
     args.push("-database".into());
@@ -570,34 +673,155 @@ pub fn build_args_with(
     Ok(args)
 }
 
+/// The accession of a FASTA header line (`>` and the text up to the first white space, as OpenMS' FASTAFile
+/// reads it); None if the line is no header. A byte order mark before the first header is skipped.
+fn fasta_accession(line: &str) -> Option<&str> {
+    let header = line.trim_start_matches('\u{feff}').strip_prefix('>')?;
+    let header = header.trim_start();
+    Some(header.split(char::is_whitespace).next().unwrap_or(""))
+}
+
+/// The contaminant prefix of the app's cRAP accessions.
+const CONTAMINANT_PREFIX: &str = "CON__";
+
+/// One entry of the cRAP FASTA, as the app appends it.
+struct CrapEntry {
+    /// with [`CONTAMINANT_PREFIX`]
+    accession: String,
+    /// the header after the accession (the description, with the white space before it)
+    rest: String,
+    /// its sequence lines, with their line ends
+    lines: Vec<String>,
+}
+
+fn crap_entries(text: &str) -> Vec<CrapEntry> {
+    let mut entries: Vec<CrapEntry> = Vec::new();
+    for line in text.split_inclusive('\n') {
+        match fasta_accession(line) {
+            Some(accession) => {
+                let at = line.find(accession).unwrap_or(1) + accession.len();
+                let rest = line[at..].trim_end_matches(['\n', '\r']).to_string();
+                let accession = if accession.starts_with(CONTAMINANT_PREFIX) {
+                    accession.to_string()
+                } else {
+                    format!("{CONTAMINANT_PREFIX}{accession}")
+                };
+                entries.push(CrapEntry {
+                    accession,
+                    rest,
+                    lines: Vec::new(),
+                });
+            }
+            None => {
+                if let Some(entry) = entries.last_mut() {
+                    entry.lines.push(line.to_string());
+                }
+            }
+        }
+    }
+    entries
+}
+
 /// Writes `dest`: the user's FASTA, then the entries of `crap` with `CON__` before their accession
 /// (unless it is there already), as the web app's `withContaminants` does. A newline is added after
-/// the user's last line if it has none. Not deduplicated against the user's entries. The user's file
-/// is only read.
-pub fn with_contaminants(user: &Path, crap: &Path, dest: &Path) -> io::Result<()> {
-    use io::Write;
-    let crap_text = fs::read_to_string(crap)?;
+/// the user's last line if it has none. The user's file is only read.
+///
+/// - A cRAP entry whose accession (with `CON__`) the user's FASTA has already (the `database.fasta` of an
+///   earlier search, which holds them) is left out: ProSE would get the accession twice.
+/// - When the user's FASTA has decoys of its own, which ProSE then uses instead of generating any (`decoys`
+///   `auto`), each appended entry gets its decoy, with the database's marker, as ProSE would generate it
+///   ([`crate::decoys`]).
+/// - A FASTA without any entry is refused (`InvalidData`, with the message for the user): the search would
+///   search the contaminants alone.
+pub fn with_contaminants(
+    user: &Path,
+    crap: &Path,
+    dest: &Path,
+    rules: &DecoyRules,
+) -> io::Result<()> {
+    use io::{BufRead, Write};
+    // (InvalidData is the user's database's: not the bundled file's)
+    let crap = crap_entries(&fs::read_to_string(crap).map_err(io::Error::other)?);
+    let wanted: std::collections::HashMap<&str, usize> = crap
+        .iter()
+        .enumerate()
+        .map(|(k, e)| (e.accession.as_str(), k))
+        .collect();
+    let mut present = vec![false; crap.len()];
+    let mut stats = DecoyStatistics::default();
+    let mut entries = 0usize;
+
     let mut out = io::BufWriter::new(fs::File::create(dest)?);
-    let mut input = fs::File::open(user)?;
+    let mut input = io::BufReader::with_capacity(1 << 20, fs::File::open(user)?);
     let mut last = b'\n';
-    let mut buffer = vec![0u8; 1 << 20];
+    let mut line = Vec::new();
     loop {
-        let read = io::Read::read(&mut input, &mut buffer)?;
-        if read == 0 {
+        line.clear();
+        if input.read_until(b'\n', &mut line)? == 0 {
             break;
         }
-        out.write_all(&buffer[..read])?;
-        last = buffer[read - 1];
+        out.write_all(&line)?;
+        last = line[line.len() - 1];
+        if line.first() == Some(&b'>') || line.starts_with("\u{feff}>".as_bytes()) {
+            let text = String::from_utf8_lossy(&line);
+            if let Some(accession) = fasta_accession(&text) {
+                entries += 1;
+                stats.count(accession, &rules.decoy_prefix);
+                if let Some(&k) = wanted.get(accession) {
+                    present[k] = true;
+                }
+            }
+        }
+    }
+    if entries == 0 {
+        drop(out);
+        let _ = fs::remove_file(dest);
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "The database {} has no proteins (no line starting with \">\"), so the search would find \
+                 contaminants only.",
+                user.display()
+            ),
+        ));
     }
     if last != b'\n' {
         out.write_all(b"\n")?;
     }
-    for line in crap_text.split_inclusive('\n') {
-        if line.starts_with('>') && !line.starts_with(">CON__") {
-            out.write_all(b">CON__")?;
-            out.write_all(&line.as_bytes()[1..])?;
-        } else {
+    let appended: Vec<&CrapEntry> = crap
+        .iter()
+        .zip(&present)
+        .filter(|(_, there)| !**there)
+        .map(|(e, _)| e)
+        .collect();
+    for entry in &appended {
+        writeln!(out, ">{}{}", entry.accession, entry.rest)?;
+        for line in &entry.lines {
             out.write_all(line.as_bytes())?;
+        }
+    }
+    // ProSE reuses the database's decoys (decoys auto): the appended entries need theirs. The marker is the
+    // user's database's; ProSE detects it in the whole database the same way (the appended targets and their
+    // decoys only add to its share)
+    let marker = if rules.mode == "auto" {
+        stats.marker(&rules.decoy_prefix)
+    } else {
+        None
+    };
+    if let Some(marker) = marker {
+        for entry in &appended {
+            let sequence: String = entry
+                .lines
+                .iter()
+                .flat_map(|l| l.chars().filter(|c| !c.is_whitespace()))
+                .collect();
+            let decoy = decoy_sequence(&sequence, rules);
+            write!(
+                out,
+                ">{}{}\n{decoy}\n",
+                marker.decoy_of(&entry.accession),
+                entry.rest
+            )?;
         }
     }
     out.flush()
@@ -622,18 +846,20 @@ pub struct InputRecord {
     pub path: String,
 }
 
-pub fn input_records(req: &SearchRequest) -> Vec<InputRecord> {
-    input_records_with(req, InputLinks::PLATFORM)
-}
-
-pub fn input_records_with(req: &SearchRequest, links: InputLinks) -> Vec<InputRecord> {
-    let placements = input_placements(req, links);
+/// The records of `inputs.json` of the inputs of `req` in the search folder `folder` (its `.partial` path).
+pub fn input_records_with(
+    req: &SearchRequest,
+    links: InputLinks,
+    folder: &Path,
+) -> Vec<InputRecord> {
+    let max = max_stem(links, folder);
+    let placements = input_placements(req, links, folder);
     req.files
         .iter()
         .zip(placements)
         .enumerate()
         .map(|(index, (f, placement))| {
-            let link = seen_name(index, &f.path, placement);
+            let link = seen_name(index, &f.path, placement, max);
             InputRecord {
                 id: f.id.clone(),
                 index,
@@ -647,16 +873,68 @@ pub fn input_records_with(req: &SearchRequest, links: InputLinks) -> Vec<InputRe
 }
 
 /// `text` with the search folder's names for the inputs replaced by the user's: the path of a link by
-/// the user's path, the bare name of a link by the user's file name. Only whole names are replaced
-/// (`1__a.mzML` inside `11__a.mzML` stays).
+/// the user's path, the bare name of a link by the user's file name, the stem ProSE names an input's
+/// outputs after by the user's (`qpx/runs/1__a.psm.parquet` -> `qpx/runs/a.psm.parquet`). The path of an
+/// output in the search folder `dir` loses the folder (`<dir>/merged.idXML` -> `merged.idXML`): the folder
+/// of a search that failed is gone. Only whole names are replaced (`1__a.mzML` inside `11__a.mzML` stays).
+/// The folder is recognised in each way a tool may write it (Windows: `\\` or `/` after any part, the drive
+/// letter in either case), whatever the platform.
 pub fn humanize(text: &str, dir: &Path, records: &[InputRecord]) -> String {
     let mut text = text.to_string();
+    let folders = path_forms(&dir.to_string_lossy());
     for r in records {
-        let full: PathBuf = dir.join(&r.link);
-        text = replace_whole(&text, &full.to_string_lossy(), &r.path);
+        for folder in &folders {
+            for sep in ['/', '\\'] {
+                text = replace_whole(&text, &format!("{folder}{sep}{}", r.link), &r.path);
+            }
+        }
+    }
+    for folder in &folders {
+        for sep in ['/', '\\'] {
+            text = text.replace(&format!("{folder}{sep}"), "");
+        }
+    }
+    for r in records {
         text = replace_whole(&text, &r.link, &r.name);
+        if r.link != r.name {
+            text = replace_whole(&text, &r.stem, &input_stem(&r.name));
+        }
     }
     text
+}
+
+/// The ways a path can be written: as it is, with `/` or `\\` between all its parts, and with a drive letter
+/// (`C:`) in the other case too; without a trailing separator. None for an empty path.
+fn path_forms(path: &str) -> Vec<String> {
+    let path = path.trim_end_matches(['/', '\\']);
+    if path.is_empty() {
+        return Vec::new();
+    }
+    let mut forms = Vec::new();
+    for form in [
+        path.to_string(),
+        path.replace('\\', "/"),
+        path.replace('/', "\\"),
+    ] {
+        let mut chars = form.chars();
+        let other_drive = match (chars.next(), chars.next()) {
+            (Some(letter), Some(':')) if letter.is_ascii_alphabetic() => {
+                let flipped = if letter.is_ascii_uppercase() {
+                    letter.to_ascii_lowercase()
+                } else {
+                    letter.to_ascii_uppercase()
+                };
+                Some(format!("{flipped}{}", &form[1..]))
+            }
+            _ => None,
+        };
+        for f in std::iter::once(form).chain(other_drive) {
+            if !forms.contains(&f) {
+                forms.push(f);
+            }
+        }
+    }
+    forms
 }
 
 fn replace_whole(text: &str, from: &str, to: &str) -> String {

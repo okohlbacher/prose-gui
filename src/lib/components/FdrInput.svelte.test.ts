@@ -96,3 +96,45 @@ describe('an FDR field that cannot be off', () => {
     expect(box.value).toBe(0.01)
   })
 })
+
+describe('an invalid entry', () => {
+  it('never leaves the valid prefix typed on the way: "150" gives back the value before, not 15 %', () => {
+    const { box, input, type, blur } = show(0.01, false)
+    type('1')
+    type('15')
+    expect(box.value).toBe(0.15)
+    type('150')
+    expect(box.value).toBe(0.01)
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    blur()
+    expect(input.value).toBe('1')
+    expect(input.getAttribute('aria-invalid')).toBe('false')
+    // the next entry starts from the value as it is then
+    type('2')
+    type('2x')
+    expect(box.value).toBe(0.01)
+    type('5')
+    blur()
+    expect(box.value).toBe(0.05)
+  })
+
+  it('also in a field that can be off, and above its maximum', () => {
+    const { box, input, type, blur } = show(0, true)
+    type('5')
+    type('500')
+    expect(box.value).toBe(0)
+    blur()
+    expect(input.value).toBe('off')
+  })
+})
+
+describe('a value it does not take', () => {
+  it('is marked invalid: a PSM FDR of 0 (ProSE\'s default, which "reset to default" sets) is not "0 % off"', () => {
+    const { input, field } = show(0, false)
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    expect(field.getAttribute('aria-invalid')).toBe('true')
+    expect(field.textContent).not.toContain('off')
+    expect(field.textContent).toContain('> 0 – 100 %')
+  })
+})
+

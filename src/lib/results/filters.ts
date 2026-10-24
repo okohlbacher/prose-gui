@@ -4,7 +4,7 @@
 
 import { columnDef } from './columns'
 import { naturalKey, parseAccession, scanNumber } from './display'
-import { peptideCounts, qLimit, type Level, type ResultModel } from './model'
+import { passesQ, peptideCounts, qLimit, type Level, type ResultModel } from './model'
 
 export type FilterState = {
   /** Words that all have to match, case-insensitively, anywhere in a row (see `applyFilters`). */
@@ -137,7 +137,9 @@ function peptideMask(m: ResultModel, f: FilterState): Uint8Array {
  * - PSMs: `text` and `hideContaminants` through the peptide, `maxQ` (PSM q-value, limited by `psmFdr`),
  *   `showDecoys`, `proteinFilter` and `peptideFilter`.
  *
- * A row without a q-value passes `maxQ`. The filters that do not belong to a level are ignored by it.
+ * A row without a q-value passes `maxQ` at the search's cutoff only (`passesQ`): the search did not apply that FDR
+ * to it, and a tighter cutoff cannot be shown to pass. A protein without PSMs within the PSM FDR never passes. The
+ * filters that do not belong to a level are ignored by it.
  */
 export function applyFilters(m: ResultModel, level: Level, f: FilterState): Uint32Array {
   let kept = 0
@@ -150,7 +152,10 @@ export function applyFilters(m: ResultModel, level: Level, f: FilterState): Uint
     for (let p = 0; p < pr.count; p++) {
       if (!f.showDecoys && pr.decoy[p]) continue
       if (f.hideContaminants && m.protein.contaminant[p]) continue
-      if (pr.qValue[p] > limit) continue
+      if (!passesQ(pr.qValue[p], limit, m.proteinFdr)) continue
+      // a protein without PSMs within the PSM FDR is no identification (ProSE may list proteins that no reported
+      // PSM maps to: one input without protein FDR)
+      if (m.protein.psms[p] === 0) continue
       if (m.protein.peptides[p] < f.minPeptides) continue
       if (tokens.length > 0 && !matches(texts[p], tokens)) continue
       if (f.minReplicatesInCondition > 0 && !foundInReplicates(m, p, f.minReplicatesInCondition)) continue
@@ -164,7 +169,7 @@ export function applyFilters(m: ResultModel, level: Level, f: FilterState): Uint
     const limit = qLimit(f.maxQ, m.psmFdr)
     const mask = peptideMask(m, f)
     for (let k = 0; k < pt.count; k++) {
-      if (!mask[k] || (!f.showDecoys && pt.decoy[k]) || m.peptide.bestQ[k] > limit) continue
+      if (!mask[k] || (!f.showDecoys && pt.decoy[k]) || !passesQ(m.peptide.bestQ[k], limit, m.psmFdr)) continue
       out[kept++] = k
     }
     return out.slice(0, kept)
@@ -176,7 +181,7 @@ export function applyFilters(m: ResultModel, level: Level, f: FilterState): Uint
   const only = f.peptideFilter
   for (let i = 0; i < ps.count; i++) {
     const k = ps.peptide[i]
-    if (!mask[k] || (!f.showDecoys && ps.decoy[i]) || ps.qValue[i] > limit) continue
+    if (!mask[k] || (!f.showDecoys && ps.decoy[i]) || !passesQ(ps.qValue[i], limit, m.psmFdr)) continue
     if (only !== undefined && k !== only) continue // an index that is no peptide matches nothing
     out[kept++] = i
   }

@@ -160,6 +160,15 @@ fn main() {
             eprintln!("Error: Unable to read file (the input broke {})", inputs[0]);
             exit(3);
         }
+        "diskfull" => {
+            // ProSE's lines of a full disk, its outputs in the search folder (fake-prose.sh: diskfull)
+            say(format!("[ProSE] [1/{count}] Searching {}", inputs[0]));
+            let psm = format!("{}/runs/{stem}.psm.parquet", qpx.display());
+            eprintln!("ArrowIOHelpers: Failed to write {psm}: IOError: Error writing bytes to file. Detail: [errno 28] No space left on device");
+            eprintln!("Failed to write the QPX psm view -> {psm}");
+            eprintln!("ProSE finished with 1 file(s) failing out of 1.");
+            exit(12);
+        }
         "segv" => {
             say(format!("[ProSE] [1/{count}] Searching {}", inputs[0]));
             eprintln!("Reading {} ...", inputs[0]);

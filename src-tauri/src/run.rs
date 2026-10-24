@@ -35,6 +35,7 @@ use crate::args::{
     with_contaminants, InputLinks, InputRecord, Placement, SearchRequest, DATABASE_FILE,
     DATABASE_RECORD,
 };
+use crate::decoys::DecoyRules;
 use crate::history::{finish_partial, lock_partial, remove_partial, with_backoff};
 use crate::progress::{ProgressTracker, STARTING};
 use crate::tool;
@@ -55,6 +56,13 @@ const GRACE: Duration = Duration::from_secs(3);
 const KILL_WAIT: Duration = Duration::from_secs(10);
 /// How many of the tool's last stderr lines are kept for a failure message.
 const STDERR_TAIL: usize = 60;
+/// How many of the tool's error lines are kept (the first ones: a cause comes before its consequences).
+const ERROR_LINES: usize = 20;
+/// The longest line of the tool's output that is read (bytes); the rest of a longer line is dropped (a
+/// 300 MB line on stderr was otherwise read whole, logged and sent as an event).
+const MAX_LINE: usize = 64 * 1024;
+/// The longest line a failure shows (characters).
+const MAX_SHOWN: usize = 1000;
 /// The log of the last failed search, in the folder `logs` beside the searches folder.
 pub const LAST_FAILURE_LOG: &str = "last-failure.log";
 
@@ -80,8 +88,8 @@ pub struct DoneEvent {
 #[serde(rename_all = "camelCase")]
 pub struct FailedEvent {
     pub search_id: String,
-    /// What went wrong: the tool's last "Error…" line (else its last line), or the shim's own message;
-    /// empty when the tool said nothing.
+    /// What went wrong: the informative line(s) of the tool's stderr (`StderrDigest::message`), or the
+    /// shim's own message; empty when the tool said nothing that explains it.
     pub message: String,
     /// The last progress label.
     pub stage: String,
@@ -189,6 +197,222 @@ mod tests {
             how_it_ended(&ExitStatus::from_raw(31)).as_deref(),
             Some("ProSE crashed (signal 31)")
         );
+        // the system's limits (ulimit -f, -t): a run with ulimit -f 50 ended with "signal 25" alone
+        assert_eq!(
+            how_it_ended(&ExitStatus::from_raw(25)).as_deref(),
+            Some("ProSE crashed (signal 25, SIGXFSZ; a file grew larger than the system allows, or the disk is full)")
+        );
+        assert_eq!(
+            how_it_ended(&ExitStatus::from_raw(24)).as_deref(),
+            Some("ProSE crashed (signal 24, SIGXCPU; it used more CPU time than the system allows it)")
+        );
+    }
+
+    /// A partial folder that cannot be removed is said in the kept log of the failure.
+    #[test]
+    fn a_folder_that_cannot_be_removed_is_noted_in_the_failure_log() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = std::env::temp_dir().join(format!("prose-discard-{}", std::process::id()));
+        let searches = base.join("searches");
+        let partial = searches.join("1-0.partial");
+        std::fs::create_dir_all(partial.join("qpx")).unwrap();
+        std::fs::write(partial.join("qpx/a.parquet"), "x").unwrap();
+        let kept = base.join("last-failure.log");
+        std::fs::write(&kept, "$ ProSE ...\n").unwrap();
+        // a folder whose parent may not be written cannot be removed
+        std::fs::set_permissions(&searches, std::fs::Permissions::from_mode(0o555)).unwrap();
+        super::discard_partial(None, &partial, Some(&kept));
+        std::fs::set_permissions(&searches, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let log = std::fs::read_to_string(&kept).unwrap();
+        let removed = !partial.exists();
+        std::fs::remove_dir_all(&base).unwrap();
+        if removed {
+            return; // (root may remove it anyway)
+        }
+        assert!(
+            log.contains("could not be removed") && log.contains("1-0.partial"),
+            "{log}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod digest_tests {
+    use super::{clean_line, read_lines, StderrDigest, MAX_LINE, MAX_SHOWN};
+
+    fn digest(lines: &[&str]) -> StderrDigest {
+        let mut d = StderrDigest::default();
+        for l in lines {
+            d.feed(l);
+        }
+        d
+    }
+
+    const CI: &str = "/home/runner/work/prose-gui/prose-gui/openms/src/openms/source/FORMAT/HANDLERS/XMLHandler.cpp";
+
+    /// A corrupt mzML (in_truncated_mzML, multi_one_corrupt): the place in the file comes before OpenMS'
+    /// error, and neither path of the machine that built ProSE is shown.
+    #[test]
+    fn a_file_that_cannot_be_read_says_where() {
+        let location = format!("{CI}(67): While loading '/data/truncated.mzML': input ended before all started tags were ended; last tag started is 'spectrum'( in line 4303 column 2)");
+        let error = format!("Error: Unable to read file (- due to that error of type Parse Error in: {CI}@68-void OpenMS::Internal::XMLHandler::fatalError(ActionMode, const std::string&, OpenMS::UInt, OpenMS::UInt) const)");
+        let d = digest(&[
+            &location,
+            "[ProSE] Ion priors: 0 and 0 confident training PSMs in the two halves of the spectra, fewer than 100; the ion_prior_* features are 0 for this file.",
+            &error,
+        ]);
+        assert_eq!(
+            d.message(false),
+            "Error: Unable to read file (Parse Error). While loading '/data/truncated.mzML': input ended before all \
+             started tags were ended; last tag started is 'spectrum' (in line 4303 column 2)"
+        );
+        // an OpenMS error without a location: as it is, without its empty "in: "
+        let fasta = digest(&["Error: Unable to read file (Error while parsing FASTA file! Only 1280 proteins could be read. Parsing next record failed. Please check the file! in: )"]);
+        assert_eq!(
+            fasta.message(false),
+            "Error: Unable to read file (Error while parsing FASTA file! Only 1280 proteins could be read. Parsing next record failed. Please check the file!)"
+        );
+        let empty = digest(&[
+            "Cannot read input file given from parameter '-in'!",
+            "Error: File empty (the file '/data/empty.mzML' is empty)",
+        ]);
+        assert_eq!(
+            empty.message(false),
+            "Error: File empty (the file '/data/empty.mzML' is empty)"
+        );
+    }
+
+    /// A full disk (devfull): the first line that says so, not ProSE's closing summary.
+    #[test]
+    fn a_full_disk_is_named() {
+        let d = digest(&[
+            "Progress of 'Predicting fragment intensities and retention times...':",
+            "-- done [took 0.02 s (CPU), 0.00 s (Wall)] -- ",
+            "Omitted writing of 4 peptide identifications due to empty hits.",
+            "ArrowIOHelpers: Failed to write /s/1-0.partial/qpx/runs/1__a.psm.parquet: IOError: Error writing bytes to file. Detail: [errno 28] No space left on device",
+            "Failed to write the QPX psm view -> /s/1-0.partial/qpx/runs/1__a.psm.parquet",
+            "ArrowIOHelpers: Failed to write /s/1-0.partial/qpx/quantms.psm.parquet: IOError: Error writing bytes to file. Detail: [errno 28] No space left on device",
+            "Failed to write the QPX psm view -> /s/1-0.partial/qpx/quantms.psm.parquet",
+            "ProSE finished with 1 file(s) failing out of 1.",
+        ]);
+        assert_eq!(
+            d.message(false),
+            "Failed to write /s/1-0.partial/qpx/runs/1__a.psm.parquet: IOError: Error writing bytes to file. Detail: [errno 28] No space left on device"
+        );
+        let idxml = digest(&[
+            "Skipping Percolator rescoring for /data/a.mzML: Only 6 PSMs, Percolator rescoring needs at least 100. Keeping the search engine scores.",
+            "Percolator rescoring is on (Search:rescore) but no input file could be rescored; all outputs carry the search engine scores.",
+            "Failed to write idXML output for /data/a.mzML -> /s/search.idXML: the file '/s/search.idXML' could not be created. writing the file failed (e.g. disk full or I/O error) (writing '/s/search.idXML' did not complete: a partial file may remain)",
+            "ProSE finished with 1 file(s) failing out of 1.",
+        ]);
+        assert!(
+            idxml
+                .message(false)
+                .starts_with("Failed to write idXML output for /data/a.mzML"),
+            "{}",
+            idxml.message(false)
+        );
+        // without a line that says more, ProSE's summary
+        let summary = digest(&[
+            "Omitted writing of 31 peptide identifications due to empty hits.",
+            "ProSE finished with 1 file(s) failing out of 1.",
+        ]);
+        assert_eq!(
+            summary.message(false),
+            "ProSE finished with 1 file(s) failing out of 1."
+        );
+    }
+
+    /// Percolator rescored one of two files: the merged idXML cannot be written. In the app's words.
+    #[test]
+    fn a_partial_rescoring_is_told_in_the_apps_words() {
+        let d = digest(&[
+            "-qpx_extended: no NCE selected for /s/1-4.partial/2__small.mzML; the predicted_* columns are null.",
+            "Cannot write the merged output -> /s/1-4.partial/merged.idXML: Percolator rescored only some of the input files (see the warnings above), and their PSMs cannot be pooled with the search engine scores of the others. Per-file outputs were written. Use '-Search:rescore false', or leave out the files that could not be rescored. (the value '1 of 2 files rescored' was used but is not valid; Percolator rescored only some of the input files, and their PSMs cannot be pooled with the search engine scores of the others.)",
+            "ProSE failed to write the merged idXML output -> /s/1-4.partial/merged.idXML.",
+        ]);
+        let message = d.message(false);
+        assert!(
+            message.starts_with("Percolator could rescore only some of the files"),
+            "{message}"
+        );
+        assert!(
+            message.contains("Turn off Percolator rescoring"),
+            "{message}"
+        );
+        assert!(
+            !message.contains("-Search:") && !message.contains("partial"),
+            "{message}"
+        );
+        assert_eq!(
+            clean_line("[ProSE] Not pooling the identifications of the input files: Percolator rescored only some of them, and runs of different search engines are not merged. Set 'rescore' to 'false' to pool them with ProSE's scores."),
+            "[ProSE] Not pooling the identifications of the input files: Percolator rescored only some of them, and runs of different search engines are not merged. Turn off Percolator rescoring to pool them with ProSE's scores."
+        );
+    }
+
+    /// A value ProSE refuses: its line, not the last line of the help it prints after it.
+    #[test]
+    fn a_refused_value_is_named_and_not_the_help() {
+        let mut lines = vec![
+            "Invalid parameter values (ConversionError): Could not convert string '3000000000' to an integer value. Aborting!".to_string(),
+            "stty: 'standard input': Inappropriate ioctl for device".to_string(),
+        ];
+        for k in 0..200 {
+            lines.push(format!(
+                "  -Search:option{k} <number>   An option (default: '1')"
+            ));
+        }
+        lines.push("  --helphelp                                               Shows all options (including advanced)".to_string());
+        let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+        let d = digest(&refs);
+        assert_eq!(
+            d.message(false),
+            "Invalid parameter values (ConversionError): Could not convert string '3000000000' to an integer value. Aborting!"
+        );
+        assert_eq!(d.tail.len(), super::STDERR_TAIL);
+    }
+
+    /// Killed (signal 9) during Percolator: its last line ("Split 3:") would only mislead.
+    #[test]
+    fn a_killed_tool_without_an_error_has_no_message() {
+        let d = digest(&[
+            "Selecting Cneg by cross-validation.",
+            "Split 1:\tSelected feature 15 as initial direction. Could separate 51 training set positives with q<0.01 in that direction.",
+            "Split 3:",
+        ]);
+        assert_eq!(d.message(true), "");
+        // ended with an exit code: its last line is all there is
+        assert_eq!(d.message(false), "Split 3:");
+        // the Percolator note before a SIGXFSZ (fsize_50) is no error either
+        let note = digest(&["Percolator rescoring of /data/a.mzML: Percolator's sanity check rejected the learned model (on the held-out folds it found no target PSM at q < 0.01, or fewer than the best single feature; typical for blank runs and runs with few confident PSMs), so the PSMs are scored with that feature alone."]);
+        assert_eq!(note.message(true), "");
+    }
+
+    /// A 300 MB line (fake_longline) is cut where it is read, and shown shorter still.
+    #[test]
+    fn long_lines_are_cut() {
+        let long = format!(
+            "Error: {}\nnext\n{}",
+            "x".repeat(3 * MAX_LINE),
+            "y".repeat(10)
+        );
+        let mut lines = Vec::new();
+        read_lines(long.as_bytes(), |l| lines.push(l.to_string()));
+        assert_eq!(lines.len(), 3);
+        assert!(
+            lines[0].ends_with('…') && lines[0].len() <= MAX_LINE + '…'.len_utf8(),
+            "{}",
+            lines[0].len()
+        );
+        assert_eq!(lines[1], "next");
+        assert_eq!(lines[2], "yyyyyyyyyy", "a last line without a line end");
+        let d = digest(&[&lines[0]]);
+        assert_eq!(d.message(false).chars().count(), MAX_SHOWN + 1);
+        assert_eq!(d.tail[0].chars().count(), MAX_SHOWN + 1);
+        // CRLF line ends and invalid UTF-8
+        let mut crlf = Vec::new();
+        read_lines(&b"a\r\nb\xff\n"[..], |l| crlf.push(l.to_string()));
+        assert_eq!(crlf, vec!["a".to_string(), "b\u{fffd}".to_string()]);
     }
 }
 
@@ -464,19 +688,44 @@ mod sys {
     }
 }
 
-/// Lines of a stream, lossily decoded, without the line end.
+/// Lines of a stream, lossily decoded, without the line end; a line longer than [`MAX_LINE`] bytes is cut
+/// there (and ends with "…"), the rest of it dropped unread into memory.
 fn read_lines(stream: impl Read, mut each: impl FnMut(&str)) {
     let mut reader = BufReader::new(stream);
-    let mut buffer = Vec::new();
-    loop {
-        buffer.clear();
-        match reader.read_until(b'\n', &mut buffer) {
-            Ok(0) | Err(_) => break,
-            Ok(_) => {
-                let line = String::from_utf8_lossy(&buffer);
-                each(line.trim_end_matches(['\n', '\r']));
-            }
+    let mut line: Vec<u8> = Vec::new();
+    let mut cut = false;
+    let mut emit = |line: &mut Vec<u8>, cut: &mut bool| {
+        let text = String::from_utf8_lossy(line);
+        let text = text.trim_end_matches(['\n', '\r']);
+        if *cut {
+            each(&format!("{text}…"));
+        } else {
+            each(text);
         }
+        line.clear();
+        *cut = false;
+    };
+    loop {
+        let buffer = match reader.fill_buf() {
+            Ok([]) => break,
+            Ok(buffer) => buffer,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => break,
+        };
+        let (taken, ends) = match buffer.iter().position(|&b| b == b'\n') {
+            Some(at) => (at + 1, true),
+            None => (buffer.len(), false),
+        };
+        let room = MAX_LINE.saturating_sub(line.len());
+        line.extend_from_slice(&buffer[..taken.min(room)]);
+        cut |= taken > room;
+        reader.consume(taken);
+        if ends {
+            emit(&mut line, &mut cut);
+        }
+    }
+    if !line.is_empty() {
+        emit(&mut line, &mut cut);
     }
 }
 
@@ -484,15 +733,196 @@ fn is_noise(line: &str) -> bool {
     line.trim().is_empty() || line.starts_with("Schema error") || line.starts_with("Warning:")
 }
 
-/// The message of a failure: the last "Error…" line of the tool's stderr, else its last line; empty
-/// when it wrote none.
-fn failure_message(tail: &VecDeque<String>) -> String {
-    tail.iter()
-        .rev()
-        .find(|l| l.starts_with("Error"))
-        .or_else(|| tail.back())
-        .map(|l| l.trim().to_string())
-        .unwrap_or_default()
+/// ProSE's own summary of failed files: the last resort of a message.
+fn is_summary(line: &str) -> bool {
+    line.starts_with("ProSE finished with") || line.starts_with("ProSE failed to write")
+}
+
+/// Where a file could not be parsed (OpenMS' XML handlers: "While loading '<file>': ... (in line 4303 column 2)").
+fn is_location(line: &str) -> bool {
+    line.starts_with("While loading '")
+}
+
+/// A line that tells of an error: OpenMS' "Error: ..." of a tool that stops, and ProSE's and OpenMS' error
+/// lines of a step that failed (a file that cannot be written or read, a value that is not valid).
+fn is_error(line: &str) -> bool {
+    const STARTS: &[&str] = &[
+        "Error",
+        "Invalid parameter",
+        "Cannot ",
+        "Unable to ",
+        "Failed to ",
+        "refusing ",
+        "terminate called",
+        "Percolator could rescore only some",
+    ];
+    const HAS: &[&str] = &[
+        "No space left on device",
+        "Disk quota exceeded",
+        "File too large",
+        "Read-only file system",
+        "Permission denied",
+        "std::bad_alloc",
+        "could not be created",
+        "could not be written",
+    ];
+    !is_summary(line)
+        && (STARTS.iter().any(|s| line.starts_with(s)) || HAS.iter().any(|s| line.contains(s)))
+}
+
+/// ProSE's hints in command-line words, in the app's (the app has no command line).
+const HINTS: &[(&str, &str)] = &[
+    (
+        "Use '-Search:rescore false', or",
+        "Turn off Percolator rescoring, or",
+    ),
+    ("Set 'rescore' to 'false'", "Turn off Percolator rescoring"),
+    (
+        "Set -Search:decoy_prefix to",
+        "Set the decoy prefix (decoy_prefix) to",
+    ),
+    ("Use '-Search:decoys ignore'", "Set decoys to ignore"),
+    ("Use '-Search:decoys generate'", "Set decoys to generate"),
+];
+
+/// A line of the tool's stderr as a failure shows it: without OpenMS' source locations (paths of the
+/// machine that built ProSE) and exception boilerplate, ProSE's command-line hints in the app's words, and
+/// at most [`MAX_SHOWN`] characters.
+fn clean_line(line: &str) -> String {
+    let mut text = line.trim().to_string();
+    // "/home/runner/.../XMLHandler.cpp(67): While loading ...": the source location of a message
+    if let Some(at) = text.find("): ") {
+        let head = &text[..at];
+        if !head.contains(' ')
+            && [".cpp(", ".h(", ".hpp(", ".cc("]
+                .iter()
+                .any(|e| head.contains(e))
+        {
+            text = text[at + 3..].to_string();
+        }
+    }
+    // OpenMS' exceptions: "<message> (- due to that error of type Parse Error in: <source>@<line>-<function>)"
+    if let Some(at) = text.find("due to that error of type ") {
+        let kind = &text[at + "due to that error of type ".len()..];
+        let kind = kind
+            .split(" in:")
+            .next()
+            .unwrap_or(kind)
+            .trim_end_matches(')')
+            .trim();
+        let head = text[..at]
+            .trim_end_matches([' ', '-'])
+            .trim_end_matches('(')
+            .trim_end();
+        text = format!("{head} ({kind})");
+    } else if let Some(at) = text.rfind(" in: ") {
+        // "... Please check the file! in: )", "... in: <source>@<line>-<function>": the location only
+        let after = text[at + 5..].trim();
+        if after.is_empty() || after == ")" || after.contains('@') {
+            let head = &text[..at];
+            let open = head.matches('(').count() > head.matches(')').count();
+            text = format!(
+                "{head}{}",
+                if open && after.ends_with(')') {
+                    ")"
+                } else {
+                    ""
+                }
+            );
+        }
+    }
+    text = text.replace("( in line ", " (in line ");
+    if let Some(rest) = text.strip_prefix("ArrowIOHelpers: ") {
+        text = rest.to_string();
+    }
+    // the merged idXML of a search that Percolator could rescore only in part (ProSE.cpp): in plain words
+    if text.contains("Percolator rescored only some of the input files")
+        && text.starts_with("Cannot write the merged output")
+    {
+        text = "Percolator could rescore only some of the files, and their PSMs cannot be pooled with the search \
+                engine scores of the others. Turn off Percolator rescoring, or leave out the files that could not \
+                be rescored."
+            .to_string();
+    }
+    // an InvalidValue's repetition of the message: "(the value '1 of 2 files rescored' was used but is not valid; ...)"
+    if let Some(at) = text.find(" (the value '") {
+        if text[at..].contains("' was used but is not valid") {
+            text.truncate(at);
+        }
+    }
+    for (from, to) in HINTS {
+        text = text.replace(from, to);
+    }
+    if text.chars().count() > MAX_SHOWN {
+        text = format!("{}…", text.chars().take(MAX_SHOWN).collect::<String>());
+    }
+    text
+}
+
+/// What a failure is told with, gathered from the tool's stderr as it comes: its last lines (the details)
+/// and the lines a message is made of.
+#[derive(Default)]
+struct StderrDigest {
+    /// The last [`STDERR_TAIL`] lines (not noise), each at most [`MAX_SHOWN`] characters.
+    tail: VecDeque<String>,
+    /// The first [`ERROR_LINES`] error lines ([`is_error`]), cleaned ([`clean_line`]).
+    errors: Vec<String>,
+    /// The last "Error..." line, with the parse location ([`is_location`]) that came last before it.
+    fatal: Option<(String, Option<String>)>,
+    location: Option<String>,
+    /// ProSE's last summary of failed files.
+    summary: Option<String>,
+}
+
+impl StderrDigest {
+    fn feed(&mut self, line: &str) {
+        if is_noise(line) {
+            return;
+        }
+        if self.tail.len() == STDERR_TAIL {
+            self.tail.pop_front();
+        }
+        let shown: String = if line.chars().count() > MAX_SHOWN {
+            format!("{}…", line.chars().take(MAX_SHOWN).collect::<String>())
+        } else {
+            line.to_string()
+        };
+        self.tail.push_back(shown);
+        let clean = clean_line(line);
+        if clean.starts_with("Error") {
+            self.fatal = Some((clean.clone(), self.location.clone()));
+        } else if is_location(&clean) {
+            self.location = Some(clean.clone());
+        } else if is_summary(&clean) {
+            self.summary = Some(clean.clone());
+        }
+        if is_error(&clean) && self.errors.len() < ERROR_LINES {
+            self.errors.push(clean);
+        }
+    }
+
+    /// The message of a failure: OpenMS' last "Error..." line (one of reading a file with the place in the
+    /// file before it), else the first error line ProSE wrote (the cause; the next ones are its consequences),
+    /// else ProSE's summary ("ProSE finished with 1 file(s) failing out of 1."), else, for a tool that ended
+    /// with an exit code, its last line. Empty for a tool killed by a signal without an error: its last line
+    /// (Percolator's "Split 3:") would only mislead.
+    fn message(&self, signalled: bool) -> String {
+        if let Some((error, location)) = &self.fatal {
+            return match location {
+                Some(location) if error.contains("Unable to read") => {
+                    format!("{error}. {location}")
+                }
+                _ => error.clone(),
+            };
+        }
+        if let Some(error) = self.errors.first().or(self.summary.as_ref()) {
+            return error.clone();
+        }
+        if signalled {
+            return String::new();
+        }
+        self.tail.back().map(|l| clean_line(l)).unwrap_or_default()
+    }
 }
 
 /// The name of a signal that ends a process (Linux and macOS agree on these numbers).
@@ -507,6 +937,9 @@ fn signal_name(signal: i32) -> Option<&'static str> {
         11 => "SIGSEGV",
         13 => "SIGPIPE",
         15 => "SIGTERM",
+        // the system's limits of a process (ulimit -t, -f)
+        24 => "SIGXCPU",
+        25 => "SIGXFSZ",
         _ => return None,
     })
 }
@@ -522,10 +955,11 @@ pub fn how_it_ended(status: &ExitStatus) -> Option<String> {
         let name = signal_name(signal)
             .map(|n| format!(", {n}"))
             .unwrap_or_default();
-        let oom = if signal == 9 {
-            "; the system may have ended it for lack of memory"
-        } else {
-            ""
+        let oom = match signal {
+            9 => "; the system may have ended it for lack of memory",
+            24 => "; it used more CPU time than the system allows it",
+            25 => "; a file grew larger than the system allows, or the disk is full",
+            _ => "",
         };
         return Some(format!("ProSE crashed (signal {signal}{name}{oom})"));
     }
@@ -547,6 +981,25 @@ fn keep_failure_log(partial: &Path) -> Option<PathBuf> {
     let kept = logs.join(LAST_FAILURE_LOG);
     fs::copy(partial.join("prose.log"), &kept).ok()?;
     Some(kept)
+}
+
+/// Removes the partial folder of a search that failed or was cancelled. A folder that cannot be removed
+/// stays for the sweep of the app's next start (`history::sweep`); that is said on stderr and in the kept
+/// log of the failure (`kept`), so that the folder's disk space is not lost unnoticed.
+fn discard_partial(lock: Option<fs::File>, partial: &Path, kept: Option<&Path>) {
+    let Err(e) = remove_partial(lock, partial) else {
+        return;
+    };
+    let note = format!(
+        "The search folder {} could not be removed ({e}); the next start of the app removes it.",
+        partial.display()
+    );
+    eprintln!("{note}");
+    if let Some(kept) = kept {
+        if let Ok(mut file) = fs::OpenOptions::new().append(true).open(kept) {
+            let _ = writeln!(file, "{note}");
+        }
+    }
 }
 
 /// Everything the supervising thread needs.
@@ -634,14 +1087,14 @@ impl Searches {
         let lock = match lock_partial(&partial) {
             Ok(lock) => lock,
             Err(e) => {
-                let _ = remove_partial(None, &partial);
+                discard_partial(None, &partial, None);
                 return Err(format!("The search folder cannot be locked ({e})."));
             }
         };
-        let records = input_records_with(&request, self.links);
-        let placements = input_placements(&request, self.links);
+        let records = input_records_with(&request, self.links, &partial);
+        let placements = input_placements(&request, self.links, &partial);
         if let Err(e) = prepare_folder(&partial, &request, &records, &placements, crap) {
-            let _ = remove_partial(Some(lock), &partial);
+            discard_partial(Some(lock), &partial, None);
             return Err(e);
         }
 
@@ -681,7 +1134,7 @@ impl Searches {
         if let Err(e) = result {
             self.running.lock().unwrap().remove(&id);
             // (the thread has ended and released the lock)
-            let _ = remove_partial(None, &partial);
+            discard_partial(None, &partial, None);
             return Err(e);
         }
         Ok(id)
@@ -765,6 +1218,19 @@ fn prepare_folder(
             })?,
             // (Windows) a hard link works on the folder's own volume only; nothing is ever copied
             Placement::HardLink => fs::hard_link(&original, &link).map_err(|e| {
+                // (a name too long for ProSE's outputs in the search folder: its link's name is shortened)
+                if !record.link.ends_with(&record.name) && !reserved_stem(&record.name) {
+                    return format!(
+                        "The name of {} is too long for ProSE's result files in the app's data folder ({}), whose \
+                         names and paths it makes from the file's name. The app links such a file into the search \
+                         folder under a shorter name, but Windows can make that link only on the drive of the app's \
+                         data and on NTFS. {} cannot be linked there ({e}). Rename the file to a shorter name and \
+                         start the search again.",
+                        record.name,
+                        dir.parent().unwrap_or(dir).display(),
+                        file.path
+                    );
+                }
                 if reserved_stem(&record.name) {
                     return format!(
                         "ProSE cannot search a file named {} under that name, because its own result files are \
@@ -794,8 +1260,18 @@ fn prepare_folder(
     if request.contaminants {
         let crap =
             crap.ok_or("The contaminant database (cRAP) is not available in this installation.")?;
-        with_contaminants(Path::new(&request.database), crap, &dir.join(DATABASE_FILE))
-            .map_err(|e| format!("The database with contaminants cannot be written ({e})."))?;
+        let rules = DecoyRules::of(&request.settings.parameters);
+        with_contaminants(
+            Path::new(&request.database),
+            crap,
+            &dir.join(DATABASE_FILE),
+            &rules,
+        )
+        .map_err(|e| match e.kind() {
+            // (the user's database: the message says what is wrong with it)
+            std::io::ErrorKind::InvalidData => e.to_string(),
+            _ => format!("The database with contaminants cannot be written ({e})."),
+        })?;
     } else {
         // the one file outside the folder that the results reader may read (files::resolve_search_file)
         let record = serde_json::json!({ "path": request.database }).to_string();
@@ -897,7 +1373,7 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
     let err_reader = {
         let log = log.clone();
         thread::spawn(move || {
-            let mut tail: VecDeque<String> = VecDeque::new();
+            let mut digest = StderrDigest::default();
             if let Some(stderr) = stderr {
                 read_lines(stderr, |line| {
                     if line.starts_with("Schema error") {
@@ -906,15 +1382,10 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
                     if let Some(log) = &log {
                         let _ = writeln!(log.lock().unwrap(), "{line}");
                     }
-                    if !is_noise(line) {
-                        if tail.len() == STDERR_TAIL {
-                            tail.pop_front();
-                        }
-                        tail.push_back(line.to_string());
-                    }
+                    digest.feed(line);
                 });
             }
-            tail
+            digest
         })
     };
 
@@ -929,7 +1400,7 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
     let tracker = out_reader
         .join()
         .unwrap_or_else(|_| ProgressTracker::new(Vec::new()));
-    let tail = err_reader.join().unwrap_or_default();
+    let digest = err_reader.join().unwrap_or_default();
     drop(log);
 
     // the hard links to the inputs (Windows) have served: they do not belong to the search, and would
@@ -940,7 +1411,7 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
         }
     }
     let outcome = if handle.cancelled.load(Ordering::SeqCst) {
-        let _ = remove_partial(lock.take(), &partial);
+        discard_partial(lock.take(), &partial, None);
         None
     } else {
         match status {
@@ -952,7 +1423,7 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
                     })),
                     Err(e) => {
                         let log = keep_failure_log(&partial);
-                        let _ = remove_partial(None, &partial);
+                        discard_partial(None, &partial, log.as_deref());
                         Some(failed(
                             &id,
                             format!("The search folder cannot be finished ({e})."),
@@ -966,13 +1437,16 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
                 }
             }
             Ok(status) => {
-                let message = humanize(&failure_message(&tail), &partial, &records);
-                let detail = (!tail.is_empty()).then(|| {
-                    let lines: Vec<&str> = tail.iter().map(String::as_str).collect();
+                // a crash: a signal, or on Windows an exception's status (how_it_ended)
+                let signalled = sys::exit_signal(&status).is_some()
+                    || (cfg!(windows) && status.code().is_some_and(|c| (c as u32) >= 0xC000_0000));
+                let message = humanize(&digest.message(signalled), &partial, &records);
+                let detail = (!digest.tail.is_empty()).then(|| {
+                    let lines: Vec<&str> = digest.tail.iter().map(String::as_str).collect();
                     humanize(&lines.join("\n"), &partial, &records)
                 });
                 let log = keep_failure_log(&partial);
-                let _ = remove_partial(lock.take(), &partial);
+                discard_partial(lock.take(), &partial, log.as_deref());
                 Some(failed(
                     &id,
                     message,
@@ -986,7 +1460,7 @@ fn supervise(searches: Arc<Searches>, job: Job, started: mpsc::Sender<Result<(),
             }
             Err(e) => {
                 let log = keep_failure_log(&partial);
-                let _ = remove_partial(lock.take(), &partial);
+                discard_partial(lock.take(), &partial, log.as_deref());
                 Some(failed(
                     &id,
                     format!("Waiting for ProSE failed ({e})."),

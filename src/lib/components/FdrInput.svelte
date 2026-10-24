@@ -23,17 +23,23 @@
 
   // what the user is typing, until the field loses focus or a chip is picked
   let draft = $state<string | null>(null)
+  // the value before the user started typing: an invalid entry gives it back, never the valid prefix that was typed
+  // on the way ("150" is no 15 %)
+  let before: number | null = null
   let input = $state<HTMLInputElement | null>(null)
 
   const parse = (typedText: string) => (off ? parsePercentOrOff(typedText) : parsePercent(typedText))
   const text = $derived(draft ?? (off && value === 0 ? 'off' : percentNumber(value)))
   const typed = $derived(draft === null ? value : parse(draft))
   const tooLarge = (q: number) => max !== undefined && q > max * (1 + 1e-9)
-  const invalid = $derived(typed === null || tooLarge(typed))
+  /** a q-value the field takes: above 0 (or 0 where it can be off), at most 1 */
+  const inRange = (q: number) => Number.isFinite(q) && (q > 0 || (off && q === 0)) && q <= 1
+  // (the value itself can be out of range too: ProSE's default PSM FDR is 0, which a reset to the default sets)
+  const invalid = $derived(typed === null || !inRange(typed) || tooLarge(typed))
   /** the field holds the word "off" (no percent sign then) */
   const saysOff = $derived(/^\s*off\s*$/i.test(text))
   function hintOf(q: number | null): string {
-    if (q === null) return off ? 'off, or > 0 – 100 %' : '> 0 – 100 %'
+    if (q === null || !inRange(q)) return off ? 'off, or > 0 – 100 %' : '> 0 – 100 %'
     if (tooLarge(q)) return `at most ${formatPercent(max!)}`
     // off has no q-value; a typed 0 gets the word beside it
     if (q === 0) return saysOff ? '' : 'off'
@@ -42,13 +48,21 @@
   const hint = $derived(hintOf(typed))
 
   function edit(event: Event & { currentTarget: HTMLInputElement }) {
+    if (draft === null) before = value
     draft = event.currentTarget.value
     const q = parse(draft)
     if (q !== null && !tooLarge(q)) value = q
+    else if (before !== null && value !== before) value = before
+  }
+
+  /** The field loses focus: it shows the value again (an invalid entry: the one before it). */
+  function leave() {
+    draft = null
+    before = null
   }
 
   function choose(q: number) {
-    draft = null
+    leave()
     value = q
   }
 </script>
@@ -72,7 +86,7 @@
       spellcheck="false"
       value={text}
       oninput={edit}
-      onblur={() => (draft = null)} />
+      onblur={leave} />
     {#if !saysOff}
       <span class="text-[13px]">%</span>
     {/if}

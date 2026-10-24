@@ -9,6 +9,7 @@
   // shown, and the annotation is of the peptide without it. A PSM of a co-isolated precursor is marked, and the
   // other PSMs of the same spectrum are linked (results/coisolated.ts).
   import { signedNumber } from '$lib/format/number'
+  import { errorText } from '$lib/format/error'
   import { Button, buttonVariants } from '$lib/components/ui/button'
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu'
   import Marker from '$lib/components/results/Marker.svelte'
@@ -108,7 +109,7 @@
         if (current) loaded = { row: r, source: s, data, error: null }
       },
       (e: unknown) => {
-        if (current) loaded = { row: r, source: s, data: null, error: e instanceof Error ? e.message : String(e) }
+        if (current) loaded = { row: r, source: s, data: null, error: errorText(e) }
       },
     )
     return () => {

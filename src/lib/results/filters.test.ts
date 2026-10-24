@@ -76,7 +76,7 @@ describe('applyFilters', () => {
     expect(applyFilters(m, 'peptides', { ...all, minPeptides: 2 })).toEqual(rows(0, 1, 2)) // the table lists the forms
   })
 
-  it('maxQ uses the protein, best-PSM and PSM q-values; a missing q-value passes', () => {
+  it("maxQ uses the protein, best-PSM and PSM q-values; a missing q-value passes the search's cutoff only", () => {
     const m = model()
     expect(applyFilters(m, 'proteins', { ...all, maxQ: 0.003 })).toEqual(rows(0, 2)) // 0.001, 0.002
     expect(applyFilters(m, 'peptides', { ...all, maxQ: 0.0025 })).toEqual(rows(0, 3)) // best PSM 0.001, 0.002
@@ -90,8 +90,36 @@ describe('applyFilters', () => {
     })
     const n = buildModel(noQ, resolveDesign([input('a.mzML')]), { showTechReplicates: false, ...cutoffs })
     for (const level of ['proteins', 'peptides', 'psms'] as const) {
-      expect(applyFilters(n, level, { ...all, maxQ: 0.001 })).toEqual(rows(0))
+      // the search did not filter them (no FDR applied): they pass its cutoff, but no tighter one
+      expect(applyFilters(n, level, { ...all, maxQ: 1 })).toEqual(rows(0))
+      expect(applyFilters(n, level, { ...all, maxQ: NaN })).toEqual(rows(0))
+      expect(applyFilters(n, level, { ...all, maxQ: 0.001 })).toEqual(rows())
     }
+    // and are counted at the search's cutoff only
+    expect(peptideCounts(n, 1).psms).toEqual(Uint32Array.of(1))
+    expect(peptideCounts(n, 0.001).psms).toEqual(Uint32Array.of(0))
+  })
+
+  it('never lists a protein without PSMs within the PSM FDR (ProSE lists unreferenced proteins without protein FDR)', () => {
+    const t = makeTables({
+      files: ['a.mzML'],
+      proteins: [
+        { accession: 'P1', sequence: 'AAAAAK', qValue: NaN },
+        { accession: 'P2', sequence: 'CCCCCK', qValue: NaN }, // no peptide maps to it
+        { accession: 'P3', sequence: 'DDDDDK', qValue: NaN }, // its only PSM is above the PSM FDR
+      ],
+      peptides: [
+        { sequence: 'AAAAAK', proteins: [0] },
+        { sequence: 'DDDDDK', proteins: [2] },
+      ],
+      psms: [
+        { peptide: 0, qValue: 0.001 },
+        { peptide: 1, qValue: 0.5 },
+      ],
+    })
+    const n = buildModel(t, resolveDesign([input('a.mzML')]), { showTechReplicates: false, psmFdr: 0.01, proteinFdr: 1 })
+    expect(applyFilters(n, 'proteins', { ...all })).toEqual(rows(0))
+    expect(applyFilters(n, 'proteins', { ...all, showDecoys: true, minPeptides: 0 })).toEqual(rows(0))
   })
 
   it('maxQ only tightens', () => {

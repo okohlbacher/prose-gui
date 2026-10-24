@@ -1,0 +1,132 @@
+# PTM Statistics Table
+# Total Modified PSMs: 1162
+# Unknown Modification PSMs: 736
+# Unique Modifications: 126
+#
+Name	TheoreticalMass	ObservedMass	MassDeviation	Count	UniquePeptides	Percentage	TargetResidues	ResidueFrequency
+15N(1)	0.997035	0.996888	-0.000147316	127	127	10.9294	F	A:166,C:22,D:135,E:188,F:32,G:118,H:40,I:80,K:108,L:74,M:31,N:131,P:110,Q:125,R:47,S:182,T:121,V:116,W:10,Y:58
+custom modification 9	1.00784	1.00942	0.00158015	109	109	9.38038	C-term	A:129,C:20,D:95,E:124,F:39,G:104,H:23,I:59,K:93,L:90,M:21,N:130,P:89,Q:122,R:45,S:164,T:112,V:76,W:6,Y:43
+Addition of Glycine	57.0215	57.019	-0.00249989	81	74	6.97074	K	A:118,C:6,D:51,E:60,F:19,G:76,H:20,I:61,K:66,L:64,M:18,N:53,P:37,Q:39,R:23,S:65,T:71,V:73,W:1,Y:26
+Deamidation	0.984016	0.984634	0.000617946	71	70	6.11015	Protein N-term(F)	A:99,C:5,D:69,E:74,F:23,G:90,H:20,I:42,K:52,L:57,M:14,N:84,P:53,Q:64,R:30,S:113,T:87,V:64,W:1,Y:23
+Oxidation or Hydroxylation	15.9949	15.9922	-0.00275904	55	48	4.73322	D	A:69,C:5,D:29,E:47,F:15,G:53,H:23,I:30,K:34,L:33,M:14,N:28,P:26,Q:26,R:25,S:48,T:33,V:51,W:2,Y:45
+dihydroxy	31.9898	31.9878	-0.0020034	51	49	4.38898	V	A:57,C:7,D:33,E:34,F:9,G:42,H:19,I:37,K:33,L:33,M:11,N:22,P:30,Q:28,R:24,S:44,T:32,V:56,W:3,Y:20
+Replacement of 3 protons by iron	52.9115	52.9087	-0.00279885	46	40	3.95869	D	A:79,C:6,D:53,E:48,F:19,G:54,H:12,I:21,K:32,L:26,M:3,N:36,P:41,Q:30,R:21,S:61,T:47,V:49,W:1,Y:14
+Carbamylation	43.0058	43.0044	-0.00138493	44	44	3.78657	Protein N-term	A:56,C:2,D:26,E:49,F:10,G:49,H:21,I:24,K:33,L:27,M:3,N:23,P:33,Q:19,R:23,S:33,T:28,V:27,Y:11
+quinone+1Da	0	30.978	0	35	35	3.01205	Y	A:44,D:30,E:29,G:34,H:2,I:31,K:21,L:28,N:28,P:23,Q:12,R:16,S:30,T:30,V:41,Y:4
+Loss of Lysine	-128.095	-128.098	-0.00300442	35	33	3.01205	Protein C-term(K)	A:24,C:4,D:26,E:23,F:13,G:16,H:3,I:21,K:68,L:33,M:5,N:27,P:18,Q:17,R:12,S:26,T:27,V:26,W:2,Y:13
+Lysine oxidation to aminoadipic semialdehyde+1Da+1Da	0	0.964672	0	33	33	2.83993	K	A:24,C:2,D:22,E:23,F:10,G:31,H:2,I:19,K:24,L:24,M:6,N:16,P:25,Q:9,R:10,S:38,T:18,V:25,W:1,Y:10
+Tryptophan oxidation to oxolactone	13.9793	13.9773	-0.00198462	30	28	2.58176	W	A:37,D:26,E:15,F:3,G:27,H:6,I:31,K:18,L:21,M:2,N:20,P:18,Q:13,R:14,S:26,T:29,V:36,Y:3
+Lysine oxidation to aminoadipic semialdehyde	-1.03163	-1.03379	-0.002157	29	29	2.4957	K	A:23,C:1,D:23,E:16,F:9,G:22,H:6,I:15,K:27,L:35,M:4,N:14,P:11,Q:9,R:5,S:22,T:20,V:20,W:1,Y:5
+carbamidomethylated Cys that undergoes beta-elimination and Michael addition of methylamine+1Da+1Da+1Da+1Da	0	1.05606	0	23	23	1.97935	C	A:20,C:3,D:24,E:19,F:15,G:16,H:2,I:9,K:16,L:14,M:6,N:12,P:6,Q:8,R:7,S:14,T:9,V:18,W:1,Y:4
+Pyro-glu from Q	-17.0265	-17.0301	-0.00354257	23	21	1.97935	N-term(Q)	A:10,C:5,D:26,E:35,F:9,G:15,H:18,I:13,K:20,L:13,M:5,N:25,P:18,Q:27,R:10,S:27,T:10,V:10,Y:6
+persulfide	31.9721	31.9774	0.00528	21	20	1.80723	W	A:21,D:22,E:22,F:5,G:13,H:5,I:9,K:17,L:14,M:3,N:15,P:21,Q:10,R:7,S:24,T:20,V:28,W:1,Y:5
+2-amino-3-oxo-butanoic_acid	-2.01565	-2.01783	-0.0021797	21	21	1.80723	C-term(K)	A:16,C:1,D:14,E:14,F:6,G:19,H:1,I:13,K:14,L:18,M:5,N:9,P:7,Q:3,R:9,S:19,T:7,V:14,W:2,Y:4
+13C6 labeled ubiquitinylation residue	120.063	120.075	0.0114525	15	14	1.29088	K	A:19,D:7,E:8,F:3,G:9,H:11,I:9,K:10,L:12,M:1,N:7,P:9,Q:5,R:7,S:6,T:4,V:28,Y:7
+Amidation	-0.984016	-0.988234	-0.00421751	14	14	1.20482	Protein C-term	A:8,C:1,D:13,E:18,F:5,G:8,H:2,I:9,K:9,L:10,M:2,N:6,P:1,Q:2,R:5,S:6,T:7,V:11,W:1,Y:3
+15N(2)	1.99407	1.99207	-0.00199565	14	14	1.20482	N	A:31,C:5,D:20,E:28,F:4,G:18,H:5,I:11,K:14,L:6,M:3,N:23,P:18,Q:18,R:5,S:26,T:20,V:9,Y:7
+carbamidomethylated Cys that undergoes beta-elimination and Michael addition of methylamine+1Da+1Da	0	-0.950639	0	14	14	1.20482	C	A:7,C:3,D:8,E:15,F:4,G:9,I:7,K:11,L:14,N:13,P:7,Q:11,R:3,S:12,T:6,V:7,W:1,Y:5
+thiocarboxylic acid	15.9772	15.9807	0.0035574	12	12	1.0327	Protein C-term(G)	A:10,D:13,E:12,F:5,G:16,H:2,I:6,K:8,L:6,M:2,N:10,P:8,Q:11,R:7,S:14,T:13,V:12,W:1,Y:8
+Pyro-Glu from E + Methylation Medium	-0.979006	-0.97615	0.00285613	12	12	1.0327	N-term(E)	A:12,C:5,D:7,E:14,F:5,G:6,H:1,I:7,K:11,L:8,M:2,N:6,P:6,Q:8,R:3,S:7,T:3,V:6,W:1,Y:5
+replacement of proton with ammonium ion	17.0265	17.0225	-0.0040272	12	12	1.0327	C-term	A:29,D:16,E:20,F:1,G:7,I:5,K:3,L:5,M:1,N:8,P:10,Q:21,R:5,S:22,T:12,V:7,Y:6
+cysteine oxidation to cysteic acid+1Da+1Da	0	49.9958	0	12	10	1.0327	F	A:13,C:2,D:4,E:9,F:12,G:13,H:5,I:8,K:7,L:2,N:7,P:7,Q:5,R:5,S:10,T:16,V:7,Y:8
+Lysine oxidation to aminoadipic semialdehyde+1Da+1Da+1Da	0	1.97084	0	11	10	0.946644	K	A:10,D:7,E:13,F:4,G:28,H:1,I:5,K:5,L:11,N:18,P:10,Q:16,R:6,S:11,T:6,V:6,Y:6
+Half of a disulfide bridge	-1.00782	-1.00538	0.00244629	11	11	0.946644	C	A:16,D:7,E:12,F:2,G:9,I:6,K:12,L:9,M:3,N:9,P:5,Q:5,R:2,S:13,T:8,V:11,Y:4
+custom modification 9+1Da	0	2.01485	0	8	8	0.688468	C-term	A:8,C:1,D:4,E:10,G:7,H:6,I:4,K:7,L:7,M:4,N:11,P:9,Q:22,R:1,S:17,T:9,V:6,Y:7
+carbamidomethylated Cys that undergoes beta-elimination and Michael addition of methylamine+1Da+1Da+1Da	0	0.0644649	0	8	8	0.688468	C	A:5,C:1,D:10,E:4,F:1,G:1,I:8,K:3,L:4,M:1,N:4,P:2,Q:8,R:5,S:13,T:3,V:4,Y:6
+carbamidomethylated Cys that undergoes beta-elimination and Michael addition of methylamine+1Da	0	-1.95022	0	6	6	0.516351	C	A:4,C:1,D:11,E:3,G:5,H:1,I:3,K:6,L:10,N:5,P:3,Q:2,S:4,V:3,Y:1
+Pyro-glu from Q+1Da	0	-16.0305	0	6	5	0.516351	N-term(Q)	A:10,C:1,D:3,E:1,F:1,G:7,H:1,I:5,K:7,L:5,M:2,N:5,P:4,S:10,T:4,V:4,Y:1
+Reduced acrolein addition +58	58.0419	58.0276	-0.0142893	6	6	0.516351	C	A:14,D:5,E:5,F:2,G:5,H:1,I:5,K:5,L:4,M:1,N:4,P:3,Q:4,R:4,S:5,T:4,V:5,Y:4
+cysteine oxidation to cysteic acid	47.9847	47.9764	-0.00832362	5	5	0.430293	F	A:16,C:1,E:2,G:6,I:3,K:4,L:1,N:3,P:4,R:1,S:7,T:6,V:2,W:4
+O18 Labeling	2.00425	2.00223	-0.00201354	5	5	0.430293	C-term	A:6,C:5,D:7,E:6,F:1,G:8,H:3,I:1,K:3,L:5,M:1,N:4,P:4,Q:3,R:4,S:5,T:5,V:6,Y:3
+Oxidation or Hydroxylation+1Da	0	16.9951	0	5	5	0.430293	D	A:10,D:6,E:4,F:3,G:5,H:2,I:2,K:3,L:3,M:2,N:8,P:1,Q:6,R:2,S:9,T:3,V:4,Y:2
+Replacement of 2 protons by iron	53.9193	53.9185	-0.000760868	5	5	0.430293	C-term	A:6,D:3,E:11,F:1,G:5,H:3,I:2,K:2,L:3,M:1,N:7,P:3,Q:9,R:3,S:7,T:3,V:9,Y:3
+Replacement of 3 protons by iron+1Da	0	53.9025	0	5	5	0.430293	D	A:11,C:2,D:2,E:7,F:1,G:4,I:6,K:5,L:2,M:1,N:5,P:3,Q:2,R:1,S:5,T:10,V:4
+Methylation	14.0157	14.0129	-0.00275126	5	5	0.430293	T	A:1,C:1,D:5,E:2,G:7,H:1,I:4,K:5,L:6,P:2,Q:1,R:1,S:4,T:6,V:4,Y:1
+Iodoacetic acid derivative	58.0055	58.0161	0.010631	5	5	0.430293	U	A:12,D:5,E:6,F:2,G:6,H:1,I:3,K:6,L:4,M:1,N:2,P:5,R:1,S:7,T:6,V:4,Y:1
+Loss of arginine due to transpeptidation	-156.101	-156.105	-0.00376576	4	3	0.344234	C-term(R)	A:4,C:1,D:3,E:1,F:1,G:1,I:2,K:2,L:5,P:2,Q:3,R:9,S:3,T:2,V:4
+Sodium adduct	21.9819	21.978	-0.00397288	4	4	0.344234	E	A:9,C:2,D:2,E:4,G:3,I:3,K:2,L:3,N:2,P:5,R:2,S:4,T:2,V:6
+Carboxylation	43.9898	43.9938	0.00401215	4	4	0.344234	Protein N-term(M)	A:3,D:2,E:13,G:3,H:1,I:2,K:5,L:4,N:1,P:1,Q:3,R:2,S:4,V:4
+Loss of Lysine+1Da	0	-127.097	0	3	3	0.258176	Protein C-term(K)	C:1,D:2,E:9,G:4,I:2,K:7,L:6,N:2,P:1,S:2,T:1
+Cysteinylation	119.004	119.002	-0.00205911	3	3	0.258176	C	A:5,C:1,E:2,G:1,H:1,I:1,K:3,L:2,Q:1,S:2,T:1,V:3,W:2,Y:1
+Pyro-glu from E	-18.0106	-18.01	0.000541758	3	3	0.258176	N-term(E)	A:6,D:1,E:4,G:5,H:1,I:1,K:2,L:2,N:1,R:1,S:2,T:6,V:4,Y:1
+carbamidomethylated Cys that undergoes beta-elimination and Michael addition of methylamine+1Da+1Da+1Da+1Da+1Da	0	2.05159	0	3	3	0.258176	C	A:3,D:4,E:4,F:1,G:1,H:1,I:1,K:3,L:3,N:1,P:1,Q:2,R:1,S:3,T:1,V:1,Y:4
+Methionine oxidation to aspartic semialdehyde	-32.0085	-32.0097	-0.00119497	3	3	0.258176	M	A:5,C:1,D:4,G:4,H:1,I:2,K:3,L:3,M:3,N:1,R:1,S:3,T:2,V:4
+Chlorination of tyrosine residues	33.961	33.9501	-0.0108865	3	3	0.258176	Y	A:3,C:2,D:4,E:2,F:1,G:4,I:2,K:5,L:4,M:1,N:2,Q:2,S:4,T:1,V:3,Y:1
+quinone	29.9742	29.9699	-0.00428886	3	3	0.258176	Y	A:2,E:2,F:1,G:3,H:1,I:1,K:4,L:2,P:1,Q:1,S:1,T:2,V:9
+Replacement of 2 protons by magnesium	21.9694	21.9727	0.00329533	3	2	0.258176	C-term	A:6,G:5,I:5,K:2,L:1,M:1,N:3,P:2,Q:1,R:1,S:7,T:5,Y:1
+aminoethylcysteine	59.0194	59.0122	-0.00719615	3	3	0.258176	S	A:8,D:2,E:4,G:3,I:4,K:4,L:1,M:2,N:2,P:5,Q:5,S:8,T:3,V:1,Y:5
+alpha-amino adipic acid	14.9633	14.9769	0.0136568	3	3	0.258176	K	A:1,D:4,E:2,F:1,G:3,H:1,I:3,K:3,L:3,N:2,P:4,Q:2,R:1,S:4,T:2,V:2
+13C(6) 15N(2) (D)9 SILAC label+1Da	0	18.0591	0	2	2	0.172117	K	A:1,D:1,E:3,F:1,K:1,M:1,N:1,P:2,Q:2,R:1,S:1,T:3
+carbamidomethylated Cys that undergoes beta-elimination and Michael addition of methylamine+1Da+1Da+1Da+1Da+1Da+1Da	0	3.05632	0	2	2	0.172117	C	A:3,E:1,F:1,I:1,K:3,L:1,N:2,P:1,S:1,T:7,Y:2
+reduction	-15.9949	-15.9982	-0.00326973	2	2	0.172117	S	C:1,D:1,E:1,F:1,G:2,H:1,K:1,L:3,M:1,Q:1,R:1,S:1,T:1,V:1,Y:2
+Replacement of 2 protons by iron+1Da	0	54.9196	0	2	2	0.172117	C-term	A:9,D:1,E:2,G:2,K:2,L:1,N:1,P:10,Q:9,R:1,S:8,T:3,V:2,Y:1
+Trideuteration	3.01883	3.02574	0.00690946	2	2	0.172117	M	A:4,D:2,E:5,H:1,I:3,K:4,L:1,M:2,N:2,P:6,Q:1,R:1,S:3,T:4,V:2,Y:2
+dihydroxy+1Da+1Da	0	33.9919	0	2	2	0.172117	V	A:2,D:1,E:2,G:1,H:1,K:1,L:3,P:1,Q:1,R:1,V:5
+monomethylation+1Da	0	19.045	0	2	2	0.172117	N-term	A:4,D:1,E:2,G:1,I:1,K:2,L:2,N:1,R:1
+Replacement of 3 protons by iron+1Da+1Da	0	54.9135	0	2	2	0.172117	D	A:2,C:1,D:1,F:1,H:1,K:1,L:3,N:2,Q:1,R:2,S:1,T:2,V:1,Y:2
+heavy acetylation	44.0173	44.0159	-0.00135187	2	2	0.172117	Protein N-term	D:3,E:3,F:2,H:3,I:2,K:1,M:1,N:1,R:1,S:1,T:1,V:1
+S-Ethylcystine from Serine	44.0085	44.0015	-0.00699367	2	2	0.172117	S	A:1,D:3,E:1,F:1,G:1,H:2,K:2,L:1,N:1,P:1,Q:2,S:5,T:3,V:3,Y:1
+Deamidation followed by a methylation	14.9997	14.9894	-0.0102751	2	2	0.172117	N	A:2,E:2,G:3,K:3,L:3,P:1,Q:3,S:1,T:4,V:3,Y:1
+In Bachi as Formylaspargine (typo?)	4.97893	4.98107	0.002141	2	2	0.172117	H	C:1,D:3,F:1,G:3,H:1,I:2,K:2,L:2,N:1,R:1,S:2,T:5,V:1,Y:1
+Guanidination	42.0218	42.0261	0.00427036	2	2	0.172117	N-term	A:2,C:1,D:2,E:1,F:2,G:1,H:1,K:1,L:1,M:1,Q:2,R:1,S:2,V:1,Y:1
+Formylation	27.9949	27.9901	-0.00478485	2	2	0.172117	S	A:3,E:3,G:2,I:2,K:3,L:1,N:1,P:1,S:5,T:2
+13C6 labeled ubiquitinylation residue+1Da	0	121.066	0	2	2	0.172117	K	A:4,E:1,H:2,I:4,K:2,M:1,N:2,P:1,Q:2,S:1,T:2,V:1,Y:2
+Proline oxidation to pyrrolidinone	-30.0106	-30.0096	0.000942892	2	2	0.172117	P	A:7,G:2,I:2,K:2,L:1,N:2,P:4,S:4,T:4,V:1
+DST crosslinker cleaved by sodium periodate	55.9898	56.0058	0.0159467	1	1	0.0860585	K	A:1,G:1,I:1,K:1,Q:1,T:1,V:3
+D5 N-ethylmaleimide+water on cysteines	148.09	148.072	-0.0180061	1	1	0.0860585	C	D:1,E:1,G:4,I:1,K:1,L:1,V:1
+Cys alkylation by dimethylaminoethyl halide	71.0735	71.0714	-0.00208286	1	1	0.0860585	C	G:1,L:1,P:1,R:1,V:3,Y:1
+DST crosslinker cleaved by sodium periodate+1Da	0	56.9819	0	1	1	0.0860585	K	A:2,G:2,K:1,L:1,S:1,V:3
+Crotonaldehyde	70.0419	70.0329	-0.00895096	1	1	0.0860585	C	A:3,D:2,E:1,I:2,K:1,P:1,Q:1,S:1,T:1
+cysteine oxidation to cysteic acid+1Da	0	48.9905	0	1	1	0.0860585	F	A:2,D:1,E:2,I:1,K:1,S:1,T:1,W:1
+Addition of lysine due to transpeptidation	128.095	128.092	-0.00266687	1	1	0.0860585	N-term	E:1,G:1,I:2,K:1,L:1,N:1,Q:1,S:2,T:1,V:1
+Cleaved and reduced DTBP crosslinker	87.0143	87.0147	0.000466876	1	1	0.0860585	K	A:2,E:3,G:1,L:1,Q:1,R:1,S:3,V:2
+Carboxyl modification with ethanolamine	43.0422	43.0258	-0.0163765	1	1	0.0860585	D	A:4,G:1,H:1,I:2,R:1,Y:1
+dihydroxy+1Da	0	32.9876	0	1	1	0.0860585	V	A:1,G:4,H:1,M:1,N:1,P:2,Q:1,R:1,S:2,T:1,V:1,W:1
+Azidophenylalanine	41.0014	41.0127	0.0113215	1	1	0.0860585	F	A:1,G:1,I:1,K:1,L:1,N:1,R:1,V:1
+glycosylated asparagine 18O labeling	2.98826	2.9821	-0.00616129	1	1	0.0860585	N	D:1,E:2,G:1,I:1,K:1,L:2,S:1
+phospho-propargylamine	116.998	117.006	0.00823821	1	1	0.0860585	S	A:4,G:1,H:1,I:2,R:1,Y:1
+ubiquitinylation residue	114.043	114.042	-0.000971327	1	1	0.0860585	Protein N-term	A:1,D:1,G:2,I:2,K:1,Y:1
+tri-Methylation	42.047	42.0457	-0.00129533	1	1	0.0860585	K	A:5,G:2,K:1,L:1
+13C(6) 15N(2) (D)9 SILAC label	17.0707	17.0687	-0.00201642	1	1	0.0860585	K	A:2,D:1,E:1,F:1,G:1,L:1,R:1,S:2,Y:1
+13C3 label for SILAC	3.01006	3.01367	0.00360112	1	1	0.0860585	A	E:3,K:2,M:1,T:1
+reaction with phenyl salicylate (PS)	120.021	120.014	-0.00707299	1	1	0.0860585	K	A:3,F:1,G:1,K:1,P:2,V:1
+2-OH-ethyl thio-Ser	60.0034	59.9974	-0.00594249	1	1	0.0860585	T	A:2,G:1,K:1,P:2,R:1,V:2,Y:1
+3-methyl-2-pyridyl isocyanate	134.048	134.056	0.00772802	1	1	0.0860585	N-term	A:1,D:1,E:1,F:1,H:1,K:1,L:1,P:1,T:1,V:1
+pyridylacetyl	119.037	119.022	-0.0152922	1	1	0.0860585	K	A:1,L:1,P:1,R:1,S:1,T:1,V:2
+glycosylphosphatidylinositol	123.009	123.013	0.00455461	1	1	0.0860585	Protein C-term	A:2,E:1,F:1,G:1,K:1,L:1,N:1,R:1,S:1
+persulfide+1Da	0	32.9714	0	1	1	0.0860585	W	D:2,E:1,I:1,P:2,R:1,S:2,T:2,V:2
+Acetaldehyde +26	26.0157	26.0264	0.0107123	1	1	0.0860585	N-term	A:1,E:1,K:1,L:1,S:2,Y:1
+o-toluene	106.042	106.04	-0.0023468	1	1	0.0860585	K	A:2,D:1,E:1,H:1,K:1,L:1,V:4
+Acetyl 4,4,5,5-D4 Lysine	46.0357	46.0475	0.0118715	1	1	0.0860585	K	E:2,L:1,Q:1,R:1,S:2,T:2,V:1
+monomethylation	18.0378	18.0308	-0.00708045	1	1	0.0860585	N-term	D:1,F:2,G:10,N:5,P:2,Q:2,R:1
+lactic acid from N-term Ser	-15.0109	-15.0012	0.00966868	1	1	0.0860585	Protein N-term(S)	A:2,D:1,K:1,P:2,R:1,V:2,Y:1
+Ethanolation	44.0262	44.0295	0.00332303	1	1	0.0860585	R	A:2,D:1,E:1,G:1,I:2,K:2,L:1,S:1,T:2,Y:1
+Loss of ammonia (15N)	-18.0236	-18.0195	0.00407381	1	1	0.0860585	Protein N-term(T)	A:1,E:3,K:1,L:1,Q:1,S:4,T:2,V:1
+Proline oxidation to 5-hydroxy-2-aminovaleric acid	18.0106	18.0077	-0.0028359	1	1	0.0860585	P	A:2,C:3,G:2,I:1,K:1,S:1,T:1,W:1
+Preomics iST-NHS Kit specific cysteine modification	113.084	113.082	-0.00239695	1	1	0.0860585	C	D:1,E:2,I:1,K:1,M:1,S:1
+Phosphorylation Decoy	79.9663	79.9628	-0.00348188	1	1	0.0860585	G	A:1,D:1,H:1,L:1,R:1,S:1,T:1,V:1,Y:2
+O-methyl amino phosphinate	92.998	93.0144	0.0163858	1	1	0.0860585	C	D:1,E:2,F:1,G:3,L:1,Q:1,R:3,S:2,T:3,V:3
+O-Sulfonation+1Da	0	80.9557	0	1	1	0.0860585	C	C:1,E:1,H:1,I:2,L:1,N:1,P:1,Q:1,R:1,S:3,Y:1
+Removal of initiator methionine from protein N-terminus	-131.04	-131.041	-0.000379008	1	1	0.0860585	Protein N-term(M)	K:2,L:3,M:1,P:2,S:1,T:2
+Replacement of 2 protons by calcium	37.9469	37.9401	-0.00681275	1	1	0.0860585	D	A:3,G:2,I:2,K:1,N:1,P:1,S:3,T:2
+O-Sulfonation	79.9568	79.9485	-0.00835677	1	1	0.0860585	C	C:1,E:1,H:1,I:2,L:1,N:1,P:1,Q:1,R:1,S:3,Y:1
+O-Dimethylphosphorylation	107.998	107.995	-0.00284671	1	1	0.0860585	S	C:2,D:1,G:1,H:1,I:1,K:1,L:2,N:1,R:2,S:2,T:1,V:2,Y:1
+N-Homocysteine thiolactone+1Da	0	118.032	0	1	1	0.0860585	K	A:2,D:1,E:1,H:1,K:1,L:1,V:4
+Replacement of 3 protons by aluminium	23.9581	23.9631	0.00504144	1	1	0.0860585	C-term	A:3,G:2,I:2,K:1,N:1,P:1,S:3,T:2
+N-Homocysteine thiolactone	117.025	117.026	0.00112962	1	1	0.0860585	K	A:1,E:1,K:1,L:2,N:2,P:1,R:1,T:2,V:1
+Monomethylated Arg13C(6) 15N(4)	24.0239	24.0129	-0.011017	1	1	0.0860585	R	D:2,G:1,I:2,K:2,V:3,Y:1
+Lysine oxidation to aminoadipic semialdehyde+1Da	0	-0.0506916	0	1	1	0.0860585	K	A:2,G:2,K:1,L:1,P:2,S:1,T:1,V:2
+Dimethyl-Mono-Medium	31.0472	31.0363	-0.0108885	1	1	0.0860585	Protein N-term(P)	F:2,G:9,N:3,R:2,S:1,Y:1
+SILAC or AQUA label	4.0071	4.00463	-0.00247188	1	1	0.0860585	S	K:1,L:1,P:2,S:1,T:1,V:2
+Sec Iodoacetamide derivative	104.966	104.985	0.0194887	1	1	0.0860585	C	A:6,K:1,L:1,N:1,P:5,R:1,S:1,T:2,V:3
+In Bachi as Formylaspargine (typo?)+1Da+1Da	0	6.99213	0	1	1	0.0860585	H	E:1,I:1,K:1,L:3,P:1,S:1
+Sulfenic acid fragment of DSSO crosslinker	103.993	103.995	0.00220169	1	1	0.0860585	Protein N-term	A:6,K:1,L:1,N:1,P:5,R:1,S:1,T:2,V:3
+SulfurDioxide	63.9619	63.9704	0.00848091	1	1	0.0860585	C	A:3,G:2,I:2,K:1,N:1,P:1,S:3,T:2
+In Bachi as Formylaspargine (typo?)+1Da	0	5.9699	0	1	1	0.0860585	H	A:2,C:1,E:1,F:1,G:1,H:2,I:1,K:1,L:1,M:1,P:1,Q:3,S:6,T:1,V:1
+Tryptophan oxidation to dihydroxy-N-formaylkynurenine	63.9797	63.9777	-0.0019593	1	1	0.0860585	W	E:2,M:1,R:1,T:2,W:1,Y:1
+Tryptophan oxidation to hydroxy-bis-tryptophandione	43.9534	43.9589	0.0054908	1	1	0.0860585	W	A:2,D:1,G:1,H:1,K:1,L:2,S:1,V:1
+Tyrosine caged with 2-nitrobenzyl (ONB)	135.032	135.02	-0.0121897	1	1	0.0860585	Y	A:2,G:1,H:1,I:1,L:1,M:1,N:1,R:1,S:1,T:1,V:1
+Ubiquitination 2H4 lysine	118.068	118.071	0.00326635	1	1	0.0860585	K	A:1,E:1,K:1,L:2,N:2,P:1,R:1,T:2,V:1
+amidination of lysines or N-terminal amines with methyl acetimidate	41.0265	41.0263	-0.000267274	1	1	0.0860585	K	A:3,D:1,G:3,I:1,M:2,N:1,P:1,R:1,S:2,T:1,V:2
+carbamidomethylated Cys that undergoes beta-elimination and Michael addition of methylamine	-2.94552	-2.95267	-0.00714524	1	1	0.0860585	C	A:2,D:2,E:1,G:1,H:1,I:2,K:1,L:1,S:1
+Ethylation	28.0313	28.0312	-6.5686e-05	1	1	0.0860585	D	F:2,G:9,N:3,R:2,S:1,Y:1

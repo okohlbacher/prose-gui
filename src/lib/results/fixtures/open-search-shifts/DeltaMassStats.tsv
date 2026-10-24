@@ -1,0 +1,9 @@
+# Delta Mass Statistics Table
+# Total PSMs: 4922
+# Modified PSMs: 1898
+# Unmodified PSMs: 3024
+# Mean Delta Mass: -27.7687
+# Median Delta Mass: 0.9985
+#
+DeltaMass	Count	UniquePeptides	ChargeStates	Percentage	MappedModification	IsKnown
+57.019	10	3366	2	0.52687	Addition of Glycine	true

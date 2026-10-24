@@ -1,6 +1,8 @@
 <script lang="ts">
   // A number of the search settings. What the user types stays until the field loses focus; only
-  // valid numbers (whole for `int`, within min and max) reach `onChange`.
+  // valid numbers (whole for `int`, within min and max) reach `onChange`. An invalid entry is marked and gives
+  // back the value from before the user started typing, never the valid prefix typed on the way ("1.5" is no 1, "150"
+  // with at most 100 no 15); the field shows that value again when it loses focus.
   import { Input } from '$lib/components/ui/input'
   import * as InputGroup from '$lib/components/ui/input-group'
   import { cn } from '$lib/utils'
@@ -38,6 +40,8 @@
   } = $props()
 
   let draft = $state<string | null>(null)
+  /** the value before the user started typing (`draft` null: not typing) */
+  let before: number | undefined
   const text = $derived(draft ?? (value === undefined || !Number.isFinite(value) ? '' : String(value)))
 
   function parse(t: string): number | null {
@@ -56,10 +60,24 @@
   const title = $derived(invalid ? `${kind === 'int' ? 'A whole number' : 'A number'}${range ? `, ${range}` : ''}` : undefined)
 
   function edit(event: Event & { currentTarget: HTMLInputElement }) {
+    if (draft === null) before = value
     draft = event.currentTarget.value
     if (onClear && draft.trim() === '') return onClear()
     const n = parse(draft)
     if (n !== null) onChange(n)
+    else restore()
+  }
+
+  /** The value from before the typing again (an empty one: cleared, where the field can be empty). */
+  function restore() {
+    if (value === before || (Number.isNaN(value) && Number.isNaN(before))) return
+    if (before !== undefined && Number.isFinite(before)) onChange(before)
+    else if (onClear) onClear()
+  }
+
+  function leave() {
+    draft = null
+    before = undefined
   }
 </script>
 
@@ -74,7 +92,7 @@
     aria-invalid={invalid}
     {title}
     oninput={edit}
-    onblur={() => (draft = null)}
+    onblur={leave}
     class={cn('h-full px-2.5 text-[13px]', className)} />
 {:else}
   <Input
@@ -87,6 +105,6 @@
     aria-invalid={invalid}
     {title}
     oninput={edit}
-    onblur={() => (draft = null)}
+    onblur={leave}
     class={cn('h-8 bg-background text-[13px] shadow-none md:text-[13px]', className)} />
 {/if}

@@ -23,6 +23,7 @@
   import { formatCount } from '$lib/results/display'
   import { exportCsv } from '$lib/results/exports'
   import { keyFigures, levelTotal } from '$lib/results/figures'
+  import { psmFdrAppliedToNone, psmFdrNotice } from '$lib/results/overview'
   import { restoreFromHistory } from '$lib/history/history.svelte'
   import { resultsViewFor, type Tab } from '$lib/results/view.svelte'
   import { openResult } from '$lib/search/session.svelte'
@@ -53,6 +54,8 @@
   // at the search's cutoffs, without decoys: the key figures and the tabs' counts
   const figures = $derived(view ? keyFigures(view.model, view.result.outcome.summary) : null)
   const peptideTotal = $derived(view ? levelTotal(view.model, 'peptides', false) : 0)
+  // the PSM FDR was requested but not applied to some file (no decoy PSM): its PSMs are not FDR-controlled
+  const fdrNotice = $derived(view ? psmFdrNotice(view.result.outcome.summary) : null)
   const proteinTotal = $derived(view ? levelTotal(view.model, 'proteins', false) : 0)
 
   const tabs = $derived<{ value: Tab; label: string; count?: number }[]>([
@@ -164,6 +167,9 @@
       style:width={psmOpen ? 'clamp(320px, 27vw, 400px)' : undefined}>
       <h1 class="sr-only">Results</h1>
       <SaveNotice id={view.result.id} />
+      {#if fdrNotice}
+        <p class="text-xs text-amber-700" data-testid="psm-fdr-notice">{fdrNotice}</p>
+      {/if}
       {#if view.result.outcome.warnings.length > 0}
         <p class="text-xs text-amber-700 dark:text-amber-400" data-testid="results-warnings">{view.result.outcome.warnings.join(' ')}</p>
       {/if}
@@ -201,7 +207,11 @@
         {#if level}
           <Tabs.Content value={view.tab} tabindex={-1} class="flex min-h-0 flex-1 flex-col gap-3" data-testid="results-table">
             {#key level}
-              <FilterBar {view} {level} proteinFdrApplied={view.result.outcome.summary.proteinFdrApplied} />
+              <FilterBar
+                {view}
+                {level}
+                proteinFdrApplied={view.result.outcome.summary.proteinFdrApplied}
+                psmFdrApplied={!psmFdrAppliedToNone(view.result.outcome.summary)} />
             {/key}
             {#if level.level === 'proteins' && noProteins}
               <ProteinsEmpty {view} peptides={peptideTotal} psms={figures.psms} />

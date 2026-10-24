@@ -44,6 +44,11 @@
   }
 
   const fieldId = (name: string) => `param-${name.replace(/[^A-Za-z0-9_-]/g, '-')}`
+  /** Why a parameter cannot be used with the other settings, as on the page (the request leaves it out then). */
+  const blockedReason = (name: string) =>
+    name === 'chimeric:enabled' && searchPlan.chimericBlocked
+      ? 'ProSE looks for co-isolated precursors only without database chunks. Set database:chunk_size to 0 to use it.'
+      : null
   const isChanged = (name: string) => !sameValue(form.values[name], form.defaults[name])
   /** The inverted range (lowest above highest) the parameter is part of. */
   const invertedRange = (name: string) => searchPlan.inverted.find((r) => r.min === name || r.max === name)
@@ -105,6 +110,7 @@
                     {id}
                     labelId="{id}-label"
                     value={form.values[entry.name]}
+                    blocked={blockedReason(entry.name)}
                     onChange={(v) => form.setParam(entry.name, v)} />
                   {#if invertedRange(entry.name)}
                     {@const inverted = invertedRange(entry.name)!}

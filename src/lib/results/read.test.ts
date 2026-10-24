@@ -199,8 +199,11 @@ function expectSummary(s: ProSEMultiSummary, w: ProSEMultiSummary, index?: 'diff
   expect(s.files.map((f) => basename(f.path))).toEqual(w.files.map((f) => basename(f.path)))
   s.files.forEach((f, i) => {
     const e = w.files[i]
-    expect({ ...f, path: '', secondsSearch: 0, precursorError: null, fragmentError: null }).toEqual({
+    // (psmFdrApplied: the app's; the web app has none, for applied)
+    expect(f.psmFdrApplied).toBe(e.psmFdrApplied ?? true)
+    expect({ ...f, path: '', secondsSearch: 0, precursorError: null, fragmentError: null, psmFdrApplied: undefined }).toEqual({
       ...e,
+      psmFdrApplied: undefined,
       path: '',
       secondsSearch: 0,
       precursorError: null,
@@ -666,6 +669,14 @@ describe('missing and broken files', () => {
     await expect(readSearch(failing)).rejects.toThrow('qpx/quantms.pg.parquet: permission denied')
   })
 
+  test('a rejection that is no Error (a Tauri command error object) keeps its message', async () => {
+    const { files } = folder(join(fixtures, 'suitability'))
+    const failing = (name: string) => (name.endsWith('.pg.parquet') ? Promise.reject({ message: 'permission denied' }) : files(name))
+    await expect(readSearch(failing)).rejects.toThrow('qpx/quantms.pg.parquet: permission denied')
+    const odd = (name: string) => (name.endsWith('.pg.parquet') ? Promise.reject({ code: 13 }) : files(name))
+    await expect(readSearch(odd)).rejects.toThrow('qpx/quantms.pg.parquet: {"code":13}')
+  })
+
   test('a QPX psm file without the columns of -qpx_extended fails the read, naming the file', async () => {
     await withCopy('mods', async (dir) => {
       // a plain QPX psm view: no spectrum_reference, isotope_error, protein_mappings (two of its columns suffice here)
@@ -779,6 +790,82 @@ describe('missing and broken files', () => {
     ])
     expect(summary.proteinFdrApplied).toBe(false)
     expect(warnings).toEqual([])
+  })
+
+  test('a search whose PSM FDR ProSE skipped (no decoy PSM) says so, also from a ProSE that does not report it', async () => {
+    // fixtures/no-psm-fdr: the app's example run against three random proteins, PSM FDR 1 %: one PSM, no decoy PSM,
+    // so ProSE skipped the PSM FDR and the PSM has no q-value (the pin: no psm_fdr_applied, inferred from that)
+    const { tables, summary } = await readSearch(folder(join(fixtures, 'no-psm-fdr')).files)
+    expect(tables.psms.count).toBe(1)
+    expect(tables.psms.qValue[0]).toBeNaN()
+    expect(summary.psmFdr).toBe(0.01)
+    expect(summary.files.map((f) => f.psmFdrApplied)).toEqual([false])
+    // a search that applied it: every input has q-values
+    const applied = await readSearch(folder(join(fixtures, 'suitability')).files)
+    expect(applied.summary.files.map((f) => f.psmFdrApplied)).toEqual([true, true])
+  })
+
+  test("the run view's psm_fdr_applied, else the provenance's, says whether the PSM FDR was applied", async () => {
+    /** the run view of `dir` with the column psm_fdr_applied (a later ProSE's) */
+    const withColumn = async (dir: string, values: (boolean | null)[]) => {
+      const path = join(dir, RUN_VIEW)
+      const bytes = new Uint8Array(readFileSync(path))
+      const metadata = parquetMetadata(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer)
+      const rows = await rowsOf(bytes)
+      const schema = [{ ...metadata.schema[0], num_children: (metadata.schema[0].num_children ?? 0) + 1 }, ...metadata.schema.slice(1)]
+      schema.push({ name: 'psm_fdr_applied', type: 'BOOLEAN', repetition_type: 'OPTIONAL' })
+      const columnData = topColumns(metadata).map((name) => ({ name, data: rows.map((r) => r[name]) as never[] }))
+      columnData.push({ name: 'psm_fdr_applied', data: values as never[] })
+      const compressors = { ZSTD: (input: Uint8Array) => new Uint8Array(zstdCompressSync(input)) }
+      writeFileSync(path, new Uint8Array(parquetWriteBuffer({ columnData, schema, codec: 'ZSTD', compressors })))
+    }
+    const RUN_VIEW = 'qpx/quantms.run.parquet'
+    // the column wins over the PSMs' q-values (and its null: no PSM FDR requested)
+    for (const value of [true, null]) {
+      await withCopy('no-psm-fdr', async (dir) => {
+        await withColumn(dir, [value])
+        expect((await readSearch(folder(dir).files)).summary.files[0].psmFdrApplied).toBe(value)
+      })
+    }
+    await withCopy('suitability', async (dir) => {
+      await withColumn(dir, [false, true])
+      expect((await readSearch(folder(dir).files)).summary.files.map((f) => f.psmFdrApplied)).toEqual([false, true])
+    })
+    // without the column: the provenance's (true for the search), else inferred from the q-values
+    await withCopy('no-psm-fdr', async (dir) => {
+      await setParameters(dir, 'target_decoy_fdr', { psm_fdr_applied: 'true' })
+      expect((await readSearch(folder(dir).files)).summary.files[0].psmFdrApplied).toBe(true)
+      await setParameters(dir, 'target_decoy_fdr', { psm_fdr_applied: 'false' })
+      expect((await readSearch(folder(dir).files)).summary.files[0].psmFdrApplied).toBe(false)
+      // no PSM FDR requested
+      await setParameters(dir, 'target_decoy_fdr', { psm_fdr: '0' })
+      expect((await readSearch(folder(dir).files)).summary.files[0].psmFdrApplied).toBeNull()
+    })
+  })
+
+  test("a PSM whose proteins all failed the protein FDR keeps its .pin features but enzN and enzC", async () => {
+    // one input with the protein FDR: ProSE removes the references to the proteins that failed it, so the PSM has
+    // no protein mappings left (the PSMs of the iPRG2015 subset showed empty features)
+    const before = await readSearch(folder(join(fixtures, 'suitability')).files)
+    await withCopy('suitability', async (dir) => {
+      await changeRows(dir, 'qpx/quantms.psm.parquet', (rows) => {
+        rows[0].protein_mappings = []
+      })
+      const { tables } = await readSearch(folder(dir).files)
+      const { featureNames, features } = tables.psms
+      expect(featureNames).toEqual(before.tables.psms.featureNames)
+      const n = featureNames.length
+      const kept = ['CalcMass', 'mass', 'peplen', 'charge2', 'charge3', 'enzInt', 'dm', 'absdm']
+      for (const name of featureNames) {
+        const j = featureNames.indexOf(name)
+        const [value, was] = [features[j], before.tables.psms.features[j]]
+        if (name === 'enzN' || name === 'enzC') expect(value, name).toBeNaN()
+        else expect(value, name).toBe(was)
+        if (kept.includes(name)) expect(value, name).not.toBeNaN()
+      }
+      // the other PSMs are as they were
+      expect(Array.from(features.subarray(n))).toEqual(Array.from(before.tables.psms.features.subarray(n)))
+    })
   })
 
   test('an open search without its mod-analysis folder reads, without the analysis', async () => {

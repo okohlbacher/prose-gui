@@ -1,0 +1,1443 @@
+[ProSE] Fragment tolerance 0.5 Da exceeds the deisotoping limit (100 ppm / 0.1 Da); skipping MS2 deisotoping (expected for low-resolution data).
+[ProSE] open_search=true (precursor tolerance [-500, +500] Da)
+[ProSE] Loading /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/1__a.mzML
+[ProSE] Loading /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/2__a.mzML
+[ProSE] Loading /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/3__valid.mzML.gz
+[ProSE] Chunk-major multi-file: 8272 proteins, 9 chunks, 3 files.
+[ProSE] Chunk 1/9 (1000 proteins)
+Warning: FragmentIndex received the unknown parameter 'decoy_prefix'!
+Warning: FragmentIndex received the unknown parameter 'rescore'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_min_peaks'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_charge_cap'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_sum_intensity'!
+Warning: FragmentIndex received the unknown parameter 'fragment:query_spectrum'!
+Warning: FragmentIndex received the unknown parameter 'peaks:keep_n'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_top'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_type'!
+Warning: FragmentIndex received the unknown parameter 'annotate:local_fragment_evidence'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:enable'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:ms2_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:instrument'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:nce'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model_type'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:batch_size'!
+Warning: FragmentIndex received the unknown parameter 'report:isotope_error_convention'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM_groups'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein_inference_PSM'!
+Warning: FragmentIndex received the unknown parameter 'scoring:fragment_charges'!
+Warning: FragmentIndex received the unknown parameter 'scoring:method'!
+Warning: FragmentIndex received the unknown parameter 'scoring:mass_error_sd'!
+Warning: FragmentIndex received the unknown parameter 'calibration:enabled'!
+Warning: FragmentIndex received the unknown parameter 'calibration:subset_ratio'!
+Warning: FragmentIndex received the unknown parameter 'calibration:min_psms'!
+Warning: FragmentIndex received the unknown parameter 'database:chunk_size'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:enabled'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_coisolated'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_kl'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:top_hits'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:mz_tolerance'!
+[FragmentIndex] Open-search mode auto-triggered: window [-500, +500] Da exceeds threshold. Isotope-error iteration collapses to [0, 0].
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 1678 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] Chunk 2/9 (1000 proteins)
+Warning: FragmentIndex received the unknown parameter 'decoy_prefix'!
+Warning: FragmentIndex received the unknown parameter 'rescore'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_min_peaks'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_charge_cap'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_sum_intensity'!
+Warning: FragmentIndex received the unknown parameter 'fragment:query_spectrum'!
+Warning: FragmentIndex received the unknown parameter 'peaks:keep_n'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_top'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_type'!
+Warning: FragmentIndex received the unknown parameter 'annotate:local_fragment_evidence'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:enable'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:ms2_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:instrument'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:nce'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model_type'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:batch_size'!
+Warning: FragmentIndex received the unknown parameter 'report:isotope_error_convention'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM_groups'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein_inference_PSM'!
+Warning: FragmentIndex received the unknown parameter 'scoring:fragment_charges'!
+Warning: FragmentIndex received the unknown parameter 'scoring:method'!
+Warning: FragmentIndex received the unknown parameter 'scoring:mass_error_sd'!
+Warning: FragmentIndex received the unknown parameter 'calibration:enabled'!
+Warning: FragmentIndex received the unknown parameter 'calibration:subset_ratio'!
+Warning: FragmentIndex received the unknown parameter 'calibration:min_psms'!
+Warning: FragmentIndex received the unknown parameter 'database:chunk_size'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:enabled'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_coisolated'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_kl'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:top_hits'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:mz_tolerance'!
+[FragmentIndex] Open-search mode auto-triggered: window [-500, +500] Da exceeds threshold. Isotope-error iteration collapses to [0, 0].
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 1080 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] Chunk 3/9 (1000 proteins)
+Warning: FragmentIndex received the unknown parameter 'decoy_prefix'!
+Warning: FragmentIndex received the unknown parameter 'rescore'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_min_peaks'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_charge_cap'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_sum_intensity'!
+Warning: FragmentIndex received the unknown parameter 'fragment:query_spectrum'!
+Warning: FragmentIndex received the unknown parameter 'peaks:keep_n'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_top'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_type'!
+Warning: FragmentIndex received the unknown parameter 'annotate:local_fragment_evidence'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:enable'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:ms2_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:instrument'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:nce'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model_type'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:batch_size'!
+Warning: FragmentIndex received the unknown parameter 'report:isotope_error_convention'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM_groups'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein_inference_PSM'!
+Warning: FragmentIndex received the unknown parameter 'scoring:fragment_charges'!
+Warning: FragmentIndex received the unknown parameter 'scoring:method'!
+Warning: FragmentIndex received the unknown parameter 'scoring:mass_error_sd'!
+Warning: FragmentIndex received the unknown parameter 'calibration:enabled'!
+Warning: FragmentIndex received the unknown parameter 'calibration:subset_ratio'!
+Warning: FragmentIndex received the unknown parameter 'calibration:min_psms'!
+Warning: FragmentIndex received the unknown parameter 'database:chunk_size'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:enabled'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_coisolated'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_kl'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:top_hits'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:mz_tolerance'!
+[FragmentIndex] Open-search mode auto-triggered: window [-500, +500] Da exceeds threshold. Isotope-error iteration collapses to [0, 0].
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 190 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] Chunk 4/9 (1000 proteins)
+Warning: FragmentIndex received the unknown parameter 'decoy_prefix'!
+Warning: FragmentIndex received the unknown parameter 'rescore'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_min_peaks'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_charge_cap'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_sum_intensity'!
+Warning: FragmentIndex received the unknown parameter 'fragment:query_spectrum'!
+Warning: FragmentIndex received the unknown parameter 'peaks:keep_n'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_top'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_type'!
+Warning: FragmentIndex received the unknown parameter 'annotate:local_fragment_evidence'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:enable'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:ms2_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:instrument'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:nce'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model_type'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:batch_size'!
+Warning: FragmentIndex received the unknown parameter 'report:isotope_error_convention'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM_groups'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein_inference_PSM'!
+Warning: FragmentIndex received the unknown parameter 'scoring:fragment_charges'!
+Warning: FragmentIndex received the unknown parameter 'scoring:method'!
+Warning: FragmentIndex received the unknown parameter 'scoring:mass_error_sd'!
+Warning: FragmentIndex received the unknown parameter 'calibration:enabled'!
+Warning: FragmentIndex received the unknown parameter 'calibration:subset_ratio'!
+Warning: FragmentIndex received the unknown parameter 'calibration:min_psms'!
+Warning: FragmentIndex received the unknown parameter 'database:chunk_size'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:enabled'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_coisolated'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_kl'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:top_hits'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:mz_tolerance'!
+[FragmentIndex] Open-search mode auto-triggered: window [-500, +500] Da exceeds threshold. Isotope-error iteration collapses to [0, 0].
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 85 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] Chunk 5/9 (1000 proteins)
+Warning: FragmentIndex received the unknown parameter 'decoy_prefix'!
+Warning: FragmentIndex received the unknown parameter 'rescore'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_min_peaks'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_charge_cap'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_sum_intensity'!
+Warning: FragmentIndex received the unknown parameter 'fragment:query_spectrum'!
+Warning: FragmentIndex received the unknown parameter 'peaks:keep_n'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_top'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_type'!
+Warning: FragmentIndex received the unknown parameter 'annotate:local_fragment_evidence'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:enable'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:ms2_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:instrument'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:nce'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model_type'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:batch_size'!
+Warning: FragmentIndex received the unknown parameter 'report:isotope_error_convention'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM_groups'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein_inference_PSM'!
+Warning: FragmentIndex received the unknown parameter 'scoring:fragment_charges'!
+Warning: FragmentIndex received the unknown parameter 'scoring:method'!
+Warning: FragmentIndex received the unknown parameter 'scoring:mass_error_sd'!
+Warning: FragmentIndex received the unknown parameter 'calibration:enabled'!
+Warning: FragmentIndex received the unknown parameter 'calibration:subset_ratio'!
+Warning: FragmentIndex received the unknown parameter 'calibration:min_psms'!
+Warning: FragmentIndex received the unknown parameter 'database:chunk_size'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:enabled'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_coisolated'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_kl'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:top_hits'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:mz_tolerance'!
+[FragmentIndex] Open-search mode auto-triggered: window [-500, +500] Da exceeds threshold. Isotope-error iteration collapses to [0, 0].
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 186 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] Chunk 6/9 (1000 proteins)
+Warning: FragmentIndex received the unknown parameter 'decoy_prefix'!
+Warning: FragmentIndex received the unknown parameter 'rescore'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_min_peaks'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_charge_cap'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_sum_intensity'!
+Warning: FragmentIndex received the unknown parameter 'fragment:query_spectrum'!
+Warning: FragmentIndex received the unknown parameter 'peaks:keep_n'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_top'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_type'!
+Warning: FragmentIndex received the unknown parameter 'annotate:local_fragment_evidence'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:enable'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:ms2_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:instrument'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:nce'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model_type'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:batch_size'!
+Warning: FragmentIndex received the unknown parameter 'report:isotope_error_convention'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM_groups'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein_inference_PSM'!
+Warning: FragmentIndex received the unknown parameter 'scoring:fragment_charges'!
+Warning: FragmentIndex received the unknown parameter 'scoring:method'!
+Warning: FragmentIndex received the unknown parameter 'scoring:mass_error_sd'!
+Warning: FragmentIndex received the unknown parameter 'calibration:enabled'!
+Warning: FragmentIndex received the unknown parameter 'calibration:subset_ratio'!
+Warning: FragmentIndex received the unknown parameter 'calibration:min_psms'!
+Warning: FragmentIndex received the unknown parameter 'database:chunk_size'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:enabled'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_coisolated'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_kl'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:top_hits'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:mz_tolerance'!
+[FragmentIndex] Open-search mode auto-triggered: window [-500, +500] Da exceeds threshold. Isotope-error iteration collapses to [0, 0].
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 683 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] Chunk 7/9 (1000 proteins)
+Warning: FragmentIndex received the unknown parameter 'decoy_prefix'!
+Warning: FragmentIndex received the unknown parameter 'rescore'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_min_peaks'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_charge_cap'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_sum_intensity'!
+Warning: FragmentIndex received the unknown parameter 'fragment:query_spectrum'!
+Warning: FragmentIndex received the unknown parameter 'peaks:keep_n'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_top'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_type'!
+Warning: FragmentIndex received the unknown parameter 'annotate:local_fragment_evidence'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:enable'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:ms2_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:instrument'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:nce'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model_type'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:batch_size'!
+Warning: FragmentIndex received the unknown parameter 'report:isotope_error_convention'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM_groups'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein_inference_PSM'!
+Warning: FragmentIndex received the unknown parameter 'scoring:fragment_charges'!
+Warning: FragmentIndex received the unknown parameter 'scoring:method'!
+Warning: FragmentIndex received the unknown parameter 'scoring:mass_error_sd'!
+Warning: FragmentIndex received the unknown parameter 'calibration:enabled'!
+Warning: FragmentIndex received the unknown parameter 'calibration:subset_ratio'!
+Warning: FragmentIndex received the unknown parameter 'calibration:min_psms'!
+Warning: FragmentIndex received the unknown parameter 'database:chunk_size'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:enabled'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_coisolated'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_kl'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:top_hits'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:mz_tolerance'!
+[FragmentIndex] Open-search mode auto-triggered: window [-500, +500] Da exceeds threshold. Isotope-error iteration collapses to [0, 0].
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 460 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] Chunk 8/9 (1000 proteins)
+Warning: FragmentIndex received the unknown parameter 'decoy_prefix'!
+Warning: FragmentIndex received the unknown parameter 'rescore'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_min_peaks'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_charge_cap'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_sum_intensity'!
+Warning: FragmentIndex received the unknown parameter 'fragment:query_spectrum'!
+Warning: FragmentIndex received the unknown parameter 'peaks:keep_n'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_top'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_type'!
+Warning: FragmentIndex received the unknown parameter 'annotate:local_fragment_evidence'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:enable'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:ms2_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:instrument'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:nce'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model_type'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:batch_size'!
+Warning: FragmentIndex received the unknown parameter 'report:isotope_error_convention'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM_groups'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein_inference_PSM'!
+Warning: FragmentIndex received the unknown parameter 'scoring:fragment_charges'!
+Warning: FragmentIndex received the unknown parameter 'scoring:method'!
+Warning: FragmentIndex received the unknown parameter 'scoring:mass_error_sd'!
+Warning: FragmentIndex received the unknown parameter 'calibration:enabled'!
+Warning: FragmentIndex received the unknown parameter 'calibration:subset_ratio'!
+Warning: FragmentIndex received the unknown parameter 'calibration:min_psms'!
+Warning: FragmentIndex received the unknown parameter 'database:chunk_size'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:enabled'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_coisolated'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_kl'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:top_hits'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:mz_tolerance'!
+[FragmentIndex] Open-search mode auto-triggered: window [-500, +500] Da exceeds threshold. Isotope-error iteration collapses to [0, 0].
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 183 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] Chunk 9/9 (272 proteins)
+Warning: FragmentIndex received the unknown parameter 'decoy_prefix'!
+Warning: FragmentIndex received the unknown parameter 'rescore'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_min_peaks'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_charge_cap'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_sum_intensity'!
+Warning: FragmentIndex received the unknown parameter 'fragment:query_spectrum'!
+Warning: FragmentIndex received the unknown parameter 'peaks:keep_n'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_top'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_type'!
+Warning: FragmentIndex received the unknown parameter 'annotate:local_fragment_evidence'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:enable'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:ms2_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:instrument'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:nce'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model_type'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:batch_size'!
+Warning: FragmentIndex received the unknown parameter 'report:isotope_error_convention'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM_groups'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein_inference_PSM'!
+Warning: FragmentIndex received the unknown parameter 'scoring:fragment_charges'!
+Warning: FragmentIndex received the unknown parameter 'scoring:method'!
+Warning: FragmentIndex received the unknown parameter 'scoring:mass_error_sd'!
+Warning: FragmentIndex received the unknown parameter 'calibration:enabled'!
+Warning: FragmentIndex received the unknown parameter 'calibration:subset_ratio'!
+Warning: FragmentIndex received the unknown parameter 'calibration:min_psms'!
+Warning: FragmentIndex received the unknown parameter 'database:chunk_size'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:enabled'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_coisolated'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_kl'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:top_hits'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:mz_tolerance'!
+[FragmentIndex] Open-search mode auto-triggered: window [-500, +500] Da exceeds threshold. Isotope-error iteration collapses to [0, 0].
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 239 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+Merge took: 0.00 s (wall), 0.00 s (CPU), 0.00 s (system), 0.00 s (user)
+Memory usage (Aho-Corasick): 0 MB (working set delta), 0 MB (peak working set delta)
+[ProSE] Ion priors: 0 and 0 confident training PSMs in the two halves of the spectra, fewer than 100; the ion_prior_* features are 0 for this file.
+
+Peptide identification engine: PROSE
+Enzyme: Trypsin/P
+Building trie ... done (0s)
+Compressing trie to BFS format ...
+ACTrie::compressTrie(): created BFS trie with 1334 nodes (path compression skipped 20 suffix nodes)
+ done (0s)
+Mapping 139 peptides to 8272 proteins.
+Searching with up to 3 ambiguous amino acid(s) and 0 mismatch(es)!
+
+Aho-Corasick done:
+  found 143 hits for 139 of 139 peptides.
+Peptide hits passing enzyme filter: 143
+     ... rejected by enzyme filter: 0
+-----------------------------------
+Peptide statistics
+
+  unmatched                : 0 (0 %)
+  target/decoy:
+    match to target DB only: 101 (72 %)
+    match to decoy DB only : 38 (27 %)
+    match to both          : 0 (0 %)
+
+  mapping to proteins:
+    no match (to 0 protein)         : 0
+    unique match (to 1 protein)     : 135
+    non-unique match (to >1 protein): 4
+-----------------------------------
+Protein statistics
+
+  total proteins searched: 8272
+  matched proteins       : 117 (117 new)
+  matched target proteins: 81 (69 %)
+  matched decoy proteins : 36 (30 %)
+  orphaned proteins      : 0 (all removed)
+-----------------------------------
+[ProSE] Ion priors (rich model, all peaks): not trained; 0 + 0 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.000479 s; 139 hits annotated in 3.1e-05 s; peak lists 36050 peaks of 139 spectra, 0.178263 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 139 PSMs in-process with 29 features.
+Features:
+CalcMass mass peplen charge2 charge3 charge4 enzN enzC enzInt dm absdm score fragment_mz_error_median_ppm matched_prefix_ions_fraction matched_suffix_ions_fraction longest_peptide_ion_sequence matched_prefix_ions matched_suffix_ions matched_ion_current matched_ion_current_fraction complementary_ions_fraction hyperscore_zscore ln_num_candidates chance_match_surprise mass_competition_evidence delta_score isotope_error ion_prior_llr ion_prior_explained 
+Train/test set contains 101 positives and 38 negatives, size ratio=2.65789 and pi0=1
+Warning : the number of positive samples read is too small to perform a correct classification.
+
+Warning : the number of negative samples read is too small to perform a correct classification.
+
+Split 1:	Selected feature 11 as initial direction. Could separate 46 training set positives with q<0.01 in that direction.
+Split 2:	Selected feature 11 as initial direction. Could separate 41 training set positives with q<0.01 in that direction.
+Split 3:	Selected feature 11 as initial direction. Could separate 45 training set positives with q<0.01 in that direction.
+Selecting Cneg by cross-validation.
+---Training with Cpos=0.1, Cneg selected by cross validation, initial_fdr=0.01, fdr=0.01
+Iteration 1:	Estimated 0 PSMs with q<0.01
+Iteration 2:	Estimated 0 PSMs with q<0.01
+Iteration 3:	Estimated 0 PSMs with q<0.01
+Iteration 4:	Estimated 0 PSMs with q<0.01
+Iteration 5:	Estimated 0 PSMs with q<0.01
+Iteration 6:	Estimated 0 PSMs with q<0.01
+Iteration 7:	Estimated 0 PSMs with q<0.01
+Iteration 8:	Estimated 0 PSMs with q<0.01
+Iteration 9:	Estimated 0 PSMs with q<0.01
+Iteration 10:	Estimated 0 PSMs with q<0.01
+Learned normalized SVM weights for the 3 cross-validation splits:
+ Split1	 Split2	 Split3	FeatureName
+-0.1430	-0.1220	-0.1544	CalcMass
+-0.0233	-0.1027	 0.0467	mass
+-0.2042	-0.3427	-0.2602	peplen
+ 0.0168	-0.0267	 0.0178	charge2
+-0.1063	 0.0322	 0.0348	charge3
+ 0.1525	-0.0058	-0.0933	charge4
+ 0.0494	-0.0946	 0.1608	enzN
+ 0.0194	-0.0398	-0.0444	enzC
+-0.4518	 0.0050	-0.3575	enzInt
+ 0.2082	 0.0350	 0.3488	dm
+-0.2001	-0.1605	-0.2399	absdm
+ 0.0544	 0.1029	 0.1923	score
+-0.4264	-0.4124	-0.0889	fragment_mz_error_median_ppm
+-0.0962	 0.0349	 0.3964	matched_prefix_ions_fraction
+-0.1073	 0.1716	-0.0806	matched_suffix_ions_fraction
+ 0.0257	 0.0582	 0.0055	longest_peptide_ion_sequence
+ 0.0166	 0.1620	 0.1618	matched_prefix_ions
+-0.0839	 0.0026	-0.0734	matched_suffix_ions
+ 0.4473	 0.3296	 0.5506	matched_ion_current
+ 0.3576	 0.1996	 0.1973	matched_ion_current_fraction
+ 0.1610	 0.3666	 0.0637	complementary_ions_fraction
+ 0.2901	 0.1544	 0.2655	hyperscore_zscore
+ 0.0434	 0.0442	-0.1241	ln_num_candidates
+ 0.1201	-0.2057	 0.1699	chance_match_surprise
+ 0.2471	 0.5570	 0.0839	mass_competition_evidence
+ 0.1777	 0.1142	 0.2134	delta_score
+ 0.0000	 0.0000	 0.0000	isotope_error
+ 0.0000	 0.0000	 0.0000	ion_prior_llr
+ 0.0000	 0.0000	 0.0000	ion_prior_explained
+ 0.1606	 0.1966	 0.1670	m0
+Found 0 test set PSMs with q<0.01.
+No targets found with q<0.01
+Resetting score vector, using default vector. Use --override flag to prevent this.
+Split 1:	Selected feature 11 as initial direction. Could separate 46 training set positives with q<0.01 in that direction.
+Split 2:	Selected feature 11 as initial direction. Could separate 41 training set positives with q<0.01 in that direction.
+Split 3:	Selected feature 11 as initial direction. Could separate 45 training set positives with q<0.01 in that direction.
+Delta mass statistics written to: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/mods/1__a_ModificationAnalysis_DeltaMassStats.tsv
+PTM statistics written to: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/mods/1__a_ModificationAnalysis_PTMStats.tsv
+Merge took: 0.00 s (wall), 0.00 s (CPU), 0.00 s (system), 0.00 s (user)
+Memory usage (Aho-Corasick): 0 MB (working set delta), 0 MB (peak working set delta)
+
+Peptide identification engine: PROSE
+Enzyme: Trypsin/P
+Building trie ... done (0s)
+Compressing trie to BFS format ...
+ACTrie::compressTrie(): created BFS trie with 1334 nodes (path compression skipped 20 suffix nodes)
+ done (0s)
+Mapping 139 peptides to 8272 proteins.
+Searching with up to 3 ambiguous amino acid(s) and 0 mismatch(es)!
+
+Aho-Corasick done:
+  found 143 hits for 139 of 139 peptides.
+Peptide hits passing enzyme filter: 143
+     ... rejected by enzyme filter: 0
+-----------------------------------
+Peptide statistics
+
+  unmatched                : 0 (0 %)
+  target/decoy:
+    match to target DB only: 101 (72 %)
+    match to decoy DB only : 38 (27 %)
+    match to both          : 0 (0 %)
+
+  mapping to proteins:
+    no match (to 0 protein)         : 0
+    unique match (to 1 protein)     : 135
+    non-unique match (to >1 protein): 4
+-----------------------------------
+Protein statistics
+
+  total proteins searched: 8272
+  matched proteins       : 117 (117 new)
+  matched target proteins: 81 (69 %)
+  matched decoy proteins : 36 (30 %)
+  orphaned proteins      : 0 (all removed)
+-----------------------------------
+[ProSE] Ion priors (rich model, all peaks): not trained; 0 + 0 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.0005 s; 139 hits annotated in 3.9e-05 s; peak lists 36050 peaks of 139 spectra, 0.178263 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 139 PSMs in-process with 29 features.
+Features:
+CalcMass mass peplen charge2 charge3 charge4 enzN enzC enzInt dm absdm score fragment_mz_error_median_ppm matched_prefix_ions_fraction matched_suffix_ions_fraction longest_peptide_ion_sequence matched_prefix_ions matched_suffix_ions matched_ion_current matched_ion_current_fraction complementary_ions_fraction hyperscore_zscore ln_num_candidates chance_match_surprise mass_competition_evidence delta_score isotope_error ion_prior_llr ion_prior_explained 
+Train/test set contains 101 positives and 38 negatives, size ratio=2.65789 and pi0=1
+Warning : the number of positive samples read is too small to perform a correct classification.
+
+Warning : the number of negative samples read is too small to perform a correct classification.
+
+Split 1:	Selected feature 11 as initial direction. Could separate 46 training set positives with q<0.01 in that direction.
+Split 2:	Selected feature 11 as initial direction. Could separate 41 training set positives with q<0.01 in that direction.
+Split 3:	Selected feature 11 as initial direction. Could separate 45 training set positives with q<0.01 in that direction.
+Selecting Cneg by cross-validation.
+---Training with Cpos=0.1, Cneg selected by cross validation, initial_fdr=0.01, fdr=0.01
+Iteration 1:	Estimated 0 PSMs with q<0.01
+Iteration 2:	Estimated 0 PSMs with q<0.01
+Iteration 3:	Estimated 0 PSMs with q<0.01
+Iteration 4:	Estimated 0 PSMs with q<0.01
+Iteration 5:	Estimated 0 PSMs with q<0.01
+Iteration 6:	Estimated 0 PSMs with q<0.01
+Iteration 7:	Estimated 0 PSMs with q<0.01
+Iteration 8:	Estimated 0 PSMs with q<0.01
+Iteration 9:	Estimated 0 PSMs with q<0.01
+Iteration 10:	Estimated 0 PSMs with q<0.01
+Learned normalized SVM weights for the 3 cross-validation splits:
+ Split1	 Split2	 Split3	FeatureName
+-0.1430	-0.1220	-0.1544	CalcMass
+-0.0233	-0.1027	 0.0467	mass
+-0.2042	-0.3427	-0.2602	peplen
+ 0.0168	-0.0267	 0.0178	charge2
+-0.1063	 0.0322	 0.0348	charge3
+ 0.1525	-0.0058	-0.0933	charge4
+ 0.0494	-0.0946	 0.1608	enzN
+ 0.0194	-0.0398	-0.0444	enzC
+-0.4518	 0.0050	-0.3575	enzInt
+ 0.2082	 0.0350	 0.3488	dm
+-0.2001	-0.1605	-0.2399	absdm
+ 0.0544	 0.1029	 0.1923	score
+-0.4264	-0.4124	-0.0889	fragment_mz_error_median_ppm
+-0.0962	 0.0349	 0.3964	matched_prefix_ions_fraction
+-0.1073	 0.1716	-0.0806	matched_suffix_ions_fraction
+ 0.0257	 0.0582	 0.0055	longest_peptide_ion_sequence
+ 0.0166	 0.1620	 0.1618	matched_prefix_ions
+-0.0839	 0.0026	-0.0734	matched_suffix_ions
+ 0.4473	 0.3296	 0.5506	matched_ion_current
+ 0.3576	 0.1996	 0.1973	matched_ion_current_fraction
+ 0.1610	 0.3666	 0.0637	complementary_ions_fraction
+ 0.2901	 0.1544	 0.2655	hyperscore_zscore
+ 0.0434	 0.0442	-0.1241	ln_num_candidates
+ 0.1201	-0.2057	 0.1699	chance_match_surprise
+ 0.2471	 0.5570	 0.0839	mass_competition_evidence
+ 0.1777	 0.1142	 0.2134	delta_score
+ 0.0000	 0.0000	 0.0000	isotope_error
+ 0.0000	 0.0000	 0.0000	ion_prior_llr
+ 0.0000	 0.0000	 0.0000	ion_prior_explained
+ 0.1606	 0.1966	 0.1670	m0
+Found 0 test set PSMs with q<0.01.
+No targets found with q<0.01
+Resetting score vector, using default vector. Use --override flag to prevent this.
+Split 1:	Selected feature 11 as initial direction. Could separate 46 training set positives with q<0.01 in that direction.
+Split 2:	Selected feature 11 as initial direction. Could separate 41 training set positives with q<0.01 in that direction.
+Split 3:	Selected feature 11 as initial direction. Could separate 45 training set positives with q<0.01 in that direction.
+Delta mass statistics written to: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/mods/2__a_ModificationAnalysis_DeltaMassStats.tsv
+PTM statistics written to: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/mods/2__a_ModificationAnalysis_PTMStats.tsv
+Merge took: 0.00 s (wall), 0.00 s (CPU), 0.00 s (system), 0.00 s (user)
+Memory usage (Aho-Corasick): 0 MB (working set delta), 0 MB (peak working set delta)
+
+Peptide identification engine: PROSE
+Enzyme: Trypsin/P
+Building trie ... done (0s)
+Compressing trie to BFS format ...
+ACTrie::compressTrie(): created BFS trie with 1334 nodes (path compression skipped 20 suffix nodes)
+ done (0s)
+Mapping 139 peptides to 8272 proteins.
+Searching with up to 3 ambiguous amino acid(s) and 0 mismatch(es)!
+
+Aho-Corasick done:
+  found 143 hits for 139 of 139 peptides.
+Peptide hits passing enzyme filter: 143
+     ... rejected by enzyme filter: 0
+-----------------------------------
+Peptide statistics
+
+  unmatched                : 0 (0 %)
+  target/decoy:
+    match to target DB only: 101 (72 %)
+    match to decoy DB only : 38 (27 %)
+    match to both          : 0 (0 %)
+
+  mapping to proteins:
+    no match (to 0 protein)         : 0
+    unique match (to 1 protein)     : 135
+    non-unique match (to >1 protein): 4
+-----------------------------------
+Protein statistics
+
+  total proteins searched: 8272
+  matched proteins       : 117 (117 new)
+  matched target proteins: 81 (69 %)
+  matched decoy proteins : 36 (30 %)
+  orphaned proteins      : 0 (all removed)
+-----------------------------------
+[ProSE] Ion priors (rich model, all peaks): not trained; 0 + 0 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.00043 s; 139 hits annotated in 3.3e-05 s; peak lists 36050 peaks of 139 spectra, 0.178263 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Features:
+CalcMass mass peplen charge2 charge3 charge4 enzN enzC enzInt dm absdm score fragment_mz_error_median_ppm matched_prefix_ions_fraction matched_suffix_ions_fraction longest_peptide_ion_sequence matched_prefix_ions matched_suffix_ions matched_ion_current matched_ion_current_fraction complementary_ions_fraction hyperscore_zscore ln_num_candidates chance_match_surprise mass_competition_evidence delta_score isotope_error ion_prior_llr ion_prior_explained 
+Rescoring 139 PSMs in-process with 29 features.
+Train/test set contains 101 positives and 38 negatives, size ratio=2.65789 and pi0=1
+Warning : the number of positive samples read is too small to perform a correct classification.
+
+Warning : the number of negative samples read is too small to perform a correct classification.
+
+Split 1:	Selected feature 11 as initial direction. Could separate 46 training set positives with q<0.01 in that direction.
+Split 2:	Selected feature 11 as initial direction. Could separate 41 training set positives with q<0.01 in that direction.
+Split 3:	Selected feature 11 as initial direction. Could separate 45 training set positives with q<0.01 in that direction.
+Selecting Cneg by cross-validation.
+---Training with Cpos=0.1, Cneg selected by cross validation, initial_fdr=0.01, fdr=0.01
+Iteration 1:	Estimated 0 PSMs with q<0.01
+Iteration 2:	Estimated 0 PSMs with q<0.01
+Iteration 3:	Estimated 0 PSMs with q<0.01
+Iteration 4:	Estimated 0 PSMs with q<0.01
+Iteration 5:	Estimated 0 PSMs with q<0.01
+Iteration 6:	Estimated 0 PSMs with q<0.01
+Iteration 7:	Estimated 0 PSMs with q<0.01
+Iteration 8:	Estimated 0 PSMs with q<0.01
+Iteration 9:	Estimated 0 PSMs with q<0.01
+Iteration 10:	Estimated 0 PSMs with q<0.01
+Learned normalized SVM weights for the 3 cross-validation splits:
+ Split1	 Split2	 Split3	FeatureName
+-0.1430	-0.1220	-0.1544	CalcMass
+-0.0233	-0.1027	 0.0467	mass
+-0.2042	-0.3427	-0.2602	peplen
+ 0.0168	-0.0267	 0.0178	charge2
+-0.1063	 0.0322	 0.0348	charge3
+ 0.1525	-0.0058	-0.0933	charge4
+ 0.0494	-0.0946	 0.1608	enzN
+ 0.0194	-0.0398	-0.0444	enzC
+-0.4518	 0.0050	-0.3575	enzInt
+ 0.2082	 0.0350	 0.3488	dm
+-0.2001	-0.1605	-0.2399	absdm
+ 0.0544	 0.1029	 0.1923	score
+-0.4264	-0.4124	-0.0889	fragment_mz_error_median_ppm
+-0.0962	 0.0349	 0.3964	matched_prefix_ions_fraction
+-0.1073	 0.1716	-0.0806	matched_suffix_ions_fraction
+ 0.0257	 0.0582	 0.0055	longest_peptide_ion_sequence
+ 0.0166	 0.1620	 0.1618	matched_prefix_ions
+-0.0839	 0.0026	-0.0734	matched_suffix_ions
+ 0.4473	 0.3296	 0.5506	matched_ion_current
+ 0.3576	 0.1996	 0.1973	matched_ion_current_fraction
+ 0.1610	 0.3666	 0.0637	complementary_ions_fraction
+ 0.2901	 0.1544	 0.2655	hyperscore_zscore
+ 0.0434	 0.0442	-0.1241	ln_num_candidates
+ 0.1201	-0.2057	 0.1699	chance_match_surprise
+ 0.2471	 0.5570	 0.0839	mass_competition_evidence
+ 0.1777	 0.1142	 0.2134	delta_score
+ 0.0000	 0.0000	 0.0000	isotope_error
+ 0.0000	 0.0000	 0.0000	ion_prior_llr
+ 0.0000	 0.0000	 0.0000	ion_prior_explained
+ 0.1606	 0.1966	 0.1670	m0
+Found 0 test set PSMs with q<0.01.
+No targets found with q<0.01
+Resetting score vector, using default vector. Use --override flag to prevent this.
+Split 1:	Selected feature 11 as initial direction. Could separate 46 training set positives with q<0.01 in that direction.
+Split 2:	Selected feature 11 as initial direction. Could separate 41 training set positives with q<0.01 in that direction.
+Split 3:	Selected feature 11 as initial direction. Could separate 45 training set positives with q<0.01 in that direction.
+Delta mass statistics written to: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/mods/3__valid_ModificationAnalysis_DeltaMassStats.tsv
+PTM statistics written to: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/mods/3__valid_ModificationAnalysis_PTMStats.tsv
+[ProSE] Running aggregate modification analysis on 417 pooled PSM(s) from 3 input file(s).
+Delta mass statistics written to: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/mods/_aggregate_across_files_ModificationAnalysis_DeltaMassStats.tsv
+PTM statistics written to: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/mods/_aggregate_across_files_ModificationAnalysis_PTMStats.tsv
+Percolator rescoring of /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/1__a.mzML: Percolator's sanity check rejected the learned model (on the held-out folds it found no target PSM at q < 0.01, or fewer than the best single feature; typical for blank runs and runs with few confident PSMs), so the PSMs are scored with that feature alone.
+<[ProSE] Ion priors: 0 and 0 confident training PSMs in the two halves of the spectra, fewer than 100; the ion_prior_* features are 0 for this file.> occurred 3 times
+Percolator rescoring of /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/2__a.mzML: Percolator's sanity check rejected the learned model (on the held-out folds it found no target PSM at q < 0.01, or fewer than the best single feature; typical for blank runs and runs with few confident PSMs), so the PSMs are scored with that feature alone.
+Percolator rescoring of /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/3__valid.mzML.gz: Percolator's sanity check rejected the learned model (on the held-out folds it found no target PSM at q < 0.01, or fewer than the best single feature; typical for blank runs and runs with few confident PSMs), so the PSMs are scored with that feature alone.
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+  -- done [took 0.01 s (CPU), 0.01 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 0.01 s (CPU), 0.01 s (Wall)] -- 
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+  -- done [took 0.02 s (CPU), 0.01 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 0.02 s (CPU), 0.01 s (Wall) @ 88.76 MiB/s] -- 
+-qpx_extended: selecting the NCE of /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/1__a.mzML with PeptDeep rescoring on a copy of its PSMs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Progress of 'Selecting collision energy...':
+-- done [took 0.73 s (CPU), 0.17 s (Wall)] -- 
+Progress of 'Predicting fragment intensities and retention times...':
+-- done [took 0.26 s (CPU), 0.06 s (Wall)] -- 
+[PeptDeepRescoring] run 'ProSE_2026-10-24 11:01:03': NCE 29 selected from a grid centred on 35 (median cosine 0.820547)
+[PeptDeepRescoring] run 'ProSE_2026-10-24 11:01:03': retention-time calibration (b_spline) on 33 PSMs, median residual 5.07462 s
+[PeptDeepRescoring] Predicted features added: 69 / 69 PSMs (ms2_cosine, ms2_spectral_angle, ms2_pearson, ms2_frac_pred_found, rt_abs_error), NCE=29
+-qpx_extended: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/1__a.mzML: PeptDeep predictions of 56 peptide(s) at NCE 29 (selected)
+-qpx_extended: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/1__a.mzML: 69 spectra of its PSMs, 19796 of 19796 peaks kept (the 100 most intense per 100 Th and the annotated ones)
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+  -- done [took 0.00 s (CPU), 0.01 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 0.00 s (CPU), 0.01 s (Wall)] -- 
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+  -- done [took 0.02 s (CPU), 0.01 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 0.03 s (CPU), 0.01 s (Wall) @ 90.66 MiB/s] -- 
+-qpx_extended: selecting the NCE of /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/2__a.mzML with PeptDeep rescoring on a copy of its PSMs
+Progress of 'Selecting collision energy...':
+-- done [took 0.72 s (CPU), 0.16 s (Wall)] -- 
+Progress of 'Predicting fragment intensities and retention times...':
+-- done [took 0.25 s (CPU), 0.06 s (Wall)] -- 
+[PeptDeepRescoring] run 'ProSE_2026-10-24 11:01:04': NCE 29 selected from a grid centred on 35 (median cosine 0.820547)
+[PeptDeepRescoring] run 'ProSE_2026-10-24 11:01:04': retention-time calibration (b_spline) on 33 PSMs, median residual 5.07462 s
+[PeptDeepRescoring] Predicted features added: 69 / 69 PSMs (ms2_cosine, ms2_spectral_angle, ms2_pearson, ms2_frac_pred_found, rt_abs_error), NCE=29
+-qpx_extended: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/2__a.mzML: PeptDeep predictions of 56 peptide(s) at NCE 29 (selected)
+-qpx_extended: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/2__a.mzML: 69 spectra of its PSMs, 19796 of 19796 peaks kept (the 100 most intense per 100 Th and the annotated ones)
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+  -- done [took 0.01 s (CPU), 0.01 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 0.02 s (CPU), 0.01 s (Wall)] -- 
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+  -- done [took 0.02 s (CPU), 0.01 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 0.02 s (CPU), 0.01 s (Wall) @ 27.63 MiB/s] -- 
+-qpx_extended: selecting the NCE of /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/3__valid.mzML.gz with PeptDeep rescoring on a copy of its PSMs
+Progress of 'Selecting collision energy...':
+  100.00 %               -- done [took 0.72 s (CPU), 0.17 s (Wall)] -- 
+Progress of 'Predicting fragment intensities and retention times...':
+-- done [took 0.26 s (CPU), 0.06 s (Wall)] -- 
+[PeptDeepRescoring] run 'ProSE_2026-10-24 11:01:04': NCE 29 selected from a grid centred on 35 (median cosine 0.820547)
+[PeptDeepRescoring] run 'ProSE_2026-10-24 11:01:04': retention-time calibration (b_spline) on 33 PSMs, median residual 5.07462 s
+[PeptDeepRescoring] Predicted features added: 69 / 69 PSMs (ms2_cosine, ms2_spectral_angle, ms2_pearson, ms2_frac_pred_found, rt_abs_error), NCE=29
+-qpx_extended: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/3__valid.mzML.gz: PeptDeep predictions of 56 peptide(s) at NCE 29 (selected)
+-qpx_extended: /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/3__valid.mzML.gz: 69 spectra of its PSMs, 19796 of 19796 peaks kept (the 100 most intense per 100 Th and the annotated ones)
+Found score type q-value to be of type 5
+Found score type MS:1001493 to be of type 3
+Building graph on 207 spectra and 53 proteins.
+Progress of 'Building graph...':
+-- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+Progress of 'Annotating indistinguishable proteins...':
+-- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+Omitted writing of 210 peptide identifications due to empty hits.
+<Found score type MS:1001493 to be of type 3> occurred 2 times
+Found 51 connected components.
+
+[ProSE] ===================== Search Report =====================
+[ProSE] Database     : /scratch/sachsenb/prose-desktop/src-tauri/resources/example/Ecoli_K12_proteome.fasta  (4136 target + 4136 decoy proteins, decoys: generated)
+[ProSE] Config       : Trypsin/P, 2 MC | prec [-500, +500] Da | frag 0.5 Da | z 2-5 | mode: open | chunked
+[ProSE] Fragment idx : 936941 peptides / 23913129 fragments (build 0.9 s)
+[ProSE] -------------------------------------------------------------
+[ProSE] File                         MS2  Matched     ID%  Peptide    Prot   Decoy
+[ProSE] 1__a.mzML                    139       69   49.6%       54      53       3
+[ProSE] 2__a.mzML                    139       69   49.6%       54      53       3
+[ProSE] 3__valid.mzML.gz             139       69   49.6%       54      53       3
+[ProSE] TOTAL                        417      207   49.6%        -       -       9
+[ProSE] ---------------- Modification discovery ---------------
+[ProSE] Delta mass : 15 modified / 207 PSMs (7.2%), median Δ=-0.2180 Da, 4 bins
+[ProSE] PTMs      : 0 PSMs with known PTMs, 15 unknown, 0 unique PTMs
+[ProSE]   Top unknown delta masses (potential novel PTMs):
+[ProSE]    1 | Δ=    -0.2180 Da |      6 PSMs | 54 peptides
+[ProSE] Total time   : 6.8 s
+[ProSE] Percolator   : rescored 3 / 3 file(s)
+[ProSE] ------------------------- Outputs ----------------------------
+[ProSE]   merged idXML    -> /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/merged.idXML
+[ProSE]   QPX parquet     -> /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/qpx
+[ProSE]   mod-analysis tables-> /home/user/.local/share/org.openms.prose.desktop/searches/1792832460322-0.partial/mods
+[ProSE] ==============================================================
+
+ProSE took 6.77 s (wall), 18.21 s (CPU), 0.15 s (system), 18.06 s (user); Peak Memory Usage: 156 MB.

@@ -33,6 +33,7 @@
 
 pub mod args;
 pub mod content;
+pub mod decoys;
 pub mod files;
 pub mod history;
 pub mod progress;

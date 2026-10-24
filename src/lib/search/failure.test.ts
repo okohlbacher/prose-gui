@@ -59,6 +59,8 @@ describe('describeFailure', () => {
     expect(stage('Loading the PeptDeep models...')).toBe('While loading the PeptDeep models')
     expect(stage('Reading the spectra of the PSMs...')).toBe('While reading the spectra of the PSMs')
     expect(stage('Building fragment index...')).toBe('During “Building fragment index”')
+    expect(stage('Preparing the spectrum view (file 2 of 3)…')).toBe('While preparing the spectrum view of file 2 of 3')
+    expect(stage('Preparing the spectrum view…')).toBe('While preparing the spectrum view')
     expect(stage('')).toBe('During the search')
   })
 

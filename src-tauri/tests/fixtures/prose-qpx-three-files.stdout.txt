@@ -1,0 +1,1048 @@
+[ProSE] [1/3] Searching /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/1__JD_06232014_sample1_A.mzML
+Warning: FragmentIndex received the unknown parameter 'decoy_prefix'!
+Warning: FragmentIndex received the unknown parameter 'rescore'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_min_peaks'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_charge_cap'!
+Warning: FragmentIndex received the unknown parameter 'fragment:deisotope_sum_intensity'!
+Warning: FragmentIndex received the unknown parameter 'fragment:query_spectrum'!
+Warning: FragmentIndex received the unknown parameter 'peaks:keep_n'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_top'!
+Warning: FragmentIndex received the unknown parameter 'peaks:window_type'!
+Warning: FragmentIndex received the unknown parameter 'annotate:local_fragment_evidence'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:enable'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:ms2_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:instrument'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:nce'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:rt_model_type'!
+Warning: FragmentIndex received the unknown parameter 'peptdeep:batch_size'!
+Warning: FragmentIndex received the unknown parameter 'report:isotope_error_convention'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM'!
+Warning: FragmentIndex received the unknown parameter 'FDR:PSM_groups'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein'!
+Warning: FragmentIndex received the unknown parameter 'FDR:protein_inference_PSM'!
+Warning: FragmentIndex received the unknown parameter 'scoring:fragment_charges'!
+Warning: FragmentIndex received the unknown parameter 'scoring:method'!
+Warning: FragmentIndex received the unknown parameter 'scoring:mass_error_sd'!
+Warning: FragmentIndex received the unknown parameter 'calibration:enabled'!
+Warning: FragmentIndex received the unknown parameter 'calibration:subset_ratio'!
+Warning: FragmentIndex received the unknown parameter 'calibration:min_psms'!
+Warning: FragmentIndex received the unknown parameter 'database:chunk_size'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:enabled'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_coisolated'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:max_kl'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:top_hits'!
+Warning: FragmentIndex received the unknown parameter 'chimeric:mz_tolerance'!
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+Collapsed 120013 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] open_search=false (precursor tolerance [-10, +10] ppm)
+[ProSE] Protein mapping with PeptideIndexing (the fragment index does not list every protein occurrence of its peptides (low_memory, protein-terminal modifications, or not built from this database)).
+Merge took: 0.00 s (wall), 0.04 s (CPU), 0.00 s (system), 0.04 s (user)
+Memory usage (Aho-Corasick): 26 MB (working set delta), 28 MB (peak working set delta)
+
+Peptide identification engine: PROSE
+Enzyme: Trypsin/P
+Building trie ... done (0s)
+Compressing trie to BFS format ...
+ACTrie::compressTrie(): created BFS trie with 190890 nodes (path compression skipped 7064 suffix nodes)
+ done (0s)
+Mapping 23750 peptides to 13488 proteins.
+Searching with up to 3 ambiguous amino acid(s) and 0 mismatch(es)!
+
+Aho-Corasick done:
+  found 28686 hits for 23750 of 23750 peptides.
+Peptide hits passing enzyme filter: 28686
+     ... rejected by enzyme filter: 154
+-----------------------------------
+Peptide statistics
+
+  unmatched                : 0 (0 %)
+  target/decoy:
+    match to target DB only: 22265 (93 %)
+    match to decoy DB only : 1480 (6 %)
+    match to both          : 5 (0 %)
+
+  mapping to proteins:
+    no match (to 0 protein)         : 0
+    unique match (to 1 protein)     : 21935
+    non-unique match (to >1 protein): 1815
+-----------------------------------
+Protein statistics
+
+  total proteins searched: 13488
+  matched proteins       : 4897 (4897 new)
+  matched target proteins: 3639 (74 %)
+  matched decoy proteins : 1258 (25 %)
+  orphaned proteins      : 0 (all removed)
+-----------------------------------
+[ProSE] Ion priors (rich model, all peaks): trained on 10003 + 10127 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.104248 s; 23750 hits annotated in 0.014374 s; peak lists 5053695 peaks of 49514 spectra, 26.3645 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 23750 PSMs in-process with 31 features.
+Features:
+CalcMass mass peplen charge2 charge3 charge4 charge5 charge6 enzN enzC enzInt dm absdm score fragment_mz_error_median_ppm matched_prefix_ions_fraction matched_suffix_ions_fraction longest_peptide_ion_sequence matched_prefix_ions matched_suffix_ions matched_ion_current matched_ion_current_fraction complementary_ions_fraction hyperscore_zscore ln_num_candidates chance_match_surprise mass_competition_evidence delta_score isotope_error ion_prior_llr ion_prior_explained 
+Train/test set contains 22270 positives and 1480 negatives, size ratio=15.0473 and pi0=1
+Split 1:	Selected feature 30 as initial direction. Could separate 13782 training set positives with q<0.01 in that direction.
+Split 2:	Selected feature 26 as initial direction. Could separate 13812 training set positives with q<0.01 in that direction.
+Split 3:	Selected feature 26 as initial direction. Could separate 13807 training set positives with q<0.01 in that direction.
+Selecting Cneg by cross-validation.
+---Training with Cpos=0.1, Cneg selected by cross validation, initial_fdr=0.01, fdr=0.01
+Iteration 1:	Estimated 20983 PSMs with q<0.01
+Iteration 2:	Estimated 20982 PSMs with q<0.01
+Iteration 3:	Estimated 20978 PSMs with q<0.01
+Iteration 4:	Estimated 20976 PSMs with q<0.01
+Iteration 5:	Estimated 20975 PSMs with q<0.01
+Iteration 6:	Estimated 20974 PSMs with q<0.01
+Iteration 7:	Estimated 20973 PSMs with q<0.01
+Iteration 8:	Estimated 20973 PSMs with q<0.01
+Iteration 9:	Estimated 20973 PSMs with q<0.01
+Iteration 10:	Estimated 20973 PSMs with q<0.01
+Learned normalized SVM weights for the 3 cross-validation splits:
+ Split1	 Split2	 Split3	FeatureName
+ 0.3237	 0.3264	 0.2754	CalcMass
+ 0.3240	 0.3140	 0.2769	mass
+-0.2145	-0.0830	-0.1594	peplen
+-0.1283	-0.0929	-0.0816	charge2
+ 0.1170	 0.0664	 0.0740	charge3
+ 0.0553	 0.1102	 0.0399	charge4
+ 0.0283	 0.0173	 0.0231	charge5
+-0.0588	-0.0540	-0.0603	charge6
+ 0.0224	 0.0010	 0.0324	enzN
+-0.0236	-0.1237	-0.0191	enzC
+-0.1031	-0.1015	-0.0440	enzInt
+-0.1006	-0.1970	-0.1619	dm
+-0.1096	-0.2011	-0.0626	absdm
+-0.5375	-0.4880	-0.4256	score
+ 0.0628	 0.0650	 0.0364	fragment_mz_error_median_ppm
+ 0.2233	-0.2751	 0.0529	matched_prefix_ions_fraction
+ 0.0848	 0.3518	-0.0310	matched_suffix_ions_fraction
+ 0.3635	 0.5083	 0.2572	longest_peptide_ion_sequence
+-0.3209	 0.2451	-0.1183	matched_prefix_ions
+-0.1468	-0.5891	 0.0578	matched_suffix_ions
+ 0.0487	 0.0927	-0.2198	matched_ion_current
+ 0.0591	 0.0097	 0.2165	matched_ion_current_fraction
+-0.1721	-0.1430	-0.0263	complementary_ions_fraction
+ 0.3156	-0.0256	 0.1820	hyperscore_zscore
+-0.4211	-0.0698	-0.3763	ln_num_candidates
+ 0.4772	 0.3965	 0.2631	chance_match_surprise
+ 0.5556	 0.4819	 0.7536	mass_competition_evidence
+ 0.9300	 1.0386	 0.7393	delta_score
+ 0.0476	 0.0135	 0.0693	isotope_error
+ 0.8983	 1.0699	 0.9380	ion_prior_llr
+ 0.2647	 0.2799	 0.3591	ion_prior_explained
+ 2.8669	 2.6101	 2.9431	m0
+Found 20961 test set PSMs with q<0.01.
+[ProSE] Closed search mode - per-file modification analysis skipped
+[ProSE] [2/3] Searching /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/2__JD_06232014_sample1_B.mzML
+[ProSE] open_search=false (precursor tolerance [-10, +10] ppm)
+[ProSE] Protein mapping with PeptideIndexing (the fragment index does not list every protein occurrence of its peptides (low_memory, protein-terminal modifications, or not built from this database)).
+Merge took: 0.00 s (wall), 0.04 s (CPU), 0.00 s (system), 0.04 s (user)
+Memory usage (Aho-Corasick): 12 MB (working set delta), 13 MB (peak working set delta)
+
+Peptide identification engine: PROSE
+Enzyme: Trypsin/P
+Building trie ... done (0s)
+Compressing trie to BFS format ...
+ACTrie::compressTrie(): created BFS trie with 198602 nodes (path compression skipped 7460 suffix nodes)
+ done (0s)
+Mapping 24361 peptides to 13488 proteins.
+Searching with up to 3 ambiguous amino acid(s) and 0 mismatch(es)!
+
+Aho-Corasick done:
+  found 29110 hits for 24361 of 24361 peptides.
+Peptide hits passing enzyme filter: 29110
+     ... rejected by enzyme filter: 158
+-----------------------------------
+Peptide statistics
+
+  unmatched                : 0 (0 %)
+  target/decoy:
+    match to target DB only: 22943 (94 %)
+    match to decoy DB only : 1414 (5 %)
+    match to both          : 4 (0 %)
+
+  mapping to proteins:
+    no match (to 0 protein)         : 0
+    unique match (to 1 protein)     : 22551
+    non-unique match (to >1 protein): 1810
+-----------------------------------
+Protein statistics
+
+  total proteins searched: 13488
+  matched proteins       : 4938 (4938 new)
+  matched target proteins: 3718 (75 %)
+  matched decoy proteins : 1220 (24 %)
+  orphaned proteins      : 0 (all removed)
+-----------------------------------
+[ProSE] Ion priors (rich model, all peaks): trained on 10273 + 10543 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.100216 s; 24361 hits annotated in 0.014926 s; peak lists 5120997 peaks of 49633 spectra, 26.6908 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 24361 PSMs in-process with 31 features.
+Features:
+CalcMass mass peplen charge2 charge3 charge4 charge5 charge6 enzN enzC enzInt dm absdm score fragment_mz_error_median_ppm matched_prefix_ions_fraction matched_suffix_ions_fraction longest_peptide_ion_sequence matched_prefix_ions matched_suffix_ions matched_ion_current matched_ion_current_fraction complementary_ions_fraction hyperscore_zscore ln_num_candidates chance_match_surprise mass_competition_evidence delta_score isotope_error ion_prior_llr ion_prior_explained 
+Train/test set contains 22947 positives and 1414 negatives, size ratio=16.2284 and pi0=1
+Split 1:	Selected feature 26 as initial direction. Could separate 14352 training set positives with q<0.01 in that direction.
+Split 2:	Selected feature 26 as initial direction. Could separate 14297 training set positives with q<0.01 in that direction.
+Split 3:	Selected feature 26 as initial direction. Could separate 14375 training set positives with q<0.01 in that direction.
+Selecting Cneg by cross-validation.
+---Training with Cpos=0.1, Cneg selected by cross validation, initial_fdr=0.01, fdr=0.01
+Iteration 1:	Estimated 21716 PSMs with q<0.01
+Iteration 2:	Estimated 21710 PSMs with q<0.01
+Iteration 3:	Estimated 21706 PSMs with q<0.01
+Iteration 4:	Estimated 21705 PSMs with q<0.01
+Iteration 5:	Estimated 21710 PSMs with q<0.01
+Iteration 6:	Estimated 21713 PSMs with q<0.01
+Iteration 7:	Estimated 21715 PSMs with q<0.01
+Iteration 8:	Estimated 21715 PSMs with q<0.01
+Iteration 9:	Estimated 21715 PSMs with q<0.01
+Iteration 10:	Estimated 21715 PSMs with q<0.01
+Learned normalized SVM weights for the 3 cross-validation splits:
+ Split1	 Split2	 Split3	FeatureName
+ 0.3126	 0.2528	 0.2689	CalcMass
+ 0.3145	 0.2524	 0.2689	mass
+-0.0378	 0.1116	 0.0731	peplen
+-0.1320	-0.0836	-0.1207	charge2
+ 0.1202	 0.0760	 0.1123	charge3
+ 0.0600	 0.0415	 0.0459	charge4
+ 0.0424	 0.0310	 0.0368	charge5
+-0.0757	-0.0647	-0.0656	charge6
+ 0.0829	 0.0306	 0.0686	enzN
+-0.0510	-0.0472	-0.0931	enzC
+-0.0901	-0.0220	-0.0633	enzInt
+-0.0620	-0.0602	-0.0613	dm
+-0.0161	-0.0610	-0.0166	absdm
+-0.0696	-0.2923	-0.2934	score
+ 0.0238	 0.0090	 0.0276	fragment_mz_error_median_ppm
+ 0.1859	 0.2367	-0.0066	matched_prefix_ions_fraction
+ 0.6868	 0.5327	 0.6705	matched_suffix_ions_fraction
+ 0.4150	 0.4171	 0.2254	longest_peptide_ion_sequence
+-0.2460	-0.1304	 0.1520	matched_prefix_ions
+-0.7474	-0.4293	-0.1420	matched_suffix_ions
+-0.2156	-0.1597	-0.0924	matched_ion_current
+ 0.1700	 0.2117	 0.1713	matched_ion_current_fraction
+-0.3135	-0.2939	-0.2269	complementary_ions_fraction
+ 0.3408	 0.2083	 0.3998	hyperscore_zscore
+-0.4712	-0.3198	-0.5730	ln_num_candidates
+ 0.1749	 0.1581	-0.1361	chance_match_surprise
+ 1.0144	 0.6859	 0.7473	mass_competition_evidence
+ 0.8032	 0.5662	 0.5756	delta_score
+ 0.0472	 0.0207	-0.0015	isotope_error
+ 0.6299	 0.7371	 0.6125	ion_prior_llr
+ 0.0818	 0.1143	 0.1817	ion_prior_explained
+ 2.8697	 2.4500	 2.4846	m0
+Found 21730 test set PSMs with q<0.01.
+[ProSE] Closed search mode - per-file modification analysis skipped
+[ProSE] [3/3] Searching /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/3__JD_06232014_sample1_C.mzML
+[ProSE] open_search=false (precursor tolerance [-10, +10] ppm)
+[ProSE] Protein mapping with PeptideIndexing (the fragment index does not list every protein occurrence of its peptides (low_memory, protein-terminal modifications, or not built from this database)).
+Merge took: 0.00 s (wall), 0.03 s (CPU), 0.00 s (system), 0.03 s (user)
+Memory usage (Aho-Corasick): 2 MB (working set delta), 0 MB (peak working set delta)
+
+Peptide identification engine: PROSE
+Enzyme: Trypsin/P
+Building trie ... done (0s)
+Compressing trie to BFS format ...
+ACTrie::compressTrie(): created BFS trie with 180427 nodes (path compression skipped 6630 suffix nodes)
+ done (0s)
+Mapping 22607 peptides to 13488 proteins.
+Searching with up to 3 ambiguous amino acid(s) and 0 mismatch(es)!
+
+Aho-Corasick done:
+  found 27291 hits for 22607 of 22607 peptides.
+Peptide hits passing enzyme filter: 27291
+     ... rejected by enzyme filter: 151
+-----------------------------------
+Peptide statistics
+
+  unmatched                : 0 (0 %)
+  target/decoy:
+    match to target DB only: 21042 (93 %)
+    match to decoy DB only : 1563 (6 %)
+    match to both          : 2 (0 %)
+
+  mapping to proteins:
+    no match (to 0 protein)         : 0
+    unique match (to 1 protein)     : 20839
+    non-unique match (to >1 protein): 1768
+-----------------------------------
+Protein statistics
+
+  total proteins searched: 13488
+  matched proteins       : 4867 (4867 new)
+  matched target proteins: 3554 (73 %)
+  matched decoy proteins : 1313 (26 %)
+  orphaned proteins      : 0 (all removed)
+-----------------------------------
+[ProSE] Ion priors (rich model, all peaks): trained on 9234 + 9466 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.087203 s; 22607 hits annotated in 0.013463 s; peak lists 5162238 peaks of 49334 spectra, 26.8738 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 22607 PSMs in-process with 31 features.
+Features:
+CalcMass mass peplen charge2 charge3 charge4 charge5 charge6 enzN enzC enzInt dm absdm score fragment_mz_error_median_ppm matched_prefix_ions_fraction matched_suffix_ions_fraction longest_peptide_ion_sequence matched_prefix_ions matched_suffix_ions matched_ion_current matched_ion_current_fraction complementary_ions_fraction hyperscore_zscore ln_num_candidates chance_match_surprise mass_competition_evidence delta_score isotope_error ion_prior_llr ion_prior_explained 
+Train/test set contains 21044 positives and 1563 negatives, size ratio=13.4639 and pi0=1
+Split 1:	Selected feature 26 as initial direction. Could separate 12893 training set positives with q<0.01 in that direction.
+Split 2:	Selected feature 26 as initial direction. Could separate 12979 training set positives with q<0.01 in that direction.
+Split 3:	Selected feature 26 as initial direction. Could separate 12944 training set positives with q<0.01 in that direction.
+Selecting Cneg by cross-validation.
+---Training with Cpos=0.1, Cneg selected by cross validation, initial_fdr=0.01, fdr=0.01
+Iteration 1:	Estimated 19651 PSMs with q<0.01
+Iteration 2:	Estimated 19653 PSMs with q<0.01
+Iteration 3:	Estimated 19648 PSMs with q<0.01
+Iteration 4:	Estimated 19646 PSMs with q<0.01
+Iteration 5:	Estimated 19647 PSMs with q<0.01
+Iteration 6:	Estimated 19646 PSMs with q<0.01
+Iteration 7:	Estimated 19645 PSMs with q<0.01
+Iteration 8:	Estimated 19648 PSMs with q<0.01
+Iteration 9:	Estimated 19648 PSMs with q<0.01
+Iteration 10:	Estimated 19648 PSMs with q<0.01
+Learned normalized SVM weights for the 3 cross-validation splits:
+ Split1	 Split2	 Split3	FeatureName
+ 0.3810	 0.3841	 0.3185	CalcMass
+ 0.3841	 0.3823	 0.3229	mass
+-0.0919	-0.1940	 0.0017	peplen
+-0.1714	-0.1729	-0.1590	charge2
+ 0.1572	 0.1534	 0.1521	charge3
+ 0.0806	 0.1083	 0.0458	charge4
+ 0.0032	-0.0326	 0.0267	charge5
+-0.0582	-0.0539	-0.0592	charge6
+-0.0016	-0.0075	 0.0519	enzN
+-0.0673	-0.0573	-0.0582	enzC
+-0.1012	-0.0764	-0.0937	enzInt
+-0.0754	-0.0353	-0.0427	dm
+-0.0830	-0.1262	-0.0684	absdm
+-0.4758	-0.0634	-0.1901	score
+ 0.0131	 0.0159	-0.0397	fragment_mz_error_median_ppm
+ 0.3260	 0.2529	 0.2096	matched_prefix_ions_fraction
+ 0.3959	 0.6828	 0.5240	matched_suffix_ions_fraction
+ 0.3410	 0.1761	 0.3755	longest_peptide_ion_sequence
+-0.1917	-0.0306	 0.0080	matched_prefix_ions
+-0.2476	-0.2808	-0.0352	matched_suffix_ions
+-0.0417	-0.0221	 0.0600	matched_ion_current
+ 0.1920	 0.2370	 0.1391	matched_ion_current_fraction
+-0.3031	-0.3660	-0.1545	complementary_ions_fraction
+ 0.4011	 0.1033	 0.3173	hyperscore_zscore
+-0.4972	-0.2870	-0.5591	ln_num_candidates
+ 0.1330	-0.1037	 0.0707	chance_match_surprise
+ 0.7427	 0.8969	 0.6122	mass_competition_evidence
+ 0.9180	 0.5100	 0.6610	delta_score
+-0.0603	 0.0428	-0.0308	isotope_error
+ 0.8327	 0.7062	 0.7527	ion_prior_llr
+ 0.2642	 0.0527	-0.0314	ion_prior_explained
+ 2.7646	 2.5552	 2.8171	m0
+Found 19616 test set PSMs with q<0.01.
+[ProSE] Closed search mode - per-file modification analysis skipped
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+    16.06 %                   42.07 %                   68.23 %                   96.87 %                 -- done [took 3.82 s (CPU), 3.82 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 3.82 s (CPU), 3.82 s (Wall)] -- 
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+    13.48 %                   27.40 %                   41.25 %                   54.81 %                   67.71 %                   81.92 %                   98.92 %                 -- done [took 01:01 m (CPU), 6.95 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+  -- done [took 0.03 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 01:01 m (CPU), 6.95 s (Wall) @ 195.6 MiB/s] -- 
+-qpx_extended: selecting the NCE of /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/1__JD_06232014_sample1_A.mzML with PeptDeep rescoring on a copy of its PSMs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Progress of 'Selecting collision energy...':
+  14.29 %                 28.57 %                 42.86 %                 57.14 %                 71.43 %                 85.71 %                 100.00 %               -- done [took 01:48 m (CPU), 6.77 s (Wall)] -- 
+Progress of 'Predicting fragment intensities and retention times...':
+  50.00 %                 100.00 %               -- done [took 02:39 m (CPU), 9.98 s (Wall)] -- 
+[PeptDeepRescoring] run 'ProSE_2026-10-24 11:47:09': NCE 21 selected from a grid centred on 27 (median cosine 0.966192)
+[PeptDeepRescoring] run 'ProSE_2026-10-24 11:47:09': retention-time calibration (b_spline) on 10482 PSMs, median residual 84.9134 s
+[PeptDeepRescoring] Predicted features added: 21174 / 21174 PSMs (ms2_cosine, ms2_spectral_angle, ms2_pearson, ms2_frac_pred_found, rt_abs_error), NCE=21
+-qpx_extended: /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/1__JD_06232014_sample1_A.mzML: PeptDeep predictions of 20095 peptide(s) at NCE 21 (selected)
+-qpx_extended: /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/1__JD_06232014_sample1_A.mzML: 21174 spectra of its PSMs, 13345689 of 23838945 peaks kept (the 100 most intense per 100 Th and the annotated ones)
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+    0.10 %                   23.11 %                   47.78 %                   72.74 %                 -- done [took 3.99 s (CPU), 3.99 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 3.99 s (CPU), 3.99 s (Wall)] -- 
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+    0.18 %                   14.88 %                   28.23 %                   41.49 %                   54.78 %                   68.60 %                   83.64 %                 -- done [took 01:01 m (CPU), 7.01 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+    100.00 %                 -- done [took 0.03 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 01:01 m (CPU), 7.02 s (Wall) @ 194.5 MiB/s] -- 
+-qpx_extended: selecting the NCE of /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/2__JD_06232014_sample1_B.mzML with PeptDeep rescoring on a copy of its PSMs
+Progress of 'Selecting collision energy...':
+  14.29 %                 28.57 %                 42.86 %                 57.14 %                 71.43 %                 85.71 %                 100.00 %               -- done [took 01:52 m (CPU), 7.03 s (Wall)] -- 
+Progress of 'Predicting fragment intensities and retention times...':
+  50.00 %                 100.00 %               -- done [took 02:54 m (CPU), 10.91 s (Wall)] -- 
+[PeptDeepRescoring] run 'ProSE_2026-10-24 11:47:12': NCE 21 selected from a grid centred on 27 (median cosine 0.967821)
+[PeptDeepRescoring] run 'ProSE_2026-10-24 11:47:12': retention-time calibration (b_spline) on 10869 PSMs, median residual 91.8073 s
+[PeptDeepRescoring] Predicted features added: 21955 / 21955 PSMs (ms2_cosine, ms2_spectral_angle, ms2_pearson, ms2_frac_pred_found, rt_abs_error), NCE=21
+-qpx_extended: /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/2__JD_06232014_sample1_B.mzML: PeptDeep predictions of 20897 peptide(s) at NCE 21 (selected)
+-qpx_extended: /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/2__JD_06232014_sample1_B.mzML: 21955 spectra of its PSMs, 14161783 of 25352697 peaks kept (the 100 most intense per 100 Th and the annotated ones)
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+    11.57 %                   35.12 %                   59.28 %                   84.99 %                 -- done [took 4.09 s (CPU), 4.10 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 4.09 s (CPU), 4.10 s (Wall)] -- 
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+    7.26 %                   20.71 %                   34.11 %                   47.79 %                   61.41 %                   75.63 %                   91.27 %                 -- done [took 01:00 m (CPU), 6.97 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+  -- done [took 0.02 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 01:00 m (CPU), 6.98 s (Wall) @ 202.5 MiB/s] -- 
+-qpx_extended: selecting the NCE of /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/3__JD_06232014_sample1_C.mzML with PeptDeep rescoring on a copy of its PSMs
+Progress of 'Selecting collision energy...':
+  14.29 %                 42.86 %                 57.14 %                 71.43 %                 85.71 %                 100.00 %               -- done [took 01:49 m (CPU), 6.82 s (Wall)] -- 
+Progress of 'Predicting fragment intensities and retention times...':
+  50.00 %                 100.00 %               -- done [took 02:30 m (CPU), 9.42 s (Wall)] -- 
+[PeptDeepRescoring] run 'ProSE_2026-10-24 11:47:19': NCE 21 selected from a grid centred on 27 (median cosine 0.96401)
+[PeptDeepRescoring] run 'ProSE_2026-10-24 11:47:19': retention-time calibration (b_spline) on 9808 PSMs, median residual 103.915 s
+[PeptDeepRescoring] Predicted features added: 19813 / 19813 PSMs (ms2_cosine, ms2_spectral_angle, ms2_pearson, ms2_frac_pred_found, rt_abs_error), NCE=21
+-qpx_extended: /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/3__JD_06232014_sample1_C.mzML: PeptDeep predictions of 18787 peptide(s) at NCE 21 (selected)
+-qpx_extended: /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/3__JD_06232014_sample1_C.mzML: 19813 spectra of its PSMs, 12324924 of 22461653 peaks kept (the 100 most intense per 100 Th and the annotated ones)
+Found score type q-value to be of type 5
+Found score type MS:1001493 to be of type 3
+Building graph on 70718 spectra and 6930 proteins.
+Progress of 'Building graph...':
+-- done [took 0.13 s (CPU), 0.14 s (Wall)] -- 
+Progress of 'Annotating indistinguishable proteins...':
+-- done [took 0.29 s (CPU), 0.02 s (Wall)] -- 
+<Found score type MS:1001493 to be of type 3> occurred 2 times
+Found 6377 connected components.
+[ProSE] Protein inference on 70718 PSMs (7776 of them up to FDR:protein_inference_PSM, not reported), protein score PEP: 4418 target and 2512 decoy proteins.
+[ProSE] Protein inference + picked-protein FDR: 3553 proteins at 1% FDR.
+Omitted writing of 7776 peptide identifications due to empty hits.
+
+[ProSE] ===================== Search Report =====================
+[ProSE] Database     : /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/database.fasta  (6744 target + 6744 decoy proteins, decoys: generated)
+[ProSE] Config       : Trypsin/P, 2 MC | prec [-10, +10] ppm | frag 20 ppm | z 2-5 | mode: closed
+[ProSE] Fragment idx : 2032895 peptides / 48749218 fragments (build 0.6 s)
+[ProSE] -------------------------------------------------------------
+[ProSE] File                         MS2  Matched     ID%  Peptide    Prot   Decoy
+[ProSE] ...32014_sample1_A.mzML    49514    21174   42.8%    18030    3405     209
+[ProSE] ...32014_sample1_B.mzML    49633    21955   44.2%    18855    3510     217
+[ProSE] ...32014_sample1_C.mzML    49334    19813   40.2%    16883    3248     196
+[ProSE] TOTAL                     148481    62942   42.4%        -       -     622
+[ProSE] Total time   : 143.5 s
+[ProSE] Percolator   : rescored 3 / 3 file(s)
+[ProSE] ------------------------- Outputs ----------------------------
+[ProSE]   merged idXML    -> /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/merged.idXML
+[ProSE]   QPX parquet     -> /home/user/.local/share/org.openms.prose.desktop/searches/1792835225426-16.partial/qpx
+[ProSE] ==============================================================
+
+ProSE took 02:23 m (wall), 24:55 m (CPU), 7.97 s (system), 24:47 m (user); Peak Memory Usage: 2897 MB.
