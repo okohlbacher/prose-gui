@@ -1,6 +1,7 @@
 <script lang="ts">
   import CloseGuard from '$lib/components/CloseGuard.svelte'
   import TopBar from '$lib/components/TopBar.svelte'
+  import { Toaster } from '$lib/components/ui/sonner'
   import * as Tooltip from '$lib/components/ui/tooltip'
   import { initHistory } from '$lib/history/history.svelte'
   import { readHash, router } from '$lib/route.svelte'
@@ -40,3 +41,5 @@
 </Tooltip.Provider>
 
 <CloseGuard />
+<!-- notifications: a search that finished while the user was elsewhere (search/finished.ts) -->
+<Toaster position="bottom-right" closeButton />

@@ -8,6 +8,7 @@ import { unknownModifications } from '../settings/modifications'
 import { copyValues, requestParameters } from '../settings/parameters'
 import { PROSE_PARAMETERS } from '../settings/prose'
 import { invertedRanges, rangeMessage } from '../settings/ranges'
+import { keepsOpenResult, showFinished } from './finished'
 import { CRAP_PROTEINS, searchForm as form } from './form.svelte'
 import { runSearch, searchRun } from './session.svelte'
 import { toolState } from './tool.svelte'
@@ -117,7 +118,7 @@ export function searchRequest(): SearchRequest | null {
   }
 }
 
-/** Starts the search of the form; on success, opens its result. */
+/** Starts the search of the form; on success, opens its result (or says it finished: `showFinished`). */
 export async function startSearch(): Promise<void> {
   const request = searchRequest()
   if (!searchPlan.canStart || !request || !form.database) return
@@ -136,8 +137,8 @@ export async function startSearch(): Promise<void> {
       contaminants: form.contaminants,
       presetId: form.presetId,
     },
-  })
-  if (id !== null) navigate({ view: 'results', id })
+  }, keepsOpenResult)
+  if (id !== null) showFinished(id)
 }
 
 /**

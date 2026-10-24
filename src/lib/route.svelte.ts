@@ -36,3 +36,8 @@ export function readHash(): void {
   const canonical = formatHash(route)
   if (location.hash !== canonical) history.replaceState(null, '', canonical)
 }
+
+/** The "Results" link no longer returns to result `id` (e.g. deleted from History). */
+export function forgetResult(id: string): void {
+  if (resultId === id) resultId = null
+}

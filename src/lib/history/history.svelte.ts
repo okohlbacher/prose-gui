@@ -7,13 +7,15 @@
 
 import { desktopBackend, errorText } from '../desktop'
 import { resultName } from '../results/display'
-import { navigate } from '../route.svelte'
+import { forgetResult, navigate, router } from '../route.svelte'
 import {
+  closeResult,
   finishedWhileCancelled,
   forgetFinishedWhileCancelled,
   onFinishedWhileCancelled,
   onSearchEnded,
   onSearchFinished,
+  openFinished,
   openResult,
   openStoredResult,
   type EndedSearch,
@@ -237,9 +239,12 @@ async function show(id: string): Promise<void> {
   navigate({ view: 'results', id })
 }
 
-/** Opens a saved search in Results; the one already open is just shown. */
+/**
+ * Opens a saved search in Results; the one already open is just shown, one of this session that finished
+ * while the user was elsewhere comes from memory (`openFinished`).
+ */
 export async function openFromHistory(id: string): Promise<void> {
-  if (openResult.current?.id === id) {
+  if (openResult.current?.id === id || openFinished(id)) {
     navigate({ view: 'results', id })
     return
   }
@@ -248,7 +253,7 @@ export async function openFromHistory(id: string): Promise<void> {
 
 /** Reopens the search of an address (`#/results/<id>`), e.g. after a restart; false if History does not have it. */
 export async function restoreFromHistory(id: string): Promise<boolean> {
-  if (openResult.current?.id === id) return true
+  if (openResult.current?.id === id || openFinished(id)) return true
   if (!ready) await refreshHistory()
   if (!entries.some((e) => e.id === id)) return false
   const { result, origin } = await openSearch(backend, id)
@@ -288,8 +293,15 @@ export async function saveProjectFile(result: OpenResult): Promise<string | null
   return exportProject(backend, result.id, nameOf(result))
 }
 
+/**
+ * Deletes search `id` from History. If it is the open result, it is closed (its spectra, read as PSMs are
+ * opened, are gone), the "Results" link no longer leads to it, and Results of it goes to History.
+ */
 export async function removeFromHistory(id: string): Promise<void> {
   await backend.delete(id)
+  closeResult(id)
+  forgetResult(id)
+  if (router.route.view === 'results' && router.route.id === id) navigate({ view: 'history' })
   await refreshHistory()
 }
 
