@@ -6,7 +6,7 @@ mod common;
 use common::*;
 use prose_desktop_lib::args::{
     build_args, build_args_with, input_placements, input_records_with, input_stem, is_input_link,
-    link_name, with_contaminants, InputLinks, Placement, SearchRequest,
+    link_name, with_contaminants, InputLinks, Placement, SearchRequest, MAX_STEM,
 };
 use prose_desktop_lib::progress::ProgressTracker;
 use prose_desktop_lib::run::{SearchEvent, Searches};
@@ -711,6 +711,29 @@ fn link_names_keep_the_name_and_the_gz_suffix() {
     assert_eq!(input_stem("1__x.mzML"), "1__x");
     assert_eq!(input_stem("10__x.mzML.gz"), "10__x");
     assert_eq!(input_stem("2__a.b.MZML.GZ"), "2__a.b");
+}
+
+#[test]
+fn link_names_of_long_file_names_are_shortened_to_a_unique_stem_with_the_suffix() {
+    // 255 bytes: the longest name a file can have, and `1__` makes the link too long for the file system
+    let long = format!("{}.mzML", "x".repeat(250));
+    let link = link_name(0, &format!("/data/{long}"));
+    assert!(link.starts_with("1__xxx") && link.ends_with(".mzML"), "{link}");
+    assert_eq!(input_stem(&link).len(), MAX_STEM, "{link}");
+    // ProSE's longest output name fits
+    assert!(format!("{}_ModificationAnalysis_DeltaMassStats.tsv", input_stem(&link)).len() <= 255);
+    assert!(is_input_link(&link));
+    // `<n>__` keeps two such inputs apart, and the suffix stays as it is
+    let gz = link_name(11, &format!("/data/{}.MZML.GZ", "x".repeat(246)));
+    assert!(gz.starts_with("12__xxx") && gz.ends_with(".MZML.GZ"), "{gz}");
+    assert_ne!(input_stem(&link), input_stem(&link_name(1, &format!("/data/{long}"))));
+    // shortened at a character, never inside one
+    let umlauts = link_name(0, &format!("/data/{}.mzML", "ä".repeat(125)));
+    assert!(input_stem(&umlauts).len() <= MAX_STEM && umlauts.ends_with(".mzML"), "{umlauts}");
+    assert!(umlauts.trim_start_matches("1__").trim_end_matches(".mzML").chars().all(|c| c == 'ä'));
+    // a name that fits stays as it is
+    let fits = format!("{}.mzML", "y".repeat(MAX_STEM - 3));
+    assert_eq!(link_name(0, &format!("/data/{fits}")), format!("1__{fits}"));
 }
 
 /// Names whose lower-cased form has another length in bytes: `İ` (2 bytes, lower case 3), `Ⱥ` (2 -> 3),
@@ -1545,6 +1568,37 @@ fn gz_inputs_keep_their_suffix_in_the_link() {
         serde_json::from_str(&fs::read_to_string(folder.join("inputs.json")).unwrap()).unwrap();
     assert_eq!(mapping[0]["link"], "1__x.mzML.gz");
     assert_eq!(mapping[0]["name"], "x.mzML.gz");
+}
+
+#[test]
+fn an_input_of_a_255_byte_name_is_searched_and_maps_back_to_its_file() {
+    let run = Run::new();
+    let i = inputs();
+    let name = format!("{}.mzML", "n".repeat(250));
+    let long = i.dir.write(&format!("long/{name}"), "<mzML/>");
+    let (id, rx) = run.start(request(&[&long], &i.fasta, false, json!({})), None);
+    id.unwrap();
+    let folder = done_folder(&until_terminal(&rx, WAIT));
+    let mapping: Value =
+        serde_json::from_str(&fs::read_to_string(folder.join("inputs.json")).unwrap()).unwrap();
+    let link = mapping[0]["link"].as_str().unwrap().to_string();
+    let stem = mapping[0]["stem"].as_str().unwrap().to_string();
+    assert_eq!(mapping[0]["name"], name.as_str());
+    assert_eq!(mapping[0]["path"], long.to_str().unwrap());
+    assert_eq!(stem, input_stem(&link));
+    assert!(link.len() <= 255 && stem.len() == MAX_STEM, "{link}");
+    assert!(fs::symlink_metadata(folder.join(&link)).unwrap().file_type().is_symlink());
+    // the reader finds the input's outputs by the stem inputs.json records
+    assert!(folder.join(format!("qpx/runs/{stem}.psm.parquet")).is_file());
+    // Windows: such an input goes as a (shortened) link, not by its own path
+    let req = request(&[&long, &i.mzml], &i.fasta, false, json!({}));
+    assert_eq!(
+        input_placements(&req, InputLinks::PathsOrHardLinks),
+        vec![Placement::HardLink, Placement::OwnPath]
+    );
+    let records = input_records_with(&req, InputLinks::PathsOrHardLinks);
+    assert_eq!(records[0].link, link);
+    assert_eq!(records[1].link, "a.mzML");
 }
 
 /// Windows' way (`InputLinks::PathsOrHardLinks`), run on every platform: inputs of different names go to

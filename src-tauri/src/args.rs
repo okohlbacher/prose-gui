@@ -211,11 +211,32 @@ fn file_name(path: &str) -> String {
         .unwrap_or_default()
 }
 
+/// The longest stem (bytes) an input may have where ProSE names outputs after it. Its longest output name is
+/// `<stem>_ModificationAnalysis_DeltaMassStats.tsv` (open search), and a file name has at most 255 bytes (Linux,
+/// macOS; NTFS 255 UTF-16 units, which are never more than the bytes).
+pub const MAX_STEM: usize = 255 - "_ModificationAnalysis_DeltaMassStats.tsv".len();
+
 /// The name of input `index` (0-based) in the search folder: `<n>__<name>` with `n` from 1. ProSE names
 /// its per-input outputs after the input and refuses two inputs of one name, so an input goes in as
-/// a link with a name of its own (see [`InputLinks`]); the suffix (`.mzML.gz`) stays as it is.
+/// a link with a name of its own (see [`InputLinks`]); the suffix (`.mzML.gz`) stays as it is. A name
+/// whose stem would be longer than [`MAX_STEM`] is shortened (at a character) to that length: `<n>__`
+/// keeps the stems unique, `inputs.json` maps the link back to the user's file ([`InputRecord`]).
 pub fn link_name(index: usize, path: &str) -> String {
-    format!("{}__{}", index + 1, file_name(path))
+    let link = format!("{}__{}", index + 1, file_name(path));
+    let stem = input_stem(&link).len();
+    if stem <= MAX_STEM {
+        return link;
+    }
+    let mut end = MAX_STEM;
+    while !link.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}{}", &link[..end], &link[stem..])
+}
+
+/// Whether ProSE's outputs of an input of this name would have names too long for the file system.
+fn stem_too_long(name: &str) -> bool {
+    input_stem(name).len() > MAX_STEM
 }
 
 /// Whether `name`, a name in the top level of a search folder, is one of the links to the inputs
@@ -288,10 +309,15 @@ pub fn input_placements(req: &SearchRequest, links: InputLinks) -> Vec<Placement
                 .collect();
             let placements: Vec<Placement> = keys
                 .iter()
-                .map(|k| {
+                .zip(&req.files)
+                .map(|(k, f)| {
                     // ProSE refuses an input of stem `quantms` (its QPX outputs would clash with the merged
-                    // `quantms.*` views): such an input goes as a link `<n>__<name>` too
-                    if keys.iter().filter(|other| *other == k).count() > 1 || k == RESERVED_STEM {
+                    // `quantms.*` views): such an input goes as a link `<n>__<name>` too, as does one whose
+                    // name is too long for ProSE's outputs (the link's is shortened)
+                    if keys.iter().filter(|other| *other == k).count() > 1
+                        || k == RESERVED_STEM
+                        || stem_too_long(&file_name(&f.path))
+                    {
                         Placement::HardLink
                     } else {
                         Placement::OwnPath
