@@ -376,36 +376,44 @@
   class="@container flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-5 pt-3.5 pb-6"
   aria-labelledby="{uid}-heading"
   data-testid="psm-view">
-  <header class="flex items-start justify-between gap-3">
-    <div class="flex min-w-0 flex-wrap items-baseline gap-x-1 text-xs text-muted-foreground" data-testid="psm-breadcrumb">
-      <nav aria-label="Breadcrumb" class="min-w-0">
-        <ol class="flex flex-wrap items-baseline gap-x-1">
-          <li><button type="button" class={crumb} onclick={() => onBreadcrumb({ tab: 'proteins' })}>Proteins</button> ›</li>
-          <li>
+  <!-- The breadcrumb and the PSM's name take what the buttons leave them, at least 16rem: in a narrow view the
+       buttons go to a row of their own. The crumbs stay on one line, the protein and the peptide truncated (their
+       whole text is their tooltip). -->
+  <header class="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+    <div class="flex min-w-0 flex-[1_1_16rem] flex-wrap items-baseline gap-x-1 text-xs text-muted-foreground" data-testid="psm-breadcrumb">
+      <nav aria-label="Breadcrumb" class="max-w-full min-w-0">
+        <ol class="flex min-w-0 items-baseline gap-x-1 whitespace-nowrap">
+          <li class="shrink-0"><button type="button" class={crumb} onclick={() => onBreadcrumb({ tab: 'proteins' })}>Proteins</button> ›</li>
+          <li class="flex min-w-0 items-baseline gap-x-1">
             {#if proteinCrumb && proteinRow !== null}
-              <button type="button" class="{crumb} font-medium text-foreground" title={proteinCrumb.title} onclick={() => onBreadcrumb({ protein: proteinRow! })}
+              <button type="button" class="{crumb} min-w-0 truncate font-medium text-foreground" title={proteinCrumb.title} onclick={() => onBreadcrumb({ protein: proteinRow! })}
                 >{proteinCrumb.text}</button>
               <span class="sr-only">({proteinCrumb.title})</span>
             {:else}
-              <span>below protein FDR</span>
+              <span class="min-w-0 truncate">below protein FDR</span>
             {/if}
-            ›
+            <span>›</span>
           </li>
-          <li><button type="button" class={crumb} onclick={() => onBreadcrumb({ tab: 'peptides' })}>Peptides</button> ›</li>
-          <li>
-            <button type="button" class="{crumb} max-w-[22rem] truncate align-bottom font-medium text-foreground" title="Show the PSMs of {proforma} in the PSM table" onclick={() => onBreadcrumb({ peptide: k })}
+          <li class="shrink-0"><button type="button" class={crumb} onclick={() => onBreadcrumb({ tab: 'peptides' })}>Peptides</button> ›</li>
+          <li class="flex min-w-0 items-baseline gap-x-1">
+            <button type="button" class="{crumb} max-w-[22rem] min-w-0 truncate font-medium text-foreground" title="Show the PSMs of {proforma} in the PSM table" onclick={() => onBreadcrumb({ peptide: k })}
               >{peptideCrumb}</button>
-            ›
+            <span>›</span>
           </li>
         </ol>
       </nav>
-      <h2 bind:this={heading} id="{uid}-heading" tabindex="-1" class="rounded-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+      <h2
+        bind:this={heading}
+        id="{uid}-heading"
+        tabindex="-1"
+        class="max-w-full min-w-0 truncate rounded-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        title="PSM in {fileName}, {spectrumName}">
         PSM in {fileName}, {spectrumName}
       </h2>
       <!-- the focus can stay in the list beside the view: say which PSM opened -->
       <p class="sr-only" aria-live="polite">PSM {peptideCrumb}, {charge}+, {spectrumName} ({fileName})</p>
     </div>
-    <div class="flex flex-none items-center gap-1.5">
+    <div class="ml-auto flex flex-none items-center gap-1.5">
       <Button
         bind:ref={prevButton}
         variant="outline"
