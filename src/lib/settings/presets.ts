@@ -136,8 +136,38 @@ export function savePreset(
     builtin: false,
   }
   const next = existing ? users.map((p) => (p.id === preset.id ? preset : p)) : [...users, preset]
-  storage?.setItem(PRESETS_KEY, JSON.stringify(next.map(({ builtin: _b, ...p }) => p)))
+  writeUserPresets(next, storage)
   return preset
+}
+
+function writeUserPresets(presets: Preset[], storage: PresetStorage | null) {
+  storage?.setItem(PRESETS_KEY, JSON.stringify(presets.map(({ builtin: _b, ...p }) => p)))
+}
+
+/**
+ * The preset named `name` (as saved: trimmed), if any. "Save as preset" asks before it replaces a user preset of
+ * that name; a built-in one cannot be replaced.
+ */
+export function presetNamed(presets: Preset[], name: string): Preset | null {
+  return presets.find((p) => p.name === name.trim()) ?? null
+}
+
+/** Renames the user preset `id` (a built-in one, or a name another preset has, is refused: false). */
+export function renamePreset(id: string, name: string, storage: PresetStorage | null = appStorage()): boolean {
+  const users = readUserPresets(storage)
+  const trimmed = name.trim()
+  const other = presetNamed(loadPresets(storage), trimmed)
+  if (trimmed === '' || !users.some((p) => p.id === id) || (other !== null && other.id !== id)) return false
+  writeUserPresets(users.map((p) => (p.id === id ? { ...p, name: trimmed } : p)), storage)
+  return true
+}
+
+/** Deletes the user preset `id` (a built-in one stays: false). */
+export function deletePreset(id: string, storage: PresetStorage | null = appStorage()): boolean {
+  const users = readUserPresets(storage)
+  if (!users.some((p) => p.id === id)) return false
+  writeUserPresets(users.filter((p) => p.id !== id), storage)
+  return true
 }
 
 /** The values of a preset: ProSE's defaults with the preset's parameters on top (copies). */

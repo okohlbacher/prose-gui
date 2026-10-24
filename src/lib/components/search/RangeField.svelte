@@ -1,6 +1,8 @@
 <script lang="ts">
-  // A range of two whole numbers ("2 – 5") in one field, e.g. the precursor charges.
+  // A range of two whole numbers ("2 – 5") in one field, e.g. the precursor charges. A range whose lowest value
+  // is above its highest is marked (`invalid`, with `describedBy` saying why); the search does not start with it.
   import * as InputGroup from '$lib/components/ui/input-group'
+  import { cn } from '$lib/utils'
   import NumberField from './NumberField.svelte'
 
   let {
@@ -10,6 +12,8 @@
     fromLabel,
     toLabel,
     min,
+    invalid = false,
+    describedBy,
     onFrom,
     onTo,
   }: {
@@ -20,12 +24,19 @@
     fromLabel: string
     toLabel: string
     min?: number
+    invalid?: boolean
+    /** The id of the text that says why the range is not valid. */
+    describedBy?: string
     onFrom: (value: number) => void
     onTo: (value: number) => void
   } = $props()
 </script>
 
-<InputGroup.Root class="h-8 bg-background shadow-none" aria-labelledby={labelId}>
+<InputGroup.Root
+  class={cn('h-8 bg-background shadow-none', invalid && 'border-destructive ring-3 ring-destructive/20 dark:ring-destructive/40')}
+  aria-labelledby={labelId}
+  aria-invalid={invalid || undefined}
+  aria-describedby={invalid ? describedBy : undefined}>
   <NumberField value={from} kind="int" {min} inGroup fit ariaLabel={fromLabel} onChange={onFrom} class="flex-none pr-0" />
   <span class="px-1.5" aria-hidden="true">–</span>
   <NumberField value={to} kind="int" {min} inGroup ariaLabel={toLabel} onChange={onTo} class="w-0 min-w-0 flex-1 pl-0" />

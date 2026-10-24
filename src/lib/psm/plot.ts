@@ -97,6 +97,61 @@ export function stripFits(label: string, similarity: string | null, available: n
   return textWidth(label, fontSize) + gap + textWidth(similarity, fontSize) <= available
 }
 
+/**
+ * Where the legend above the mirror spectrum goes, item by item (`widths`: each item with its swatch and
+ * the room after it, `spacing` of which is that room). Beside the label at the top, flush right, when
+ * both fit between `left` and `right` with `gap` px between them; otherwise on lines of its own under the
+ * label, from the left, a new line where one is full. `line` 0 is the label's, `lines` how many lines of
+ * its own the legend takes (0 beside the label).
+ */
+export function placeLegend(
+  label: number,
+  widths: number[],
+  left: number,
+  right: number,
+  { gap = 16, spacing = 7 } = {},
+): { items: { x: number; line: number }[]; lines: number } {
+  const total = widths.reduce((sum, w) => sum + w, 0)
+  if (left + label + gap + total - spacing <= right) {
+    let x = right + spacing - total
+    return { items: widths.map((w) => ({ x: (x += w) - w, line: 0 })), lines: 0 }
+  }
+  let line = 1
+  let x = left
+  const items = widths.map((w) => {
+    // a new line when this one is full (an item wider than the whole line still gets a line)
+    if (x > left && x + w - spacing > right) {
+      line += 1
+      x = left
+    }
+    const at = { x, line }
+    x += w
+    return at
+  })
+  return { items, lines: line }
+}
+
+/**
+ * A text of parts joined by " · " on lines of at most `available` px, broken between parts (a part
+ * wider than a line gets a line of its own). Every line but the last ends in " ·", so the lines read
+ * on as one text.
+ */
+export function wrapParts(parts: string[], available: number, fontSize = 11): string[] {
+  const lines: string[] = []
+  let line = ''
+  for (const part of parts) {
+    const next = line === '' ? part : `${line} · ${part}`
+    if (line !== '' && textWidth(`${next} ·`, fontSize) > available) {
+      lines.push(`${line} ·`)
+      line = part
+    } else {
+      line = next
+    }
+  }
+  if (line !== '' || lines.length === 0) lines.push(line)
+  return lines
+}
+
 /** The width of a label in pixels, estimated (the SVG is laid out before the text is measured). */
 export function textWidth(text: string, fontSize: number): number {
   let w = 0

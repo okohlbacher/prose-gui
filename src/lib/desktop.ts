@@ -3,15 +3,18 @@
 // plain types below, so that the screens stay the web app's and the tests need no Tauri.
 //
 // Commands (src-tauri/src/lib.rs): tool_info, start_search, cancel_search, read_search_file,
-// inspect_files, example_files, save_text, save_search_file, history_list, history_save_record,
+// inspect_files, cpu_count, example_files, save_text, save_search_file, history_list, history_save_record,
 // history_save_proteins, history_rename, history_delete, history_files, history_import, open_project_file,
 // save_project_file, answer_close. Events: search://progress, search://done, search://failed,
-// app://close-requested.
+// project://progress, app://close-requested. The system's dialogs open one at a time (`oneDialog`). The window's
+// theme (`windowTheme`, `onWindowThemeChanged`, `setWindowTheme`).
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { open } from '@tauri-apps/plugin-dialog'
+import { oneDialog } from './dialogs'
 import type { HistoryBackend, HistoryEntry } from './history/history'
 import type { ByteRange, SearchFiles } from './results/read'
 
@@ -23,13 +26,20 @@ export type InputFile = { path: string; name: string; size: number }
 
 /** What New search shows of a file (`inspect_files`): sizes and counts, never contents. */
 export type FileFacts = InputFile & {
-  /** The spectra of an mzML's header (null: `.mzML.gz`, or not said). */
+  /** The spectra of an mzML's header (null: not said). */
   spectra: number | null
   /** The entries of a FASTA and the residues of their sequences. */
   proteins: number | null
   residues: number | null
-  /** Why the file cannot be used. */
+  /** Why the file cannot be used (missing, unreadable). */
   error: string | null
+  /**
+   * Why ProSE cannot search the file, which is there (src-tauri/src/content.rs): an mzML that is not one, is cut off
+   * or has no spectra; a FASTA without entries, with an accession twice, a protein too long. Sentences, the file named.
+   */
+  problem: string | null
+  /** What ProSE may mishandle (a FASTA's byte-order mark, lowercase residues): sentences, not blocking. */
+  warnings: string[]
 }
 
 /** The search request of the shim (src-tauri/src/args.rs `SearchRequest`, camelCase). */
@@ -167,20 +177,27 @@ export function inspectFiles(paths: string[]): Promise<FileFacts[]> {
   return invoke<FileFacts[]>('inspect_files', { paths })
 }
 
+/** The cores the search's threads may use (`navigator.hardwareConcurrency` is capped by the webview). */
+export function cpuCount(): Promise<number> {
+  return invoke<number>('cpu_count')
+}
+
 /** The bundled example: the run as two named files, and its FASTA. */
 export function exampleFiles(): Promise<{ spectra: string[]; database: string }> {
   return invoke('example_files')
 }
 
 /** The system's open dialog for spectra (several) or a database; the chosen paths ([] if cancelled). */
-export async function chooseFiles(kind: 'spectra' | 'database'): Promise<string[]> {
-  const chosen = await open(
-    kind === 'spectra'
-      ? { multiple: true, title: 'Add mzML files', filters: [{ name: 'mzML', extensions: ['mzML', 'mzml', 'gz'] }] }
-      : { multiple: false, title: 'Choose a FASTA database', filters: [{ name: 'FASTA', extensions: ['fasta', 'fa', 'faa'] }] },
-  )
-  if (chosen === null) return []
-  return Array.isArray(chosen) ? chosen : [chosen]
+export function chooseFiles(kind: 'spectra' | 'database'): Promise<string[]> {
+  return oneDialog<string[]>([], async () => {
+    const chosen = await open(
+      kind === 'spectra'
+        ? { multiple: true, title: 'Add mzML files', filters: [{ name: 'mzML', extensions: ['mzML', 'mzml', 'gz'] }] }
+        : { multiple: false, title: 'Choose a FASTA database', filters: [{ name: 'FASTA', extensions: ['fasta', 'fa', 'faa'] }] },
+    )
+    if (chosen === null) return []
+    return Array.isArray(chosen) ? chosen : [chosen]
+  })
 }
 
 /**
@@ -205,17 +222,17 @@ export async function onFileDrop(handlers: { over: (on: boolean) => void; drop: 
  * `name`. Resolves with the path, or null if the user cancelled.
  */
 export function saveText(name: string, contents: string): Promise<string | null> {
-  return invoke('save_text', { name, contents })
+  return oneDialog(null, () => invoke<string | null>('save_text', { name, contents }))
 }
 
 /** Copies a file of a search (e.g. `merged.idXML`) to where the user chooses, suggesting `suggested`. */
 export function saveSearchFile(searchId: string, name: string, suggested: string): Promise<string | null> {
-  return invoke('save_search_file', { searchId, name, suggested })
+  return oneDialog(null, () => invoke<string | null>('save_search_file', { searchId, name, suggested }))
 }
 
 /**
- * History's disk: the Rust commands (src-tauri/src/history.rs). Project files go as raw bodies (the
- * name of a project in a header), not as JSON numbers.
+ * History's disk: the Rust commands (src-tauri/src/history.rs). A project file is written by the Rust side
+ * (src-tauri/src/project.rs); an opened one and the entries of an import go as raw bodies, not as JSON numbers.
  */
 export const desktopBackend: HistoryBackend = {
   list: () => invoke<HistoryEntry[]>('history_list'),
@@ -225,12 +242,26 @@ export const desktopBackend: HistoryBackend = {
   rename: (searchId, name) => invoke('history_rename', { searchId, name }),
   delete: (searchId) => invoke('history_delete', { searchId }),
   files: (searchId) => invoke('history_files', { searchId }),
-  saveProject: (name, bytes) => invoke('save_project_file', bytes, { headers: { name: encodeURIComponent(name) } }),
+  // the dialog and the writing are one command: the zip goes to disk entry by entry, `project://progress` says how far
+  saveProject: (searchId, name, onProgress) =>
+    oneDialog(null, async () => {
+      const unlisten = onProgress
+        ? await listen<{ searchId: string; written: number; total: number }>('project://progress', (e) => {
+            if (e.payload.searchId === searchId) onProgress(e.payload.total > 0 ? e.payload.written / e.payload.total : 1)
+          })
+        : null
+      try {
+        return await invoke<string | null>('save_project_file', { searchId, name })
+      } finally {
+        unlisten?.()
+      }
+    }),
   // the dialog and the read are one command: the page never names a path (cancelled: an empty body)
-  openProject: async () => {
-    const bytes = new Uint8Array(await invoke<ArrayBuffer>('open_project_file'))
-    return bytes.length === 0 ? null : bytes
-  },
+  openProject: () =>
+    oneDialog(null, async () => {
+      const bytes = new Uint8Array(await invoke<ArrayBuffer>('open_project_file'))
+      return bytes.length === 0 ? null : bytes
+    }),
   importEntries: (body) => invoke<string>('history_import', body),
 }
 
@@ -241,6 +272,35 @@ export const desktopBackend: HistoryBackend = {
 export async function onCloseRequested(handler: () => void): Promise<() => void> {
   if (!isDesktop()) return () => {}
   return listen('app://close-requested', () => handler())
+}
+
+/** The window's theme as the system gives it (null outside Tauri, or when it cannot be read). */
+export async function windowTheme(): Promise<'light' | 'dark' | null> {
+  if (!isDesktop()) return null
+  try {
+    return await getCurrentWindow().theme()
+  } catch {
+    return null
+  }
+}
+
+/** Changes of the window's theme (the system's, or the one `setWindowTheme` sets). Returns the way to stop listening. */
+export async function onWindowThemeChanged(handler: (theme: 'light' | 'dark') => void): Promise<() => void> {
+  if (!isDesktop()) return () => {}
+  return getCurrentWindow().onThemeChanged(({ payload }) => handler(payload))
+}
+
+/**
+ * The theme of the window itself (its title bar, the system's dialogs): light or dark, or null to follow
+ * the system again. A failure is ignored (the page has its theme either way).
+ */
+export async function setWindowTheme(theme: 'light' | 'dark' | null): Promise<void> {
+  if (!isDesktop()) return
+  try {
+    await getCurrentWindow().setTheme(theme)
+  } catch {
+    // e.g. a platform without it
+  }
 }
 
 /** The answer to a close request: close (the running search ends), or keep the window. */

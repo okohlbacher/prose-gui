@@ -7,7 +7,7 @@
 // (see `peptideCounts`): the getters get the counts to read as their third argument.
 
 import { psmProforma } from '../format/peptide'
-import { parseDescription } from './display'
+import { parseAccession, parseDescription } from './display'
 import { baseName, type Level, type PeptideCounts, type ResultModel } from './model'
 
 type Get<T> = (m: ResultModel, row: number, peptideCounts: PeptideCounts) => T
@@ -38,8 +38,14 @@ const label = (header: string, number: Get<number>, csv: Get<string>): ColumnDef
 const accessions = (m: ResultModel, peptide: number) =>
   Array.from(m.peptide.proteins[peptide], (p) => m.tables.proteins.accession[p])
 
+/**
+ * An accession as the tables show it (`parseAccession`): "P02768" for "sp|P02768|ALBU_HUMAN", a contaminant
+ * without its CON__. The accession columns sort by it (not by the FASTA's prefixes); the CSV has the accession.
+ */
+const shown = (accession: string | undefined) => (accession === undefined ? '' : parseAccession(accession).id)
+
 const proteins: Record<string, ColumnDef> = {
-  accession: str('Accession', (m, p) => m.tables.proteins.accession[p]),
+  accession: str('Accession', (m, p) => shown(m.tables.proteins.accession[p]), (m, p) => m.tables.proteins.accession[p]),
   // the gene name (GN=) of a UniProt-style description; '' without one
   gene: str('Gene', (m, p) => parseDescription(m.tables.proteins.description[p]).gene ?? ''),
   description: str('Description', (m, p) => m.tables.proteins.description[p]),
@@ -61,7 +67,7 @@ const peptides: Record<string, ColumnDef> = {
   peptide: str('Peptide', (m, k) => m.tables.peptides.proforma[k]),
   sequence: str('Sequence', (m, k) => m.tables.peptides.sequence[k]),
   length: num('Length', (m, k) => m.tables.peptides.sequence[k].length),
-  proteins: str('Proteins', (m, k) => accessions(m, k)[0] ?? '', (m, k) => accessions(m, k).join(';')),
+  proteins: str('Proteins', (m, k) => shown(accessions(m, k)[0]), (m, k) => accessions(m, k).join(';')),
   psms: num('PSMs', (_, k, c) => c.psms[k]),
   bestQ: num('Best PSM q-value', (m, k) => m.peptide.bestQ[k]),
   foundIn: num('Found in', (_, k, c) => c.foundIn[k]),
@@ -82,7 +88,7 @@ const psms: Record<string, ColumnDef> = {
   sequence: str('Sequence', (m, i) => m.tables.peptides.sequence[m.tables.psms.peptide[i]]),
   proteins: str(
     'Proteins',
-    (m, i) => accessions(m, m.tables.psms.peptide[i])[0] ?? '',
+    (m, i) => shown(accessions(m, m.tables.psms.peptide[i])[0]),
     (m, i) => accessions(m, m.tables.psms.peptide[i]).join(';'),
   ),
   // Percolator's score when rescored, else ln(hyperscore); the header names it (see `columnDef`)

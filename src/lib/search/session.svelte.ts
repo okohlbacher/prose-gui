@@ -140,6 +140,12 @@ export const openResult = {
 }
 
 /**
+ * A search of this session that finished while the user was elsewhere (`runSearch`'s `keepOpen`): the open
+ * result stayed open, and this one opens from memory when it is shown (`openFinished`). One at most.
+ */
+let held: OpenResult | null = null
+
+/**
  * Opens a result that did not come from this session's search (History, a project file) in
  * place of the open one, whose view and caches are released. A stored search keeps its `id` and
  * `createdAt` (`origin`), so that its address stays the same. Returns the id.
@@ -147,7 +153,33 @@ export const openResult = {
 export function openStoredResult(result: Omit<OpenResult, 'id' | 'createdAt'>, origin: { id: string; createdAt: string }): string {
   releaseResultsView()
   open = { ...result, id: origin.id, createdAt: origin.createdAt }
+  // (a held search opens from History now, read again: it is not kept twice)
+  held = null
   return origin.id
+}
+
+/**
+ * Opens search `id` if it is the one that finished while the user was elsewhere (`held`), in place of the
+ * open result; false otherwise.
+ */
+export function openFinished(id: string): boolean {
+  if (held === null || held.id !== id) return false
+  releaseResultsView()
+  open = held
+  held = null
+  return true
+}
+
+/**
+ * Closes search `id` (deleted from History): the open result, if it is that search (its view and caches are
+ * released), and a held one. Returns whether it was open.
+ */
+export function closeResult(id: string): boolean {
+  if (held?.id === id) held = null
+  if (open?.id !== id) return false
+  releaseResultsView()
+  open = null
+  return true
 }
 
 /**
@@ -254,11 +286,14 @@ export const READING_RESULTS = 'Reading the results...'
 
 /**
  * Runs a search in the ProSE tool. Resolves with the id of the opened result, or null if the search
- * failed or was cancelled (`searchRun` says which).
+ * failed or was cancelled (`searchRun` says which). When it finishes, its result becomes the open one,
+ * unless `keepOpen` says that the user is elsewhere (another result, a PSM): then a result that is open
+ * stays open, and the finished one waits in memory until it is shown (`openFinished`).
  */
 export async function runSearch(
   request: SearchRequest,
   meta: Omit<OpenResult, 'id' | 'createdAt' | 'outcome'>,
+  keepOpen: () => boolean = () => false,
 ): Promise<string | null> {
   if (searchRun.status === 'running') return null
   const id = ++runId
@@ -317,9 +352,14 @@ export async function runSearch(
       fail({ context: 'While reading the results', summary: errorText(e), detail: null, searchId: started.searchId })
       return null
     }
-    releaseResultsView() // the previous result's view, model and caches
     const finished: OpenResult = { ...meta, id: started.searchId, createdAt, outcome: { ...result, seconds } }
-    open = finished
+    if (open !== null && keepOpen()) {
+      held = finished
+    } else {
+      releaseResultsView() // the previous result's view, model and caches
+      open = finished
+      held = null
+    }
     searchRun.status = 'done'
     for (const listener of finishedListeners) {
       try {

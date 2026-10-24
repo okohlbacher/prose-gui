@@ -69,6 +69,16 @@ export function positiveInt(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 ? value : undefined
 }
 
+/**
+ * The text of a number cell of the design table: a whole number of at least 1 written as digits, `undefined`
+ * if empty, `null` if not valid ("0", "abc", "1.5", "1e1").
+ */
+export function parsePositiveInt(text: string): number | undefined | null {
+  const t = text.trim()
+  if (t === '') return undefined
+  return /^\d+$/.test(t) ? (positiveInt(Number(t)) ?? null) : null
+}
+
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** "1–2, 4" for [1, 2, 4]. */
@@ -228,7 +238,8 @@ export function resolveDesign(inputs: DesignInput[]): DesignResolution {
 
   const notices: Notice[] = []
 
-  // The same file name twice: the rows stay apart here, but a design needs one name per file.
+  // The same file name twice (files of two folders; the same path is added once): both are searched, as files of
+  // their own, but the results and a design.tsv know files by name only.
   const byName = new Map<string, number[]>()
   inputs.forEach((input, i) => {
     const list = byName.get(input.fileName)
@@ -239,7 +250,9 @@ export function resolveDesign(inputs: DesignInput[]): DesignResolution {
     if (list.length < 2) continue
     notices.push({
       kind: 'duplicateFile',
-      message: `${name} is listed ${list.length} times. Every file needs its own name, so rename or remove one of them.`,
+      message:
+        `${list.length} files are named ${name} (from different folders). Each is searched as a file of its own, but the ` +
+        'results show them by the same name, and a design.tsv cannot tell them apart. Rename one to keep them apart.',
       rows: list.map((i) => inputs[i].id),
     })
   }

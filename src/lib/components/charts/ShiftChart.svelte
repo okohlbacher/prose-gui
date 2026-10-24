@@ -30,10 +30,11 @@
 
   const uid = $props.id()
   const M = { left: 46, right: 14, top: 46, bottom: 40 }
-  const ink = '#3f3f46'
-  const muted = '#71717a'
-  const grid = '#f1f1f3'
-  const unknownColor = '#71717a'
+  // the theme's colours (app.css)
+  const ink = 'var(--plot-ink)'
+  const muted = 'var(--plot-muted)'
+  const grid = 'var(--plot-grid)'
+  const unknownColor = 'var(--plot-muted)'
   const font = "'Inter Variable', ui-sans-serif, system-ui, sans-serif"
   const barWidth = 4
   const labelFont = 11
@@ -120,13 +121,13 @@
     <desc id="{uid}-desc">{description}</desc>
 
     {#each yTicks as t (t)}
-      <line x1={M.left} x2={width - M.right} y1={px(y(t))} y2={px(y(t))} stroke={t === 0 ? '#d4d4d8' : grid} stroke-width="1" />
+      <line x1={M.left} x2={width - M.right} y1={px(y(t))} y2={px(y(t))} stroke={t === 0 ? 'var(--plot-axis)' : grid} stroke-width="1" />
       <text x={M.left - 6} y={px(y(t) + 3.5)} text-anchor="end" font-size="10" fill={muted}>{tickLabel(t)}</text>
     {/each}
     <text x="4" y="12" font-size="11" fill={muted}>PSMs</text>
 
     <!-- zero: where the unmodified PSMs are -->
-    <line x1={px(x(0))} x2={px(x(0))} y1="20" y2={plotBottom} stroke="#a1a1aa" stroke-width="1" data-testid="zero-line" />
+    <line x1={px(x(0))} x2={px(x(0))} y1="20" y2={plotBottom} stroke="var(--plot-zero)" stroke-width="1" data-testid="zero-line" />
     <text
       x={px(x(0) + (zeroEnd ? -5 : 5))}
       y="16"
@@ -153,7 +154,7 @@
         font-size={labelFont}
         font-weight="600"
         fill={ink}
-        stroke="#ffffff"
+        stroke="var(--plot-halo)"
         stroke-width="3"
         stroke-linejoin="round"
         paint-order="stroke"

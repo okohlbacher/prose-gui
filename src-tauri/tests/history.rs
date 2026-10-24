@@ -7,7 +7,7 @@ use common::{set_folder_modified, TempDir};
 use prose_desktop_lib::history::{
     delete, finish_partial, folder_files, frame, import, list, lock_partial, read_chosen_project,
     remove_partial, rename, save_proteins, save_record, sweep, with_backoff, BACKOFF_TRIES,
-    LOCK_FILE, NO_RECORD, SWEEP_GRACE,
+    LOCK_FILE, NOT_A_SEARCH, NO_RECORD, SWEEP_GRACE,
 };
 use std::fs;
 use std::io;
@@ -135,15 +135,18 @@ fn history_lists_an_incomplete_folder_with_its_message() {
     .unwrap();
     // no search.json: a search that was not saved, listed as such
     fs::create_dir_all(dir.join("9-0")).unwrap();
-    // not listed: a partial folder (running), a file, a name that is no id
+    // not listed: a partial folder (running), a file, a hidden folder
     fs::create_dir_all(dir.join("10-0.partial")).unwrap();
     fs::write(dir.join("loose.txt"), "x").unwrap();
+    fs::create_dir_all(dir.join(".hidden")).unwrap();
+    // a folder whose name is no id: listed as no search, so that it can be deleted
     fs::create_dir_all(dir.join("not an id")).unwrap();
     fs::write(dir.join("not an id/search.json"), record("x", "x")).unwrap();
 
     let entries = list(&dir);
     let ids: Vec<&str> = entries.iter().map(|e| e.id.as_str()).collect();
-    assert_eq!(entries.len(), 9, "{ids:?}");
+    assert_eq!(entries.len(), 10, "{ids:?}");
+    assert_eq!(get_error(&entries, "not an id"), Some(NOT_A_SEARCH));
     let get = |id: &str| entries.iter().find(|e| e.id == id).unwrap();
     assert!(get("1-0").error.is_none());
     assert_eq!(get("9-0").error.as_deref(), Some(NO_RECORD));
@@ -169,6 +172,93 @@ fn history_lists_an_incomplete_folder_with_its_message() {
     assert!(rename(&dir, "4-0", "x").is_err());
     // a missing searches folder lists nothing
     assert!(list(&dir.join("absent")).is_empty());
+}
+
+fn get_error<'a>(
+    entries: &'a [prose_desktop_lib::history::HistoryEntry],
+    id: &str,
+) -> Option<&'a str> {
+    entries.iter().find(|e| e.id == id)?.error.as_deref()
+}
+
+#[test]
+fn a_folder_that_is_no_search_by_its_name_is_listed_and_can_be_deleted() {
+    let (tmp, dir) = searches();
+    saved(&dir, "1-0", "kept");
+    for name in ["bad id", "a.b", "copy of 1-0"] {
+        fs::create_dir_all(dir.join(name).join("qpx")).unwrap();
+        fs::write(dir.join(name).join("qpx/x.parquet"), "x".repeat(10)).unwrap();
+    }
+    let entries = list(&dir);
+    assert_eq!(entries.len(), 4);
+    for name in ["bad id", "a.b", "copy of 1-0"] {
+        let entry = entries.iter().find(|e| e.id == name).unwrap();
+        assert_eq!(entry.error.as_deref(), Some(NOT_A_SEARCH));
+        assert_eq!(entry.bytes, 10);
+        assert_eq!(entry.name, None);
+    }
+    // listed last (with the errors)
+    assert_eq!(entries[0].id, "1-0");
+    delete(&dir, "bad id").unwrap();
+    delete(&dir, "a.b").unwrap();
+    assert!(!dir.join("bad id").exists() && !dir.join("a.b").exists());
+    assert_eq!(list(&dir).len(), 2);
+    // never a path, a hidden or partial folder, or what is above the searches folder
+    fs::create_dir_all(dir.join("2-0.partial")).unwrap();
+    fs::create_dir_all(dir.join(".hidden")).unwrap();
+    for bad in [
+        "..",
+        ".",
+        "",
+        "../searches",
+        "copy of 1-0/qpx",
+        "2-0.partial",
+        ".hidden",
+        "a\\b",
+        "c:x",
+    ] {
+        assert!(delete(&dir, bad).is_err(), "{bad:?} is refused");
+    }
+    assert!(dir.join("copy of 1-0/qpx").exists());
+    assert!(dir.join("2-0.partial").exists() && dir.join(".hidden").exists());
+    assert!(tmp.path().join("searches").exists());
+    // a file of that name is not a folder
+    fs::write(dir.join("loose file"), "x").unwrap();
+    assert!(delete(&dir, "loose file").is_err());
+    assert!(dir.join("loose file").exists());
+}
+
+/// (symbolic links: Unix)
+#[cfg(unix)]
+#[test]
+fn a_link_named_like_no_search_is_neither_listed_nor_deleted() {
+    let (tmp, dir) = searches();
+    let outside = tmp.path().join("outside");
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(outside.join("keep"), "x").unwrap();
+    std::os::unix::fs::symlink(&outside, dir.join("a link")).unwrap();
+    assert!(list(&dir).is_empty());
+    assert!(delete(&dir, "a link").is_err());
+    assert!(outside.join("keep").exists());
+}
+
+#[test]
+fn an_entry_has_the_cutoffs_and_settings_of_its_record() {
+    let (_tmp, dir) = searches();
+    fs::create_dir_all(dir.join("1-0")).unwrap();
+    let text = r#"{"schema":1,"id":"1-0","name":"x","createdAt":"2026-10-20T10:00:00.000Z","psmFdr":0.01,"proteinFdr":0.05,"settings":{"parameters":{"chimeric:enabled":true},"presetId":"p","rescore":true}}"#;
+    save_record(&dir, "1-0", text).unwrap();
+    let entry = &list(&dir)[0];
+    assert_eq!(entry.psm_fdr, Some(0.01));
+    assert_eq!(entry.protein_fdr, Some(0.05));
+    let settings = entry.settings.as_ref().unwrap();
+    assert_eq!(settings["parameters"]["chimeric:enabled"], true);
+    assert_eq!(settings["presetId"], "p");
+    // as JSON for the page: camelCase
+    let json = serde_json::to_value(entry).unwrap();
+    assert_eq!(json["psmFdr"], 0.01);
+    assert_eq!(json["proteinFdr"], 0.05);
+    assert_eq!(json["settings"]["rescore"], true);
 }
 
 #[test]

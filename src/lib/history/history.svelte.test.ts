@@ -25,8 +25,12 @@ import {
 import { ProjectError, ProjectVersionError } from './history'
 
 // (the router reads the window's location: here only where the app goes)
-const router = vi.hoisted(() => ({ route: { view: 'search' } as Route }))
-vi.mock('../route.svelte', () => ({ navigate: (next: Route) => (router.route = next) }))
+const router = vi.hoisted(() => ({ route: { view: 'search' } as Route, forgotten: [] as string[] }))
+vi.mock('../route.svelte', () => ({
+  router,
+  navigate: (next: Route) => (router.route = next),
+  forgetResult: (id: string) => router.forgotten.push(id),
+}))
 
 let fixture: Record<string, Uint8Array>
 let result: OpenResult
@@ -96,6 +100,30 @@ describe('History', () => {
     await removeFromHistory('2-0')
     await removeFromHistory('4-0')
     expect(history.entries.map((e) => e.id).sort()).toEqual(['1-0', '3-0'])
+  })
+
+  test('deleting the open search closes it, and Results of it goes to History', async () => {
+    await finished('1-0', 'first', '2026-10-20T09:00:00.000Z')
+    await finished('2-0', 'second', '2026-10-20T10:00:00.000Z')
+    await openFromHistory('1-0')
+    expect(router.route).toEqual({ view: 'results', id: '1-0' })
+    // another search: the open one stays
+    router.forgotten = []
+    await removeFromHistory('2-0')
+    expect(openResult.current?.id).toBe('1-0')
+    expect(router.route).toEqual({ view: 'results', id: '1-0' })
+    // the open one, from History: closed, and the Results link forgets it
+    router.route = { view: 'history' }
+    await removeFromHistory('1-0')
+    expect(openResult.current).toBeNull()
+    expect(router.forgotten).toEqual(['2-0', '1-0'])
+    expect(router.route).toEqual({ view: 'history' })
+    // from its Results (an address of it): to History
+    await finished('3-0', 'third', '2026-10-20T11:00:00.000Z')
+    await openFromHistory('3-0')
+    await removeFromHistory('3-0')
+    expect(openResult.current).toBeNull()
+    expect(router.route).toEqual({ view: 'history' })
   })
 
   test('a list that cannot be read says so and is empty', async () => {

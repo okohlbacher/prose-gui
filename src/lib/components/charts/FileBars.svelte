@@ -24,7 +24,8 @@
 
   const uid = $props.id()
   const font = "'Inter Variable', ui-sans-serif, system-ui, sans-serif"
-  const ink = '#3f3f46'
+  // the theme's colours (app.css)
+  const ink = 'var(--plot-ink)'
   const rowHeight = 28
   const barHeight = 16
   const maxName = 230
@@ -61,8 +62,8 @@
     onpointerleave={() => (hover = null)}>
     <title id="{uid}-title">{title}</title>
     <desc id="{uid}-desc">{description}</desc>
-    {#if hover}<rect x="0" y={4 + hover.row * rowHeight} {width} height={rowHeight} fill="#f4f4f5" />{/if}
-    <line x1={x0} x2={x0} y1="4" y2={height - 4} stroke="#d4d4d8" stroke-width="1" />
+    {#if hover}<rect x="0" y={4 + hover.row * rowHeight} {width} height={rowHeight} fill="var(--plot-band)" />{/if}
+    <line x1={x0} x2={x0} y1="4" y2={height - 4} stroke="var(--plot-axis)" stroke-width="1" />
     {#each items as item, i (i)}
       {@const top = 4 + i * rowHeight + (rowHeight - barHeight) / 2}
       {@const length = (item.count / max) * span}

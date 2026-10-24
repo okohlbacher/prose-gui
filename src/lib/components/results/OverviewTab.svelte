@@ -55,7 +55,7 @@
 
 <!-- an engine's note in short plain words; the whole text in its tooltip and, opened, below it; a warning says so -->
 {#snippet engineNote(note: EngineNote, warning: boolean)}
-  {#snippet label()}{#if warning}<span class="mr-1 font-medium text-amber-700" data-testid="engine-warning">Warning</span>{/if}{/snippet}
+  {#snippet label()}{#if warning}<span class="mr-1 font-medium text-amber-700 dark:text-amber-400" data-testid="engine-warning">Warning</span>{/if}{/snippet}
   {#if note.short === note.full}
     <span class="block max-w-[28rem] font-normal text-muted-foreground">{@render label()}{note.full}</span>
   {:else}

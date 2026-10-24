@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clipMarks, mzDomain, niceTicks, placeLabels, scale, stickGroups, stickPath, stripFits, textWidth } from './plot'
+import { clipMarks, mzDomain, niceTicks, placeLabels, placeLegend, scale, stickGroups, stickPath, stripFits, textWidth, wrapParts } from './plot'
 
 describe('axes', () => {
   it('puts ticks on round numbers inside the range', () => {
@@ -94,5 +94,71 @@ describe('the strip under the mirror spectrum', () => {
 
   it('needs no room for a similarity that is not there', () => {
     expect(stripFits(label, null, 100)).toBe(true)
+  })
+})
+
+describe('the legend above the mirror spectrum', () => {
+  // four items of 50 px, 7 px of which the room after an item; the label 200 px from 46 px on
+  const widths = [50, 50, 50, 50]
+
+  it('sits beside the label, flush right, when both fit', () => {
+    const { items, lines } = placeLegend(200, widths, 46, 800)
+    expect(lines).toBe(0)
+    expect(items.map((i) => i.line)).toEqual([0, 0, 0, 0])
+    // the last item's text ends at the right edge
+    expect(items.map((i) => i.x)).toEqual([607, 657, 707, 757])
+    // just enough room: 46 + 200 + 16 + 193
+    expect(placeLegend(200, widths, 46, 455).lines).toBe(0)
+  })
+
+  it('takes a line of its own under the label when they would meet (a narrow window)', () => {
+    const { items, lines } = placeLegend(200, widths, 46, 454)
+    expect(lines).toBe(1)
+    expect(items).toEqual([
+      { x: 46, line: 1 },
+      { x: 96, line: 1 },
+      { x: 146, line: 1 },
+      { x: 196, line: 1 },
+    ])
+    // never over the label: every item is right of it on its line, or on a line below it
+    for (const right of [300, 400, 500, 600]) {
+      for (const item of placeLegend(200, widths, 46, right).items) expect(item.line > 0 || item.x >= 46 + 200 + 16).toBe(true)
+    }
+  })
+
+  it('wraps onto more lines when one is not enough', () => {
+    const { items, lines } = placeLegend(200, widths, 46, 46 + 110)
+    expect(lines).toBe(2)
+    expect(items.map((i) => [i.x, i.line])).toEqual([
+      [46, 1],
+      [96, 1],
+      [46, 2],
+      [96, 2],
+    ])
+    // an item wider than the line still gets one
+    expect(placeLegend(200, [300], 46, 100).items).toEqual([{ x: 46, line: 1 }])
+  })
+})
+
+describe('texts of parts on narrow views', () => {
+  const parts = ['Fragment mass error', 'mean +0.175 Da', 'SD 0.191 Da', 'dot size = intensity', 'tolerance ±0.5 Da']
+
+  it('keeps one line when it fits', () => {
+    expect(wrapParts(parts, 1000)).toEqual([parts.join(' · ')])
+    expect(wrapParts(['Theoretical'], 10)).toEqual(['Theoretical'])
+    expect(wrapParts([], 100)).toEqual([''])
+  })
+
+  it('breaks between parts, each line within the width, ending in a dot that says it goes on', () => {
+    const available = 250
+    const lines = wrapParts(parts, available)
+    expect(lines.length).toBeGreaterThan(1)
+    expect(lines.join(' ')).toBe(parts.join(' · '))
+    for (const line of lines.slice(0, -1)) expect(line.endsWith(' ·')).toBe(true)
+    for (const line of lines) expect(textWidth(line, 11)).toBeLessThanOrEqual(available)
+  })
+
+  it('gives a part wider than a line a line of its own', () => {
+    expect(wrapParts(['a', 'a very long part of the text', 'b'], 40)).toEqual(['a ·', 'a very long part of the text ·', 'b'])
   })
 })

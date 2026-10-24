@@ -11,6 +11,8 @@
   import { Label } from '$lib/components/ui/label'
   import { Switch } from '$lib/components/ui/switch'
   import { searchForm as form } from '$lib/search/form.svelte'
+  import { searchPlan } from '$lib/search/plan.svelte'
+  import { rangeMessage } from '$lib/settings/ranges'
   import { dialogEntries, parameterSections, sameValue } from '$lib/settings/parameters'
   import ParameterField from './ParameterField.svelte'
 
@@ -43,6 +45,8 @@
 
   const fieldId = (name: string) => `param-${name.replace(/[^A-Za-z0-9_-]/g, '-')}`
   const isChanged = (name: string) => !sameValue(form.values[name], form.defaults[name])
+  /** The inverted range (lowest above highest) the parameter is part of. */
+  const invertedRange = (name: string) => searchPlan.inverted.find((r) => r.min === name || r.max === name)
 </script>
 
 <Dialog.Root bind:open>
@@ -102,6 +106,10 @@
                     labelId="{id}-label"
                     value={form.values[entry.name]}
                     onChange={(v) => form.setParam(entry.name, v)} />
+                  {#if invertedRange(entry.name)}
+                    {@const inverted = invertedRange(entry.name)!}
+                    <p class="text-xs text-destructive" data-testid="range-inverted">{rangeMessage(inverted, form.values)}</p>
+                  {/if}
                   <p class="text-xs whitespace-pre-line text-muted-foreground {long && !full ? 'line-clamp-2' : ''}">
                     {entry.description}
                   </p>

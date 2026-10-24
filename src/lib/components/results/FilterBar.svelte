@@ -11,6 +11,7 @@
   import type { LevelState, ResultsView } from '$lib/results/view.svelte'
   import { cn } from '$lib/utils'
   import ChevronDown from '@lucide/svelte/icons/chevron-down'
+  import { untrack } from 'svelte'
   import SearchIcon from '@lucide/svelte/icons/search'
   import XIcon from '@lucide/svelte/icons/x'
 
@@ -47,13 +48,24 @@
   function type(event: Event & { currentTarget: HTMLInputElement }) {
     draft = event.currentTarget.value
     clearTimeout(timer)
-    timer = setTimeout(() => (level.filters.text = draft), 150)
+    timer = setTimeout(() => {
+      timer = undefined
+      level.filters.text = draft
+    }, 150)
   }
   function clearText() {
     clearTimeout(timer)
+    timer = undefined
     draft = ''
     level.filters.text = ''
   }
+  // a text the view set itself (opening a PSM that the text hides clears it): the field shows it
+  $effect(() => {
+    const text = level.filters.text
+    untrack(() => {
+      if (timer === undefined && draft !== text) draft = text
+    })
+  })
 
   const peptideChoices = [
     { value: '0', label: 'Any number of peptides' },

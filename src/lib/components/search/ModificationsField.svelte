@@ -82,7 +82,7 @@
 <div
   role="group"
   aria-labelledby={labelId}
-  class="flex min-h-8 flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-1.5 py-1">
+  class="flex min-h-8 flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-1.5 py-1 dark:bg-input/30">
   {#each groups as g (g.label)}
     <span
       class={cn(

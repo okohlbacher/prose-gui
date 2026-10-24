@@ -3,7 +3,7 @@
 // copy of any such array. No row is ever turned into an object.
 
 import { columnDef } from './columns'
-import { naturalKey, scanNumber } from './display'
+import { naturalKey, parseAccession, scanNumber } from './display'
 import { peptideCounts, qLimit, type Level, type ResultModel } from './model'
 
 export type FilterState = {
@@ -43,8 +43,18 @@ export function defaultFilters(): FilterState {
 }
 
 /**
- * What the protein text filter searches, per protein, lower-cased: its accession, its description and
- * the sequences of its peptides. Made once per model, on the first text filter.
+ * What the text filters find of an accession: the ID the tables show and the UniProt entry name ("P02768",
+ * "ALBU_HUMAN" of "sp|P02768|ALBU_HUMAN"), not the FASTA's "sp|", "tr|" or "CON__" (typing "sp" would match
+ * every Swiss-Prot entry; the contaminants have their own filter).
+ */
+function accessionText(accession: string): string {
+  const { id, entry } = parseAccession(accession)
+  return entry === null ? id : `${id}\n${entry}`
+}
+
+/**
+ * What the protein text filter searches, per protein, lower-cased: its accession (`accessionText`), its
+ * description and the sequences of its peptides. Made once per model, on the first text filter.
  */
 const proteinTexts = new WeakMap<ResultModel, string[]>()
 function proteinText(m: ResultModel): string[] {
@@ -55,7 +65,7 @@ function proteinText(m: ResultModel): string[] {
     const sequence = m.tables.peptides.sequence
     texts = new Array(pr.count)
     for (let p = 0; p < pr.count; p++) {
-      const parts = [pr.accession[p], pr.description[p]]
+      const parts = [accessionText(pr.accession[p]), pr.description[p]]
       for (let i = offsets[p]; i < offsets[p + 1]; i++) parts.push(sequence[peptide[i]])
       texts[p] = parts.join('\n').toLowerCase()
     }
@@ -99,10 +109,17 @@ function peptideMask(m: ResultModel, f: FilterState): Uint8Array {
   }
   const tokens = words(f.text)
   if (tokens.length > 0) {
+    // (each protein's text once, not once per peptide)
     const accession = m.tables.proteins.accession
+    const texts = new Map<number, string>()
+    const textOf = (p: number) => {
+      let text = texts.get(p)
+      if (text === undefined) texts.set(p, (text = accessionText(accession[p])))
+      return text
+    }
     for (let k = 0; k < pt.count; k++) {
       if (!mask[k]) continue
-      const proteins = Array.from(m.peptide.proteins[k], (p) => accession[p])
+      const proteins = Array.from(m.peptide.proteins[k], textOf)
       mask[k] = matches(`${pt.sequence[k]}\n${pt.proforma[k]}\n${proteins.join('\n')}`.toLowerCase(), tokens) ? 1 : 0
     }
   }
@@ -112,9 +129,9 @@ function peptideMask(m: ResultModel, f: FilterState): Uint8Array {
 /**
  * The rows of `level` that pass the filters, ascending.
  *
- * - Proteins: `text` (accession, description, the sequences of its peptides), `maxQ` (protein q-value, limited by `proteinFdr`),
+ * - Proteins: `text` (accession as shown and entry name, description, the sequences of its peptides), `maxQ` (protein q-value, limited by `proteinFdr`),
  *   `minPeptides`, `minReplicatesInCondition`, `hideContaminants`, `showDecoys`.
- * - Peptides: `text` (sequence, ProForma, accessions of the proteins), `maxQ` on the best PSM's
+ * - Peptides: `text` (sequence, ProForma, accessions of the proteins as shown), `maxQ` on the best PSM's
  *   q-value (there is no peptide-level FDR; limited by `psmFdr`), `hideContaminants` (peptides that
  *   map only to contaminants), `showDecoys`, `proteinFilter`.
  * - PSMs: `text` and `hideContaminants` through the peptide, `maxQ` (PSM q-value, limited by `psmFdr`),

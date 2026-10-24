@@ -117,7 +117,7 @@
   const td = 'border-b px-2 py-[7px] text-right whitespace-nowrap'
   // made once: a hundred rows of up to dozens of count cells are not worth a class merge each
   const countCell = 'border-b px-1 py-[7px] text-right whitespace-nowrap'
-  const noCount = `${countCell} text-[#d4d4d8]`
+  const noCount = `${countCell} text-faint`
 </script>
 
 {#if detail.peptides.length === 0}
@@ -207,7 +207,7 @@
             {#each psms.subarray(0, shown) as i (i)}
               {@const shift = massShift(ps.deltaMass[i])}
               <!-- one line: the text takes the first columns (up to six), the q-value and the button what is right of them -->
-              <tr data-testid="panel-psm" data-scan={spectrumLabel(ps.nativeId[i])} class="bg-[#fafafa] text-xs">
+              <tr data-testid="panel-psm" data-scan={spectrumLabel(ps.nativeId[i])} class="bg-subtle text-xs">
                 <td colspan={descriptionSpan} class="overflow-hidden border-b py-1 pr-2 pl-[34px] text-left text-ellipsis whitespace-nowrap" title={describe(i, shift)}>
                   {#if shift !== null}<span class="font-mono text-muted-foreground">[{shift}]?</span>{' '}{/if}{describe(i)}
                 </td>
@@ -224,7 +224,7 @@
               </tr>
             {/each}
             {#if psms.length > firstPsms}
-              <tr class="bg-[#fafafa] text-xs">
+              <tr class="bg-subtle text-xs">
                 <td colspan={4 + nS} class="border-b py-1 pl-[34px] text-left whitespace-nowrap">
                   {#if psms.length > shown}
                     <button

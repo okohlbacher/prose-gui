@@ -416,24 +416,70 @@ fn a_byte_range_is_tail_or_offset_and_length() {
     assert!(ByteRange::of(Some(1), Some(1), Some(2)).is_err());
 }
 
+/// An indexed mzML's end.
+const MZML_END: &str = "</run></mzML><indexListOffset>9</indexListOffset></indexedmzML>\n";
+
+fn gzip(bytes: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+    encoder.write_all(bytes).unwrap();
+    encoder.finish().unwrap()
+}
+
 #[test]
 fn an_mzml_shows_its_size_and_spectrum_count() {
     let tmp = TempDir::new("inspect");
-    let mzml = tmp.write(
-        "run 1.mzML",
-        "<?xml?>\n<mzML><run><spectrumList count=\"2789\" defaultDataProcessingRef=\"x\">",
-    );
+    let text = format!("<?xml?>\n<indexedmzML><mzML><run><spectrumList count=\"2789\" defaultDataProcessingRef=\"x\">{MZML_END}");
+    let mzml = tmp.write("run 1.mzML", &text);
     let facts = inspect(mzml.to_str().unwrap());
     assert_eq!(facts.name, "run 1.mzML");
     assert_eq!(facts.size, fs::metadata(&mzml).unwrap().len());
     assert_eq!(facts.spectra, Some(2789));
     assert_eq!(facts.proteins, None);
     assert_eq!(facts.error, None);
-    // compressed: the count is not known without decompressing
-    let gz = tmp.write("run.mzML.gz", "\u{1f}\u{8b}not really");
+    assert_eq!(facts.problem, None);
+    // compressed: decompressed to be counted and checked
+    let gz = tmp.path().join("run.mzML.gz");
+    fs::write(&gz, gzip(text.as_bytes())).unwrap();
     let facts = inspect(gz.to_str().unwrap());
-    assert_eq!(facts.spectra, None);
-    assert_eq!(facts.error, None);
+    assert_eq!(facts.spectra, Some(2789));
+    assert_eq!((facts.error, facts.problem), (None, None));
+}
+
+#[test]
+fn an_mzml_that_prose_cannot_search_has_a_problem() {
+    let tmp = TempDir::new("inspect");
+    let problem = |name: &str, contents: &[u8]| {
+        let path = tmp.path().join(name);
+        fs::write(&path, contents).unwrap();
+        let facts = inspect(path.to_str().unwrap());
+        assert_eq!(facts.error, None, "{name}");
+        facts
+            .problem
+            .unwrap_or_else(|| panic!("{name}: no problem"))
+    };
+    assert_eq!(problem("empty.mzML", b""), "empty.mzML is empty.");
+    assert!(problem("fake.mzML", b"not xml at all").contains("is not an mzML file"));
+    // cut off after its header (the battle test's trunc.mzML said 139 spectra)
+    let whole =
+        format!("<?xml?><indexedmzML><mzML><run><spectrumList count=\"139\"><spectrum/>{MZML_END}");
+    let cut = &whole.as_bytes()[..whole.len() - 30];
+    assert!(problem("trunc.mzML", cut).contains("trunc.mzML is incomplete"));
+    // a long file cut off: its head and its tail are read
+    let mut long = whole.as_bytes()[..whole.len() - MZML_END.len()].to_vec();
+    long.extend(std::iter::repeat_n(b' ', 3 << 20));
+    assert!(problem("long.mzML", &long).contains("is incomplete"));
+    long.extend_from_slice(MZML_END.as_bytes());
+    let path = tmp.path().join("long.mzML");
+    fs::write(&path, &long).unwrap();
+    assert_eq!(inspect(path.to_str().unwrap()).problem, None);
+    // compressed: not gzip, cut off, or an mzML cut off before it was compressed
+    assert!(problem("plain.mzML.gz", whole.as_bytes()).contains("is not gzip-compressed"));
+    let gz = gzip(whole.as_bytes());
+    assert!(
+        problem("cut.mzML.gz", &gz[..gz.len() - 12]).contains("cannot be decompressed to its end")
+    );
+    assert!(problem("cut-inside.mzML.gz", &gzip(cut)).contains("is incomplete"));
 }
 
 #[test]
@@ -444,6 +490,44 @@ fn a_fasta_shows_its_proteins_and_residues() {
     assert_eq!(facts.proteins, Some(2));
     assert_eq!(facts.residues, Some(11));
     assert_eq!(facts.spectra, None);
+    assert_eq!((facts.problem, facts.warnings), (None, vec![]));
+}
+
+#[test]
+fn a_fasta_that_prose_refuses_has_a_problem_and_what_it_may_mishandle_warnings() {
+    let tmp = TempDir::new("inspect");
+    for (name, contents, expected) in [
+        ("empty.fasta", "", "empty.fasta is empty."),
+        (
+            "notfasta.fasta",
+            "hello world\nthis is not a fasta\n",
+            "no protein entries",
+        ),
+        (
+            "headeronly.fasta",
+            ">P1\n>P2\n",
+            "2 entries without a sequence (the first: P1)",
+        ),
+        (
+            "dup.fasta",
+            ">P1\nKK\n>P1\nRR\n",
+            "1 accession more than once (the first: P1)",
+        ),
+    ] {
+        let facts = inspect(tmp.write(name, contents).to_str().unwrap());
+        let problem = facts.problem.unwrap_or_default();
+        assert!(problem.contains(expected), "{name}: {problem}");
+    }
+    let facts = inspect(
+        tmp.write("bom.fasta", "\u{feff}>P1\nmkr\n")
+            .to_str()
+            .unwrap(),
+    );
+    assert_eq!(
+        (facts.proteins, facts.residues, facts.problem),
+        (Some(1), Some(3), None)
+    );
+    assert_eq!(facts.warnings.len(), 2, "{:?}", facts.warnings);
 }
 
 #[test]

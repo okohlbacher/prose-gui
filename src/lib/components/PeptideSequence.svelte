@@ -31,12 +31,9 @@
 {/if}
 
 <style>
-  /* the modified residue: colour #1baf7a (the residue's underline and the coverage-map dots),
-     background #d7f5ea, text #065f46 */
+  /* the modified residue: the theme's --mod (the residue's underline and the coverage-map dots), on
+     --mod-bg in --mod-fg (app.css) */
   .pep {
-    --mod: #1baf7a;
-    --mod-bg: #d7f5ea;
-    --mod-fg: #065f46;
     font-family: var(--font-sequence);
     font-size: 12.5px;
     white-space: nowrap;

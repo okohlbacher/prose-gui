@@ -1,8 +1,9 @@
 <script lang="ts">
   // The web app's top bar without its engine chip and update notice (the desktop app has neither):
   // the OpenMS logo and the wordmark, the views, on Results the result's chip and its Export menu, and a running search's
-  // progress on the other views.
-  // the unmodified logo of OpenMS/Assets (src/assets/logo/README.txt), 180 px: sharp at 36 px on HiDPI screens
+  // progress on the other views; at the right end the theme menu.
+  // the unmodified logo of OpenMS/Assets (src/assets/logo/README.txt), 180 px: sharp at 36 px on HiDPI screens;
+  // its lettering is black, so in dark it stands on a light plate
   import openmsLogo from '../../assets/logo/openms-logo.png'
   import { Badge } from '$lib/components/ui/badge'
   import { formatHash, type Route, type View } from '$lib/route'
@@ -12,6 +13,7 @@
   import ExportMenu from './results/ExportMenu.svelte'
   import { cn } from '$lib/utils'
   import SearchProgress from './search/SearchProgress.svelte'
+  import ThemeMenu from './ThemeMenu.svelte'
 
   let { route, resultId }: { route: Route; resultId: string | null } = $props()
 
@@ -48,7 +50,7 @@
 <header
   class="flex min-h-[52px] flex-wrap items-center gap-x-6 gap-y-1.5 border-b bg-background px-5 py-2.5 *:shrink-0 max-[1101px]:gap-x-4">
   <div class="flex items-center gap-2 text-[15px] font-semibold tracking-tight whitespace-nowrap">
-    <img src={openmsLogo} alt="OpenMS" width="36" height="36" class="size-9 select-none" draggable="false" data-testid="openms-logo" />
+    <img src={openmsLogo} alt="OpenMS" width="36" height="36" class="size-9 select-none dark:rounded-md dark:bg-zinc-100 dark:p-0.5" draggable="false" data-testid="openms-logo" />
     <span>ProSE<small class="ml-1.5 text-xs font-normal text-muted-foreground max-[1101px]:hidden">OpenMS search engine</small></span>
   </div>
   <nav aria-label="Main" class="flex gap-1">
@@ -90,5 +92,6 @@
     {#if resultView}
       <ExportMenu view={resultView} />
     {/if}
+    <ThemeMenu />
   </div>
 </header>

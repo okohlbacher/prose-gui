@@ -361,7 +361,7 @@
   }
   /* a placeholder ("–" for zero or missing) is faint; data that matters less is muted, but readable */
   .placeholder {
-    color: #d4d4d8;
+    color: var(--faint);
   }
   .secondary {
     color: var(--color-muted-foreground);

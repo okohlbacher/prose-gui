@@ -84,23 +84,23 @@
   }
   /* matched: a tint of the series' colour, the text darker for contrast (b, y, other series) */
   .mb {
-    color: #1e40af;
-    background: #eff6ff;
+    color: var(--ion-b-fg);
+    background: var(--ion-b-bg);
   }
   .my {
-    color: #9a3412;
-    background: #fff7ed;
+    color: var(--ion-y-fg);
+    background: var(--ion-y-bg);
   }
   .mo {
-    color: #27272a;
-    background: #f4f4f5;
+    color: var(--ion-other-fg);
+    background: var(--ion-other-bg);
   }
   .m {
-    background: #d7f5ea;
-    color: #065f46;
+    background: var(--mod-bg);
+    color: var(--mod-fg);
     border-radius: 3px;
     padding: 0 1px;
-    box-shadow: inset 0 -1.5px 0 #1baf7a;
+    box-shadow: inset 0 -1.5px 0 var(--mod);
   }
   .m sup {
     font-family: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
