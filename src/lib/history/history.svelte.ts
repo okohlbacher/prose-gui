@@ -281,16 +281,17 @@ export async function openProjectFile(): Promise<boolean> {
 }
 
 /**
- * Saves `result` as a project file where the user chooses (the save dialog). A search that is not in
- * History yet (its save failed) is saved first. Resolves with the path, or null if the user cancelled.
+ * Saves `result` as a project file where the user chooses (the save dialog), `onProgress` told how far the
+ * writing is (0–1). A search that is not in History yet (its save failed) is saved first. Resolves with the
+ * path, or null if the user cancelled.
  */
-export async function saveProjectFile(result: OpenResult): Promise<string | null> {
+export async function saveProjectFile(result: OpenResult, onProgress?: (fraction: number) => void): Promise<string | null> {
   if (!isListed(result.id)) await refreshHistory()
   if (!isListed(result.id)) {
     await saveFinished(result)
     if (status?.state === 'unsaved' && status.id === result.id) throw new ProjectError(status.message)
   }
-  return exportProject(backend, result.id, nameOf(result))
+  return exportProject(backend, result.id, nameOf(result), onProgress)
 }
 
 /**

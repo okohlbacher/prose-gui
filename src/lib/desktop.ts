@@ -6,7 +6,7 @@
 // inspect_files, cpu_count, example_files, save_text, save_search_file, history_list, history_save_record,
 // history_save_proteins, history_rename, history_delete, history_files, history_import, open_project_file,
 // save_project_file, answer_close. Events: search://progress, search://done, search://failed,
-// app://close-requested. The system's dialogs open one at a time (`oneDialog`).
+// project://progress, app://close-requested. The system's dialogs open one at a time (`oneDialog`).
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
@@ -229,8 +229,8 @@ export function saveSearchFile(searchId: string, name: string, suggested: string
 }
 
 /**
- * History's disk: the Rust commands (src-tauri/src/history.rs). Project files go as raw bodies (the
- * name of a project in a header), not as JSON numbers.
+ * History's disk: the Rust commands (src-tauri/src/history.rs). A project file is written by the Rust side
+ * (src-tauri/src/project.rs); an opened one and the entries of an import go as raw bodies, not as JSON numbers.
  */
 export const desktopBackend: HistoryBackend = {
   list: () => invoke<HistoryEntry[]>('history_list'),
@@ -240,8 +240,20 @@ export const desktopBackend: HistoryBackend = {
   rename: (searchId, name) => invoke('history_rename', { searchId, name }),
   delete: (searchId) => invoke('history_delete', { searchId }),
   files: (searchId) => invoke('history_files', { searchId }),
-  saveProject: (name, bytes) =>
-    oneDialog(null, () => invoke<string | null>('save_project_file', bytes, { headers: { name: encodeURIComponent(name) } })),
+  // the dialog and the writing are one command: the zip goes to disk entry by entry, `project://progress` says how far
+  saveProject: (searchId, name, onProgress) =>
+    oneDialog(null, async () => {
+      const unlisten = onProgress
+        ? await listen<{ searchId: string; written: number; total: number }>('project://progress', (e) => {
+            if (e.payload.searchId === searchId) onProgress(e.payload.total > 0 ? e.payload.written / e.payload.total : 1)
+          })
+        : null
+      try {
+        return await invoke<string | null>('save_project_file', { searchId, name })
+      } finally {
+        unlisten?.()
+      }
+    }),
   // the dialog and the read are one command: the page never names a path (cancelled: an empty body)
   openProject: () =>
     oneDialog(null, async () => {

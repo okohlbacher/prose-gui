@@ -12,13 +12,15 @@
 //                   opens when the FASTA it was searched with has moved, or on another computer; the
 //                   folder's database.fasta (the FASTA with the contaminants) goes then
 //
-// A project file holds the same files (the links to the inputs are not files and stay out). Opening
-// one writes its files to a fresh folder of the app, as a new search of History.
+// A project file holds the same files (the links to the inputs are not files and stay out). It is written
+// by the Rust side, entry by entry from the folder's files to the file the user chose (src-tauri/src/project.rs;
+// what it would hold is checked here first). Opening one writes its files to a fresh folder of the app, as a
+// new search of History.
 //
 // The disk is behind `HistoryBackend` (desktop.ts: the Rust commands), so that the tests run against
 // a folder in memory.
 
-import { strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
+import { strToU8, unzipSync } from 'fflate'
 import type { DesignResolution } from '../design/model'
 import { readSearch, RUNS, type ByteRange, type SearchFiles } from '../results/read'
 import type { ResultTables } from '../results/types'
@@ -132,8 +134,11 @@ export interface HistoryBackend {
   delete(id: string): Promise<void>
   /** The regular files of the folder (no links to the inputs). */
   files(id: string): Promise<{ name: string; size: number }[]>
-  /** The save dialog, then the bytes written there: the path, or null if the user cancelled. */
-  saveProject(name: string, bytes: Uint8Array): Promise<string | null>
+  /**
+   * The project file of search `id` (see `exportProject`): the save dialog, suggesting `name`, then the zip
+   * written there, `onProgress` told how far (0–1) as it goes. The path, or null if the user cancelled.
+   */
+  saveProject(id: string, name: string, onProgress?: (fraction: number) => void): Promise<string | null>
   /**
    * The open dialog for a `.prose` file and the bytes of the file chosen, or null if the user cancelled.
    * (The dialog and the read are one step in Rust: the page never names a path to read.)
@@ -331,16 +336,16 @@ export function defaultName(result: OpenResult): string {
   return resultName(result.design.rows.map((r) => r.fileName))
 }
 
-/** A level that deflate does not shrink (Parquet is compressed already): stored as it is. */
-const STORE = /\.(parquet|gz|zst)$/i
+/** Files that deflate does not shrink (Parquet is compressed already): stored as they are (`project.rs` `stored`). */
+export const STORE = /\.(parquet|gz|zst)$/i
 /** The deflate level of the other files: the quickest (they are small). */
-const LEVEL = 1
+export const LEVEL = 1
 
 /**
  * Files of the folder that a project leaves out: the database copy (`proteins.fasta` has the sequences)
- * and the tool's log (its first line is the full command line, with paths of this computer).
+ * and the tool's log (its first line is the full command line, with paths of this computer). As `project.rs` `LEFT_OUT`.
  */
-const LEFT_OUT = new Set(['database.fasta', 'database.json', 'prose.log'])
+export const LEFT_OUT: ReadonlySet<string> = new Set(['database.fasta', 'database.json', 'prose.log'])
 
 /**
  * `inputs.json` as a project holds it: the files by name only, not the paths of this computer.
@@ -365,30 +370,28 @@ export function withoutPaths(inputs: Uint8Array): Uint8Array {
 /**
  * Makes a project file of the search folder `id`: its regular files as a zip, `search.json` first,
  * without the database copy and with the searched files by name only (what is shared is the results,
- * not where the files were on this computer). Resolves with the path where the user saved it, or null
- * if the user cancelled.
+ * not where the files were on this computer). What it would hold is checked first, before the save dialog;
+ * the backend then asks where and writes it there (the Rust side, entry by entry), `onProgress` told how far
+ * (0–1). Resolves with the path where the user saved it, or null if the user cancelled.
  */
-export async function exportProject(backend: HistoryBackend, id: string, name: string): Promise<string | null> {
+export async function exportProject(
+  backend: HistoryBackend,
+  id: string,
+  name: string,
+  onProgress?: (fraction: number) => void,
+): Promise<string | null> {
   const listed = await backend.files(id)
   if (!listed.some((f) => f.name === RECORD_FILE)) {
     throw new ProjectError(`The search is not saved to History (it has no ${RECORD_FILE}), so there is no project to make.`)
   }
   const kept = listed.filter((f) => !LEFT_OUT.has(f.name))
   // what the project would hold, before anything is read: within what a project opens with (MAX_UNPACKED)
-  // and what a zip without zip64 can hold (MAX_ZIP; fflate writes no zip64)
+  // and what a zip without zip64 can hold (MAX_ZIP; the app writes no zip64)
   const total = kept.reduce((n, f) => n + f.size, 0)
   if (total > MAX_UNPACKED || kept.length > MAX_ZIP_ENTRIES) throw tooLargeForAProject(total, kept.length)
-  const names = kept
-    .map((f) => f.name)
-    .sort((a, b) => (a === RECORD_FILE ? -1 : b === RECORD_FILE ? 1 : a < b ? -1 : 1))
-  const zippable: Zippable = {}
-  for (const file of names) {
-    const data = await backend.read(id, file)
-    zippable[file] = [file === 'inputs.json' ? withoutPaths(data) : data, { level: STORE.test(file) ? 0 : LEVEL }]
-  }
-  const zip = zipSync(zippable)
-  if (zip.length > MAX_ZIP) throw tooLargeForAProject(zip.length, names.length)
-  return backend.saveProject(projectFileName(name), zip)
+  // inputs.json (small) is checked too: it cannot fail once the user has chosen where
+  if (kept.some((f) => f.name === 'inputs.json')) withoutPaths(await backend.read(id, 'inputs.json'))
+  return backend.saveProject(id, projectFileName(name), onProgress)
 }
 
 /** The most a zip without zip64 holds: 4 GiB less a byte, and 65,535 entries. */
