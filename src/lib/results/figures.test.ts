@@ -27,7 +27,8 @@ describe('keyFigures', () => {
     expect(f.peptides).toBe(4) // peptides 0–3; 4 is a decoy
     expect(f.psms).toBe(7)
     expect(f.ms2).toBe(35)
-    expect(f.psmShareOfMs2).toBeCloseTo(7 / 35)
+    expect(f.spectra).toBe(7)
+    expect(f.identifiedShareOfMs2).toBeCloseTo(7 / 35)
     // |error| of PSMs 0 1 3 4 5 7: 1 2 3 4 5 0.5 → median 2.5 (NaN skipped)
     expect(f.medianAbsPpm).toBeCloseTo(2.5)
     expect(f.samples).toBe(2)
@@ -55,12 +56,34 @@ describe('keyFigures', () => {
     expect(f.proteinGroups).toBe(1)
   })
 
+  it('takes the share of MS2 from the identified spectra, not the PSMs (co-isolated precursors)', () => {
+    const tables = sampleTables()
+    // PSMs 0, 1 and 3 (file 0) are three precursors of one spectrum, PSMs 4 and 5 (file 1) two of another; PSM 7
+    // (file 1) has the native ID of PSM 0, but in another file
+    const shared = 'controllerType=0 controllerNumber=1 scan=17'
+    for (const i of [0, 1, 3, 4, 5, 7]) tables.psms.nativeId[i] = i === 4 || i === 5 ? 'scan=99' : shared
+    const m = buildModel(tables, sampleDesign(), { showTechReplicates: false, psmFdr: 0.01, proteinFdr: 0.01 })
+    const f = keyFigures(m, summary([4, 2]))
+    expect(f.psms).toBe(7) // PSMs 0 1 3 4 5 6 7
+    expect(f.spectra).toBe(4) // {0 1 3} {4 5} 6 7
+    expect(f.identifiedShareOfMs2).toBeCloseTo(4 / 6)
+    // never above 100 %: MS2 counts that are too low (a summary of another run)
+    expect(keyFigures(m, summary([1, 1])).identifiedShareOfMs2).toBe(1)
+  })
+
+  it('counts each PSM without a native ID as a spectrum of its own', () => {
+    const tables = sampleTables()
+    tables.psms.nativeId.fill('')
+    const m = buildModel(tables, sampleDesign(), { showTechReplicates: false, psmFdr: 0.01, proteinFdr: 0.01 })
+    expect(keyFigures(m, summary([20, 15])).spectra).toBe(7)
+  })
+
   it('has no share without MS2 counts and no error without errors', () => {
     const tables = sampleTables()
     tables.psms.precursorErrorPpm.fill(NaN)
     const m = buildModel(tables, sampleDesign(), { showTechReplicates: false, psmFdr: 0.01, proteinFdr: 0.01 })
     const f = keyFigures(m, summary([0]))
-    expect(f.psmShareOfMs2).toBeNull()
+    expect(f.identifiedShareOfMs2).toBeNull()
     expect(f.medianAbsPpm).toBeNull()
   })
 })

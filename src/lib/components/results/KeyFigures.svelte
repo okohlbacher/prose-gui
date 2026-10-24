@@ -13,7 +13,10 @@
     if (proteins === proteinGroups) return `${base} In this search every protein is its own group, so ${formatCount(proteins)} proteins make ${formatCount(proteinGroups)} groups.`
     return `${base} In this search, ${formatCount(proteins)} proteins form ${formatCount(proteinGroups)} groups.`
   })
-  const share = $derived(figures.psmShareOfMs2 === null ? null : `${(figures.psmShareOfMs2 * 100).toFixed(0)} % of MS2`)
+  // the share of the MS2 spectra that are identified: spectra, not PSMs (with co-isolated precursors a spectrum
+  // can have several PSMs)
+  const share = $derived(figures.identifiedShareOfMs2 === null ? null : `${(figures.identifiedShareOfMs2 * 100).toFixed(0)} % of MS2`)
+  const severalPerSpectrum = $derived(figures.spectra !== figures.psms)
   const stats = $derived([
     {
       value: formatCount(figures.proteinGroups),
@@ -31,8 +34,14 @@
     { value: formatCount(figures.peptides), note: 'peptides', title: 'Target peptides at the PSM FDR. Each modified form counts as its own peptide.', testid: 'peptide-count' },
     {
       value: formatCount(figures.psms),
-      note: share ? `PSMs · ${share}` : 'PSMs',
-      title: `Target PSMs at the PSM FDR, out of ${formatCount(figures.ms2)} MS2 spectra`,
+      note: severalPerSpectrum
+        ? ['PSMs', `${formatCount(figures.spectra)} spectra`, share].filter(Boolean).join(' · ')
+        : share
+          ? `PSMs · ${share}`
+          : 'PSMs',
+      title: severalPerSpectrum
+        ? `Target PSMs at the PSM FDR. They identify ${formatCount(figures.spectra)} of the ${formatCount(figures.ms2)} MS2 spectra: with co-isolated precursors a spectrum can have several PSMs.`
+        : `Target PSMs at the PSM FDR, out of ${formatCount(figures.ms2)} MS2 spectra`,
       testid: 'psm-count',
     },
     {

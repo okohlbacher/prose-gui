@@ -42,10 +42,15 @@ export type KeyFigures = {
   peptides: number
   /** Target PSMs within the PSM FDR. */
   psms: number
+  /**
+   * The MS2 spectra those PSMs identify. With co-isolated precursors (chimeric search) a spectrum can have
+   * several PSMs, so this can be less than `psms`.
+   */
+  spectra: number
   /** MS2 spectra in the searched files. */
   ms2: number
-  /** `psms / ms2`, or null without MS2 counts. */
-  psmShareOfMs2: number | null
+  /** `spectra / ms2` (identified spectra, not PSMs: at most 1), or null without MS2 counts. */
+  identifiedShareOfMs2: number | null
   /** The median absolute precursor error of those PSMs (ppm), or null. */
   medianAbsPpm: number | null
   /** Biological samples and conditions of the design. */
@@ -65,6 +70,7 @@ export function keyFigures(m: ResultModel, summary: ProSEMultiSummary): KeyFigur
   }
   const psms = levelRows(m, 'psms', false)
   const ms2 = summary.files.reduce((n, f) => n + f.ms2Spectra, 0)
+  const spectra = identifiedSpectra(m, psms)
 
   const errors = new Float64Array(psms.length)
   let n = 0
@@ -82,11 +88,31 @@ export function keyFigures(m: ResultModel, summary: ProSEMultiSummary): KeyFigur
     peptides: levelTotal(m, 'peptides', false),
     psms: psms.length,
     ms2,
-    psmShareOfMs2: ms2 > 0 ? psms.length / ms2 : null,
+    spectra,
+    identifiedShareOfMs2: ms2 > 0 ? Math.min(1, spectra / ms2) : null,
     medianAbsPpm: median,
     samples: new Set(m.columnSample).size,
     conditions: m.design.conditions.length,
   }
+}
+
+/** The distinct spectra (file and native ID) of the PSM rows `psms`; a PSM without a native ID counts as one. */
+function identifiedSpectra(m: ResultModel, psms: Uint32Array): number {
+  const { file, nativeId } = m.tables.psms
+  const seen = new Map<number, Set<string>>()
+  let spectra = 0
+  for (const i of psms) {
+    if (nativeId[i] === '') {
+      spectra++
+      continue
+    }
+    let ids = seen.get(file[i])
+    if (!ids) seen.set(file[i], (ids = new Set()))
+    if (ids.has(nativeId[i])) continue
+    ids.add(nativeId[i])
+    spectra++
+  }
+  return spectra
 }
 
 /**
