@@ -8,5 +8,5 @@ OpenMS-Assets-LICENSE.md is that repository's LICENSE.md: the logo may be used i
 OpenMS code, without implying ownership or endorsement by OpenMS Inc. Do not modify the file.
     sha256 8bcac7a89a585fdaf651e262d47507d159eb5cea135b4d4e133ee3828db1b872  openms-logo.png
 
-The app has light colours only (the theme's .dark variables are never switched on), so the black
-lettering always stands on a light background.
+The lettering is black: in the dark theme the top bar puts the logo on a light plate (TopBar.svelte), so
+that it always stands on a light background.

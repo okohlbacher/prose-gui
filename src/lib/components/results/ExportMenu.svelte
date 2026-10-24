@@ -17,6 +17,8 @@
   let canSpectrum = $state(false)
   let busy = $state(false)
   let projecting = $state(false)
+  /** How far the project file is written (0–1); null before the writing starts (the save dialog). */
+  let written = $state<number | null>(null)
   let error = $state<string | null>(null)
 
   function openChange(next: boolean) {
@@ -35,18 +37,23 @@
     }
   }
 
-  /** The search's folder as a project file (a zip; large for a large search), written where the user chooses. */
+  /**
+   * The search's folder as a project file (a zip; large for a large search), written where the user chooses:
+   * the dialog first, then the writing, with its percentage on the menu's button.
+   */
   async function project() {
     busy = true
     projecting = true
+    written = null
     error = null
     try {
-      await saveProjectFile(view.result)
+      await saveProjectFile(view.result, (fraction) => (written = fraction))
     } catch (e) {
       error = `Project: ${String((e as Error)?.message ?? e)}`
     } finally {
       busy = false
       projecting = false
+      written = null
     }
   }
 
@@ -68,7 +75,7 @@
 {/if}
 <DropdownMenu.Root {open} onOpenChange={openChange}>
   <DropdownMenu.Trigger class={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 gap-1 px-2.5 text-xs')} disabled={busy}>
-    {#if projecting}Saving project…{:else if busy || view.exporting}Exporting…{:else}Export{/if}<ChevronDown class="size-3.5" aria-hidden="true" />
+    {#if projecting}Saving project…{#if written !== null}<span class="tabular-nums">{Math.floor(written * 100)} %</span>{/if}{:else if busy || view.exporting}Exporting…{:else}Export{/if}<ChevronDown class="size-3.5" aria-hidden="true" />
   </DropdownMenu.Trigger>
   <DropdownMenu.Content class="w-auto min-w-52" align="end">
     <DropdownMenu.Item disabled={view.level === null || view.exporting} onSelect={() => guard(() => exportCsv(view))}

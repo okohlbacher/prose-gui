@@ -171,7 +171,7 @@
         <p class="text-xs text-amber-700" data-testid="psm-fdr-notice">{fdrNotice}</p>
       {/if}
       {#if view.result.outcome.warnings.length > 0}
-        <p class="text-xs text-amber-700" data-testid="results-warnings">{view.result.outcome.warnings.join(' ')}</p>
+        <p class="text-xs text-amber-700 dark:text-amber-400" data-testid="results-warnings">{view.result.outcome.warnings.join(' ')}</p>
       {/if}
       {#if !panelOpen && !psmOpen}
         <KeyFigures {figures} proteinFdr={view.result.proteinFdr} proteinFdrApplied={view.result.outcome.summary.proteinFdrApplied} />
@@ -271,11 +271,11 @@
 <style>
   .legend-mod {
     font-family: var(--font-sequence);
-    background: #d7f5ea;
-    color: #065f46;
+    background: var(--mod-bg);
+    color: var(--mod-fg);
     border-radius: 3px;
     padding: 0 1px;
-    box-shadow: inset 0 -1.5px 0 #1baf7a;
+    box-shadow: inset 0 -1.5px 0 var(--mod);
   }
   .legend-mod sup {
     font-size: 9px;

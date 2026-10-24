@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Search settings: the preset, the ten common parameters (in the mockup's order), "Advanced": the
+  // Search settings: the preset (PresetPicker), the ten common parameters (in the mockup's order), "Advanced": the
   // threads (all cores by default), the database chunks and co-isolated precursors, and the web app's "All N parameters" dialog
   // (AllParametersDialog), made from the pinned ProSE's parameter list.
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right'
@@ -10,21 +10,23 @@
   import { Switch } from '$lib/components/ui/switch'
   import { searchForm as form } from '$lib/search/form.svelte'
   import { searchPlan } from '$lib/search/plan.svelte'
+  import { loadCores, machine } from '$lib/search/tool.svelte'
+  import { onMount } from 'svelte'
   import { dialogEntries } from '$lib/settings/parameters'
   import AllParametersDialog from './AllParametersDialog.svelte'
   import ChoiceSelect from './ChoiceSelect.svelte'
   import ModificationsField from './ModificationsField.svelte'
   import NumberField from './NumberField.svelte'
+  import PresetPicker from './PresetPicker.svelte'
   import RangeField from './RangeField.svelte'
   import ToleranceField from './ToleranceField.svelte'
 
   let dialogOpen = $state(false)
   const count = $derived(dialogEntries([...form.entries.values()]).length)
 
-  /** The cores of this computer (the default of the threads). */
-  const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || null : null
-
-  const presetOptions = $derived(form.presets.map((p) => ({ value: p.id, label: p.name })))
+  // the cores of this computer (the default of the threads)
+  onMount(loadCores)
+  const cores = $derived(machine.cores)
 
   // the usual enzymes first, then the others alphabetically
   const COMMON_ENZYMES = [
@@ -54,6 +56,10 @@
     form.setParam('precursor:mass_tolerance_upper', v)
   }
 
+  // ranges whose lowest value is above the highest: marked, and the search waits (plan.svelte.ts)
+  const chargesInverted = $derived(searchPlan.inverted.some((r) => r.min === 'precursor:min_charge'))
+  const lengthInverted = $derived(searchPlan.inverted.some((r) => r.min === 'peptide:min_size'))
+
   const modOptions = $derived(form.entry('modifications:variable')?.validStrings)
   const fixedOptions = $derived(form.entry('modifications:fixed')?.validStrings)
 </script>
@@ -61,11 +67,7 @@
 <Card.Root size="sm" class="gap-3 rounded-lg shadow-none">
   <Card.Header class="flex flex-wrap items-center gap-x-2.5 gap-y-2">
     <Card.Title class="text-[14px] font-semibold">Search settings</Card.Title>
-    <Label for="preset" class="font-normal text-muted-foreground">Preset</Label>
-    <ChoiceSelect id="preset" class="w-[230px]" value={form.presetId} options={presetOptions} onChange={(id) => form.choosePreset(id)} />
-    {#if form.modified}
-      <span class="text-xs text-muted-foreground">modified</span>
-    {/if}
+    <PresetPicker />
     <div class="flex-1"></div>
     <Button
       variant="ghost"
@@ -163,8 +165,13 @@
         fromLabel="Lowest precursor charge"
         toLabel="Highest precursor charge"
         min={1}
+        invalid={chargesInverted}
+        describedBy="charges-inverted"
         onFrom={(v) => form.setParam('precursor:min_charge', v)}
         onTo={(v) => form.setParam('precursor:max_charge', v)} />
+      {#if chargesInverted}
+        <p id="charges-inverted" class="text-xs text-destructive">The lowest charge is above the highest.</p>
+      {/if}
     </div>
     <div class="grid min-w-0 content-start gap-1">
       <span id="length-label" class="text-xs font-medium">Peptide length</span>
@@ -175,8 +182,13 @@
         fromLabel="Shortest peptide (residues)"
         toLabel="Longest peptide (residues)"
         min={1}
+        invalid={lengthInverted}
+        describedBy="length-inverted"
         onFrom={(v) => form.setParam('peptide:min_size', v)}
         onTo={(v) => form.setParam('peptide:max_size', v)} />
+      {#if lengthInverted}
+        <p id="length-inverted" class="text-xs text-destructive">The shortest length is above the longest.</p>
+      {/if}
     </div>
 
     {#if form.advancedSettings}

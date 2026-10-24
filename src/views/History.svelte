@@ -2,7 +2,9 @@
   // History: the searches kept on this computer, each a folder of the app's data (the tool's outputs and a
   // record of the settings and the design; the mzML files stay where they are). Open, rename and delete;
   // "Open project…" unpacks a .prose file into History. It stays usable while a search runs, and reads the
-  // list again when it is shown.
+  // list again when it is shown. Beside each name: the search's database and, for searches of the same name,
+  // what tells them apart (history/details.ts). A folder that is no search (no record, or a name that is not one
+  // of a search) is listed with what is wrong, and can be deleted.
   import SaveNotice from '$lib/components/history/SaveNotice.svelte'
   import * as Alert from '$lib/components/ui/alert'
   import { Button } from '$lib/components/ui/button'
@@ -13,6 +15,8 @@
   import { formatCount } from '$lib/results/display'
   import { history, openFromHistory, openProjectFile, refreshHistory, removeFromHistory, rename } from '$lib/history/history.svelte'
   import type { HistoryEntry } from '$lib/history/history'
+  import { distinguishing, entryFacts } from '$lib/history/details'
+  import { searchForm } from '$lib/search/form.svelte'
   import CircleAlertIcon from '@lucide/svelte/icons/circle-alert'
   import { onMount } from 'svelte'
 
@@ -35,6 +39,9 @@
   let deleteOpen = $state(false)
 
   const total = $derived(history.entries.reduce((n, e) => n + e.bytes, 0))
+  const presetName = (id: string) => searchForm.presets.find((p) => p.id === id)?.name ?? null
+  /** The line beside each name: the database, and what tells searches of one name apart (all of it: its tooltip). */
+  const details = $derived(distinguishing(history.entries, presetName))
 
   const message = (e: unknown) => String((e as Error)?.message ?? e)
 
@@ -152,22 +159,25 @@
       </p>
     </div>
   {:else}
+    <!-- a fixed layout: the date, the counts and the buttons keep their width, the name and the files share the
+         rest and truncate (at the smallest window the buttons stay in view); in a narrow window the files give their
+         room to the name (they are in the name's tooltip) -->
     <div class="rounded-lg border bg-background">
-      <Table.Root class="text-xs" aria-label="Saved searches" data-testid="history-table">
+      <Table.Root class="table-fixed text-xs" aria-label="Saved searches" data-testid="history-table">
         <Table.Header>
           <Table.Row class="hover:bg-transparent">
             <Table.Head scope="col" class="{head} text-left">Name</Table.Head>
-            <Table.Head scope="col" class="{head} text-left">Finished</Table.Head>
-            <Table.Head scope="col" class="{head} text-left">Files</Table.Head>
-            <Table.Head scope="col" class="{head} text-right" title="Target PSMs that pass the search's PSM FDR">PSMs</Table.Head>
-            <Table.Head scope="col" class="{head} text-right" title="Disk space the search takes on this computer">Size</Table.Head>
-            <Table.Head scope="col" class="{head} text-right"><span class="sr-only">Actions</span></Table.Head>
+            <Table.Head scope="col" class="{head} w-[8.75rem] text-left">Finished</Table.Head>
+            <Table.Head scope="col" class="{head} text-left max-lg:hidden">Files</Table.Head>
+            <Table.Head scope="col" class="{head} w-[4.5rem] text-right" title="Target PSMs that pass the search's PSM FDR">PSMs</Table.Head>
+            <Table.Head scope="col" class="{head} w-[4.5rem] text-right" title="Disk space the search takes on this computer">Size</Table.Head>
+            <Table.Head scope="col" class="{head} w-[13rem] text-right"><span class="sr-only">Actions</span></Table.Head>
           </Table.Row>
         </Table.Header>
         <Table.Body>
           {#each history.entries as entry (entry.id)}
             <Table.Row data-testid="history-row" data-id={entry.id}>
-              <Table.Cell class="{cell} max-w-[22rem] text-left font-medium">
+              <Table.Cell class="{cell} text-left font-medium">
                 {#if renaming === entry.id}
                   <Input
                     class="h-7 text-[13px] md:text-[13px]"
@@ -186,7 +196,17 @@
                     }}
                     onblur={() => commitRename(entry)} />
                 {:else}
-                  <span class="block min-w-0 truncate" title={entry.name ?? entry.id} data-column="name">{entry.name ?? entry.id}</span>
+                  {@const facts = details.get(entry.id) ?? []}
+                  <span class="block min-w-0 truncate" title={[entry.name ?? entry.id, ...entry.files].join('\n')} data-column="name"
+                    >{entry.name ?? entry.id}</span>
+                  {#if facts.length > 0}
+                    <span
+                      class="mt-0.5 block min-w-0 truncate text-[11px] font-normal text-muted-foreground"
+                      title={entryFacts(entry, presetName)
+                        .map((f) => f.text)
+                        .join('\n')}
+                      data-testid="history-row-details">{facts.map((f) => f.text).join(' · ')}</span>
+                  {/if}
                   {#if entry.error}
                     <span class="mt-0.5 block text-xs font-normal whitespace-normal text-destructive" data-testid="history-row-error"
                       >{entry.error}</span>
@@ -196,7 +216,7 @@
               <Table.Cell class="{cell} whitespace-nowrap text-left" data-column="date">
                 {#if entry.createdAt}<time datetime={entry.createdAt}>{date(entry.createdAt)}</time>{/if}
               </Table.Cell>
-              <Table.Cell class="{cell} max-w-[20rem] text-left" data-column="files">
+              <Table.Cell class="{cell} text-left max-lg:hidden" data-column="files">
                 <span class="block truncate" title={entry.files.join('\n')}>{filesText(entry.files)}</span>
               </Table.Cell>
               <Table.Cell class="{cell} text-right tabular-nums" data-column="psms">{entry.psms === null ? '' : formatCount(entry.psms)}</Table.Cell>

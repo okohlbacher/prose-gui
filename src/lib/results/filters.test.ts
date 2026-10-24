@@ -4,6 +4,7 @@ import { resolveDesign } from '../design/model'
 import type { DesignInput } from '../design/model'
 import { cutoffs, sampleDesign, sampleTables } from './fixtures'
 import { applyFilters, defaultFilters, initialFilters, sortRows, type FilterState } from './filters'
+import { toCsv } from './csv'
 import { buildModel, peptideCounts } from './model'
 import { makeLargeTables, makeTables, syntheticDesign } from './synthetic'
 
@@ -367,10 +368,45 @@ describe('sortRows', () => {
   it('sorts text case-insensitively', () => {
     const m = model()
     const proteins = applyFilters(m, 'proteins', all)
-    expect(sortRows(m, 'proteins', proteins, 'accession', 'asc', all)).toEqual(rows(2, 3, 1, 0))
-    expect(sortRows(m, 'proteins', proteins, 'accession', 'desc', all)).toEqual(rows(0, 1, 3, 2))
+    // by the IDs the table shows: P00761 (CON__), P01009, P02768, P99999 (DECOY_sp|…)
+    expect(sortRows(m, 'proteins', proteins, 'accession', 'asc', all)).toEqual(rows(2, 1, 0, 3))
+    expect(sortRows(m, 'proteins', proteins, 'accession', 'desc', all)).toEqual(rows(3, 0, 1, 2))
     const peptides = applyFilters(m, 'peptides', all)
     expect(sortRows(m, 'peptides', peptides, 'sequence', 'asc', all)).toEqual(rows(2, 3, 0, 4, 1))
+  })
+
+  it('sorts and filters accessions as the tables show them, not by their FASTA prefixes', () => {
+    // sp| and tr| mixed, a contaminant, a plain accession
+    const tables = makeTables({
+      files: ['a.mzML'],
+      proteins: [
+        { accession: 'tr|A0A024R161|A0A024R161_HUMAN', sequence: 'AAAAAK' },
+        { accession: 'sp|P02768|ALBU_HUMAN', sequence: 'CCCCCK' },
+        { accession: 'CON__P00761', sequence: 'DDDDDK' },
+        { accession: 'tr|B4DJ30|B4DJ30_HUMAN', sequence: 'EEEEEK' },
+        { accession: 'O00001', sequence: 'FFFFFK' },
+      ],
+      peptides: ['AAAAAK', 'CCCCCK', 'DDDDDK', 'EEEEEK', 'FFFFFK'].map((sequence, p) => ({ sequence, proteins: [p] })),
+      psms: [0, 1, 2, 3, 4].map((peptide) => ({ peptide })),
+    })
+    const m = buildModel(tables, resolveDesign([input('a.mzML')]), { showTechReplicates: false, ...cutoffs })
+    const proteins = applyFilters(m, 'proteins', all)
+    // A0A024R161, B4DJ30, O00001, P00761, P02768: tr| entries among the sp| ones, the contaminant by its ID
+    expect(sortRows(m, 'proteins', proteins, 'accession', 'asc', all)).toEqual(rows(0, 3, 4, 2, 1))
+    // the protein references of peptides and PSMs too
+    expect(sortRows(m, 'peptides', applyFilters(m, 'peptides', all), 'proteins', 'asc', all)).toEqual(rows(0, 3, 4, 2, 1))
+    expect(sortRows(m, 'psms', applyFilters(m, 'psms', all), 'proteins', 'asc', all)).toEqual(rows(0, 3, 4, 2, 1))
+    // "sp", "tr" and "con" are prefixes of the FASTA, not of what is shown: no match
+    for (const text of ['sp', 'tr|', 'con__']) {
+      expect(applyFilters(m, 'proteins', { ...all, text }), text).toEqual(rows())
+      expect(applyFilters(m, 'peptides', { ...all, text }), text).toEqual(rows())
+    }
+    // the shown ID and the entry name match
+    expect(applyFilters(m, 'proteins', { ...all, text: 'p00761' })).toEqual(rows(2))
+    expect(applyFilters(m, 'proteins', { ...all, text: 'albu_human' })).toEqual(rows(1))
+    expect(applyFilters(m, 'psms', { ...all, text: 'b4dj30' })).toEqual(rows(3))
+    // the CSV keeps the whole accession
+    expect(toCsv(m, 'proteins', rows(0, 2), ['accession'], all)).toBe('\uFEFFAccession\ntr|A0A024R161|A0A024R161_HUMAN\nCON__P00761\n')
   })
 
   it('puts missing values last in either direction', () => {

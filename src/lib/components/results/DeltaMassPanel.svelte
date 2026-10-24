@@ -59,7 +59,7 @@
     <div class="rounded-lg border bg-background px-4 pt-3 pb-2">
       <ul class="mb-1 flex flex-wrap gap-x-4 gap-y-1 text-xs" data-testid="legend" aria-label="Legend">
         <li class="flex items-center gap-1.5"><span class="inline-block size-2.5 rounded-[3px]" style:background={COLORS.mod} aria-hidden="true"></span>Known modification</li>
-        <li class="flex items-center gap-1.5"><span class="inline-block size-2.5 rounded-[3px]" style:background="#71717a" aria-hidden="true"></span>No known modification</li>
+        <li class="flex items-center gap-1.5"><span class="inline-block size-2.5 rounded-[3px]" style:background="var(--plot-muted)" aria-hidden="true"></span>No known modification</li>
       </ul>
       <ShiftChart title="PSMs by delta mass in the open search" {description} {bars} unmodified={analysis.deltaMasses.unmodifiedPSMs} />
     </div>

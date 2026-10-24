@@ -97,9 +97,9 @@ most 3 GB (larger searches are refused with a message; they stay in History).
   2.8 MB (not read at open).
   On Windows the webview (WebView2) runs Chromium's JavaScript engine, whose arrays are smaller (an earlier
   measurement in Node.js, the same engine, read 4 million synthetic PSMs but not 8 million), so there the limit may
-  be lower; macOS' webview is WebKit, as on Linux. Project files are made and read in memory too, and hold at most
-  3 GB (fflate writes no zip64; a larger search is refused with a message). Later, not now: streaming the project
-  zip (with zip64).
+  be lower; macOS' webview is WebKit, as on Linux. Project files are written to disk entry by entry (after the save
+  dialog), but read in memory when opened, and hold at most 3 GB (no zip64 is written or read; a larger search is
+  refused with a message). Later, not now: reading the project zip entry by entry (with zip64).
 - macOS: Apple silicon only; not signed with a Developer ID (see Install).
 - Windows: two inputs of one name are searched together only when they are on the drive of the app's data.
 

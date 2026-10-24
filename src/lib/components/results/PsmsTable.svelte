@@ -2,14 +2,17 @@
   // The PSMs of the open result (the best hit of each spectrum). An open search's mass shift above
   // 0.05 Da goes before the sequence as an unlocalized ProForma mass ("[+15.9949]?"). A row opens the
   // PSM view (`onOpen`); while it is open, the table is the list beside it (`compact`): peptide,
-  // charge, sample, q-value and precursor error, as in the mockup.
+  // charge, sample, q-value and precursor error, as in the mockup. A decoy PSM and that of a co-isolated
+  // precursor (a search with chimeric:enabled) are marked after the peptide.
   import PeptideSequence from '$lib/components/PeptideSequence.svelte'
   import { massShift, peptideView } from '$lib/format/peptide'
+  import { COISOLATED_TITLE, isCoisolated } from '$lib/results/coisolated'
   import { baseName } from '$lib/results/model'
   import { formatQCompact, formatQValue, formatScore, spectrumLabel } from '$lib/results/display'
   import type { LevelState, ResultsView } from '$lib/results/view.svelte'
   import { fixed, signed, tableColumns, type CellDef } from './cells'
   import DataTable from './DataTable.svelte'
+  import Marker from './Marker.svelte'
   import ProteinRefs from './ProteinRefs.svelte'
 
   let {
@@ -23,10 +26,16 @@
   const ps = $derived(m.tables.psms)
   const fixedMods = $derived(view.result.settings.fixedMods)
 
+  /** The peptide's tooltip, with what its markers say (they may be cut off in a narrow column). */
+  function withMarks(text: string, i: number): string {
+    const marks = [ps.decoy[i] ? 'decoy' : null, isCoisolated(ps, i) ? 'co-isolated precursor' : null].filter((x) => x !== null)
+    return marks.length > 0 ? `${text} (${marks.join(', ')})` : text
+  }
+
   function cells(id: string): CellDef {
     switch (id) {
       case 'peptide':
-        return { cell: () => peptideCell, cellTitle: (i) => m.tables.peptides.proforma[ps.peptide[i]] }
+        return { cell: () => peptideCell, cellTitle: (i) => withMarks(m.tables.peptides.proforma[ps.peptide[i]], i) }
       case 'proteins':
         return {
           cell: () => proteinsCell,
@@ -99,7 +108,8 @@
   {@const shift = massShift(ps.deltaMass[i])}
   {#if shift !== null}<span class="font-mono text-[12.5px] text-muted-foreground" title="Unassigned mass shift in Da. Its position on the peptide is not known."
       >[{shift}]?</span
-    >{/if}<PeptideSequence view={peptideView(m.tables.peptides, ps.peptide[i], fixedMods)} />
+    >{/if}<PeptideSequence view={peptideView(m.tables.peptides, ps.peptide[i], fixedMods)} />{#if ps.decoy[i]}<Marker
+      text="decoy" />{/if}{#if isCoisolated(ps, i)}<Marker text="co-isolated" title={COISOLATED_TITLE} />{/if}
 {/snippet}
 
 {#snippet proteinsCell(i: number)}

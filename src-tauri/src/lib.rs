@@ -9,7 +9,8 @@
 //!   `{ searchId, folder }` and `search://failed` `{ searchId, message, stage, file?, ended?, detail?, log? }`
 //! - `read_search_file(searchId, name, tail?, offset?, length?)` -> the bytes of a file of the search's folder
 //!   (with `tail`: its last `tail` bytes; with `offset` and `length`: those bytes), or of the database its database.json records (`files`; rejects `{ notFound, message }`)
-//! - `inspect_files(paths)` -> `[{ path, name, size, spectra?, proteins?, residues?, error? }]`
+//! - `inspect_files(paths)` -> `[{ path, name, size, spectra?, proteins?, residues?, error?, problem?, warnings }]`
+//! - `cpu_count()` -> the cores the search's threads may use
 //! - `example_files()` -> `{ spectra: [path, path], database }`
 //! - `save_text(name, contents)` and `save_search_file(searchId, name, suggested)`: a save dialog of
 //!   the system, then the file written where the user chose (-> the path, or null if cancelled)
@@ -18,8 +19,9 @@
 //!   after `search://done`), `history_save_proteins(searchId, proteins)` (its `proteins.fasta`, once the
 //!   results are read; the folder's `database.fasta` goes), `history_rename(searchId, name)`,
 //!   `history_delete(searchId)`, `history_files(searchId)` (the regular files of the folder, for a project
-//!   file), `save_project_file(body, header name)` (a save dialog, then the zip written where the user
-//!   chose), `open_project_file()` (the open dialog, then the bytes of the file chosen; empty if
+//!   file), `save_project_file(searchId, name)` (a save dialog, then the search's project zip written there
+//!   entry by entry: `project`; events `project://progress` `{ searchId, written, total }`),
+//!   `open_project_file()` (the open dialog, then the bytes of the file chosen; empty if
 //!   cancelled) and `history_import(body)` (the entries of a project in a fresh folder -> the new id). At
 //!   startup the partial folders of interrupted searches are swept (`history::sweep`).
 //!
@@ -30,10 +32,12 @@
 //! makes the executable the watchdog of a search (macOS: [`watchdog`]).
 
 pub mod args;
+pub mod content;
 pub mod decoys;
 pub mod files;
 pub mod history;
 pub mod progress;
+pub mod project;
 pub mod run;
 pub mod tool;
 #[cfg(unix)]
@@ -78,6 +82,14 @@ pub struct Closing {
     asked: bool,
     /// The user confirmed: the next close request closes.
     confirmed: bool,
+}
+
+impl Closing {
+    /// A search starts: a question about an earlier one that was never answered (the page could not answer, or
+    /// the search ended meanwhile) is forgotten, so that closing the window during this one asks again.
+    pub fn search_started(&mut self) {
+        self.asked = false;
+    }
 }
 
 /// What a close request of the window does: `true` lets the window close; `false` keeps it and asks the
@@ -137,6 +149,7 @@ async fn start_search(
     state: State<'_, AppState>,
     request: SearchRequest,
 ) -> Result<StartResult, String> {
+    state.closing.lock().unwrap().search_started();
     let resources = resource_dir(&app);
     let tool_path = tool::resolve(resources.as_deref())?;
     let searches_dir = searches_dir(&app)?;
@@ -194,12 +207,20 @@ async fn read_search_file(
     Ok(Response::new(bytes))
 }
 
-/// What New search shows of the files it was given (sizes and counts; never contents).
+/// What New search shows of the files it was given (sizes, counts and what ProSE cannot search; never
+/// contents).
 #[tauri::command]
 async fn inspect_files(paths: Vec<String>) -> Result<Vec<files::FileFacts>, String> {
-    tauri::async_runtime::spawn_blocking(move || paths.iter().map(|p| files::inspect(p)).collect())
+    tauri::async_runtime::spawn_blocking(move || files::inspect_all(&paths))
         .await
         .map_err(|e| e.to_string())
+}
+
+/// The cores ProSE's threads may use: the threads' default ("all"). The webview's own count is capped
+/// (WebKit reports at most 8).
+#[tauri::command]
+fn cpu_count() -> usize {
+    std::thread::available_parallelism().map_or(1, |n| n.get())
 }
 
 #[tauri::command]
@@ -399,58 +420,64 @@ async fn open_project_file(app: AppHandle) -> Result<Response, String> {
     .map(Response::new)
 }
 
-/// `text` with `%XX` escapes decoded (a header carries the name of the project, escaped by the page).
-fn unescape(text: &str) -> Option<String> {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' {
-            let hex = std::str::from_utf8(bytes.get(i + 1..i + 3)?).ok()?;
-            out.push(u8::from_str_radix(hex, 16).ok()?);
-            i += 3;
-        } else {
-            out.push(bytes[i]);
-            i += 1;
-        }
-    }
-    String::from_utf8(out).ok()
-}
-
 /// The title of the save dialog of a project file: what it holds, beyond the results.
 pub const PROJECT_DIALOG_TITLE: &str =
     "Save the project: the search's results, including folder paths of this computer";
 
-/// A project file: the zip (the raw body; the suggested name in the header `name`) written where
-/// the user chooses in the system's save dialog, as `.prose`. -> the path, or null if cancelled.
+/// How far the writing of a project file is (`project://progress`): the bytes of the search's files read.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectProgress {
+    search_id: String,
+    written: u64,
+    total: u64,
+}
+
+/// A project file of search `search_id`: what it would hold is checked first, then the system's save
+/// dialog (suggesting `name`, a file name), then the zip written there entry by entry (`project`), with
+/// `project://progress` as it goes (at most once per percent). -> the path, or null if cancelled.
 #[tauri::command]
 async fn save_project_file(
     app: AppHandle,
-    request: tauri::ipc::Request<'_>,
+    search_id: String,
+    name: String,
 ) -> Result<Option<String>, String> {
-    let tauri::ipc::InvokeBody::Raw(body) = request.body() else {
-        return Err("The project's bytes are missing.".to_string());
-    };
-    let name = request
-        .headers()
-        .get("name")
-        .and_then(|v| v.to_str().ok())
-        .and_then(unescape)
-        .unwrap_or_else(|| "prose.prose".to_string());
     // (only a file name is suggested)
     let name = Path::new(&name)
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "prose.prose".to_string());
-    let body = body.clone();
+    let dir = searches_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
+        project::project_files(&dir, &search_id)?;
         // (the path as chosen: the dialog's filter and the suggested name carry the extension; the title says
         // what a project holds, as README.md does)
         let Some(path) = ask_save_path_titled(&app, &name, Some(PROJECT_DIALOG_TITLE))? else {
             return Ok(None);
         };
-        std::fs::write(&path, body)
-            .map_err(|e| format!("{} cannot be written ({e}).", path.display()))?;
+        let mut shown = None;
+        let mut progress = |written: u64, total: u64| {
+            let percent = written.saturating_mul(100) / total.max(1);
+            if shown != Some(percent) {
+                shown = Some(percent);
+                let search_id = search_id.clone();
+                let _ = app.emit(
+                    "project://progress",
+                    ProjectProgress {
+                        search_id,
+                        written,
+                        total,
+                    },
+                );
+            }
+        };
+        project::write_project(
+            &dir,
+            &search_id,
+            &path,
+            std::time::SystemTime::now(),
+            &mut progress,
+        )?;
         Ok(Some(path.to_string_lossy().into_owned()))
     })
     .await
@@ -569,6 +596,7 @@ pub fn run() {
             cancel_search,
             read_search_file,
             inspect_files,
+            cpu_count,
             example_files,
             save_text,
             save_search_file,
@@ -595,7 +623,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{close_requested, unescape, Closing};
+    use super::{close_requested, Closing};
 
     #[test]
     fn closing_the_window_asks_first_while_a_search_runs() {
@@ -625,12 +653,16 @@ mod tests {
     }
 
     #[test]
-    fn unescape_decodes_the_pages_encodeuricomponent() {
-        assert_eq!(unescape("a%20b.prose").as_deref(), Some("a b.prose"));
-        assert_eq!(unescape("na%C3%AFve").as_deref(), Some("naïve"));
-        assert_eq!(unescape("plain").as_deref(), Some("plain"));
-        assert_eq!(unescape("bad%2"), None);
-        assert_eq!(unescape("bad%zz"), None);
-        assert_eq!(unescape("%FF"), None, "not UTF-8");
+    fn a_question_left_open_does_not_outlive_its_search() {
+        // asked, never answered (the search ended as the dialog was open, and the page could not answer)
+        let mut closing = Closing::default();
+        assert!(!close_requested(&mut closing, true));
+        assert!(closing.asked);
+        // no search runs: the window just closes
+        assert!(close_requested(&mut closing.clone(), false));
+        // the next search asks again (and does not close at the first request)
+        closing.search_started();
+        assert!(!close_requested(&mut closing, true));
+        assert!(closing.asked && !closing.confirmed);
     }
 }

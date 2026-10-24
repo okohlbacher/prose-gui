@@ -19,7 +19,7 @@
       {#if canRetrySave(unsaved.id)}
         <button
           type="button"
-          class="ml-1 font-medium underline underline-offset-2 hover:text-amber-950"
+          class="ml-1 font-medium underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-50"
           data-testid="history-retry-save"
           onclick={() => void retrySave(unsaved.id)}>Try again</button>
       {/if}

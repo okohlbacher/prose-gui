@@ -1,8 +1,10 @@
-// History without the disk: the record, the folder a saved search leaves, the project file (made and
-// read with fflate), and how a project is refused. Against a search folder of the pinned tool
+// History without the disk: the record, the folder a saved search leaves, the project file (read with
+// fflate; made by the Rust side, here by the memory backend, and one the Rust side made: fixtures/rust-project.prose),
+// and how a project is refused. Against a search folder of the pinned tool
 // (results/fixtures/example) held in memory; the Rust side has its own tests (src-tauri/tests/history.rs).
 
 import { strToU8, zipSync } from 'fflate'
+import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, test, vi } from 'vitest'
 import { OldLayoutError, RUNS } from '../results/read'
 import type { OpenResult } from '../search/session.svelte'
@@ -322,6 +324,42 @@ describe('project files', () => {
     }
     expect(methods.get('qpx/runs/1__Ecoli_1.psm.parquet')).toBe(0)
     expect(methods.get('inputs.json')).toBe(8)
+  })
+
+  test('the export says how far it is', async () => {
+    const backend = await savedBackend()
+    const seen: number[] = []
+    await exportProject(backend, '100-0', 'x', (f) => seen.push(f))
+    expect(seen.length).toBeGreaterThan(1)
+    expect(seen.at(-1)).toBe(1)
+  })
+
+  test("a project the Rust side wrote opens (src-tauri/tests/project.rs makes it, entry by entry)", async () => {
+    const bytes = new Uint8Array(readFileSync(new URL('./fixtures/rust-project.prose', import.meta.url)))
+    const entries = unpackProject(bytes)
+    const files = Object.fromEntries(entries.map((e) => [e.name, new TextDecoder().decode(e.data)]))
+    // the record first, the rest by name; without the database copy, its path and the log
+    expect(entries.map((e) => e.name)).toEqual([
+      'search.json',
+      'empty.txt',
+      'inputs.json',
+      'mods/1__a_PTMStats.tsv',
+      'proteins.fasta',
+      'qpx/quantms.psm.parquet',
+      'qpx/runs/1__a.mz.parquet',
+    ])
+    expect(parseRecord(files['search.json'], 'project').name).toBe('Fixture')
+    expect(JSON.parse(files['inputs.json']).map((r: { path: string }) => r.path)).toEqual(['a.mzML', 'b.mzML'])
+    expect(files['proteins.fasta']).toBe('>P1 first protein\nPEPTIDEKPEPTIDEKPEPTIDEK\n'.repeat(50))
+    expect(files['mods/1__a_PTMStats.tsv']).toBe('name\tcount\nOxidation\t3\n')
+    expect(files['empty.txt']).toBe('')
+    const parquet = entries.find((e) => e.name === 'qpx/quantms.psm.parquet')!.data
+    expect(parquet.length).toBe(20000)
+    expect(new DataView(parquet.buffer, parquet.byteOffset).getUint32(4 * 4999, true)).toBe(4999 * 7919)
+    // and becomes a search of History
+    const backend = new MemoryBackend()
+    const id = await importProjectBytes(backend, bytes)
+    expect((await backend.list())[0]).toMatchObject({ id, name: 'Fixture', files: ['a.mzML', 'b.mzML'], error: null })
   })
 
   test('a newer schema is refused with a message, and nothing is written', async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { input, mockupDesign } from './fixtures'
-import { fileStem, resolveDesign } from './model'
+import { fileStem, parsePositiveInt, resolveDesign } from './model'
 
 describe('resolveDesign', () => {
   it('empty fields mean unfractionated, replicates in file order', () => {
@@ -191,7 +191,18 @@ describe('resolveDesign', () => {
     expect(r.notices.map((n) => n.kind)).toEqual(['duplicateFile'])
     expect(r.notices[0].rows).toEqual([a.id, b.id])
     expect(r.notices[0].message).toContain('run.mzML')
-    expect(r.notices[0].message).toMatch(/rename or remove/i)
+    // what happens: both are searched (the same path is added once, form.svelte.ts), told apart only by renaming
+    expect(r.notices[0].message).toMatch(/^2 files are named run\.mzML \(from different folders\)\. Each is searched as a file of its own/)
+    expect(r.notices[0].message).toMatch(/Rename one/)
+    expect(r.notices[0].message).not.toMatch(/remove/i)
+  })
+
+  it('reads a number cell as a whole number of at least 1, empty, or not valid', () => {
+    expect(parsePositiveInt('')).toBeUndefined()
+    expect(parsePositiveInt('  ')).toBeUndefined()
+    expect(parsePositiveInt('3')).toBe(3)
+    expect(parsePositiveInt(' 12 ')).toBe(12)
+    for (const text of ['0', '-1', 'abc', '1.5', '1e1', '0x10', '2a']) expect(parsePositiveInt(text), text).toBeNull()
   })
 
   it('a duplicated file name is not also called a technical replicate of itself', () => {

@@ -79,7 +79,7 @@
   {@const c = m.protein.coverage[p]}
   <span class="inline-flex items-center gap-1.5">
     <span class="h-1.5 w-[54px] overflow-hidden rounded-full bg-muted"
-      ><span class="block h-full rounded-full bg-[#2a78d6]" style:width="{(c * 100).toFixed(1)}%"></span></span
+      ><span class="block h-full rounded-full bg-ion-b" style:width="{(c * 100).toFixed(1)}%"></span></span
     ><span class="text-xs text-muted-foreground">{(c * 100).toFixed(0)} %</span>
   </span>
 {/snippet}

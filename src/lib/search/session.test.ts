@@ -35,10 +35,12 @@ vi.mock('../results/read', () => ({ readSearch: fake.read }))
 const { SearchFailed } = await import('../desktop')
 const {
   cancelSearch,
+  closeResult,
   finishedWhileCancelled,
   forgetFinishedWhileCancelled,
   onFinishedWhileCancelled,
   onSearchEnded,
+  openFinished,
   openResult,
   runSearch,
   searchProgress,
@@ -109,6 +111,43 @@ describe('runSearch', () => {
     expect(openResult.current?.id).toBe('17-0')
     expect(openResult.current?.outcome.summary).toBe(result.summary)
     expect(openResult.current?.outcome.seconds).toBeGreaterThanOrEqual(0)
+  })
+
+  it('a search that finishes while the user is elsewhere leaves the open result open, and waits to be shown', async () => {
+    const result = { summary: {}, tables: {}, spectra: {}, predicted: {}, warnings: [] }
+    fake.read.mockResolvedValue(result)
+    // a result is open (this session's first search)
+    let search = started('20-0')
+    let run = runSearch(request, meta)
+    await settle()
+    search.done.resolve({ folder: '/data/searches/20-0' })
+    expect(await run).toBe('20-0')
+    expect(openResult.current?.id).toBe('20-0')
+    // the next one finishes while the user looks at it: it stays open
+    search = started('21-0')
+    run = runSearch(request, meta, () => true)
+    await settle()
+    search.done.resolve({ folder: '/data/searches/21-0' })
+    expect(await run).toBe('21-0')
+    expect(searchRun.status).toBe('done')
+    expect(openResult.current?.id).toBe('20-0')
+    // shown: from memory, in place of the open one
+    expect(openFinished('20-0')).toBe(false)
+    expect(openFinished('21-0')).toBe(true)
+    expect(openResult.current?.id).toBe('21-0')
+    expect(openResult.current?.outcome.summary).toBe(result.summary)
+    expect(openFinished('21-0')).toBe(false)
+    // closed (deleted from History): nothing is open
+    expect(closeResult('20-0')).toBe(false)
+    expect(closeResult('21-0')).toBe(true)
+    expect(openResult.current).toBeNull()
+    // with nothing open, a finished search opens whatever the user does
+    search = started('22-0')
+    run = runSearch(request, meta, () => true)
+    await settle()
+    search.done.resolve({ folder: '/data/searches/22-0' })
+    expect(await run).toBe('22-0')
+    expect(openResult.current?.id).toBe('22-0')
   })
 
   it('a failure says where: the stage and the file ProSE was at', async () => {

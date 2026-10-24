@@ -1,7 +1,8 @@
 // A History backend in memory, for the tests: the folders of the searches as maps of file names to
 // bytes, with the semantics of the Rust commands that the tests rely on (src-tauri/src/history.rs).
 
-import type { HistoryBackend, HistoryEntry } from './history'
+import { zipSync, type Zippable } from 'fflate'
+import { LEFT_OUT, LEVEL, RECORD_FILE, STORE, withoutPaths, type HistoryBackend, type HistoryEntry } from './history'
 import { bytesOfRange, type ByteRange } from '../results/read'
 
 export class NotFound extends Error {
@@ -33,7 +34,7 @@ export class MemoryBackend implements HistoryBackend {
   /** The `.prose` files "on disk", by path, and the one the open dialog gives (null: cancelled). */
   projects = new Map<string, Uint8Array>()
   chosen: string | null = null
-  /** What the save dialog got, and whether the user cancels it. */
+  /** What the save dialog got (the zip as the Rust side writes it), and whether the user cancels it. */
   saved: { name: string; bytes: Uint8Array }[] = []
   cancelSave = false
   imported = 0
@@ -59,7 +60,21 @@ export class MemoryBackend implements HistoryBackend {
     for (const [id, folder] of this.folders) {
       const record = folder.get('search.json')
       const bytes = [...folder.values()].reduce((n, f) => n + f.length, 0)
-      const entry: HistoryEntry = { id, name: null, createdAt: null, appVersion: null, toolVersion: null, files: [], database: null, psms: null, bytes, error: null }
+      const entry: HistoryEntry = {
+        id,
+        name: null,
+        createdAt: null,
+        appVersion: null,
+        toolVersion: null,
+        files: [],
+        database: null,
+        psms: null,
+        psmFdr: null,
+        proteinFdr: null,
+        settings: null,
+        bytes,
+        error: null,
+      }
       // (as `history::list`: a folder without a record is a search that was not saved)
       if (!record) {
         entries.push({ ...entry, error: NO_RECORD })
@@ -77,6 +92,9 @@ export class MemoryBackend implements HistoryBackend {
           files: json.files ?? [],
           database: json.database ?? null,
           psms: json.psms ?? null,
+          psmFdr: json.psmFdr ?? null,
+          proteinFdr: json.proteinFdr ?? null,
+          settings: json.settings ?? null,
         })
       } catch (e) {
         entry.error = (e as Error).message.startsWith('search.json') || (e as Error).message.startsWith('This') ? (e as Error).message : 'search.json is not valid JSON.'
@@ -132,9 +150,24 @@ export class MemoryBackend implements HistoryBackend {
     return [...this.folder(id)].map(([name, data]) => ({ name, size: data.length }))
   }
 
-  async saveProject(name: string, bytes: Uint8Array): Promise<string | null> {
+  /**
+   * As `save_project_file` (src-tauri/src/project.rs): the dialog, then the folder's files but `LEFT_OUT` as a
+   * zip, `search.json` first, `inputs.json` without paths, Parquet stored (here in memory, with fflate).
+   */
+  async saveProject(id: string, name: string, onProgress?: (fraction: number) => void): Promise<string | null> {
+    const folder = this.folder(id)
+    if (!folder.has(RECORD_FILE)) throw new Error(`The search is not saved to History (it has no ${RECORD_FILE}), so there is no project to make.`)
     if (this.cancelSave) return null
-    this.saved.push({ name, bytes })
+    const names = [...folder.keys()]
+      .filter((n) => !LEFT_OUT.has(n))
+      .sort((a, b) => (a === RECORD_FILE ? -1 : b === RECORD_FILE ? 1 : a < b ? -1 : 1))
+    const zippable: Zippable = {}
+    names.forEach((file, i) => {
+      const data = folder.get(file)!
+      zippable[file] = [file === 'inputs.json' ? withoutPaths(data) : data, { level: STORE.test(file) ? 0 : LEVEL }]
+      onProgress?.((i + 1) / names.length)
+    })
+    this.saved.push({ name, bytes: zipSync(zippable) })
     return `/saved/${name}`
   }
 
