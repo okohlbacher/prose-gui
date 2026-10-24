@@ -325,6 +325,108 @@ fn parameter_values_of_the_wrong_type_are_refused() {
 }
 
 #[test]
+fn integers_beyond_proses_32_bits_and_absurd_threads_are_refused() {
+    let i = inputs();
+    let out = i.dir.path().join("o");
+    // ProSE reads its integers as 32-bit: 3000000000 made it print its 152 KB help and stop
+    for (params, words) in [
+        (
+            json!({ "precursor:max_charge": 3_000_000_000_u64 }),
+            "precursor:max_charge",
+        ),
+        (
+            json!({ "precursor:isotope_error_min": -2_147_483_649_i64 }),
+            "precursor:isotope_error_min",
+        ),
+        (
+            json!({ "peptide:missed_cleavages": 9.0e15 }),
+            "peptide:missed_cleavages",
+        ),
+        (json!({ "threads": 4_294_967_295_u64 }), "threads"),
+        (json!({ "threads": 1025 }), "threads"),
+    ] {
+        let err =
+            build_args(&request(&[&i.mzml], &i.fasta, false, params.clone()), &out).unwrap_err();
+        assert!(err.contains(words), "{params}: {err}");
+    }
+    let err = build_args(
+        &request(
+            &[&i.mzml],
+            &i.fasta,
+            false,
+            json!({ "precursor:max_charge": 3_000_000_000_u64 }),
+        ),
+        &out,
+    )
+    .unwrap_err();
+    assert!(
+        err.contains("2147483647"),
+        "the message names the range: {err}"
+    );
+    // the request's own field too
+    let mut req = request(&[&i.mzml], &i.fasta, false, json!({}));
+    req.settings.threads = 100_000;
+    assert!(build_args(&req, &out).unwrap_err().contains("1024"));
+    // the bounds themselves pass
+    let args = args_of(
+        &request(
+            &[&i.mzml],
+            &i.fasta,
+            false,
+            json!({ "precursor:max_charge": 2_147_483_647_i64, "precursor:isotope_error_min": -2_147_483_648_i64, "threads": 1024 }),
+        ),
+        &out,
+    );
+    assert_eq!(
+        values_of(&args, "-Search:precursor:max_charge"),
+        vec![OsString::from("2147483647")]
+    );
+    assert_eq!(
+        values_of(&args, "-Search:precursor:isotope_error_min"),
+        vec![OsString::from("-2147483648")]
+    );
+    assert_eq!(values_of(&args, "-threads"), vec![OsString::from("1024")]);
+}
+
+#[test]
+fn co_isolated_precursors_are_left_out_with_database_chunks() {
+    let i = inputs();
+    let out = i.dir.path().join("o");
+    let with = |chunk: i64| {
+        args_of(
+            &request(
+                &[&i.mzml],
+                &i.fasta,
+                false,
+                json!({ "chimeric:enabled": true, "database:chunk_size": chunk }),
+            ),
+            &out,
+        )
+    };
+    assert!(has(&with(0), "-Search:chimeric:enabled"));
+    let chunked = with(1000);
+    assert!(
+        !has(&chunked, "-Search:chimeric:enabled"),
+        "ProSE would ignore it"
+    );
+    assert_eq!(
+        values_of(&chunked, "-Search:database:chunk_size"),
+        vec![OsString::from("1000")]
+    );
+    // a wrong value is still refused
+    assert!(build_args(
+        &request(
+            &[&i.mzml],
+            &i.fasta,
+            false,
+            json!({ "chimeric:enabled": "yes", "database:chunk_size": 1000 })
+        ),
+        &out
+    )
+    .is_err());
+}
+
+#[test]
 fn the_psm_fdr_is_above_zero() {
     let i = inputs();
     let out = i.dir.path().join("o");

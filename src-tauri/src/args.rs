@@ -178,6 +178,10 @@ pub const SINGLE_IDXML: &str = "search.idXML";
 /// leaves a search without q-values, which the results need.
 pub const DEFAULT_PSM_FDR: f64 = 0.01;
 
+/// The most threads a search may ask for (`-threads`): far beyond any computer the app runs on, but a typo of
+/// a few more digits is refused here, before ProSE starts that many OpenMP threads (or refuses the number).
+pub const MAX_THREADS: u32 = 1024;
+
 /// Where `suffix` (ASCII, with the dot) begins at the end of `name`, compared ignoring ASCII case as
 /// OpenMS compares extensions (`FileNameUtils`); None if `name` does not end with it. The original's own
 /// bytes are compared: a lower-cased copy can be longer or shorter (`İ`, `Ⱥ`, `ẞ`, the Kelvin sign), and
@@ -387,12 +391,20 @@ fn parameter_args(name: &str, kind: Kind, value: &Value) -> Result<Vec<OsString>
     Ok(match kind {
         Int => {
             let f = number(name, value)?;
-            if f.fract() != 0.0 || f.abs() > 9.0e15 {
+            if f.fract() != 0.0 {
                 return Err(format!(
                     "The value of {name} must be a whole number, not {value}."
                 ));
             }
-            one(format!("{}", f as i64))
+            // ProSE's integers are 32-bit: a larger one makes it print its whole help and stop
+            if f < f64::from(i32::MIN) || f > f64::from(i32::MAX) {
+                return Err(format!(
+                    "The value of {name} is outside the range ProSE accepts: {value} (whole numbers from {} to {}).",
+                    i32::MIN,
+                    i32::MAX
+                ));
+            }
+            one(format!("{}", f as i32))
         }
         Float => one(format!("{}", number(name, value)?)),
         Choice => match value {
@@ -483,13 +495,19 @@ pub fn build_args_with(
     let mut params = req.settings.parameters.clone();
     let mut threads = req.settings.threads;
     let mut parameter_args_list: Vec<OsString> = Vec::new();
+    // ProSE ignores co-isolated precursors with database chunks (with a warning): the front end leaves the
+    // switch out then, and so does the shim, so that the record of the search does not claim them
+    let chunked = params
+        .get("database:chunk_size")
+        .and_then(Value::as_f64)
+        .is_some_and(|n| n > 0.0);
     // validate every parameter before using any of them, in the order the front end gave
     for (name, value) in &params {
         if name == "threads" {
             let n = number(name, value)?;
-            if n < 0.0 || n.fract() != 0.0 || n > f64::from(u32::MAX) {
+            if n < 0.0 || n.fract() != 0.0 || n > f64::from(MAX_THREADS) {
                 return Err(format!(
-                    "The value of threads must be a whole number of at least 0, not {value}."
+                    "The value of threads must be a whole number from 0 (all cores) to {MAX_THREADS}, not {value}."
                 ));
             }
             threads = n as u32;
@@ -500,7 +518,16 @@ pub fn build_args_with(
                 "The parameter {name} is not one of ProSE's search parameters the app sets."
             ));
         };
-        parameter_args_list.extend(parameter_args(name, *kind, value)?);
+        let args = parameter_args(name, *kind, value)?;
+        if chunked && name == "chimeric:enabled" {
+            continue;
+        }
+        parameter_args_list.extend(args);
+    }
+    if threads > MAX_THREADS {
+        return Err(format!(
+            "The value of threads must be a whole number from 0 (all cores) to {MAX_THREADS}, not {threads}."
+        ));
     }
     match params.get("FDR:PSM") {
         Some(v) => {

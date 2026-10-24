@@ -187,6 +187,7 @@
             id="threads"
             kind="int"
             min={1}
+            max={1024}
             placeholder={cores ? `all (${cores})` : 'all'}
             value={form.threads ?? undefined}
             onChange={(v) => (form.threads = v)}
