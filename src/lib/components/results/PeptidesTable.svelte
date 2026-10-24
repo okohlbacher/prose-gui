@@ -1,11 +1,13 @@
 <script lang="ts">
-  // The peptides (peptidoforms) of the open result, with PSM counts at the "best PSM q-value" filter.
+  // The peptides (peptidoforms) of the open result, with PSM counts at the "best PSM q-value" filter. A decoy
+  // is marked after its sequence, as the Proteins table marks a decoy protein.
   import PeptideSequence from '$lib/components/PeptideSequence.svelte'
   import { peptideView } from '$lib/format/peptide'
   import { formatCount, formatQValue } from '$lib/results/display'
   import type { LevelState, ResultsView } from '$lib/results/view.svelte'
   import { tableColumns, sampleIndex, type CellDef } from './cells'
   import DataTable from './DataTable.svelte'
+  import Marker from './Marker.svelte'
   import ProteinRefs from './ProteinRefs.svelte'
 
   let { view, level }: { view: ResultsView; level: LevelState } = $props()
@@ -25,7 +27,7 @@
     }
     switch (id) {
       case 'peptide':
-        return { cell: () => peptideCell, cellTitle: (k) => pt.proforma[k] }
+        return { cell: () => peptideCell, cellTitle: (k) => (pt.decoy[k] ? `${pt.proforma[k]} (decoy)` : pt.proforma[k]) }
       case 'proteins':
         return { cell: () => proteinsCell, cellTitle: (k) => Array.from(m.peptide.proteins[k], (p) => m.tables.proteins.accession[p]).join('\n') }
       case 'psms':
@@ -45,7 +47,7 @@
 </script>
 
 {#snippet peptideCell(k: number)}
-  <PeptideSequence view={peptideView(pt, k, fixedMods)} />
+  <PeptideSequence view={peptideView(pt, k, fixedMods)} />{#if pt.decoy[k]}<Marker text="decoy" />{/if}
 {/snippet}
 
 {#snippet proteinsCell(k: number)}

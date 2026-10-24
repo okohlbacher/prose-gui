@@ -6,7 +6,8 @@
   // charge and loss toggles; the
   // ion table, the fragment mass errors and the PSM's features. A PSM whose peaks the search did not
   // keep shows its ladder, theoretical ions and features. An open search's unlocalized mass shift is
-  // shown, and the annotation is of the peptide without it.
+  // shown, and the annotation is of the peptide without it. A PSM of a co-isolated precursor is marked, and the
+  // other PSMs of the same spectrum are linked (results/coisolated.ts).
   import { signedNumber } from '$lib/format/number'
   import { Button, buttonVariants } from '$lib/components/ui/button'
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu'
@@ -42,6 +43,7 @@
     type PsmOptions,
   } from '$lib/psm/psm'
   import { exportSpectrumSvg } from '$lib/psm/svg-export'
+  import { COISOLATED_TITLE, chimericRank, isCoisolated, sameSpectrum } from '$lib/results/coisolated'
   import { baseName } from '$lib/results/model'
   import { formatQValue, parseAccession, parseDescription, scanNumber } from '$lib/results/display'
   import type { LoadedSpectra, PsmSpectra } from '$lib/results/read'
@@ -254,6 +256,15 @@
 
   const neighbours = $derived(view.psmNeighbours)
 
+  /** The other PSMs of this spectrum (co-isolated precursors), as links: "VHGEEDPTKK 3+". */
+  const mates = $derived(
+    sameSpectrum(ps, row).map((j) => {
+      const [sequence, rank] = [pt.sequence[ps.peptide[j]], chimericRank(ps, j)]
+      const which = rank >= 2 ? ', a co-isolated precursor' : rank === 1 ? ', the precursor the spectrum was taken of' : ''
+      return { row: j, sequence, charge: ps.charge[j], coisolated: rank >= 2, decoy: ps.decoy[j] === 1, title: `Open the PSM of ${sequence}, ${ps.charge[j]}+${which}` }
+    }),
+  )
+
   const spectrumTitle = $derived.by(() => {
     const listed = modificationList(pt, k, fixedMods)
     const below = options.bottom === 'peptdeep' ? `PeptDeep's prediction at ${nce.label}` : 'the theoretical spectrum'
@@ -431,9 +442,24 @@
   <div class="mt-1 flex flex-wrap items-end gap-x-5" bind:clientWidth={ladderRow}>
     <FragmentLadder {peptide} {cuts} {shift} available={ladderRow} />
     <p class="pb-3 text-xs text-muted-foreground tabular-nums" data-testid="psm-header">
-      {#if shift}<span class="font-mono">[{shift}]?</span>{' · '}{/if}{headerLine}{#if ps.decoy[row]}<Marker text="decoy" />{/if}
+      {#if shift}<span class="font-mono">[{shift}]?</span>{' · '}{/if}{headerLine}{#if ps.decoy[row]}<Marker text="decoy" />{/if}{#if isCoisolated(ps, row)}<Marker
+          text="co-isolated"
+          title={COISOLATED_TITLE} />{/if}
     </p>
   </div>
+  {#if mates.length > 0}
+    <!-- the PSMs of the other precursors of this spectrum: each opens here (the list beside keeps its place) -->
+    <p class="-mt-1 mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-muted-foreground" data-testid="same-spectrum">
+      <span>Same spectrum:</span>
+      {#each mates as mate (mate.row)}
+        <span class="whitespace-nowrap">
+          <button type="button" class="{crumb} font-mono text-foreground" title={mate.title} onclick={() => view.openPsm(mate.row)}
+            >{mate.sequence}</button>
+          {mate.charge}+{#if mate.decoy}{' '}decoy{/if}{#if mate.coisolated}{' '}co-isolated{/if}
+        </span>
+      {/each}
+    </p>
+  {/if}
   {#if shift}
     <p class="-mt-1 mb-2 text-xs text-muted-foreground" data-testid="open-search-note">
       This PSM from the open search has a mass shift of {shiftText} Da at an unknown position. The annotation shows the peptide
