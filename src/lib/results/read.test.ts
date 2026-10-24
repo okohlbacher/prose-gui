@@ -843,6 +843,31 @@ describe('missing and broken files', () => {
     })
   })
 
+  test("a PSM whose proteins all failed the protein FDR keeps its .pin features but enzN and enzC", async () => {
+    // one input with the protein FDR: ProSE removes the references to the proteins that failed it, so the PSM has
+    // no protein mappings left (the PSMs of the iPRG2015 subset showed empty features)
+    const before = await readSearch(folder(join(fixtures, 'suitability')).files)
+    await withCopy('suitability', async (dir) => {
+      await changeRows(dir, 'qpx/quantms.psm.parquet', (rows) => {
+        rows[0].protein_mappings = []
+      })
+      const { tables } = await readSearch(folder(dir).files)
+      const { featureNames, features } = tables.psms
+      expect(featureNames).toEqual(before.tables.psms.featureNames)
+      const n = featureNames.length
+      const kept = ['CalcMass', 'mass', 'peplen', 'charge2', 'charge3', 'enzInt', 'dm', 'absdm']
+      for (const name of featureNames) {
+        const j = featureNames.indexOf(name)
+        const [value, was] = [features[j], before.tables.psms.features[j]]
+        if (name === 'enzN' || name === 'enzC') expect(value, name).toBeNaN()
+        else expect(value, name).toBe(was)
+        if (kept.includes(name)) expect(value, name).not.toBeNaN()
+      }
+      // the other PSMs are as they were
+      expect(Array.from(features.subarray(n))).toEqual(Array.from(before.tables.psms.features.subarray(n)))
+    })
+  })
+
   test('an open search without its mod-analysis folder reads, without the analysis', async () => {
     await withCopy('open', async (dir) => {
       rmSync(join(dir, 'mods'), { recursive: true })

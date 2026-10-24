@@ -672,30 +672,33 @@ export async function readSearch(files: SearchFiles): Promise<SearchResult> {
       deltaMass[i] = values[deltaMassS]
       features[row] = hyperscore
 
-      // the .pin features (PercolatorInfile::stampPinFeaturesOnHits); none for a hit without a protein
+      // the .pin features (PercolatorInfile::stampPinFeaturesOnHits). Percolator saw every hit with its proteins, but a
+      // hit whose proteins all failed the protein FDR has none left in QPX (one input: ProSE removes the references):
+      // its features are those of the hit alone, without enzN and enzC, which need the residues around the peptide
+      // in a protein
       const sequence = String(f.sequence[r] ?? '')
       const e0 = f.evidence.offsets[r]
+      const set = (j: number, v: number) => {
+        features[row + j] = v
+        if (!Number.isNaN(v)) featurePresent[j] = 1
+      }
+      // Percolator's dm: corrected by ProSE's isotope error meta value as it is (with its convention's sign)
+      const iso = Math.fround(isotopeSign * isotope)
+      const dm = (Number.isNaN(iso) ? observed : observed - (iso * C13C12_MASSDIFF_U) / z) - calc
+      set(calcMassJ, calc)
+      set(massJ, observed)
+      set(peplenJ, sequence.length)
+      for (let c = 0; c < chargeColumns.length; c++) set(chargeColumns[c], minCharge + c === z ? 1 : 0)
       if (f.evidence.offsets[r + 1] > e0) {
-        // Percolator's dm: corrected by ProSE's isotope error meta value as it is (with its convention's sign)
-        const iso = Math.fround(isotopeSign * isotope)
-        const dm = (Number.isNaN(iso) ? observed : observed - (iso * C13C12_MASSDIFF_U) / z) - calc
         // a protein terminus ('-' in QPX) as OpenMS' '[' and ']', which Percolator's features were computed with
         const before = f.evidence.aa_before[e0] === '-' ? '[' : String(f.evidence.aa_before[e0] ?? '')
         const after = f.evidence.aa_after[e0] === '-' ? ']' : String(f.evidence.aa_after[e0] ?? '')
-        const set = (j: number, v: number) => {
-          features[row + j] = v
-          if (!Number.isNaN(v)) featurePresent[j] = 1
-        }
-        set(calcMassJ, calc)
-        set(massJ, observed)
-        set(peplenJ, sequence.length)
-        for (let c = 0; c < chargeColumns.length; c++) set(chargeColumns[c], minCharge + c === z ? 1 : 0)
         set(enzNJ, isEnz(before.charAt(0), sequence.charAt(0), enzyme) ? 1 : 0)
         set(enzCJ, isEnz(sequence.charAt(sequence.length - 1), after.charAt(0), enzyme) ? 1 : 0)
-        set(enzIntJ, countEnzymatic(sequence, enzyme))
-        set(dmJ, dm)
-        set(absdmJ, Math.abs(dm))
       }
+      set(enzIntJ, countEnzymatic(sequence, enzyme))
+      set(dmJ, dm)
+      set(absdmJ, Math.abs(dm))
 
       // its peptide, unique by the OpenMS string
       const mods = modificationsOf(f.modifications, r, sequence.length)
