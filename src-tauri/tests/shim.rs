@@ -449,6 +449,59 @@ fn the_psm_fdr_is_above_zero() {
 }
 
 #[test]
+fn a_search_without_decoys_has_no_fdr() {
+    let i = inputs();
+    let out = i.dir.path().join("o");
+    let fdr = json!({ "FDR:PSM": 0.01, "FDR:protein": 0.05, "FDR:protein_inference_PSM": 0.1 });
+    let mut without = fdr.clone();
+    without["decoys"] = json!("ignore");
+    // decoys 'ignore': no FDR is sent (ProSE would skip it), not even the shim's default PSM FDR, and 0 is no error
+    for params in [
+        without,
+        json!({ "decoys": "ignore" }),
+        json!({ "decoys": "ignore", "FDR:PSM": 0 }),
+    ] {
+        let args = args_of(&request(&[&i.mzml], &i.fasta, false, params.clone()), &out);
+        for name in [
+            "-Search:FDR:PSM",
+            "-Search:FDR:protein",
+            "-Search:FDR:protein_inference_PSM",
+        ] {
+            assert!(!has(&args, name), "{name} sent with {params}");
+        }
+        assert_eq!(
+            values_of(&args, "-Search:decoys"),
+            vec![OsString::from("ignore")]
+        );
+    }
+    // with decoys they are sent
+    for decoys in ["auto", "generate"] {
+        let mut params = fdr.clone();
+        params["decoys"] = json!(decoys);
+        let args = args_of(&request(&[&i.mzml], &i.fasta, false, params), &out);
+        assert_eq!(
+            values_of(&args, "-Search:FDR:PSM"),
+            vec![OsString::from("0.01")]
+        );
+        assert_eq!(
+            values_of(&args, "-Search:FDR:protein"),
+            vec![OsString::from("0.05")]
+        );
+    }
+    // a value of the wrong type is still refused
+    assert!(build_args(
+        &request(
+            &[&i.mzml],
+            &i.fasta,
+            false,
+            json!({ "decoys": "ignore", "FDR:PSM": "x" })
+        ),
+        &out
+    )
+    .is_err());
+}
+
+#[test]
 fn input_paths_are_validated() {
     let i = inputs();
     let out = i.dir.path().join("o");

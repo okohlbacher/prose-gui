@@ -125,6 +125,7 @@ pub const PARAMETERS: &[(&str, Kind)] = &[
     ("peptide:max_mass", Int),
     ("report:top_hits", Int),
     ("report:isotope_error_convention", Choice),
+    ("percolator:max_train_psms", Int),
     ("FDR:PSM", Float),
     ("FDR:PSM_groups", Choice),
     ("FDR:protein", Float),
@@ -176,8 +177,20 @@ pub const MERGED_IDXML: &str = "merged.idXML";
 pub const SINGLE_IDXML: &str = "search.idXML";
 
 /// The FDR the shim uses when the request has no `FDR:PSM`: ProSE's default (0) filters nothing and
-/// leaves a search without q-values, which the results need.
+/// leaves a search without q-values, which the results need. Not for a search without decoys
+/// ([`FDR_PARAMETERS`]), which has no FDR.
 pub const DEFAULT_PSM_FDR: f64 = 0.01;
+
+/// The FDR parameters, which a search without decoys (`decoys` 'ignore') leaves out: ProSE cannot estimate an FDR
+/// then and would skip a PSM or protein FDR above 0 with only a warning in its log (and the inference's PSM cutoff,
+/// a q-value, has nothing to cut). The front end turns them off then; the shim leaves them out too, so that no
+/// search claims an FDR it did not apply.
+pub const FDR_PARAMETERS: [&str; 3] = ["FDR:PSM", "FDR:protein", "FDR:protein_inference_PSM"];
+
+/// Whether the parameters search without decoys (`decoys` 'ignore'): no FDR then ([`FDR_PARAMETERS`]).
+pub fn without_decoys(params: &Map<String, Value>) -> bool {
+    params.get("decoys").and_then(Value::as_str) == Some("ignore")
+}
 
 /// The most threads a search may ask for (`-threads`): far beyond any computer the app runs on, but a typo of
 /// a few more digits is refused here, before ProSE starts that many OpenMP threads (or refuses the number).
@@ -567,6 +580,7 @@ pub fn build_args_with(
         .get("database:chunk_size")
         .and_then(Value::as_f64)
         .is_some_and(|n| n > 0.0);
+    let no_decoys = without_decoys(&params);
     // validate every parameter before using any of them, in the order the front end gave
     for (name, value) in &params {
         if name == "threads" {
@@ -585,7 +599,9 @@ pub fn build_args_with(
             ));
         };
         let args = parameter_args(name, *kind, value)?;
-        if chunked && name == "chimeric:enabled" {
+        if (chunked && name == "chimeric:enabled")
+            || (no_decoys && FDR_PARAMETERS.contains(&name.as_str()))
+        {
             continue;
         }
         parameter_args_list.extend(args);
@@ -596,6 +612,8 @@ pub fn build_args_with(
         ));
     }
     match params.get("FDR:PSM") {
+        // without decoys there is no FDR (left out above)
+        _ if no_decoys => {}
         Some(v) => {
             if number("FDR:PSM", v)? <= 0.0 {
                 return Err(

@@ -6,12 +6,19 @@ import type { SearchRequest } from '../desktop'
 import { navigate } from '../route.svelte'
 import { unknownModifications } from '../settings/modifications'
 import { copyValues, requestParameters } from '../settings/parameters'
+import { DECOY_LABELS } from '../settings/labels'
 import { PROSE_PARAMETERS } from '../settings/prose'
-import { invertedRanges, rangeMessage } from '../settings/ranges'
+import { boundsMessage, invertedRanges, outOfBounds, rangeMessage } from '../settings/ranges'
 import { keepsOpenResult, showFinished } from './finished'
 import { CRAP_PROTEINS, searchForm as form } from './form.svelte'
 import { runSearch, searchRun } from './session.svelte'
 import { toolState } from './tool.svelte'
+
+/** The FDR parameters, which a search without decoys does not send (src-tauri/src/args.rs `FDR_PARAMETERS`). */
+export const FDR_PARAMETERS = ['FDR:PSM', 'FDR:protein', 'FDR:protein_inference_PSM'] as const
+
+/** Why the FDR fields are off and disabled without decoys. */
+export const NO_FDR_HINT = `No FDR without decoys: choose “${DECOY_LABELS.auto}” or “${DECOY_LABELS.generate}” to control the FDR.`
 
 function unknownMessage(names: string[]): string {
   return (
@@ -23,6 +30,13 @@ function unknownMessage(names: string[]): string {
 class SearchPlan {
   /** PeptDeep features need Percolator and a ProSE with ONNX Runtime (unknown while the tool is asked). */
   peptdeep = $derived(form.rescore && form.peptdeep && (toolState.info?.onnx ?? true))
+
+  /**
+   * Without decoys (decoys 'ignore', the database card's "None") ProSE cannot estimate an FDR and would skip a PSM or
+   * protein FDR with only a warning in its log: the FDR fields are off and disabled then, and the request sends none
+   * (`FDR_PARAMETERS`; the shim leaves them out too). The values stay for when the decoys come back.
+   */
+  fdrBlocked = $derived(form.value('decoys') === 'ignore')
 
   /** ProSE looks for co-isolated precursors (chimeric:enabled) only without database chunks; it ignores the switch then. */
   chimericBlocked = $derived(Number(form.value('database:chunk_size')) > 0)
@@ -46,16 +60,19 @@ class SearchPlan {
   })
 
   /**
-   * The example's note, a line of its own under the plan (it wraps): its tolerance and its protein FDR (off unless
-   * the user set one), and why its results list the proteins without a protein FDR and say that Percolator fell back.
+   * The example's note, a line of its own under the plan (it wraps): its tolerance, its PSM FDR (2 %: Percolator's
+   * (decoys + 1) / targets keeps a run this small above 1 %) and its protein FDR (off unless the user set one), and why
+   * its results list the proteins without a protein FDR and say that Percolator fell back.
    */
   note = $derived.by(() => {
     if (!form.isExample) return null
     const tolerance = `${form.value('fragment:mass_tolerance')} ${form.value('fragment:mass_tolerance_unit')}`
+    const psmFdr = `${Number((Number(form.value('FDR:PSM')) * 100).toPrecision(6))} %`
     return Number(form.value('FDR:protein')) > 0
-      ? `Ion-trap example with a ${tolerance} fragment tolerance. The run is too small for a protein FDR and for Percolator's full model.`
-      : `Ion-trap example with a ${tolerance} fragment tolerance and no protein FDR: the run is too small for one. ` +
-          "It has too few PSMs for Percolator's full model."
+      ? `Ion-trap example with a ${tolerance} fragment tolerance and a ${psmFdr} PSM FDR. ` +
+          "The run is too small for 1 %, for a protein FDR and for Percolator's full model."
+      : `Ion-trap example with a ${tolerance} fragment tolerance, a ${psmFdr} PSM FDR and no protein FDR: ` +
+          "the run is too small for 1 % and for a protein FDR. It has too few PSMs for Percolator's full model."
   })
 
   /** Modification names ProSE does not know. */
@@ -63,6 +80,9 @@ class SearchPlan {
 
   /** Ranges of the settings whose lowest value is above the highest (charges 5–2): marked, and the search waits. */
   inverted = $derived(invertedRanges(form.values))
+
+  /** Settings outside the bounds ProSE gives them (charges 1–20, ...): ProSE would refuse them, so the search waits. */
+  outside = $derived(outOfBounds(form.values, PROSE_PARAMETERS))
 
   /** Why the search cannot start yet. */
   problem = $derived.by(() => {
@@ -81,7 +101,8 @@ class SearchPlan {
     if (form.database.proteins === null) return 'Counting the proteins of the database…'
     if (form.database.problem) return `${form.database.problem} Choose another FASTA file.`
     if (this.inverted.length > 0) return rangeMessage(this.inverted[0], form.values)
-    if (!(Number(form.value('FDR:PSM')) > 0)) return 'Set a PSM FDR above 0 %.'
+    if (this.outside.length > 0) return boundsMessage(this.outside[0], form.values)
+    if (!this.fdrBlocked && !(Number(form.value('FDR:PSM')) > 0)) return 'Set a PSM FDR above 0 %.'
     if (this.unknownMods.length > 0) return unknownMessage(this.unknownMods)
     if (toolState.status === 'failed') return `ProSE cannot be run: ${toolState.error}`
     return null
@@ -105,6 +126,7 @@ export function searchRequest(): SearchRequest | null {
   const values = $state.snapshot(form.values) as Record<string, unknown>
   const parameters = requestParameters(values, form.defaults)
   if (searchPlan.chimericBlocked) delete parameters['chimeric:enabled']
+  if (searchPlan.fdrBlocked) for (const name of FDR_PARAMETERS) delete parameters[name]
   return {
     files: form.files.map((r) => ({ id: r.id, path: r.file.path })),
     database: form.database.file.path,
@@ -125,9 +147,10 @@ export async function startSearch(): Promise<void> {
   const values = $state.snapshot(form.values) as Record<string, unknown>
   const id = await runSearch(request, {
     design: $state.snapshot(form.design),
-    psmFdr: Number(values['FDR:PSM']),
-    // the protein FDR off (0): no protein cutoff, every protein counts (the results' cutoffs are q-values above 0)
-    proteinFdr: Number(values['FDR:protein']) || 1,
+    // no FDR (a search without decoys; the protein FDR off, 0): no cutoff, every PSM or protein counts (the results'
+    // cutoffs are q-values above 0)
+    psmFdr: searchPlan.fdrBlocked ? 1 : Number(values['FDR:PSM']),
+    proteinFdr: searchPlan.fdrBlocked ? 1 : Number(values['FDR:protein']) || 1,
     settings: {
       parameters: request.settings.parameters,
       fixedMods: (values['modifications:fixed'] as string[] | undefined) ?? [],

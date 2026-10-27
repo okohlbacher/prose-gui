@@ -48,7 +48,8 @@
 //! After the last file's search ProSE prepares the spectrum view of each input, in input order: it reads the
 //! input's spectra again, selects PeptDeep's NCE for it if the search did not (PeptDeep rescoring on a copy of
 //! its PSMs, which prints `[PeptDeepRescoring]` lines: no rescoring of the search), predicts the spectra of its
-//! PSMs and builds its mz view. The lines (real runs in `tests/fixtures/prose-qpx-*.stdout.txt`):
+//! PSMs and builds its mz view. The lines (real runs in `tests/fixtures/prose-qpx-*.stdout.txt`, of the pinned ProSE in
+//! `tests/fixtures/prose-develop-*.stdout.txt`):
 //!
 //! | ProSE line (stdout)                                                       | position in the file's share |
 //! | ------------------------------------------------------------------------- | ---------------------------- |
@@ -58,7 +59,7 @@
 //! | `[PeptDeepRescoring] ...` (the selection's end)                           | 0.67                         |
 //! | `-qpx_extended: <path>: PeptDeep predictions of N peptide(s) at NCE x (…)`| 0.97                         |
 //! | `-qpx_extended: <path>: N spectra of its PSMs, … peaks kept …`            | 1 (the next file starts)     |
-//! | `-qpx_extended: <path>: <step>`, step reading/loading, selecting, predicting, writing (explicit phase lines of later ProSE) | 0, 0.26, 0.67, 0.97 |
+//! | `-qpx_extended: <path>: <step>`, step reading/loading, selecting, predicting, writing (the phase lines of the pinned ProSE, OpenMS #10715: `reading spectra`, `selecting NCE`, `predicting N peptides at NCE x (selected` or `from PeptDeep rescoring)`, the peaks-kept line, `writing`) | 0, 0.26, 0.67, 0.97 |
 //!
 //! The label is `Preparing the spectrum view (file i of n)...` (one input: `Preparing the spectrum view...`),
 //! file -1. The input of a line is its link `<n>__<name>` in the path (else the user's name in it); a line of
@@ -659,6 +660,75 @@ mod tests {
         assert!((steps[at].2 - SEARCH_SHARE).abs() < 1e-9, "{:?}", steps[at]);
         assert!(steps[at - 1].2 < SEARCH_SHARE);
         assert_monotone(&steps);
+    }
+
+    #[test]
+    fn the_phase_lines_of_the_pinned_prose_move_each_spectrum_view() {
+        // real output of the pinned ProSE (bundled, with ONNX Runtime): the app's example as two inputs, Percolator on,
+        // PeptDeep off, so -qpx_extended reads each input's spectra, selects its NCE, predicts and writes, saying so in
+        // `-qpx_extended: <file>: <step>` lines (the peaks-kept line comes before "writing")
+        let steps = steps(
+            include_str!("../tests/fixtures/prose-develop-two-files-nce.stdout.txt"),
+            &["Ecoli_1.mzML", "Ecoli_2.mzML"],
+        );
+        let l = labels(&steps);
+        assert_eq!(l[l.len() - 2..], [POOLING, WRITING]);
+        let v = views(&steps);
+        let half = (VIEWS_END - SEARCH_SHARE) / 2.0;
+        for (k, start) in [(1, SEARCH_SHARE), (2, SEARCH_SHARE + half)] {
+            let at: Vec<f64> = v
+                .iter()
+                .filter(|s| s.0 == format!("Preparing the spectrum view (file {k} of 2)..."))
+                .map(|s| s.2)
+                .collect();
+            // reading, selecting the NCE, predicting at it (the peaks-kept line ends the view, "writing" comes late)
+            let expected = [0.0, VIEW_SELECTING, VIEW_SELECTED].map(|p| start + p * half);
+            assert_eq!(at.len(), expected.len(), "file {k}: {at:?}");
+            for (a, e) in at.iter().zip(expected) {
+                assert!(
+                    (a - e).abs() < 1e-9,
+                    "file {k}: {at:?}, expected {expected:?}"
+                );
+            }
+        }
+        assert!(v.iter().all(|s| s.1 == -1), "{v:?}");
+        assert!((steps.last().unwrap().2 - REPORT_FRACTION).abs() < 1e-9);
+        assert_monotone(&steps);
+
+        // one input with PeptDeep: the view predicts at the rescoring's NCE, without selecting one
+        let steps = steps_of_one_peptdeep();
+        assert_eq!(
+            labels(&steps),
+            [
+                "Searching Ecoli_1.mzML (1 of 1)...",
+                "Building the fragment index...",
+                "Searching Ecoli_1.mzML (1 of 1)...",
+                "Adding PeptDeep rescoring features...",
+                "Mapping peptides to proteins...",
+                "Rescoring with Percolator...",
+                "Preparing the spectrum view...",
+                "Writing the results...",
+            ]
+        );
+        let view: Vec<f64> = steps
+            .iter()
+            .filter(|s| s.0 == "Preparing the spectrum view...")
+            .map(|s| s.2)
+            .collect();
+        let whole = VIEWS_END - SEARCH_SHARE;
+        assert!((view[0] - SEARCH_SHARE).abs() < 1e-9, "{view:?}");
+        assert!(
+            (view[1] - (SEARCH_SHARE + VIEW_SELECTED * whole)).abs() < 1e-9,
+            "{view:?}"
+        );
+        assert_monotone(&steps);
+    }
+
+    fn steps_of_one_peptdeep() -> Vec<Step> {
+        steps(
+            include_str!("../tests/fixtures/prose-develop-one-file-peptdeep.stdout.txt"),
+            &["Ecoli_1.mzML"],
+        )
     }
 
     #[test]

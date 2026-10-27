@@ -44,8 +44,8 @@ async function nextSearchRuns() {
   await $('button*=Start search').waitForClickable({ timeout: 20000 })
   await $('button*=Start search').click()
   await waitForResults()
-  // each copy of the example's run has the example's 60 PSMs
-  await expect($('[data-testid="psm-count"]')).toHaveText(expect.stringContaining((60 * LONG_SEARCH_FILES).toLocaleString('en-US')))
+  // each copy of the example's run has the example's 77 PSMs
+  await expect($('[data-testid="psm-count"]')).toHaveText(expect.stringContaining((77 * LONG_SEARCH_FILES).toLocaleString('en-US')))
   expect(searchFolders().finished).toHaveLength(1)
   expect(searchFolders().partial).toEqual([])
 }

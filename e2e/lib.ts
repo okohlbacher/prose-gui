@@ -185,8 +185,9 @@ export async function runExample(options: { peptdeep?: boolean } = {}): Promise<
 }
 
 /**
- * New search with nothing chosen and the example's fragment tolerance, 0.5 Da, set by hand (the example's own setting
- * ends with its files: Start over gives back the preset's).
+ * New search with nothing chosen and the example's own settings set by hand (they end with its files: Start over gives
+ * back the preset's): its fragment tolerance, 0.5 Da, its PSM FDR, 2 % (the run is too small for 1 %), and no protein
+ * FDR.
  */
 export async function exampleSettings() {
   await freshForm()
@@ -194,6 +195,11 @@ export async function exampleSettings() {
   await $('#fragment-tolerance').setValue('0.5')
   await expect($('button[aria-label^="Fragment tolerance unit: Da"]')).toBeExisting()
   await expect($('#fragment-tolerance')).toHaveValue('0.5')
+  await $('#psm-fdr').setValue('2')
+  await $('#protein-fdr').setValue('off')
+  await $('#fragment-tolerance').click()
+  await expect($('#psm-fdr')).toHaveValue('2')
+  await expect($('#protein-fdr')).toHaveValue('off')
 }
 
 /** The files of `longSearch`: copies of the example's run, Ecoli_1.mzML … Ecoli_<n>.mzML, in the spec's data folder. */

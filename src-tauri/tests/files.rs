@@ -511,7 +511,7 @@ fn a_fasta_that_prose_refuses_has_a_problem_and_what_it_may_mishandle_warnings()
         (
             "dup.fasta",
             ">P1\nKK\n>P1\nRR\n",
-            "1 accession more than once (the first: P1)",
+            "1 accession more than once with different sequences (the first: P1)",
         ),
     ] {
         let facts = inspect(tmp.write(name, contents).to_str().unwrap());
@@ -527,7 +527,16 @@ fn a_fasta_that_prose_refuses_has_a_problem_and_what_it_may_mishandle_warnings()
         (facts.proteins, facts.residues, facts.problem),
         (Some(1), Some(3), None)
     );
-    assert_eq!(facts.warnings.len(), 2, "{:?}", facts.warnings);
+    // ProSE reads a byte-order mark and lowercase residues
+    assert!(facts.warnings.is_empty(), "{:?}", facts.warnings);
+    // an entry listed twice: searched once
+    let facts = inspect(
+        tmp.write("twice.fasta", ">P1\nKK\n>P1\nKK\n")
+            .to_str()
+            .unwrap(),
+    );
+    assert_eq!(facts.problem, None);
+    assert_eq!(facts.warnings.len(), 1, "{:?}", facts.warnings);
 }
 
 #[test]

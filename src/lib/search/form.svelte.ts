@@ -10,6 +10,7 @@ import { changedParameters, copyValue, copyValues, defaultsOf, sameValue, type P
 import { BUILTIN_PRESETS, DEFAULT_PRESET_ID, deletePreset, loadPresets, renamePreset, savePreset, type Preset } from '../settings/presets'
 import { PROSE_PARAMETERS } from '../settings/prose'
 import { formatBytes } from '../format/bytes'
+import { formatPercent } from '../format/fdr'
 import { isFasta, isMzML } from './files'
 
 export type FileRow = DesignFields & {
@@ -24,7 +25,7 @@ export type FileRow = DesignFields & {
 /**
  * The database: its proteins and residues once counted (null while counting), or why it could not be
  * read (`error`), or why ProSE cannot search it (`problem`: no entries, an accession twice, ...); the search
- * cannot start with either. `warnings`: what ProSE may mishandle (a byte-order mark, lowercase residues).
+ * cannot start with either. `warnings`: what ProSE treats specially (a FASTA's entries listed twice, searched once).
  */
 export type DatabaseChoice = {
   file: InputFile
@@ -47,9 +48,10 @@ export const CRAP_RESIDUES = 38459
  * twice as two replicates of condition "example", against the E. coli K-12 proteins (targets only: ProSE makes
  * the decoys). The shim gives the bundled run under the two names. Its own settings (`settings`), each group of
  * which goes back to the preset's on its own when the example is left (`#leaveExample`): its fragments are measured
- * in the ion trap, so the fragment tolerance is 0.5 Da; the run is too small for a protein FDR (about 55 proteins:
- * none would pass 1 %), so the protein FDR is off (0) and its proteins are listed without one. Everything else is
- * the preset's.
+ * in the ion trap, so the fragment tolerance is 0.5 Da; the run is too small for a PSM FDR of 1 %: Percolator's
+ * q-values are (decoys + 1) / targets, so its ~80 PSMs reach 1.2 % at best (and none passes 1 %), and the PSM FDR is
+ * 2 %; it is too small for a protein FDR as well (about 60 proteins: none would pass 1 %), so the protein FDR is off
+ * (0) and its proteins are listed without one. Everything else is the preset's.
  */
 export const EXAMPLE = {
   names: ['Ecoli_1.mzML', 'Ecoli_2.mzML'],
@@ -57,9 +59,31 @@ export const EXAMPLE = {
   condition: 'example',
   settings: [
     { label: 'fragment tolerance', parameters: { 'fragment:mass_tolerance': 0.5, 'fragment:mass_tolerance_unit': 'Da' } },
+    { label: 'PSM FDR', parameters: { 'FDR:PSM': 0.02 } },
     { label: 'protein FDR', parameters: { 'FDR:protein': 0 } },
   ],
 } as const
+
+/**
+ * The notice for a preset that searches without decoys (decoys 'ignore') but has an FDR: the FDR is off then (the form
+ * shows it off and sends none, `searchPlan.fdrBlocked`); null for any other preset.
+ */
+export function noFdrNotice(preset: Preset): string | null {
+  const p = preset.parameters
+  if (p.decoys !== 'ignore') return null
+  const fdrs = (
+    [
+      ['PSM FDR', p['FDR:PSM']],
+      ['protein FDR', p['FDR:protein']],
+    ] as const
+  ).filter(([, v]) => typeof v === 'number' && v > 0)
+  if (fdrs.length === 0) return null
+  const named = fdrs.map(([name, v]) => `${name} of ${formatPercent(v as number)}`).join(' and ')
+  return (
+    `The preset “${preset.name}” searches without decoys, so its ${named} ${fdrs.length === 1 ? 'is' : 'are'} off: ` +
+    'ProSE cannot estimate an FDR without decoys. Choose other decoys under Protein database to control the FDR.'
+  )
+}
 
 /** What "Remove all" or "Start over" removed: the rows, the database (Start over), the notices, the example's settings. */
 export type Removed = {
@@ -120,7 +144,7 @@ class SearchForm {
   /** The example's settings (EXAMPLE.settings) are in force: set by loadExample (or an Undo), the example's files still there. */
   #exampleSettings = $state(false)
   /**
-   * The example's own settings that are in force and unchanged, by their labels ('fragment tolerance', 'protein
+   * The example's own settings that are in force and unchanged, by their labels ('fragment tolerance', 'PSM FDR', 'protein
    * FDR'): leaving the example gives them back to the preset's (Start over's tooltip says so); one the user set since
    * stays (`#leaveExample`).
    */
@@ -196,6 +220,8 @@ class SearchForm {
     this.#exampleSettings = false
     this.presetId = id
     this.overrides = copyValues(preset.parameters)
+    const notice = noFdrNotice(preset)
+    if (notice) this.notices.push(notice)
   }
 
   /** Saves the settings that differ from ProSE's defaults as a user preset and selects it. */
@@ -310,7 +336,7 @@ class SearchForm {
 
   /**
    * "Start over": no files and no database; the settings (preset, parameters, rescoring) as they are, but for the
-   * example's own (its fragment tolerance, its protein FDR), which go back to the preset's. Undo brings everything back.
+   * example's own (its fragment tolerance, its PSM and protein FDR), which go back to the preset's. Undo brings everything back.
    */
   startOver() {
     if (this.busy) return
@@ -369,7 +395,7 @@ class SearchForm {
   /**
    * The example's files are gone or joined by others: its own settings go back to the preset's (or ProSE's
    * defaults), each group unless the user changed it since (then it is the user's: a tolerance and its unit go
-   * together, the protein FDR on its own). Returns the example's values it replaced.
+   * together, each FDR on its own). Returns the example's values it replaced.
    */
   #leaveExample(): Record<string, unknown> {
     if (!this.#exampleSettings) return {}

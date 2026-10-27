@@ -99,7 +99,7 @@ for (const m of ini.matchAll(token)) {
     description: attr(tag, 'description') ?? '',
     tags: attr(tag, 'advanced') === 'true' ? ['advanced'] : [],
   }
-  if (restrictions !== undefined && !key.startsWith('modifications:')) {
+  if (restrictions !== undefined && key !== 'modifications:fixed' && key !== 'modifications:variable') {
     if (type === 'int' || type === 'double') {
       const [min, max] = restrictions.split(':')
       if (min !== '') entry.min = Number(min)

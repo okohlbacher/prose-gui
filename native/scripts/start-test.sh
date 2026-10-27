@@ -11,7 +11,8 @@
 # 3. It searches the example (<example-dir>: Ecoli_MS2_small.mzML and Ecoli_K12_proteome.fasta, copied into a
 #    folder with a space in its name) from the command line with the example's settings, Percolator and PeptDeep:
 #    it has to end with 0, write the outputs the app reads, rescore with PeptDeep, and find more than 40 target
-#    PSMs (69 with these settings).
+#    PSMs at the example's PSM FDR of 2 % (81 with these settings; Percolator's q-values are (decoys + 1) / targets,
+#    so this run reaches 1.2 % at best).
 #    The same in a folder named 'Größe ü', with the temporary folder there too, has to give the same number
 #    of PSMs.
 # 4. The app starts with --smoke-test (src-tauri/src/lib.rs): once its page has loaded it reports the page
@@ -106,7 +107,7 @@ search() { # <folder>: copies the example there and searches it as the app does 
     -database "$(native "$dir/Ecoli_K12_proteome.fasta")" \
     -out_qpx "$(native "$dir/qpx")" -qpx_extended -qpx_peak_window 100 -qpx_peak_top 100 -keep_decoys \
     -threads 3 -Search:rescore true -Search:peptdeep:enable -Search:peptdeep:instrument QE \
-    -Search:FDR:PSM 0.01 -Search:enzyme Trypsin/P -Search:peptide:missed_cleavages 2 \
+    -Search:FDR:PSM 0.02 -Search:enzyme Trypsin/P -Search:peptide:missed_cleavages 2 \
     -Search:modifications:fixed "Carbamidomethyl (C)" \
     -Search:modifications:variable "Oxidation (M)" "Acetyl (Protein N-term)" \
     -Search:fragment:mass_tolerance 0.5 -Search:fragment:mass_tolerance_unit Da >"$dir/out.txt" 2>&1
@@ -123,11 +124,11 @@ grep -E '^\[PeptDeepRescoring\] Predicted features added' "$data/out.txt" \
 for f in qpx/runs/Ecoli_MS2_small.psm.parquet qpx/runs/Ecoli_MS2_small.mz.parquet qpx/quantms.psm.parquet qpx/quantms.pg.parquet qpx/quantms.run.parquet qpx/quantms.provenance.parquet; do
   [ -s "$data/$f" ] || die "the search wrote no $f"
 done
-# the target PSMs of the end-of-search report ("[ProSE] Target/decoy : 69 target / 0 decoy PSMs")
+# the target PSMs of the end-of-search report ("[ProSE] Target/decoy : 81 target / 0 decoy PSMs")
 target_psms() { sed -n 's/^\[ProSE\] Target\/decoy *: *\([0-9]*\) target.*/\1/p' "$1" | head -n 1; }
 psms=$(target_psms "$data/out.txt")
 [ -n "$psms" ] && [ "$psms" -gt 40 ] || die "the search found ${psms:-no} target PSMs, expected more than 40"
-echo "command-line search: $psms target PSMs at 1 % FDR, with PeptDeep, in ${seconds} s"
+echo "command-line search: $psms target PSMs at 2 % FDR, with PeptDeep, in ${seconds} s"
 
 # a folder name outside ASCII, the temporary folder too (Windows: ProSE.exe runs with the UTF-8 code page,
 # bundle_closure.py; without it the search read its inputs wrongly and failed in Percolator)
@@ -197,7 +198,7 @@ summary "### Start test ($platform)"
 summary ""
 summary "- package: \`$(basename "$PACKAGE")\`"
 summary "- bundled ProSE: \`$version\`"
-summary "- command-line search of the example with PeptDeep: $psms target PSMs at 1 % FDR, ${seconds} s"
+summary "- command-line search of the example with PeptDeep: $psms target PSMs at 2 % FDR, ${seconds} s"
 summary "- a folder named \`Größe ü\`: $wide_result"
 summary "- app \`--smoke-test\`: \`$report_installed\`"
 if [ -n "$report_linked" ]; then summary "- the app through a symbolic link: \`$report_linked\`"; fi

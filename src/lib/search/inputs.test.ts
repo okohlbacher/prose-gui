@@ -93,9 +93,11 @@ describe('the inputs of New search', () => {
     expect(searchPlan.problem).toBeNull()
   })
 
-  test('a database ProSE cannot search holds the search; what it may mishandle does not', async () => {
+  test('a database ProSE cannot search holds the search; what it treats specially does not', async () => {
     special.set('empty.fasta', { proteins: 0, residues: 0, problem: 'empty.fasta is empty.' })
-    special.set('lower.fasta', { warnings: ['lower.fasta has lowercase residues in 3 sequences (the first: P1).'] })
+    special.set('lower.fasta', {
+      warnings: ['lower.fasta lists 3 entries twice, with the same accession and sequence (the first: P1), e.g. the file was added twice: ProSE searches each protein once.'],
+    })
     await ready()
     await form.setDatabase('/db/empty.fasta')
     expect(form.database?.problem).toBe('empty.fasta is empty.')

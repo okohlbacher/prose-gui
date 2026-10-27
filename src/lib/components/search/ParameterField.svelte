@@ -26,7 +26,7 @@
     labelId: string
     value: unknown
     onChange: (value: unknown) => void
-    /** Why the parameter cannot be used with the other settings (a switch is then off and disabled); null: it can. */
+    /** Why the parameter cannot be used with the other settings (a switch or an FDR is then off and disabled); null: it can. */
     blocked?: string | null
   } = $props()
 
@@ -49,7 +49,17 @@
   }
 </script>
 
-{#if FDR.includes(entry.name)}
+{#if entry.name.startsWith('FDR:') && blocked}
+  <!-- a cutoff that cannot be used (no FDR without decoys): off and disabled, with the reason -->
+  <FdrInput
+    {id}
+    off
+    disabled
+    value={0}
+    aria-describedby="{id}-blocked"
+    class="[&>div:first-child]:h-8 [&>div:first-child]:bg-background [&>div:first-child]:shadow-none" />
+  <p id="{id}-blocked" class="text-xs text-foreground">{blocked}</p>
+{:else if FDR.includes(entry.name)}
   <!-- a q-value cutoff: always as a percentage with the q-value beside it; the protein FDR can be off (0) -->
   <FdrInput
     {id}

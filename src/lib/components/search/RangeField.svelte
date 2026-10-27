@@ -12,6 +12,7 @@
     fromLabel,
     toLabel,
     min,
+    max,
     invalid = false,
     describedBy,
     onFrom,
@@ -24,6 +25,7 @@
     fromLabel: string
     toLabel: string
     min?: number
+    max?: number
     invalid?: boolean
     /** The id of the text that says why the range is not valid. */
     describedBy?: string
@@ -37,7 +39,7 @@
   aria-labelledby={labelId}
   aria-invalid={invalid || undefined}
   aria-describedby={invalid ? describedBy : undefined}>
-  <NumberField value={from} kind="int" {min} inGroup fit ariaLabel={fromLabel} onChange={onFrom} class="flex-none pr-0" />
+  <NumberField value={from} kind="int" {min} {max} inGroup fit ariaLabel={fromLabel} onChange={onFrom} class="flex-none pr-0" />
   <span class="px-1.5" aria-hidden="true">–</span>
-  <NumberField value={to} kind="int" {min} inGroup ariaLabel={toLabel} onChange={onTo} class="w-0 min-w-0 flex-1 pl-0" />
+  <NumberField value={to} kind="int" {min} {max} inGroup ariaLabel={toLabel} onChange={onTo} class="w-0 min-w-0 flex-1 pl-0" />
 </InputGroup.Root>

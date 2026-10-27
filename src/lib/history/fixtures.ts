@@ -38,7 +38,8 @@ export async function exampleResult(folder: Record<string, Uint8Array>, id = '10
     createdAt: '2026-10-20T10:00:00.000Z',
     outcome: { ...read, seconds: 12.5 },
     design: resolveDesign([input('Ecoli_1.mzML', { condition: 'a' }), input('Ecoli_2.mzML', { condition: 'b' })]),
-    psmFdr: 0.01,
+    // the example's PSM FDR (the run is too small for 1 %)
+    psmFdr: 0.02,
     proteinFdr: 0.01,
     settings: {
       parameters: { precursor_tolerance: 10 },

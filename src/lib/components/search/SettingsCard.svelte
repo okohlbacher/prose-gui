@@ -9,7 +9,7 @@
   import { Label } from '$lib/components/ui/label'
   import { Switch } from '$lib/components/ui/switch'
   import { searchForm as form } from '$lib/search/form.svelte'
-  import { searchPlan } from '$lib/search/plan.svelte'
+  import { NO_FDR_HINT, searchPlan } from '$lib/search/plan.svelte'
   import { loadCores, machine } from '$lib/search/tool.svelte'
   import { onMount } from 'svelte'
   import { dialogEntries } from '$lib/settings/parameters'
@@ -57,6 +57,8 @@
   }
 
   // ranges whose lowest value is above the highest: marked, and the search waits (plan.svelte.ts)
+  const fdrClass = '[&>div:first-child]:h-8 [&>div:first-child]:bg-background [&>div:first-child]:shadow-none'
+
   const chargesInverted = $derived(searchPlan.inverted.some((r) => r.min === 'precursor:min_charge'))
   const lengthInverted = $derived(searchPlan.inverted.some((r) => r.min === 'peptide:min_size'))
 
@@ -140,22 +142,33 @@
         onChange={(v) => form.setParam('modifications:variable', v)} />
     </div>
 
-    <div class="grid min-w-0 content-start gap-1">
-      <Label for="psm-fdr" class="text-xs">PSM FDR</Label>
-      <FdrInput
-        id="psm-fdr"
-        class="[&>div:first-child]:h-8 [&>div:first-child]:bg-background [&>div:first-child]:shadow-none"
-        bind:value={() => form.value<number>('FDR:PSM'), (v) => form.setParam('FDR:PSM', v)} />
-    </div>
-    <div class="grid min-w-0 content-start gap-1">
-      <Label for="protein-fdr" class="text-xs">Protein FDR</Label>
-      <!-- off (0): ProSE applies no protein FDR (the example's setting) -->
-      <FdrInput
-        id="protein-fdr"
-        off
-        class="[&>div:first-child]:h-8 [&>div:first-child]:bg-background [&>div:first-child]:shadow-none"
-        bind:value={() => form.value<number>('FDR:protein'), (v) => form.setParam('FDR:protein', v)} />
-    </div>
+    {#if searchPlan.fdrBlocked}
+      <!-- without decoys: no FDR (both off and disabled; the values come back with the decoys) -->
+      <div class="col-span-2 grid min-w-0 grid-cols-2 content-start gap-x-4 gap-y-1">
+        <Label for="psm-fdr" class="text-xs">PSM FDR</Label>
+        <Label for="protein-fdr" class="text-xs">Protein FDR</Label>
+        <FdrInput id="psm-fdr" off disabled value={0} aria-describedby="no-fdr-hint" class={fdrClass} />
+        <FdrInput id="protein-fdr" off disabled value={0} aria-describedby="no-fdr-hint" class={fdrClass} />
+        <p id="no-fdr-hint" class="col-span-2 text-xs text-muted-foreground" data-testid="no-fdr-hint">{NO_FDR_HINT}</p>
+      </div>
+    {:else}
+      <div class="grid min-w-0 content-start gap-1">
+        <Label for="psm-fdr" class="text-xs">PSM FDR</Label>
+        <FdrInput
+          id="psm-fdr"
+          class={fdrClass}
+          bind:value={() => form.value<number>('FDR:PSM'), (v) => form.setParam('FDR:PSM', v)} />
+      </div>
+      <div class="grid min-w-0 content-start gap-1">
+        <Label for="protein-fdr" class="text-xs">Protein FDR</Label>
+        <!-- off (0): ProSE applies no protein FDR (the example's setting) -->
+        <FdrInput
+          id="protein-fdr"
+          off
+          class={fdrClass}
+          bind:value={() => form.value<number>('FDR:protein'), (v) => form.setParam('FDR:protein', v)} />
+      </div>
+    {/if}
     <div class="grid min-w-0 content-start gap-1">
       <span id="charges-label" class="text-xs font-medium">Charges</span>
       <RangeField
@@ -164,7 +177,8 @@
         to={form.value<number>('precursor:max_charge')}
         fromLabel="Lowest precursor charge"
         toLabel="Highest precursor charge"
-        min={1}
+        min={form.entry('precursor:min_charge')?.min ?? 1}
+        max={form.entry('precursor:max_charge')?.max}
         invalid={chargesInverted}
         describedBy="charges-inverted"
         onFrom={(v) => form.setParam('precursor:min_charge', v)}

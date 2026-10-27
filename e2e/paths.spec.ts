@@ -131,7 +131,7 @@ describe('inputs by path', () => {
     const count = $('[data-testid="psm-count"]')
     await count.waitForDisplayed({ timeout: 20000 })
     // two copies of the run give what the example's two names give
-    await expect(count).toHaveText(expect.stringContaining('120'))
+    await expect(count).toHaveText(expect.stringContaining('154'))
     expect(await textOf('[data-testid="result-chip"]')).toContain('2 files')
   })
 })

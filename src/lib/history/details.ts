@@ -59,7 +59,8 @@ export function entryFacts(entry: HistoryEntry, presetName: (id: string) => stri
   const window = lower === upper ? `±${number(lower)}` : `−${number(lower)}/+${number(upper)}`
   facts.push({ key: 'precursor', text: `precursor ${window} ${unit}` })
   facts.push({ key: 'fragment', text: `fragment ${number(value('fragment:mass_tolerance'))} ${value('fragment:mass_tolerance_unit')}` })
-  if (entry.psmFdr !== null) facts.push({ key: 'psmFdr', text: `PSM FDR ${formatPercent(entry.psmFdr)}` })
+  // (a search without decoys has none: its cutoff is 1, as the protein FDR's when off)
+  if (entry.psmFdr !== null) facts.push({ key: 'psmFdr', text: entry.psmFdr >= 1 ? 'no PSM FDR' : `PSM FDR ${formatPercent(entry.psmFdr)}` })
   if (entry.proteinFdr !== null) {
     facts.push({ key: 'proteinFdr', text: entry.proteinFdr >= 1 ? 'no protein FDR' : `protein FDR ${formatPercent(entry.proteinFdr)}` })
   }

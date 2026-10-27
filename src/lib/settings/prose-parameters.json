@@ -6,46 +6,46 @@
   "description": "The enzyme used for peptide digestion.",
   "tags": [],
   "validStrings": [
+   "2-iodobenzoate",
+   "Alpha-lytic protease",
    "glutamyl endopeptidase",
+   "proline endopeptidase",
    "elastase-trypsin-chymotrypsin",
-   "no cleavage",
    "Clostripain/P",
    "cyanogen-bromide",
    "PepsinA + P",
-   "Glu-C+P",
-   "proline-endopeptidase/HKR",
-   "unspecific cleavage",
-   "Alpha-lytic protease",
-   "Chymotrypsin",
-   "2-iodobenzoate",
-   "Trypsin",
    "iodosobenzoate",
-   "Chymotrypsin/P",
-   "CNBr",
-   "V8-E",
-   "Formic_acid",
-   "staphylococcal protease/D",
-   "Arg-C",
-   "leukocyte elastase",
-   "Lys-C",
-   "Arg-C/P",
-   "Asp-N_ambic",
-   "Lys-N",
-   "Asp-N",
    "Asp-N/B",
+   "staphylococcal protease/D",
+   "proline-endopeptidase/HKR",
+   "Glu-C+P",
+   "no cleavage",
+   "Trypsin",
+   "Arg-C",
+   "Asp-N_ambic",
+   "unspecific cleavage",
+   "Trypsin/P",
+   "Chymotrypsin",
+   "V8-DE",
+   "Chymotrypsin/P",
+   "Arg-C/P",
+   "CNBr",
+   "Asp-N",
+   "Formic_acid",
+   "Lys-C",
+   "Lys-N",
+   "V8-E",
    "Lys-C/P",
    "PepsinA",
-   "TrypChymo",
-   "Trypsin/P",
-   "V8-DE",
-   "proline endopeptidase"
+   "leukocyte elastase",
+   "TrypChymo"
   ]
  },
  {
   "name": "decoys",
   "value": "auto",
   "type": "string",
-  "description": "Decoy handling for target-decoy FDR. 'auto': ensure decoys are available — reuse decoys already present in the database (marker auto-detected, prefix or suffix) or generate them if none are found. 'generate': always (re)generate decoys from the target proteins (any pre-existing decoys are removed first to avoid decoy-of-decoy entries). 'ignore': search the target proteins only — any decoys present in the database are removed.",
+  "description": "Decoy handling for target-decoy FDR. 'auto': ensure decoys are available — reuse decoys already present in the database (marker auto-detected, prefix or suffix) or generate them if none are found. Supplied decoys are reused only at 0.5 to 2 decoys per target protein: target-decoy FDR needs about one decoy per target, so a database with far fewer or more is refused (use 'generate'). 'generate': always (re)generate decoys from the target proteins (any pre-existing decoys are removed first to avoid decoy-of-decoy entries). 'ignore': search the target proteins only — any decoys present in the database are removed.",
   "tags": [],
   "validStrings": [
    "auto",
@@ -100,29 +100,37 @@
   "name": "precursor:min_charge",
   "value": 2,
   "type": "int",
-  "description": "Minimum precursor charge to be considered.",
-  "tags": []
+  "description": "Minimum precursor charge to be considered. Spectra without a precursor charge are searched with every charge of the range; spectra whose recorded charge lies outside of it are not searched.",
+  "tags": [],
+  "min": 1,
+  "max": 20
  },
  {
   "name": "precursor:max_charge",
   "value": 5,
   "type": "int",
-  "description": "Maximum precursor charge to be considered.",
-  "tags": []
+  "description": "Maximum precursor charge to be considered (see precursor:min_charge).",
+  "tags": [],
+  "min": 1,
+  "max": 20
  },
  {
   "name": "precursor:isotope_error_min",
   "value": -1,
   "type": "int",
   "description": "Minimum precursor isotope error searched, in 13C spacings (1.00336 Da) added to the observed precursor mass: -1 finds a peptide whose first 13C isotope peak was selected as the precursor. The PSM meta value 'isotope_error' reports the opposite sign by default (see report:isotope_error_convention).",
-  "tags": []
+  "tags": [],
+  "min": -5,
+  "max": 5
  },
  {
   "name": "precursor:isotope_error_max",
   "value": 1,
   "type": "int",
   "description": "Maximum precursor isotope error searched, with the sign of precursor:isotope_error_min: +1 finds a peptide whose precursor was selected one 13C spacing below its monoisotopic peak.",
-  "tags": []
+  "tags": [],
+  "min": -5,
+  "max": 5
  },
  {
   "name": "fragment:mass_tolerance",
@@ -196,14 +204,16 @@
   "value": 150,
   "type": "int",
   "description": "Minimal fragment mz for database",
-  "tags": []
+  "tags": [],
+  "min": 0
  },
  {
   "name": "fragment:max_mz",
   "value": 2000,
   "type": "int",
   "description": "Maximal fragment mz for database",
-  "tags": []
+  "tags": [],
+  "min": 0
  },
  {
   "name": "fragment:min_ion_index",
@@ -232,14 +242,18 @@
   "value": 5,
   "type": "int",
   "description": "Minimal number of matched ions to report a PSM",
-  "tags": []
+  "tags": [],
+  "min": 0,
+  "max": 1000
  },
  {
   "name": "fragment:max_charge",
   "value": 2,
   "type": "int",
   "description": "max fragment charge",
-  "tags": []
+  "tags": [],
+  "min": 1,
+  "max": 10
  },
  {
   "name": "peaks:keep_n",
@@ -298,7 +312,9 @@
   "value": 2,
   "type": "int",
   "description": "Maximum number of residues carrying a variable modification per candidate peptide",
-  "tags": []
+  "tags": [],
+  "min": 0,
+  "max": 5
  },
  {
   "name": "annotate:PSM",
@@ -463,9 +479,9 @@
  },
  {
   "name": "peptdeep:batch_size",
-  "value": 500,
+  "value": 64,
   "type": "int",
-  "description": "Peptides per ONNX inference call.",
+  "description": "Peptides per ONNX inference call. The calls run side by side, one per thread: small ones keep the threads evenly busy and the memory low (on iPRG2015 with 16 threads, 64 took 40% less time than 500 and 1 GB less memory).",
   "tags": [
    "advanced"
   ],
@@ -476,21 +492,24 @@
   "value": 7,
   "type": "int",
   "description": "Minimum size a peptide must have after digestion to be considered in the search.",
-  "tags": []
+  "tags": [],
+  "min": 0
  },
  {
   "name": "peptide:max_size",
   "value": 40,
   "type": "int",
   "description": "Maximum size a peptide must have after digestion to be considered in the search (0 = disabled).",
-  "tags": []
+  "tags": [],
+  "min": 0
  },
  {
   "name": "peptide:missed_cleavages",
   "value": 1,
   "type": "int",
   "description": "Number of missed cleavages.",
-  "tags": []
+  "tags": [],
+  "min": 0
  },
  {
   "name": "peptide:clip_nterm_methionine",
@@ -545,7 +564,7 @@
   "name": "peptide:motif",
   "value": "",
   "type": "string",
-  "description": "If set, only peptides that contain this motif (provided as RegEx) will be considered.",
+  "description": "If set, only peptides whose unmodified sequence (one-letter codes) contains a match of this regular expression are searched, target and decoy peptides alike, e.g. 'N[^P][ST]' for N-glycosylation sequons or 'C' for cysteine-containing peptides; '^' and '$' anchor it to the peptide termini.",
   "tags": []
  },
  {
@@ -553,21 +572,25 @@
   "value": 100,
   "type": "int",
   "description": "Minimal peptide mass for database",
-  "tags": []
+  "tags": [],
+  "min": 0
  },
  {
   "name": "peptide:max_mass",
   "value": 9000,
   "type": "int",
   "description": "Maximal peptide mass for database",
-  "tags": []
+  "tags": [],
+  "min": 0
  },
  {
   "name": "report:top_hits",
   "value": 1,
   "type": "int",
   "description": "Maximum number of top scoring hits per spectrum that are reported.",
-  "tags": []
+  "tags": [],
+  "min": 1,
+  "max": 100
  },
  {
   "name": "report:isotope_error_convention",
@@ -583,10 +606,20 @@
   ]
  },
  {
+  "name": "percolator:max_train_psms",
+  "value": 500000,
+  "type": "int",
+  "description": "With 'rescore': the most PSMs Percolator trains a model on (0: all). Every PSM is scored, also beyond the cap. For a run with more PSMs, Percolator samples the training PSMs by spectrum; for the model of the files of a multi-file search too small for a model of their own (trained on the files rescored on their own), each of these files contributes an equal share, so that none dominates. The run log says when the training PSMs were sampled. Searches below the cap are not affected.",
+  "tags": [
+   "advanced"
+  ],
+  "min": 0
+ },
+ {
   "name": "FDR:PSM",
   "value": 0,
   "type": "double",
-  "description": "Filter PSMs based on q-value (e.g., 0.05 = 5% FDR; 0 disables the filter). Target and decoy PSMs are filtered alike by the threshold; decoys that pass are kept (no decoy-specific stripping here — decoys are removed only at protein-FDR finalization). With 'rescore' (the default), the threshold applies to the Percolator q-values, the main score of the rescored PSMs. Without rescoring ('rescore' false, or a run that Percolator did not rescore), 0 computes no q-values: every PSM keeps its search engine score ('ln(hyperscore)') as main score, e.g. as input for Percolator or a downstream FDR step. Above 0, the target-decoy q-value (see FDR:PSM_groups) replaces the main score (the search engine score is kept as meta value 'ln(hyperscore)_score') and only the best hit of each spectrum is kept. Needs decoys ('decoys' auto or generate); with 'ignore', a threshold above 0 is skipped with a warning.",
+  "description": "Filter PSMs based on q-value (e.g., 0.05 = 5% FDR; 0 disables the filter). Target and decoy PSMs are filtered alike by the threshold; decoys that pass are kept (no decoy-specific stripping here — decoys are removed only at protein-FDR finalization). With 'rescore' (the default), the threshold applies to the Percolator q-values, the main score of the rescored PSMs. Without rescoring ('rescore' false, or a run that Percolator did not rescore), 0 computes no q-values: every PSM keeps its search engine score ('ln(hyperscore)') as main score, e.g. as input for Percolator or a downstream FDR step. Above 0, the target-decoy q-value (see FDR:PSM_groups) replaces the main score (the search engine score is kept as meta value 'ln(hyperscore)_score') and only the best hit of each spectrum is kept. If no PSM matched a decoy, the q-value of the T PSMs is the conservative 1/T (target-decoy competition with +1), so a lower threshold reports no PSM instead of lifting the filter. Needs decoys ('decoys' auto or generate); with 'ignore', a threshold above 0 is skipped with a warning (the QPX run view of the ProSE tool's -qpx_extended records per input whether the filter was applied: 'psm_fdr_applied'). Afterwards, the proteins that no remaining PSM references are removed.",
   "tags": [],
   "min": 0,
   "max": 1
@@ -608,7 +641,7 @@
   "name": "FDR:protein",
   "value": 0,
   "type": "double",
-  "description": "Filter proteins based on picked-protein FDR q-value (e.g., 0.01 = 1% protein FDR, set to 0 to disable). Applied after PSM-level FDR on a complete protein set (single file, or the -out_merged aggregate). Setting this > 0 finalizes the result: identified decoys are removed. With 0, decoys are retained for downstream/merged FDR. Uses the picked-protein approach (Savitski et al. 2015) which pairs target and decoy proteins by accession. The protein inference and the picked-protein FDR use the PSMs up to FDR:protein_inference_PSM, and a protein scores with the best posterior error probability of its PSMs (Percolator's, with 'rescore'; without it the best search engine score). Proteins without a reported PSM (one that passes FDR:PSM) are removed afterwards. Needs decoys ('decoys' auto or generate).",
+  "description": "Filter proteins based on picked-protein FDR q-value (e.g., 0.01 = 1% protein FDR, set to 0 to disable). Applied after PSM-level FDR on a complete protein set (single file, or the -out_merged aggregate). Setting this > 0 finalizes the result: identified decoys are removed. With 0, decoys are retained for downstream/merged FDR. Uses the picked-protein approach (Savitski et al. 2015) which pairs target and decoy proteins by accession. The protein inference and the picked-protein FDR use the PSMs up to FDR:protein_inference_PSM, and a protein scores with the best posterior error probability of its PSMs (Percolator's, with 'rescore'; without it the best search engine score). The proteins and the protein groups (which have q-values of their own) are filtered at the threshold, and only the proteins of the groups that pass are kept. Proteins without a reported PSM (one that passes FDR:PSM) are removed afterwards, and so are the PSMs all of whose proteins failed the protein FDR. Needs decoys ('decoys' auto or generate).",
   "tags": [],
   "min": 0,
   "max": 1
@@ -629,7 +662,8 @@
   "value": 50,
   "type": "int",
   "description": "The number of initial hits for which we calculate a score",
-  "tags": []
+  "tags": [],
+  "min": 1
  },
  {
   "name": "scoring:fragment_charges",

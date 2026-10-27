@@ -11,7 +11,7 @@
   import { Label } from '$lib/components/ui/label'
   import { Switch } from '$lib/components/ui/switch'
   import { searchForm as form } from '$lib/search/form.svelte'
-  import { searchPlan } from '$lib/search/plan.svelte'
+  import { FDR_PARAMETERS, NO_FDR_HINT, searchPlan } from '$lib/search/plan.svelte'
   import { rangeMessage } from '$lib/settings/ranges'
   import { dialogEntries, parameterSections, sameValue } from '$lib/settings/parameters'
   import ParameterField from './ParameterField.svelte'
@@ -48,7 +48,9 @@
   const blockedReason = (name: string) =>
     name === 'chimeric:enabled' && searchPlan.chimericBlocked
       ? 'ProSE looks for co-isolated precursors only without database chunks. Set database:chunk_size to 0 to use it.'
-      : null
+      : (FDR_PARAMETERS as readonly string[]).includes(name) && searchPlan.fdrBlocked
+        ? NO_FDR_HINT
+        : null
   const isChanged = (name: string) => !sameValue(form.values[name], form.defaults[name])
   /** The inverted range (lowest above highest) the parameter is part of. */
   const invertedRange = (name: string) => searchPlan.inverted.find((r) => r.min === name || r.max === name)

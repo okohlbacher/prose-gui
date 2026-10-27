@@ -8,6 +8,7 @@
   import HistogramChart from '$lib/components/charts/HistogramChart.svelte'
   import { tickLabel } from '$lib/format/chart'
   import { formatPercent, formatQ } from '$lib/format/fdr'
+  import { psmFdrOff } from '$lib/results/overview'
   import { signedNumber } from '$lib/format/number'
   import { COLORS } from '$lib/psm/psm'
   import { formatCount } from '$lib/results/display'
@@ -18,7 +19,8 @@
 
   const m = $derived(view.model)
   const openSearch = $derived(view.result.outcome.summary.openSearch)
-  const fdr = $derived(`${formatPercent(m.psmFdr)}, ${formatQ(m.psmFdr)}`)
+  // (a search without decoys has no FDR)
+  const fdr = $derived(psmFdrOff(view.result.outcome.summary) ? 'no FDR' : `${formatPercent(m.psmFdr)}, ${formatQ(m.psmFdr)}`)
 
   const targetColor = COLORS.b
   const decoyColor = COLORS.y

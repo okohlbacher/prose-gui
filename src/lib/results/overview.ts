@@ -118,8 +118,19 @@ export function psmFdrAppliedToNone(summary: ProSEMultiSummary): boolean {
   return withPsms.length > 0 && withPsms.every((f) => f.psmFdrApplied === false)
 }
 
+/**
+ * The search asked for no PSM FDR: a search without decoys (decoys 'ignore'), for which the app sends no FDR (ProSE could
+ * not estimate one). Its PSMs have no q-value.
+ */
+export function psmFdrOff(summary: ProSEMultiSummary): boolean {
+  return summary.psmFdr === 0
+}
+
+const NO_DECOYS = 'The search had no decoys, so ProSE could not estimate an FDR and applied none'
+
 /** The Overview's "PSM FDR": the cutoff, and to which files it was not applied. */
 export function psmFdrFact(summary: ProSEMultiSummary): { value: string; title: string } {
+  if (psmFdrOff(summary)) return { value: 'off (no decoys)', title: `${NO_DECOYS}: the PSMs have no q-value and are not FDR-controlled.` }
   const cutoff = `${formatPercent(summary.psmFdr)} (${formatQ(summary.psmFdr)})`
   const skipped = psmFdrSkipped(summary)
   const why = 'ProSE skips the PSM FDR of a file whose PSMs match no decoy: without decoys it cannot estimate the FDR.'
@@ -138,6 +149,11 @@ export function psmFdrFact(summary: ProSEMultiSummary): { value: string; title: 
  * no q-value and are not FDR-controlled, though they are listed.
  */
 export function psmFdrNotice(summary: ProSEMultiSummary): string | null {
+  if (psmFdrOff(summary)) {
+    return summary.files.some((f) => f.targetPSMs > 0)
+      ? `${NO_DECOYS}: its PSMs have no q-value and are not FDR-controlled. Search with decoys to control the FDR.`
+      : null
+  }
   const skipped = psmFdrSkipped(summary).filter((f) => f.targetPSMs > 0)
   if (skipped.length === 0) return null
   const cutoff = formatPercent(summary.psmFdr)

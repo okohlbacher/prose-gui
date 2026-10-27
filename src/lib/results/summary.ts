@@ -272,6 +272,8 @@ export function parseModificationAnalysis(deltaMassStats: string, ptmStats: stri
       totalPSMs: toNumber(d.header.get('Total PSMs')),
       modifiedPSMs: toNumber(d.header.get('Modified PSMs')),
       unmodifiedPSMs: toNumber(d.header.get('Unmodified PSMs')),
+      // ProSE since OpenMS #10715 counts the target PSMs only and says how many decoy PSMs it left out
+      ...(d.header.has('Decoy PSMs') ? { decoyPSMs: toNumber(d.header.get('Decoy PSMs')) } : {}),
       meanDeltaMass: toNumber(d.header.get('Mean Delta Mass')),
       medianDeltaMass: toNumber(d.header.get('Median Delta Mass')),
       entries: d.rows.map((r) => ({

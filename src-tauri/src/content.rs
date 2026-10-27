@@ -6,7 +6,8 @@
 //! The checks are cheap next to a search, which reads every file in full anyway: an mzML's first MiB and last
 //! 64 KiB (a `.mzML.gz` is decompressed once, as a stream, to find a cut-off file), a FASTA in one pass.
 
-use std::collections::HashSet;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
@@ -190,8 +191,8 @@ pub fn mzml_gz(path: &Path, name: &str) -> io::Result<MzmlFacts> {
     }
 }
 
-/// What a FASTA holds, and what in it ProSE refuses (`problems`: the search cannot start) or may mishandle
-/// (`warnings`).
+/// What a FASTA holds, and what in it ProSE refuses (`problems`: the search cannot start) or treats specially
+/// (`warnings`: entries listed twice, which it searches once).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct FastaFacts {
     pub proteins: u64,
@@ -226,8 +227,8 @@ fn shown_accession(accession: &[u8]) -> String {
     shown
 }
 
-/// The 128-bit hash of an accession (two SipHash runs): a set of these finds an accession twice in a large
-/// database without keeping the accessions.
+/// The 128-bit hash of an accession or a sequence (two SipHash runs): a map of these finds an accession twice in a
+/// large database, and whether its sequence is the same, without keeping the accessions and sequences.
 fn accession_hash(accession: &[u8]) -> u128 {
     let half = |seed: u8| {
         let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -243,9 +244,8 @@ fn accession_hash(accession: &[u8]) -> u128 {
 struct FastaScan {
     proteins: u64,
     residues: u64,
-    /// Bytes of the file so far (a byte-order mark is not counted as content).
+    /// Bytes of the file so far (a byte-order mark is not counted as content; ProSE reads one).
     bytes: u64,
-    bom: bool,
     /// A byte that no text file has (NUL and other control characters).
     binary: bool,
     /// A sequence line before the first header.
@@ -255,16 +255,20 @@ struct FastaScan {
     in_header: bool,
     collecting: bool,
     accession: Vec<u8>,
-    /// The residues of the entry being read; whether it had lowercase ones or other characters.
+    /// The residues of the entry being read (upper case: ProSE reads lowercase ones so), and whether it had other
+    /// characters.
     length: u64,
-    lowercase_here: bool,
+    sequence: Vec<u8>,
     invalid_here: Option<u8>,
-    seen: HashSet<u128>,
+    /// The hashes of the accessions so far, with the hash of their sequence.
+    seen: HashMap<u128, u128>,
+    /// An accession again with another sequence (ProSE refuses it), and with the same (an entry listed twice, e.g.
+    /// a FASTA or the contaminants added twice: ProSE searches it once).
     duplicates: Tally,
+    repeated: Tally,
     no_accession: u64,
     empty: Tally,
     too_long: Tally,
-    lowercase: Tally,
     invalid: Tally,
 }
 
@@ -275,7 +279,6 @@ impl FastaScan {
         let bom = start.starts_with(BOM);
         let scan = FastaScan {
             line_start: true,
-            bom,
             ..Default::default()
         };
         (scan, if bom { BOM.len() } else { 0 })
@@ -286,20 +289,29 @@ impl FastaScan {
         if self.proteins == 0 {
             // (what came before the first header: `headless`)
             self.length = 0;
-            self.lowercase_here = false;
+            self.sequence.clear();
             self.invalid_here = None;
             return;
         }
         let accession = std::mem::take(&mut self.accession);
+        if !accession.is_empty() {
+            let sequence = accession_hash(&self.sequence);
+            match self.seen.entry(accession_hash(&accession)) {
+                Entry::Vacant(e) => {
+                    e.insert(sequence);
+                }
+                Entry::Occupied(e) if *e.get() == sequence => {
+                    self.repeated.add(&accession, String::new)
+                }
+                Entry::Occupied(_) => self.duplicates.add(&accession, String::new),
+            }
+        }
         let length = self.length;
         if length == 0 {
             self.empty.add(&accession, String::new);
         }
         if length > MAX_PROTEIN_LENGTH {
             self.too_long.add(&accession, || thousands(length));
-        }
-        if self.lowercase_here {
-            self.lowercase.add(&accession, String::new);
         }
         if let Some(c) = self.invalid_here {
             self.invalid.add(&accession, || {
@@ -313,7 +325,7 @@ impl FastaScan {
         self.accession = accession;
         self.accession.clear();
         self.length = 0;
-        self.lowercase_here = false;
+        self.sequence.clear();
         self.invalid_here = None;
     }
 
@@ -324,9 +336,6 @@ impl FastaScan {
         self.collecting = false;
         if self.accession.is_empty() {
             self.no_accession += 1;
-        } else if !self.seen.insert(accession_hash(&self.accession)) {
-            let accession = self.accession.clone();
-            self.duplicates.add(&accession, String::new);
         }
     }
 
@@ -377,9 +386,7 @@ impl FastaScan {
                     self.headless = true;
                 }
                 self.length += 1;
-                if b.is_ascii_lowercase() {
-                    self.lowercase_here = true;
-                }
+                self.sequence.push(b.to_ascii_uppercase());
             } else if matches!(b, b'*' | b'.' | b' ' | b'\t' | 0x0b | 0x0c) {
                 // (a stop, and blanks: ProSE reads them)
             } else {
@@ -439,7 +446,7 @@ impl FastaScan {
             }
             if self.duplicates.count > 0 {
                 problems.push(format!(
-                    "{name} has {} more than once (the first: {}). ProSE needs every accession once.",
+                    "{name} has {} more than once with different sequences (the first: {}). ProSE needs every accession once.",
                     plural(self.duplicates.count, "accession", "accessions"),
                     first(&self.duplicates).0
                 ));
@@ -452,16 +459,11 @@ impl FastaScan {
                     thousands(MAX_PROTEIN_LENGTH)
                 ));
             }
-            if self.bom {
+            if self.repeated.count > 0 {
                 warnings.push(format!(
-                    "{name} starts with a byte-order mark, which ProSE may not read. If the search stops at once, save the file as UTF-8 without one."
-                ));
-            }
-            if self.lowercase.count > 0 {
-                warnings.push(format!(
-                    "{name} has lowercase residues in {} (the first: {}), which ProSE may not read. If the search stops at once, convert them to capitals.",
-                    plural(self.lowercase.count, "sequence", "sequences"),
-                    first(&self.lowercase).0
+                    "{name} lists {} twice, with the same accession and sequence (the first: {}), e.g. the file was added twice: ProSE searches each protein once.",
+                    plural(self.repeated.count, "entry", "entries"),
+                    first(&self.repeated).0
                 ));
             }
         }
@@ -560,7 +562,7 @@ mod tests {
         assert!(all.contains("1 entry without an accession"), "{all}");
         assert!(all.contains("1 sequence (the first: '-' in P3)"), "{all}");
         assert!(
-            all.contains("1 accession more than once (the first: P2)"),
+            all.contains("1 accession more than once with different sequences (the first: P2)"),
             "{all}"
         );
         // the last entry without a sequence: a file cut off after a header
@@ -594,22 +596,39 @@ mod tests {
     }
 
     #[test]
-    fn a_byte_order_mark_and_lowercase_residues_are_warnings() {
+    fn a_byte_order_mark_and_lowercase_residues_are_read() {
+        // ProSE reads both (since OpenMS #10713)
         let facts = fasta_of(b"\xef\xbb\xbf>P1\nmkr\n>P2\nKR\n", "w.fasta");
         assert_eq!(facts.proteins, 2);
         assert_eq!(facts.residues, 5);
         assert!(facts.problems.is_empty(), "{:?}", facts.problems);
-        assert_eq!(facts.warnings.len(), 2);
-        assert!(facts.warnings[0].contains("byte-order mark"));
-        assert!(facts.warnings[1].contains("lowercase residues in 1 sequence (the first: P1)"));
+        assert!(facts.warnings.is_empty(), "{:?}", facts.warnings);
     }
 
     #[test]
     fn duplicates_are_found_across_the_pieces_of_a_read() {
         // the accession of the second entry is split between the two pieces of fasta_of
-        let text = b">ABCDEFGH x\nKK\n>ABCDEFGH y\nKK\n";
+        let text = b">ABCDEFGH x\nKK\n>ABCDEFGH y\nKR\n";
         assert_eq!(fasta_of(text, "d.fasta").problems.len(), 1);
         assert!(fasta_of(b">A\nK\n>AB\nK\n", "d.fasta").problems.is_empty());
+    }
+
+    #[test]
+    fn an_entry_listed_twice_is_a_warning_an_accession_with_another_sequence_a_problem() {
+        // the same accession and sequence (a FASTA added twice; lines and case may differ): ProSE searches it once
+        let twice = fasta_of(b">P1 a\nKKR\n>P2\nMK\n>P1 b\nkk\nr\n>P2\nMK\n", "t.fasta");
+        assert!(twice.problems.is_empty(), "{:?}", twice.problems);
+        assert_eq!(
+            twice.warnings,
+            ["t.fasta lists 2 entries twice, with the same accession and sequence (the first: P1), e.g. the file was added twice: ProSE searches each protein once."]
+        );
+        // another sequence under an accession: ProSE refuses the database
+        let other = fasta_of(b">P1\nKKR\n>P1\nKKK\n", "o.fasta");
+        assert_eq!(
+            other.problems,
+            ["o.fasta has 1 accession more than once with different sequences (the first: P1). ProSE needs every accession once."]
+        );
+        assert!(other.warnings.is_empty());
     }
 
     const FOOTER: &str = "</run></mzML>\n<indexListOffset>1</indexListOffset></indexedmzML>\n";

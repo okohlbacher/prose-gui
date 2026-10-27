@@ -61,7 +61,7 @@ describe('the record', () => {
       toolVersion: '3.6.0',
       files: ['Ecoli_1.mzML', 'Ecoli_2.mzML'],
       database: 'human.fasta',
-      psms: countPsms(result.outcome.tables, 0.01),
+      psms: countPsms(result.outcome.tables, 0.02),
       seconds: 12.5,
     })
     expect(record.psms).toBeGreaterThan(0)
@@ -146,7 +146,7 @@ describe('a saved search', () => {
     expect(opened.result.stored).toEqual({ name: 'Example', appVersion: recordOf(result, '', '').appVersion, moduleVersion: '3.6.0' })
     expect(opened.result.settings).toEqual(result.settings)
     expect(opened.result.design).toEqual(JSON.parse(JSON.stringify(result.design)))
-    expect([opened.result.psmFdr, opened.result.proteinFdr]).toEqual([0.01, 0.01])
+    expect([opened.result.psmFdr, opened.result.proteinFdr]).toEqual([0.02, 0.01])
   })
 
   test('a search of the earlier layout (summary.yaml, no QPX columns) does not open, with a message that says why', async () => {
@@ -167,8 +167,8 @@ describe('a saved search', () => {
       asked.push(name)
       return read(id, name, range)
     }
-    // 60 target PSMs in each of the example's two files
-    expect(await psmsOfSearch(backend, '7-0')).toBe(120)
+    // 77 target PSMs in each of the example's two files
+    expect(await psmsOfSearch(backend, '7-0')).toBe(154)
     expect(asked).toEqual([RUNS])
     await expect(psmsOfSearch(backend, 'missing')).rejects.toThrow()
     backend.folders.get('7-0')!.set(RUNS, strToU8('not parquet'))

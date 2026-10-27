@@ -138,3 +138,18 @@ describe('a value it does not take', () => {
   })
 })
 
+
+describe('a disabled FDR field (no FDR without decoys)', () => {
+  it('says off, takes no input and its chips are disabled', () => {
+    shown = mount(FdrInput, { target: document.body, props: { id: 'fdr', off: true, disabled: true, value: 0, 'aria-describedby': 'why' } })
+    flushSync()
+    const input = document.getElementById('fdr') as HTMLInputElement
+    expect(input.disabled).toBe(true)
+    expect(input.value).toBe('off')
+    expect(input.getAttribute('aria-describedby')).toBe('why')
+    expect(input.getAttribute('aria-invalid')).toBe('false')
+    const chips = [...document.querySelectorAll('button')]
+    expect(chips.length).toBeGreaterThan(1)
+    expect(chips.every((b) => b.disabled)).toBe(true)
+  })
+})

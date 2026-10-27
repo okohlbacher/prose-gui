@@ -52,6 +52,8 @@ export type KeyFigures = {
    * are not FDR-controlled.
    */
   psmsWithoutFdr: number
+  /** The search asked for no PSM FDR (a search without decoys: `psmFdrOff`). */
+  fdrOff: boolean
   /** MS2 spectra in the searched files. */
   ms2: number
   /** `spectra / ms2` (identified spectra, not PSMs: at most 1), or null without MS2 counts. */
@@ -95,6 +97,7 @@ export function keyFigures(m: ResultModel, summary: ProSEMultiSummary): KeyFigur
     peptides: levelTotal(m, 'peptides', false),
     psms: psms.length,
     psmsWithoutFdr: withoutFdr,
+    fdrOff: summary.psmFdr === 0,
     ms2,
     spectra,
     identifiedShareOfMs2: ms2 > 0 ? Math.min(1, spectra / ms2) : null,

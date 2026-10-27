@@ -30,8 +30,8 @@ describe('the example with PeptDeep', () => {
     rmSync(join(dataHome(), 'chosen.prose'), { force: true })
   })
 
-  it('the example with PeptDeep: 120 PSMs, a PSM shows the PeptDeep mirror', async () => {
-    await expect($('[data-testid="psm-count"]')).toHaveText(expect.stringContaining('120'))
+  it('the example with PeptDeep: 154 PSMs, a PSM shows the PeptDeep mirror', async () => {
+    await expect($('[data-testid="psm-count"]')).toHaveText(expect.stringContaining('154'))
 
     await openFirstPsm()
     // the lower half is PeptDeep's prediction, with peaks, not the theoretical spectrum or a "no prediction" note
@@ -88,7 +88,7 @@ describe('the example with PeptDeep', () => {
   it('a project opens again with the same PSMs', async () => {
     // Export > Project (.prose): the app writes it where the specs' dialog seam says (app.sh)
     const count = await textOf('[data-testid="psm-count"]')
-    expect(count).toContain('120')
+    expect(count).toContain('154')
     const file = join(dataHome(), 'chosen.prose')
     rmSync(file, { force: true })
     await $('header').$('button*=Export').click()

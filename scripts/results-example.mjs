@@ -55,7 +55,7 @@ export const CASES = {
     names: ['Ecoli_1.mzML', 'Ecoli_2.mzML'],
     fasta: resolve(RESOURCES, 'example/Ecoli_K12_proteome.fasta'),
     contaminants: true,
-    parameters: { ...ORBITRAP, 'fragment:mass_tolerance': 0.5, 'fragment:mass_tolerance_unit': 'Da', 'FDR:protein': 0 },
+    parameters: { ...ORBITRAP, 'fragment:mass_tolerance': 0.5, 'fragment:mass_tolerance_unit': 'Da', 'FDR:PSM': 0.02, 'FDR:protein': 0 },
     rescore: true,
     peptdeep: true,
   },
@@ -130,6 +130,25 @@ export const CASES = {
     fasta: resolve(OPENMS_TOPP, 'ProSE_empty.fasta'),
     contaminants: false,
     parameters: { ...ORBITRAP, 'FDR:protein': 0.01 },
+    rescore: true,
+    peptdeep: false,
+  },
+  // A search without decoys (the database card's Decoys: None, ProSE's decoys 'ignore'): the app sends no FDR then (the
+  // form turns both off; ProSE would skip them), so the PSMs have no q-values and Percolator cannot rescore them (the
+  // run view says why). The app's example run, once, with the contaminants.
+  'no-decoys': {
+    mzML: resolve(RESOURCES, 'example/Ecoli_MS2_small.mzML'),
+    names: ['Ecoli_MS2_small.mzML'],
+    fasta: resolve(RESOURCES, 'example/Ecoli_K12_proteome.fasta'),
+    contaminants: true,
+    parameters: {
+      ...ORBITRAP,
+      'fragment:mass_tolerance': 0.5,
+      'fragment:mass_tolerance_unit': 'Da',
+      decoys: 'ignore',
+      'FDR:PSM': null,
+      'FDR:protein': null,
+    },
     rescore: true,
     peptdeep: false,
   },

@@ -4,6 +4,7 @@
 // same filter state (one cutoff). Kept outside the view, so that it survives a visit to New search.
 
 import { formatPercent, formatQ } from '../format/fdr'
+import { psmFdrOff } from './overview'
 import type { PsmOptionState } from '../psm/psm'
 import type { OpenResult } from '../search/session.svelte'
 import { columnDef } from './columns'
@@ -85,6 +86,8 @@ export class LevelState {
     if (this.total > 0) return `No ${what} match the filters.`
     const m = this.#view.model
     const cutoff = (fdr: string, q: number) => `the search's ${fdr} (${formatPercent(q)}, ${formatQ(q)})`
+    // a search without decoys has no FDR: nothing to pass
+    if (psmFdrOff(this.#view.result.outcome.summary)) return levelTotal(m, 'psms', false) === 0 ? 'The search found no PSMs.' : `No ${what}.`
     if (levelTotal(m, 'psms', false) === 0) {
       return `No PSMs pass ${cutoff('PSM FDR', m.psmFdr)}. The database may not match the organism of the sample.`
     }

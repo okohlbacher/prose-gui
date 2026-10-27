@@ -1,9 +1,11 @@
 # Delta Mass Statistics Table
+# Counts of the target PSMs (the decoy PSMs are left out)
 # Total PSMs: 3
 # Modified PSMs: 1
 # Unmodified PSMs: 2
+# Decoy PSMs: 0
 # Mean Delta Mass: 15.9965
 # Median Delta Mass: 15.9965
 #
 DeltaMass	Count	UniquePeptides	ChargeStates	Percentage	MappedModification	IsKnown
-15.9965	1	3	1	100	Oxidation or Hydroxylation	true
+15.9965	1	1	1	100	Oxidation or Hydroxylation	true

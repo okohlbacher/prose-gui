@@ -39,7 +39,7 @@ export type FileFacts = InputFile & {
    * or has no spectra; a FASTA without entries, with an accession twice, a protein too long. Sentences, the file named.
    */
   problem: string | null
-  /** What ProSE may mishandle (a FASTA's byte-order mark, lowercase residues): sentences, not blocking. */
+  /** What ProSE treats specially (a FASTA's entries listed twice, which it searches once): sentences, not blocking. */
   warnings: string[]
 }
 

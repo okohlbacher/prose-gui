@@ -1,0 +1,90 @@
+[ProSE] [1/1] Searching /home/ana/.local/share/org.openms.prose.desktop/searches/8-0.partial/1__Ecoli_1.mzML
+Generating peptides...
+Sorting peptides...
+done.
+Generating fragments...
+The precursor windows of the spectra reach 12566 of 966813 peptides.
+Collapsed 343 repeated peptidoform occurrences.
+Sorting fragments...
+Creating DB with bucket_size 4096
+Fragment index built!
+[ProSE] open_search=false (precursor tolerance [-10, +10] ppm)
+[PeptDeepRescoring] run 'ProSE_2026-10-27 06:08:46': NCE 37 selected from a grid centred on 35 (median cosine 0.79623)
+[PeptDeepRescoring] run 'ProSE_2026-10-27 06:08:46': retention-time calibration (b_spline) on 60 PSMs, median residual 10.0436 s
+[PeptDeepRescoring] Predicted features added: 121 / 121 PSMs (ms2_cosine, ms2_spectral_angle, ms2_pearson, ms2_frac_pred_found, rt_abs_error), NCE=37
+[ProSE] Protein mapping with PeptideIndexing (the fragment index does not list every protein occurrence of its peptides (low_memory, protein-terminal modifications, or not built from this database)).
+Merge took: 0.00 s (wall), 0.00 s (CPU), 0.00 s (system), 0.00 s (user)
+Memory usage (Aho-Corasick): 0 MB (working set delta), 0 MB (peak working set delta)
+
+Peptide identification engine: PROSE
+Enzyme: Trypsin/P
+Building trie ... done (0s)
+Compressing trie to BFS format ...
+ACTrie::compressTrie(): created BFS trie with 1054 nodes (path compression skipped 16 suffix nodes)
+ done (0s)
+Mapping 121 peptides to 8504 proteins.
+Searching with up to 3 ambiguous amino acid(s) and 0 mismatch(es)!
+
+Aho-Corasick done:
+  found 125 hits for 121 of 121 peptides.
+Peptide hits passing enzyme filter: 125
+     ... rejected by enzyme filter: 0
+-----------------------------------
+Peptide statistics
+
+  unmatched                : 0 (0 %)
+  target/decoy:
+    match to target DB only: 101 (83 %)
+    match to decoy DB only : 20 (16 %)
+    match to both          : 0 (0 %)
+
+  mapping to proteins:
+    no match (to 0 protein)         : 0
+    unique match (to 1 protein)     : 117
+    non-unique match (to >1 protein): 4
+-----------------------------------
+Protein statistics
+
+  total proteins searched: 8504
+  matched proteins       : 100 (100 new)
+  matched target proteins: 80 (80 %)
+  matched decoy proteins : 20 (20 %)
+  orphaned proteins      : 0 (all removed)
+-----------------------------------
+[ProSE] Ion priors (rich model, all peaks): not trained; 0 + 0 PSMs at q <= 0.01 (halves by scan parity, each scored by the other's model) in 0.000399 s; 121 hits annotated in 2e-05 s; peak lists 36050 peaks of 139 spectra, 0.178263 MiB.
+[ProSE] Rescoring the PSMs with Percolator...
+Stamped PIN feature meta values; 0 PSMs skipped (no evidence or unknown TD).
+Rescoring 121 PSMs in-process with 33 features.
+[ProSE] Closed search mode - per-file modification analysis skipped
+-qpx_extended: /home/ana/.local/share/org.openms.prose.desktop/searches/8-0.partial/1__Ecoli_1.mzML: reading spectra
+-qpx_extended: /home/ana/.local/share/org.openms.prose.desktop/searches/8-0.partial/1__Ecoli_1.mzML: predicting 66 peptides at NCE 37 (from PeptDeep rescoring)
+-qpx_extended: /home/ana/.local/share/org.openms.prose.desktop/searches/8-0.partial/1__Ecoli_1.mzML: 77 spectra of its PSMs, 19396 of 19396 peaks kept (the 100 most intense per 100 Th and the annotated ones)
+-qpx_extended: /home/ana/.local/share/org.openms.prose.desktop/searches/8-0.partial/1__Ecoli_1.mzML: writing
+
+[ProSE] ===================== Search Report =====================
+[ProSE] Input        : 1__Ecoli_1.mzML  (139 MS2 spectra)
+[ProSE] Config       : Trypsin/P, 2 MC | prec [-10, +10] ppm | frag 0.5 Da | z 2-5
+[ProSE]                fixed: Carbamidomethyl (C) | variable: Oxidation (M), Acetyl (Protein N-term)
+[ProSE]                ions: b,y,+c/z+1 for ETD/ECD/EThcD/ETciD | calibration: off | mode: closed
+[ProSE] Database     : /home/ana/.local/share/org.openms.prose.desktop/searches/8-0.partial/database.fasta  (4252 target + 4252 decoy proteins, decoys: generated)
+[ProSE] Fragment idx : 12223 peptides / 186685 fragments  (build 0.2 s)
+[ProSE] --------------------------- Results ---------------------------
+[ProSE] Matched      : 77 / 139 spectra   (ID rate 55.4%)
+[ProSE] Peptides/prot: 64 unique peptides | 61 unique proteins
+[ProSE] Target/decoy : 77 target / 0 decoy PSMs  | PSM FDR <= 2.0%, achieved 1.30%
+[ProSE] Charges      : 2:65 3:9 4:3
+[ProSE] Missed clv   : 0:62 1:13 2:2
+[ProSE] HyperScore   : min 1.8  median 12.1  max 58.0
+[ProSE] --------------------- Tolerance estimate ---------------------
+[ProSE] Precursor    : median 4.08 ppm, MAD 0.73  -> recommend 8 ppm
+[ProSE] Fragment     : median 46.06 ppm, MAD 126.73  -> recommend 610 ppm
+[ProSE] ------------------------- Timing -----------------------------
+[ProSE] scoring 0.3s | fdr 0.0s | index(shared) 0.2s
+[ProSE] total 0.7s | search of the file(s) 0.6s | outputs 0.1s (of which -qpx_extended 0.1s)
+[ProSE] Percolator   : rescored 1 / 1 file(s)
+[ProSE] ------------------------- Outputs ----------------------------
+[ProSE]   idXML           -> /home/ana/.local/share/org.openms.prose.desktop/searches/8-0.partial/search.idXML
+[ProSE]   QPX parquet     -> /home/ana/.local/share/org.openms.prose.desktop/searches/8-0.partial/qpx
+[ProSE] ==============================================================
+
+ProSE took 0.66 s (wall), 1.88 s (CPU), 0.11 s (system), 1.77 s (user); Peak Memory Usage: 159 MB.

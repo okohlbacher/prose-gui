@@ -11,12 +11,19 @@ where it comes from, and a verdict:
   `develop`, in the pin `native/OPENMS_COMMIT`) adds it;
 - **not needed**: the desktop app does not show it (the reason is given).
 
-Checked against ProSE of the pin (`native/OPENMS_COMMIT`: develop + #10641 + #10676; the fixtures are of develop with all three merged) on the app's example (OpenMS'
-`Ecoli_MS2_small.mzML`, LTQ Orbitrap XL CID, as two inputs, with Percolator and PeptDeep), the web app's example
-(`DatabaseSuitability_in_spec.mzML`, simulated, one and two inputs) and the TOPP test data (closed and open search, with
-and without Percolator and PeptDeep). On the app's example the reader's result equals the web app's but for the size of
-the fragment index (`indexedPeptides`, `indexedFragments`: the native tool indexes the whole database once for both
-inputs, the web module only the peptides the precursor windows reach).
+Checked against ProSE of the pin (`native/OPENMS_COMMIT`, a develop commit; the fixtures are made with it) on the app's
+example (OpenMS' `Ecoli_MS2_small.mzML`, LTQ Orbitrap XL CID, as two inputs, with Percolator and PeptDeep), the web app's
+example (`DatabaseSuitability_in_spec.mzML`, simulated, one and two inputs), the TOPP test data (closed and open search,
+with and without Percolator and PeptDeep) and a search without decoys. The reader's result equals the web app's but for
+the size of the fragment index (`indexedPeptides`, `indexedFragments`: the native tool indexes the whole database once
+for both inputs, the web module only the peptides the precursor windows reach) and for what the pinned ProSE computes
+differently from the web app's older one (`src/lib/results/read.test.ts` checks these differences): its q-values are at
+or above the web app's (1/T for T target PSMs without a decoy PSM, OpenMS #10714; Percolator's (decoys + 1) / targets
+without pi0, as the percolator executable, #10721), Percolator's scores and PEPs differ (by up to 0.01 and 0.05 on the
+web app's example), the recommended tolerances are whole ppm (#10715) and the delta-mass table counts the target PSMs
+only, with each peak's own unique peptides (#10715). The app's example is searched at a PSM FDR of 2 % (none of its PSMs
+passes 1 % with these q-values): 112 of the web app's 120 PSMs (at 1 %) are among its 154, equal but for Percolator's
+values.
 
 **The app reads only QPX** (the user's decision, 2026-10-21): the QPX psm, mz, pg, run and provenance views ProSE writes
 with `-out_qpx` and its `-qpx_extended` (#10676), with optional columns. QPX readers ignore columns and keys they do

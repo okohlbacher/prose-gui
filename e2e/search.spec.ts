@@ -76,14 +76,16 @@ describe('the example search', () => {
     expect(widths.sequence).toBeLessThan(widths.dejavu - 10)
   })
 
-  it('the example search shows 120 PSMs', async () => {
+  it('the example search shows 154 PSMs', async () => {
     await $('header').waitForDisplayed({ timeout: 20000 })
     await $('button=Try the example').click()
     // the two files in the design table, the database counted
     await expect($('[data-testid="design-summary"]')).toHaveText('2 files → 2 samples · 1 condition')
     await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
-    // the example's fragment tolerance for its ion-trap spectra, and its protein FDR off (the run is too small for one)
+    // the example's fragment tolerance for its ion-trap spectra, its PSM FDR of 2 % and its protein FDR off (the run is
+    // too small for 1 % and for a protein FDR)
     await expect($('#fragment-tolerance')).toHaveValue('0.5')
+    await expect($('#psm-fdr')).toHaveValue('2')
     await expect($('#protein-fdr')).toHaveValue('off')
     await expect($('button=Off')).toHaveAttribute('aria-pressed', 'true')
     // (textContent: the footer line is cut to the window's width)
@@ -91,7 +93,7 @@ describe('the example search', () => {
     // the example's note, on a line of its own that wraps (not cut)
     // (textContent: WebKitWebDriver reads no visible text of a line-clamped box)
     expect(await $('[data-testid="search-note"]').getProperty('textContent')).toBe(
-      "Ion-trap example with a 0.5 Da fragment tolerance and no protein FDR: the run is too small for one. It has too few PSMs for Percolator's full model.",
+      "Ion-trap example with a 0.5 Da fragment tolerance, a 2 % PSM FDR and no protein FDR: the run is too small for 1 % and for a protein FDR. It has too few PSMs for Percolator's full model.",
     )
     const clipped = await browser.execute(() => {
       const note = document.querySelector('[data-testid="search-note"]') as HTMLElement
@@ -107,7 +109,7 @@ describe('the example search', () => {
     })
     const count = $('[data-testid="psm-count"]')
     await count.waitForDisplayed({ timeout: 20000 })
-    await expect(count).toHaveText(expect.stringContaining('120'))
+    await expect(count).toHaveText(expect.stringContaining('154'))
     expect(await $('[data-testid="result-chip"]').getProperty('textContent')).toContain('Ecoli · 2 files')
     // real data: the first PSM's precursor error is not 0 ppm, its peaks have intensities of their own
     await openFirstPsm()
@@ -138,7 +140,7 @@ describe('the example search', () => {
     await expect($('#protein-fdr')).toHaveValue('off')
     await expect($('button=Start over')).toHaveAttribute(
       'title',
-      "Removes the spectra and the database. Your settings stay, but the example's fragment tolerance and protein FDR go back to the preset's.",
+      "Removes the spectra and the database. Your settings stay, but the example's fragment tolerance, PSM FDR and protein FDR go back to the preset's.",
     )
     await $('button=Remove all').click()
     await expect($('button=Try the example')).toBeDisplayed()
@@ -173,7 +175,7 @@ describe('the example search', () => {
     await dialog.$('input[aria-label="Find a parameter"]').setValue('batch_size')
     const field = dialog.$('#param-peptdeep-batch_size')
     await field.waitForDisplayed({ timeout: 10000 })
-    await field.setValue('64')
+    await field.setValue('32')
     await expect(dialog.$('button*=default:')).toBeDisplayed()
     await dialog.$('button=Done').click()
     await expect(dialog).not.toBeDisplayed()
@@ -189,7 +191,7 @@ describe('the example search', () => {
       compressors: { ZSTD: (input: Uint8Array) => new Uint8Array(zstdDecompressSync(input)) },
     })) as { step_name: string; config: string }[]
     const config = JSON.parse(rows.find((r) => r.step_name === 'peptide_search')!.config)
-    expect(config['Search:peptdeep:batch_size']).toBe(64)
+    expect(config['Search:peptdeep:batch_size']).toBe(32)
     expect(config['Search:fragment:mass_tolerance']).toBe(0.5)
   })
 
@@ -219,7 +221,7 @@ describe('the example search', () => {
     expect(existsSync(join(searchesDir(), searchId, 'proteins.fasta'))).toBe(true)
     expect(existsSync(join(searchesDir(), searchId, 'database.fasta'))).toBe(false)
     // the record's PSMs (written when ProSE ended, from its QPX run view) are the result's
-    expect(await row().$('[data-column="psms"]').getProperty('textContent')).toBe('120')
+    expect(await row().$('[data-column="psms"]').getProperty('textContent')).toBe('154')
 
     await row().$('button=Rename').click()
     await row().$('input').waitForDisplayed()
@@ -238,6 +240,6 @@ describe('the example search', () => {
     await browser.waitUntil(async () => (await browser.getUrl()).endsWith(`#/results/${searchId}`), { timeout: 30000 })
     const count = $('[data-testid="psm-count"]')
     await count.waitForDisplayed({ timeout: 30000 })
-    await expect(count).toHaveText(expect.stringContaining('120'))
+    await expect(count).toHaveText(expect.stringContaining('154'))
   })
 })

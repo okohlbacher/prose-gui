@@ -121,9 +121,15 @@ fn the_example_is_searched_through_start_search() {
     let Some(real) = real() else { return };
     let work = TempDir::new("real");
     let onnx = tool::probe(&real.bin).unwrap().onnx;
-    // as the app's example, without a protein FDR: since OpenMS #10707 ProSE applies the preset's 1 % to this small run,
-    // no protein passes it, and a result without protein groups has no quantms.pg.parquet
-    let request = example_request_with(&real, &work, onnx, json!({ "FDR:protein": 0 }));
+    // as the app's example: a PSM FDR of 2 % (Percolator's q-values are (decoys + 1) / targets since OpenMS #10721, and
+    // no PSM of this small run passes 1 %) and no protein FDR (since OpenMS #10707 ProSE applies the preset's 1 % to this
+    // small run, no protein passes it, and a result without protein groups has no quantms.pg.parquet)
+    let request = example_request_with(
+        &real,
+        &work,
+        onnx,
+        json!({ "FDR:PSM": 0.02, "FDR:protein": 0 }),
+    );
     let originals: Vec<String> = request.files.iter().map(|f| f.path.clone()).collect();
     let searches = Arc::new(Searches::default());
     let (sink, rx) = channel_sink();

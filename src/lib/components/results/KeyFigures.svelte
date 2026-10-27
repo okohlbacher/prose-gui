@@ -23,7 +23,9 @@
   const fdrNote = $derived(noFdr ? 'no PSM FDR' : someWithoutFdr ? `${formatCount(figures.psmsWithoutFdr)} without FDR` : null)
   const fdrTitle = $derived(
     noFdr
-      ? ' The PSM FDR was not applied: no PSM matched a decoy, so the PSMs have no q-value and are not FDR-controlled.'
+      ? figures.fdrOff
+        ? ' The search had no decoys, so no FDR was applied: the PSMs have no q-value and are not FDR-controlled.'
+        : ' The PSM FDR was not applied: no PSM matched a decoy, so the PSMs have no q-value and are not FDR-controlled.'
       : someWithoutFdr
         ? ` ${formatCount(figures.psmsWithoutFdr)} of them have no q-value: the PSM FDR was not applied to their files (no PSM matched a decoy), so they are not FDR-controlled.`
         : '',

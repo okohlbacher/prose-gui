@@ -56,7 +56,10 @@ const here = new URL('..', import.meta.url).pathname
 const fixture = process.env.OUT ?? join(here, 'src/lib/results/fixtures', caseName)
 
 /** args.rs DEFAULT_PSM_FDR, is_open_search */
-const parameters = { 'FDR:PSM': 0.01, ...search.parameters }
+// (null: not sent, as the shim leaves out the FDR of a search without decoys)
+const parameters = Object.fromEntries(
+  Object.entries({ ...(search.parameters.decoys === 'ignore' ? {} : { 'FDR:PSM': 0.01 }), ...search.parameters }).filter(([, v]) => v !== null),
+)
 const p = parameters
 const window = Math.max(p['precursor:mass_tolerance_lower'] ?? 10, p['precursor:mass_tolerance_upper'] ?? 10)
 const openSearch = window > ((p['precursor:mass_tolerance_unit'] ?? 'ppm') === 'ppm' ? 1000 : 1)

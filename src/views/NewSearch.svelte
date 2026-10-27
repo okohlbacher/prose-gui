@@ -14,12 +14,15 @@
 
   let dragging = $state(false)
 
+  /** "a", "a and b", "a, b and c" */
+  const listed = (items: string[]) => (items.length < 3 ? items.join(' and ') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`)
+
   // Start over's tooltip names the example's own settings that go back to the preset's
   const startOverTitle = $derived.by(() => {
     const back = form.exampleSettingsInForce
     if (back.length === 0) return 'Removes the spectra and the database. Your settings stay.'
     return (
-      `Removes the spectra and the database. Your settings stay, but the example's ${back.join(' and ')} ` +
+      `Removes the spectra and the database. Your settings stay, but the example's ${listed(back)} ` +
       `${back.length === 1 ? 'goes' : 'go'} back to the preset's.`
     )
   })

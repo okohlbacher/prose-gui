@@ -51,6 +51,10 @@ describe('History details', () => {
     ])
     // a broken folder has none
     expect(entryFacts(entry('2-0', 'x', { error: 'broken', settings: null }))).toEqual([])
+    // a search without decoys has no FDR (its cutoffs are 1)
+    const noDecoys = entryFacts(entry('3-0', 'x', { psmFdr: 1, proteinFdr: 1 }, { decoys: 'ignore' })).map((f) => f.text)
+    expect(noDecoys).toContain('no PSM FDR')
+    expect(noDecoys).toContain('no protein FDR')
   })
 
   it('tells searches of one name apart by what differs, and shows the database of every search', () => {
