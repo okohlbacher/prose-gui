@@ -141,7 +141,7 @@ Packages and their smoke test (needs the OpenMS build of `native/scripts/build-o
 ```bash
 native/scripts/bundle-prose.sh /scratch/sachsenb/openms-desktop/build src-tauri/resources/prose
 native/scripts/package-linux.sh                                    # .deb and AppImage
-native/scripts/smoke-appimage.sh src-tauri/target/release/bundle/appimage/ProSE_0.1.3_amd64.AppImage \
+native/scripts/smoke-appimage.sh src-tauri/target/release/bundle/appimage/ProSE_0.1.4_amd64.AppImage \
   --hide-openms /scratch/sachsenb/openms-desktop/build
 ```
 
