@@ -108,7 +108,12 @@
         <Table.Body>
           {#each rows as r (r.index)}
             <Table.Row>
-              <Table.Cell data-column="file" class="{cell} text-left font-medium">{r.file}</Table.Cell>
+              <Table.Cell data-column="file" class="{cell} text-left font-medium"
+                >{r.file}{#each r.inputWarnings as w (w.kind)}<span
+                    class="block font-normal text-amber-700 dark:text-amber-400"
+                    data-testid="input-warning"
+                    title={w.text}>{w.short}</span
+                  >{/each}</Table.Cell>
               <Table.Cell data-column="sample" class="{cell} text-left">{r.sample ?? '–'}</Table.Cell>
               <Table.Cell data-column="ms2" class="{cell} text-right">{r.ms2 === null ? '–' : formatCount(r.ms2)}</Table.Cell>
               <Table.Cell data-column="targets" class="{cell} text-right"

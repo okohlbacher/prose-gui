@@ -23,7 +23,7 @@
   import { formatCount } from '$lib/results/display'
   import { exportCsv } from '$lib/results/exports'
   import { keyFigures, levelTotal } from '$lib/results/figures'
-  import { psmFdrAppliedToNone, psmFdrNotice } from '$lib/results/overview'
+  import { inputNotices, psmFdrAppliedToNone, psmFdrNotice } from '$lib/results/overview'
   import { restoreFromHistory } from '$lib/history/history.svelte'
   import { resultsViewFor, type Tab } from '$lib/results/view.svelte'
   import { openResult } from '$lib/search/session.svelte'
@@ -56,6 +56,8 @@
   const peptideTotal = $derived(view ? levelTotal(view.model, 'peptides', false) : 0)
   // the PSM FDR was requested but not applied to some file (no decoy PSM): its PSMs are not FDR-controlled
   const fdrNotice = $derived(view ? psmFdrNotice(view.result.outcome.summary) : null)
+  // what ProSE reported about the inputs' spectra (no MS2 spectra, profile spectra, charges outside the range)
+  const spectraNotices = $derived(view ? inputNotices(view.result.outcome.summary) : [])
   const proteinTotal = $derived(view ? levelTotal(view.model, 'proteins', false) : 0)
 
   const tabs = $derived<{ value: Tab; label: string; count?: number }[]>([
@@ -169,6 +171,13 @@
       <SaveNotice id={view.result.id} />
       {#if fdrNotice}
         <p class="text-xs text-amber-700" data-testid="psm-fdr-notice">{fdrNotice}</p>
+      {/if}
+      {#if spectraNotices.length > 0}
+        <ul class="flex flex-col gap-0.5 text-xs text-amber-700 dark:text-amber-400" data-testid="input-notices">
+          {#each spectraNotices as notice (notice)}
+            <li>{notice}</li>
+          {/each}
+        </ul>
       {/if}
       {#if view.result.outcome.warnings.length > 0}
         <p class="text-xs text-amber-700 dark:text-amber-400" data-testid="results-warnings">{view.result.outcome.warnings.join(' ')}</p>

@@ -16,7 +16,7 @@ import { input } from '../design/fixtures'
 import { resolveDesign } from '../design/model'
 import { keyFigures } from './figures'
 import { buildModel } from './model'
-import { psmFdrFact, psmFdrNotice } from './overview'
+import { inputNotices, inputWarnings, psmFdrFact, psmFdrNotice } from './overview'
 import { bytesOfRange, FileNotFound, OldLayoutError, readSearch, ZSTD, type ByteRange } from './read'
 import type { ProSEMultiSummary, ResultTables, StoredSpectra } from './types'
 
@@ -733,6 +733,29 @@ async function changeRows(dir: string, name: string, change: (rows: Record<strin
   writeFileSync(path, rewrite(bytes, change(rows) ?? rows))
 }
 
+/**
+ * The run view of `dir` with more columns (as optional int64 columns of a later ProSE: `values` per run, null: a
+ * null value), after its own.
+ */
+async function addRunColumns(dir: string, columns: Record<string, (number | null)[]>) {
+  const path = join(dir, 'qpx/quantms.run.parquet')
+  const bytes = new Uint8Array(readFileSync(path))
+  const metadata = parquetMetadata(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer)
+  const rows = await rowsOf(bytes)
+  const names = Object.keys(columns)
+  const schema = [
+    { ...metadata.schema[0], num_children: (metadata.schema[0].num_children ?? 0) + names.length },
+    ...metadata.schema.slice(1),
+    ...names.map((name) => ({ name, type: 'INT64' as const, repetition_type: 'OPTIONAL' as const })),
+  ]
+  const columnData = [
+    ...topColumns(metadata).map((name) => ({ name, data: rows.map((r) => r[name]) as never[] })),
+    ...names.map((name) => ({ name, data: columns[name].map((v) => (v === null ? null : BigInt(v))) as never[] })),
+  ]
+  const compressors = { ZSTD: (input: Uint8Array) => new Uint8Array(zstdCompressSync(input)) }
+  writeFileSync(path, new Uint8Array(parquetWriteBuffer({ columnData, schema, codec: 'ZSTD', compressors })))
+}
+
 /** Sets parameters of the step `step` of the provenance view of `dir`. */
 const setParameters = (dir: string, step: string, values: Record<string, string>) =>
   changeRows(dir, 'qpx/quantms.provenance.parquet', (rows) => {
@@ -918,6 +941,46 @@ describe('missing and broken files', () => {
     expect([figures.psms, figures.psmsWithoutFdr, figures.fdrOff]).toEqual([119, 119, true])
     expect(psmFdrFact(summary).value).toBe('off (no decoys)')
     expect(psmFdrNotice(summary)).toMatch(/^The search had no decoys, so ProSE could not estimate an FDR and applied none/)
+  })
+
+  test("the run view's profile and charge-out-of-range counts (a later ProSE's) become the files' notes, and MS2 count 0 one", async () => {
+    // the pin's run view has neither column: no such counts, no note
+    const plain = await readSearch(folder(join(fixtures, 'suitability')).files)
+    for (const f of plain.summary.files) {
+      expect('profileSpectra' in f).toBe(false)
+      expect('chargeOutOfRange' in f).toBe(false)
+      expect(inputWarnings(f)).toEqual([])
+    }
+    await withCopy('suitability', async (dir) => {
+      await addRunColumns(dir, { profile_spectra_count: [2789, 0], charge_out_of_range_spectra_count: [0, 12] })
+      const { summary } = await readSearch(folder(dir).files)
+      expect(summary.files.map((f) => [f.profileSpectra, f.chargeOutOfRange])).toEqual([
+        [2789, { spectra: 0, min: 2, max: 5 }],
+        [0, { spectra: 12, min: 2, max: 5 }],
+      ])
+      expect(inputNotices(summary)).toEqual([
+        'DatabaseSuitability_1.mzML: all 2,789 MS2 spectra are in profile mode. ProSE expects centroided spectra and searched them ' +
+          'as they are, which identifies few peptides, if any: centroid (peak-pick) the spectra first.',
+        'DatabaseSuitability_2.mzML: 12 of 2,789 MS2 spectra were not searched: their recorded precursor charge is outside the charge range 2–5.',
+      ])
+    })
+    // null values: not reported
+    await withCopy('suitability', async (dir) => {
+      await addRunColumns(dir, { profile_spectra_count: [null, null], charge_out_of_range_spectra_count: [null, 3] })
+      const { summary } = await readSearch(folder(dir).files)
+      expect(summary.files.map((f) => [f.profileSpectra, f.chargeOutOfRange?.spectra])).toEqual([
+        [undefined, undefined],
+        [undefined, 3],
+      ])
+    })
+    // an input without MS2 spectra (an MS1-only file; every run view has the count)
+    await withCopy('mods', async (dir) => {
+      await changeRows(dir, 'qpx/quantms.run.parquet', (rows) => {
+        rows[0].ms2_spectra_count = 0n
+      })
+      const { summary } = await readSearch(folder(dir).files)
+      expect(inputNotices(summary)).toEqual(['SimpleSearchEngine_1.mzML: no MS2 spectra (e.g. only MS1 data), so nothing in it was searched.'])
+    })
   })
 
   test("the run view's psm_fdr_applied, else the provenance's, says whether the PSM FDR was applied", async () => {
