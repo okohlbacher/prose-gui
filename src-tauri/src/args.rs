@@ -478,8 +478,12 @@ fn check_file(
     }
     let meta =
         fs::metadata(path).map_err(|e| format!("The {kind} {path} cannot be read ({e})."))?;
-    if !meta.is_file() && !(meta.is_dir() && is_bruker_d(&file_name(path))) {
-        return Err(format!("The {kind} {path} is not a file."));
+    // a Bruker .d is a folder (and only a folder); every other input a file
+    if is_bruker_d(&file_name(path)) != meta.is_dir() || !(meta.is_file() || meta.is_dir()) {
+        return Err(format!(
+            "The {kind} {path} is not a {}.",
+            if is_bruker_d(&file_name(path)) { "Bruker .d folder" } else { "file" }
+        ));
     }
     if !accepted(&file_name(path)) {
         return Err(format!("The {kind} {path} is not {expected}."));

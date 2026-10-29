@@ -162,9 +162,7 @@ class SearchForm {
 
   /** Threads of the search (Advanced); null: all cores. */
   threads = $state<number | null>(null)
-  /** The Advanced area of the settings is open. */
-  advancedSettings = $state(false)
-  /** The parameters show (New search opens with the setup and a one-line summary of it only). */
+  /** The parameters show (New search opens with the preset and a one-line summary of it only). */
   showSettings = $state(false)
 
   /** ProSE's parameters by name (generated from the pinned tool). */
@@ -224,7 +222,7 @@ class SearchForm {
     this.#exampleSettings = false
     this.presetId = id
     this.overrides = copyValues(preset.parameters)
-    // a setup of an organism brings its database
+    // a preset of an organism brings its database
     if (preset.database) {
       void this.setDatabase(preset.database)
       if (preset.contaminants !== undefined) this.contaminants = preset.contaminants
@@ -498,14 +496,18 @@ class SearchForm {
    * A saved search's files, design, database and settings in the form ("Open in New search" and "Re-run" of
    * History, survey P0-9). Files that are no longer where they were are named in a notice and left out (the search
    * cannot start with fewer files unnoticed: the notice stays); a missing database leaves the FASTA to choose.
+   * Resolves with whether every file and the database were found (Re-run starts only then); a later restore
+   * supersedes an earlier one that is still inspecting its files (false, and it changes nothing more).
    */
+  #restoring = 0
   async restoreSearch(s: {
     name: string
     inputs: { path: string; fields: DesignFields }[]
     database: string | null
     databaseName: string
     settings: { parameters: Record<string, unknown>; rescore: boolean; peptdeep: boolean; contaminants: boolean; presetId?: string }
-  }) {
+  }): Promise<boolean> {
+    const generation = ++this.#restoring
     this.#leaveExample()
     this.files = []
     this.notices = []
@@ -517,10 +519,13 @@ class SearchForm {
     this.peptdeep = s.settings.peptdeep
     this.contaminants = s.settings.contaminants
     this.showSettings = true
+    let complete = true
     this.adding++
     try {
       const facts = await inspectFiles(s.inputs.map((i) => i.path))
+      if (generation !== this.#restoring) return false
       const missing = facts.filter((f) => f.error !== null)
+      complete = missing.length === 0
       facts.forEach((f, k) => {
         if (f.error === null) this.#addRow(f, s.inputs[k].fields)
       })
@@ -531,10 +536,13 @@ class SearchForm {
       this.adding--
     }
     if (s.database) await this.setDatabase(s.database)
+    if (generation !== this.#restoring) return false
     const chosen = this.database as DatabaseChoice | null
     if (!chosen || chosen.error) {
       this.notices.push(`Choose the database of “${s.name}” again: ${s.databaseName}${s.database ? ` is no longer at ${s.database}` : ''}.`)
+      return false
     }
+    return complete
   }
 
   /** "6 files · 1.9 GB" */

@@ -211,8 +211,8 @@ fn open_url(url: String) -> Result<(), String> {
 
 /// The reference proteome `proteome` (a UniProt proteome id, `UP` and nine digits) as a FASTA in the app's
 /// `databases/` folder, downloaded from UniProt's REST API with curl (macOS, Windows 10 and Linux have it) unless it
-/// is there already; `reviewed`: Swiss-Prot entries only. The only network contact of the app, and only on this
-/// request of the user. -> the FASTA's path.
+/// is there already; `reviewed`: Swiss-Prot entries only. Only on this request of the user (like the PRIDE and OLS
+/// contacts of the SDRF features). -> the FASTA's path.
 #[tauri::command]
 async fn download_proteome(app: AppHandle, proteome: String, reviewed: bool) -> Result<String, String> {
     if !(proteome.len() == 11 && proteome.starts_with("UP") && proteome[2..].bytes().all(|b| b.is_ascii_digit())) {
@@ -627,7 +627,7 @@ async fn open_qpx_folder(app: AppHandle) -> Result<Option<serde_json::Value>, St
         let Some(folder) = chosen else { return Ok(None) };
         let stems = history::qpx_stems(&folder)?;
         // (the run and provenance views, small, for the record: PSMs, cutoffs, database)
-        let qpx = if folder.join("quantms.psm.parquet").is_file() { folder.clone() } else { folder.join("qpx") };
+        let qpx = history::qpx_dir(&folder).ok_or("The folder has no QPX results.")?;
         let read = |name: &str| std::fs::read(qpx.join(name)).map_err(|e| format!("{name}: {e}"));
         Ok(Some(serde_json::json!({
             "folder": folder,

@@ -22,3 +22,15 @@ test('never claims a protein FDR that was not applied, and leaks no paths', () =
   expect(methodsText({ summary: summary(true), settings, version: '' })).toContain('filtered at 1 % protein-level FDR')
   expect(methodsText({ summary: summary(false, 0), settings, version: '' })).toContain('not FDR-controlled')
 })
+
+test('says what ProSE did: Percolator and the PSM FDR skipped are not claimed', () => {
+  const s = summary(true)
+  ;(s as unknown as { files: unknown[] }).files = [
+    { psmFdrApplied: false, percolator: { applied: false } },
+    { psmFdrApplied: false, percolator: { applied: false } },
+  ]
+  const text = methodsText({ summary: s, settings, version: '' })
+  expect(text).not.toContain('rescored with Percolator')
+  expect(text).not.toContain('filtered at 1 % PSM-level FDR')
+  expect(text).toContain('not FDR-controlled')
+})

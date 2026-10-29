@@ -291,6 +291,22 @@ pub struct FileFacts {
     pub instrument: Option<content::Instrument>,
 }
 
+/// The bytes of the regular files in `dir` and below (links not followed).
+fn folder_bytes(dir: &Path) -> u64 {
+    fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|e| match e.file_type() {
+                    Ok(t) if t.is_dir() => folder_bytes(&e.path()),
+                    Ok(t) if t.is_file() => e.metadata().map(|m| m.len()).unwrap_or(0),
+                    _ => 0,
+                })
+                .sum()
+        })
+        .unwrap_or(0)
+}
+
 /// The facts of the file at `path` (an absolute path). Never fails: what goes wrong is in `error`.
 pub fn inspect(path: &str) -> FileFacts {
     let name = Path::new(path)
@@ -322,9 +338,9 @@ pub fn inspect(path: &str) -> FileFacts {
         return facts;
     }
     let meta = match fs::metadata(path) {
-        Ok(meta) if meta.is_file() || (meta.is_dir() && is_bruker_d(&name)) => meta,
+        Ok(meta) if (meta.is_file() && !is_bruker_d(&name)) || (meta.is_dir() && is_bruker_d(&name)) => meta,
         Ok(_) => {
-            facts.error = Some(format!("{path} is not a file."));
+            facts.error = Some(if is_bruker_d(&name) { format!("{path} is not a Bruker .d folder.") } else { format!("{path} is not a file.") });
             return facts;
         }
         Err(e) => {
@@ -332,7 +348,8 @@ pub fn inspect(path: &str) -> FileFacts {
             return facts;
         }
     };
-    facts.size = meta.len();
+    // (a .d folder: the sum of its files, not the folder's own entry)
+    facts.size = if meta.is_dir() { folder_bytes(Path::new(path)) } else { meta.len() };
     let file = Path::new(path);
     let counted = if is_fasta_file(&name) {
         content::fasta(file, &name).map(|f| {

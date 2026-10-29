@@ -3,9 +3,9 @@
 
 export const HELP = {
   setup: {
-    title: 'Setup',
-    text: 'A setup fills in the settings that depend on the instrument: how exact its precursor (MS1) and fragment (MS2) masses are, and which model predicts its spectra. Choose the instrument that recorded the spectra. The built-in setups assume a tryptic digest and alkylated cysteines (Carbamidomethyl); check the enzyme and the modifications against your sample preparation.',
-    tip: 'Save your own setup (with its database, e.g. per organism) under the setup menu.',
+    title: 'Preset',
+    text: 'A preset fills in the settings that depend on the instrument: how exact its precursor (MS1) and fragment (MS2) masses are, and which model predicts its spectra. Choose the instrument that recorded the spectra. The built-in presets assume a tryptic digest and alkylated cysteines (Carbamidomethyl); check the enzyme and the modifications against your sample preparation.',
+    tip: 'Save your own preset (with its database, e.g. one per organism) with “Save as preset”.',
   },
   database: {
     title: 'Protein database (FASTA)',
@@ -25,7 +25,7 @@ export const HELP = {
   variableMods: {
     title: 'Variable modifications',
     text: 'Chemical changes a residue may or may not carry, such as oxidised methionine, which arises during sample handling. Each one is tried on and off, so each one adds candidates: the search gets slower and can lose sensitivity. Choose the few your biology or preparation justifies.',
-    tip: 'Add phosphorylation (S, T, Y) when you look for phosphopeptides, above all in phospho-enriched samples. To screen for unexpected mass shifts, use the open-search setup and check its other settings for your experiment; a mass shift alone does not identify or localize a modification.',
+    tip: 'Add phosphorylation (S, T, Y) when you look for phosphopeptides, above all in phospho-enriched samples. To screen for unexpected mass shifts, use the open-search preset and check its other settings for your experiment; a mass shift alone does not identify or localize a modification.',
   },
   fixedMods: {
     title: 'Fixed modifications',

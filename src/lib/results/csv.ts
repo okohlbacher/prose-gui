@@ -54,6 +54,9 @@ export function toCsv(m: ResultModel, level: Level, rows: Uint32Array, columns: 
 const xml = (t: string) =>
   t.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
+/** The rows of an Excel worksheet, the header included. */
+const EXCEL_ROWS = 1_048_576
+
 /** A column letter of a 0-based index (A, …, Z, AA, …). */
 function columnName(i: number): string {
   let name = ''
@@ -67,6 +70,7 @@ function columnName(i: number): string {
  * Written by hand as the smallest OOXML package (fflate zips it), not with a spreadsheet library.
  */
 export function toXlsx(m: ResultModel, level: Level, rows: Uint32Array, columns: string[], filters: FilterState, sheet: string): Uint8Array {
+  if (rows.length >= EXCEL_ROWS) throw new Error(`${rows.length.toLocaleString('en')} rows are more than an Excel sheet holds (${(EXCEL_ROWS - 1).toLocaleString('en')} and the header). Filter the table, or export CSV.`)
   const defs = expandColumns(m, level, columns).map((id) => columnDef(m, level, id)!)
   const counts = peptideCounts(m, level === 'peptides' ? filters.maxQ : NaN)
   const text = (ref: string, t: string) => `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xml(t)}</t></is></c>`
@@ -76,8 +80,9 @@ export function toXlsx(m: ResultModel, level: Level, rows: Uint32Array, columns:
     const r = i + 2
     const cells = defs.map((d, j) => {
       const ref = `${columnName(j)}${r}`
-      if (d.number && !d.csv) {
-        const x = d.number(m, row, counts)
+      // numeric columns as numbers, in the CSV's unit (coverage in %); labels and text as text
+      if (!d.csvText && (d.number || d.csv)) {
+        const x = d.csv ? Number(d.csv(m, row, counts) || NaN) : d.number!(m, row, counts)
         return Number.isFinite(x) ? `<c r="${ref}"><v>${x}</v></c>` : ''
       }
       const t = d.csv ? d.csv(m, row, counts) : d.text!(m, row, counts)
