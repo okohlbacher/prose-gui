@@ -26,6 +26,7 @@ import {
 } from '../search/session.svelte'
 import { searchForm } from '../search/form.svelte'
 import { searchPlan, startSearch } from '../search/plan.svelte'
+import { acceptedKeys } from '../search/checks'
 import { toolState } from '../search/tool.svelte'
 import {
   APP_VERSION,
@@ -320,6 +321,8 @@ export async function reopenInNewSearch(id: string, start: boolean): Promise<boo
     databaseName: record.database,
     settings: record.settings,
   })
+  // the red flags searched anyway then are not asked again (they are recorded per file: `checks.ts`)
+  if (record.accepted) searchPlan.accepted = new Set([...searchPlan.accepted, ...acceptedKeys(record.accepted)])
   if (!start) return false
   // (the database's proteins are counted in the background: start once the form allows it)
   for (let tries = 0; tries < 100 && !searchPlan.canStart; tries++) await new Promise((r) => setTimeout(r, 100))

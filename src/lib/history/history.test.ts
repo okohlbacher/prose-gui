@@ -25,6 +25,7 @@ import {
   projectFileName,
   psmsOfSearch,
   recordOf,
+  resultFromRecord,
   saveSearch,
   unpackProject,
 } from './history'
@@ -48,13 +49,13 @@ async function savedBackend(id = '100-0', name = 'Example') {
 }
 
 describe('the record', () => {
-  test('search.json holds the fields of schema 1', () => {
+  test('search.json holds the fields of schema 2', () => {
     const record = recordOf(result, 'Example', '3.6.0')
     expect(Object.keys(record).sort()).toEqual(
       ['appVersion', 'createdAt', 'database', 'design', 'files', 'id', 'name', 'proteinFdr', 'psmFdr', 'psms', 'schema', 'seconds', 'settings', 'toolVersion'],
     )
     expect(record).toMatchObject({
-      schema: 1,
+      schema: 2,
       id: '100-0',
       name: 'Example',
       createdAt: '2026-10-20T10:00:00.000Z',
@@ -89,10 +90,20 @@ describe('the record', () => {
     refuse((r) => delete r.name, /name is missing/)
   })
 
+  test('a record of schema 1 is still read; the accepted red flags of schema 2 are kept and checked', () => {
+    const v1 = { ...JSON.parse(JSON.stringify(recordOf(result, 'x', '1'))), schema: 1 }
+    expect(parseRecord(JSON.stringify(v1)).schema).toBe(1)
+    const accepted = [{ id: 'profile-ms2', files: ['/r/a.mzML'], message: 'Profile.' }]
+    const v2 = recordOf({ ...result, accepted }, 'x', '1')
+    expect(parseRecord(JSON.stringify(v2)).accepted).toEqual(accepted)
+    expect(resultFromRecord(v2, result.outcome).accepted).toEqual(accepted)
+    expect(() => parseRecord(JSON.stringify({ ...v2, accepted: [{ id: 3 }] }))).toThrow(/accepted is broken/)
+  })
+
   test('a newer schema is refused with a message', () => {
-    const newer = JSON.stringify({ ...recordOf(result, 'x', '1'), schema: 2 })
+    const newer = JSON.stringify({ ...recordOf(result, 'x', '1'), schema: 3 })
     expect(() => parseRecord(newer)).toThrow(ProjectVersionError)
-    expect(() => parseRecord(newer)).toThrow(/saved by a newer version of ProSE \(schema 2\).*reads schema 1/)
+    expect(() => parseRecord(newer)).toThrow(/saved by a newer version of ProSE \(schema 3\).*reads schema 2/)
     expect(() => parseRecord(newer, 'project')).toThrow(/This project was saved by a newer version/)
     expect(() => parseRecord(newer)).toThrow(/This search was saved by a newer version/)
   })
@@ -363,9 +374,9 @@ describe('project files', () => {
   })
 
   test('a newer schema is refused with a message, and nothing is written', async () => {
-    const newer = zipSync({ 'search.json': strToU8(JSON.stringify({ ...recordOf(result, 'x', '1'), schema: 2 })), 'a.txt': strToU8('x') })
+    const newer = zipSync({ 'search.json': strToU8(JSON.stringify({ ...recordOf(result, 'x', '1'), schema: 3 })), 'a.txt': strToU8('x') })
     const backend = new MemoryBackend()
-    await expect(importProjectBytes(backend, newer)).rejects.toThrow(/This project was saved by a newer version of ProSE \(schema 2\)/)
+    await expect(importProjectBytes(backend, newer)).rejects.toThrow(/This project was saved by a newer version of ProSE \(schema 3\)/)
     await expect(importProjectBytes(backend, newer)).rejects.toBeInstanceOf(ProjectVersionError)
     expect(backend.imported).toBe(0)
   })

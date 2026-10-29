@@ -2,7 +2,7 @@
 // bytes, with the semantics of the Rust commands that the tests rely on (src-tauri/src/history.rs).
 
 import { zipSync, type Zippable } from 'fflate'
-import { LEFT_OUT, LEVEL, RECORD_FILE, STORE, withoutPaths, type HistoryBackend, type HistoryEntry } from './history'
+import { LEFT_OUT, LEVEL, RECORD_FILE, SCHEMA_VERSION, STORE, withoutPaths, type HistoryBackend, type HistoryEntry } from './history'
 import { bytesOfRange, type ByteRange } from '../results/read'
 
 export class NotFound extends Error {
@@ -83,7 +83,7 @@ export class MemoryBackend implements HistoryBackend {
       try {
         const json = JSON.parse(new TextDecoder().decode(record))
         if (typeof json?.schema !== 'number') throw new Error('search.json has no schema: it is not a ProSE search record.')
-        if (json.schema > 1) throw new Error(`This search was saved by a newer version of ProSE (schema ${json.schema}).`)
+        if (json.schema > SCHEMA_VERSION) throw new Error(`This search was saved by a newer version of ProSE (schema ${json.schema}).`)
         Object.assign(entry, {
           name: json.name ?? null,
           createdAt: json.createdAt ?? null,

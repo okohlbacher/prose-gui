@@ -62,7 +62,7 @@
   const accuracy = $derived(summary.files.filter((f) => f.precursorError || f.fragmentError))
   const ppm = (e: { median: number; mad: number } | null) => (e ? `${e.median.toFixed(2)} ± ${e.mad.toFixed(2)}` : '–')
 
-  const methods = $derived(methodsText({ summary, settings, version: result.stored?.moduleVersion ?? toolState.info?.version ?? '' }))
+  const methods = $derived(methodsText({ summary, settings, version: result.stored?.moduleVersion ?? toolState.info?.version ?? '', accepted: result.accepted }))
   let copied = $state(false)
   async function copyMethods() {
     await navigator.clipboard.writeText(methods)

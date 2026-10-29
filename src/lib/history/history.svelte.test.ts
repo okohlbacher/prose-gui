@@ -83,7 +83,7 @@ describe('History', () => {
   test('history lists an incomplete folder with its message', async () => {
     await finished('1-0', 'good', '2026-10-20T09:00:00.000Z')
     disk.addFolder('2-0', { 'search.json': '{ broken' })
-    disk.addFolder('3-0', { 'search.json': JSON.stringify({ schema: 2, id: '3-0', name: 'future' }) })
+    disk.addFolder('3-0', { 'search.json': JSON.stringify({ schema: 3, id: '3-0', name: 'future' }) })
     // a finished search that was not saved (no record): listed as such, so that it can be deleted
     disk.addFolder('4-0', { 'qpx/quantms.psm.parquet': 'x' })
     await refreshHistory()

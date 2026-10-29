@@ -1,7 +1,7 @@
 //! History: the searches of the app's data folder (`<searches>/<id>/`), and the project files.
 //!
 //! A search is in History when its folder has `search.json` (the record: see `src/lib/history/history.ts`
-//! for its schema, version 1). The app writes the record right after `search://done`, before it reads the
+//! for its schema, version 2; version 1 is read too). The app writes the record right after `search://done`, before it reads the
 //! results ([`save_record`]), and `proteins.fasta` once it has read them ([`save_proteins`], which also
 //! drops the folder's `database.fasta`); from then on Rust owns the folder: [`list`], [`rename`],
 //! [`delete`], and [`import`], which makes a folder of a project file's entries. A finished folder
@@ -28,8 +28,10 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// The version of `search.json` this app reads and writes.
-pub const SCHEMA: u64 = 1;
+/// The version of `search.json` this app writes; it reads it and the older ones from [`OLDEST_SCHEMA`] on
+/// (version 2 added the accepted red flags, `accepted`).
+pub const SCHEMA: u64 = 2;
+pub const OLDEST_SCHEMA: u64 = 1;
 /// A partial folder without a lock file (one of an older version of the app) is removed by the sweep when
 /// it has not been written to for this long.
 pub const SWEEP_GRACE: Duration = Duration::from_secs(600);
@@ -108,7 +110,7 @@ fn parse_record(text: &str) -> Result<serde_json::Map<String, serde_json::Value>
         return Err(format!("{RECORD} is not a search record."));
     };
     match map.get("schema").and_then(|s| s.as_u64()) {
-        Some(SCHEMA) => Ok(map),
+        Some(OLDEST_SCHEMA..=SCHEMA) => Ok(map),
         Some(newer) if newer > SCHEMA => Err(newer_message(newer)),
         Some(other) => Err(format!("{RECORD} has the unknown schema {other}.")),
         None => Err(format!(
