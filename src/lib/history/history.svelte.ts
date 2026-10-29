@@ -8,7 +8,7 @@
 import { desktopBackend, errorText, importQpxFolder, openQpxFolder } from '../desktop'
 import { resolveDesign } from '../design/model'
 import { baseName } from '../results/model'
-import { parameterNumber, readMeta, targetPsmsOf } from '../results/summary'
+import { parameterNumber, qpxParameters, readMeta, targetPsmsOf } from '../results/summary'
 import { resultName } from '../results/display'
 import { forgetResult, navigate, router } from '../route.svelte'
 import {
@@ -26,7 +26,8 @@ import {
 } from '../search/session.svelte'
 import { sdrfSession } from '../design/sdrf-session.svelte'
 import { searchForm } from '../search/form.svelte'
-import { searchPlan, startSearch } from '../search/plan.svelte'
+import { canSearchAgain, searchAgain, searchPlan, startSearch } from '../search/plan.svelte'
+import { acceptedKeys } from '../search/checks'
 import { toolState } from '../search/tool.svelte'
 import {
   APP_VERSION,
@@ -295,7 +296,7 @@ export async function openProjectFile(): Promise<boolean> {
  * (its path in database.json, else none: it was copied with the contaminants) and the settings; then, with `start`,
  * the search starts once the form can (Re-run). Resolves with whether it started.
  */
-export async function reopenInNewSearch(id: string, start: boolean): Promise<boolean> {
+export async function reopenInNewSearch(id: string, start: boolean, changes: Record<string, unknown> = {}): Promise<boolean> {
   const record = parseRecord(new TextDecoder().decode(await backend.read(id, RECORD_FILE)))
   const inputs = JSON.parse(new TextDecoder().decode(await backend.read(id, 'inputs.json'))) as { path: string; name: string; index: number }[]
   // the user's FASTA: database.json (searched as it is), database-source.json (searched with contaminants)
@@ -321,8 +322,10 @@ export async function reopenInNewSearch(id: string, start: boolean): Promise<boo
     }),
     database,
     databaseName: record.database,
-    settings: record.settings,
+    settings: { ...record.settings, parameters: { ...record.settings.parameters, ...changes } },
   })
+  // the red flags searched anyway then are not asked again (they are recorded per file: `checks.ts`)
+  if (record.accepted) searchPlan.accepted = new Set([...searchPlan.accepted, ...acceptedKeys(record.accepted)])
   if (record.sdrf) searchForm.notices.push(`“${record.name}” was searched with the SDRF ${record.sdrf.name}. Load it again (Load SDRF…) to search with its metadata.`)
   if (!start) return false
   // Re-run starts only the same search: every file and the database found, no SDRF to load again
@@ -340,32 +343,15 @@ export async function reopenInNewSearch(id: string, start: boolean): Promise<boo
   return true
 }
 
-/** ProSE's parameters as its provenance view records them (peptide_search), by the names of the app's settings. */
-const QPX_PARAMETERS: [string, string, 'number' | 'text' | 'list'][] = [
-  ['enzyme', 'enzyme', 'text'],
-  ['enzyme_specificity', 'peptide:enzyme_specificity', 'text'],
-  ['missed_cleavages', 'peptide:missed_cleavages', 'number'],
-  ['peptide_min_length', 'peptide:min_size', 'number'],
-  ['peptide_max_length', 'peptide:max_size', 'number'],
-  ['precursor_mass_tolerance_lower', 'precursor:mass_tolerance_lower', 'number'],
-  ['precursor_mass_tolerance_upper', 'precursor:mass_tolerance_upper', 'number'],
-  ['precursor_mass_tolerance_unit', 'precursor:mass_tolerance_unit', 'text'],
-  ['fragment_mass_tolerance', 'fragment:mass_tolerance', 'number'],
-  ['fragment_mass_tolerance_unit', 'fragment:mass_tolerance_unit', 'text'],
-  ['min_charge', 'precursor:min_charge', 'number'],
-  ['max_charge', 'precursor:max_charge', 'number'],
-  ['fixed_modifications', 'modifications:fixed', 'list'],
-  ['variable_modifications', 'modifications:variable', 'list'],
-]
-
-function qpxParameters(search: Map<string, string>): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const [key, name, kind] of QPX_PARAMETERS) {
-    const v = search.get(key)
-    if (v === undefined || v === '') continue
-    out[name] = kind === 'number' ? Number(v) : kind === 'list' ? v.split(/,\s*/).filter(Boolean) : v
-  }
-  return out
+/**
+ * A guidance re-run (tolerance feedback, the diagnosis card): New search with the inputs and settings of `result`,
+ * changed by `changes`, the changed values marked there (`SearchForm.guided`). The inputs stay if New search still
+ * holds them; else the search is opened there from History. The user starts it.
+ */
+export async function rerunWith(result: OpenResult, changes: Record<string, unknown>): Promise<void> {
+  if (canSearchAgain(result)) searchAgain(result, changes)
+  else await reopenInNewSearch(result.id, false, changes)
+  searchForm.markGuided(nameOf(result), result.settings.parameters, changes)
 }
 
 /**
@@ -455,4 +441,40 @@ export async function rename(id: string, name: string): Promise<void> {
 /** Forgets the notice about the last save. */
 export function dismissSaveStatus(): void {
   status = null
+}
+
+/**
+ * The ProSE command line of search `id` (its `command.txt`, written by the shim; guidance G8), the parameters in
+ * its `prose.ini`. The paths are placeholders (`<input 1>`, `<database>`, `<search folder>`); `withPaths` puts in
+ * the inputs' paths (inputs.json: names only for a project) and the user's database. Null for a search made
+ * before the app wrote it.
+ */
+export async function commandLineOf(id: string, withPaths: boolean): Promise<string | null> {
+  const text = async (name: string) => new TextDecoder().decode(await backend.read(id, name))
+  let line: string
+  try {
+    line = (await text('command.txt')).trim()
+  } catch {
+    return null
+  }
+  if (!withPaths) return line
+  const quote = (p: string) => (/\s/.test(p) ? `"${p}"` : p)
+  try {
+    const inputs = JSON.parse(await text('inputs.json')) as { path: string; index: number }[]
+    for (const i of inputs) line = line.replaceAll(`<input ${i.index + 1}>`, quote(i.path))
+  } catch {
+    // (no inputs.json: the placeholders stay)
+  }
+  for (const name of ['database.json', 'database-source.json']) {
+    try {
+      const path = (JSON.parse(await text(name)) as { path?: string }).path
+      if (path) {
+        line = line.replaceAll('<database>', quote(path))
+        break
+      }
+    } catch {
+      // (not there)
+    }
+  }
+  return line
 }

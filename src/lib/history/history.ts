@@ -30,11 +30,16 @@ import { errorText } from '../format/error'
 import { fileSafe, resultName } from '../results/display'
 import { readRuns, targetPsmsOf } from '../results/summary'
 import type { EndedSearch, OpenResult } from '../search/session.svelte'
+import type { AcceptedCheck } from '../search/checks'
 // (only the version: a named import of a JSON module leaves the rest of package.json out of the bundle)
 import { version } from '../../../package.json'
 
-/** The version of `search.json` and of the project file. A newer file is refused, not guessed at. */
-export const SCHEMA_VERSION = 1
+/**
+ * The version of `search.json` and of the project file. A newer file is refused, not guessed at; an older one
+ * (from `OLDEST_SCHEMA` on) is read: version 2 added `accepted`, which version 1 has not.
+ */
+export const SCHEMA_VERSION = 2
+export const OLDEST_SCHEMA = 1
 
 /** The version of this app (package.json), written to the records it saves. */
 export const APP_VERSION: string = version
@@ -44,7 +49,7 @@ export const PROTEINS_FILE = 'proteins.fasta'
 
 /** What `search.json` holds. */
 export type SearchRecord = {
-  schema: typeof SCHEMA_VERSION
+  schema: number
   /** The search's folder in the app's searches. */
   id: string
   name: string
@@ -81,6 +86,10 @@ export type SearchRecord = {
   instruments?: Record<string, string>
   /** Set (by the Rust side) on a search made of a project file: it reads only the files of its folder. */
   imported?: boolean
+  /** The spectra of each mzML's header at the start, by file name (schema 2 on); absent: unknown. */
+  spectra?: Record<string, number>
+  /** The red flags of New search the user searched anyway (schema 2 on); absent: none. */
+  accepted?: AcceptedCheck[]
 }
 
 /**
@@ -205,6 +214,8 @@ export function endedRecordOf(search: EndedSearch, name: string, toolVersion: st
     // (no path of this computer: the record goes into project files)
     ...(search.sdrf ? { sdrf: { name: search.sdrf.name, text: withoutLocalPaths(search.sdrf.text) } } : {}),
     ...(search.instruments ? { instruments: search.instruments } : {}),
+    ...(search.accepted ? { accepted: search.accepted } : {}),
+    ...(search.spectra ? { spectra: search.spectra } : {}),
   }
 }
 
@@ -234,7 +245,7 @@ export function parseRecord(text: string, kind: 'project' | 'search' = 'search')
   if (!isObject(value)) throw new ProjectError(`${RECORD_FILE} is not a search record.`)
   if (typeof value.schema !== 'number') throw new ProjectError(`${RECORD_FILE} has no schema: it is not a ProSE search record.`)
   if (value.schema > SCHEMA_VERSION) throw new ProjectVersionError(value.schema, kind)
-  if (value.schema !== SCHEMA_VERSION) throw new ProjectError(`${RECORD_FILE} has the unknown schema ${value.schema}.`)
+  if (!Number.isInteger(value.schema) || value.schema < OLDEST_SCHEMA) throw new ProjectError(`${RECORD_FILE} has the unknown schema ${value.schema}.`)
   const bad = (what: string) => new ProjectError(`${RECORD_FILE} is incomplete: ${what}.`)
   const text_ = (k: string) => {
     if (typeof value[k] !== 'string') throw bad(`${k} is missing`)
@@ -253,6 +264,10 @@ export function parseRecord(text: string, kind: 'project' | 'search' = 'search')
   if (!isObject(settings) || !isObject(settings.parameters) || !Array.isArray(settings.fixedMods)) throw bad('settings is missing')
   const sdrf = value.sdrf
   if (sdrf !== undefined && (!isObject(sdrf) || typeof sdrf.name !== 'string' || typeof sdrf.text !== 'string')) throw bad('sdrf is broken')
+  const accepted = value.accepted
+  if (accepted !== undefined && !(Array.isArray(accepted) && accepted.every((a) => isObject(a) && typeof a.id === 'string' && Array.isArray(a.files)))) {
+    throw bad('accepted is broken')
+  }
   return value as unknown as SearchRecord
 }
 
@@ -265,6 +280,8 @@ export function resultFromRecord(record: SearchRecord, outcome: OpenResult['outc
     design: record.design,
     ...(record.sdrf ? { sdrf: record.sdrf } : {}),
     ...(record.instruments ? { instruments: record.instruments } : {}),
+    ...(record.accepted ? { accepted: record.accepted } : {}),
+    ...(record.spectra ? { spectra: record.spectra } : {}),
     psmFdr: record.psmFdr,
     proteinFdr: record.proteinFdr,
     settings: {

@@ -9,7 +9,7 @@
   import { formatPercent, formatQ } from '$lib/format/fdr'
   import { parseSdrfTable, sdrfFilterOptions } from '$lib/design/sdrf-table'
   import { formatCount, parseAccession } from '$lib/results/display'
-  import { psmValue, RANGE_KEYS, targetDecoyOf, type RangeKey } from '$lib/results/filters'
+  import { hiddenContaminants, psmValue, RANGE_KEYS, targetDecoyOf, type RangeKey } from '$lib/results/filters'
   import { psmFdrOff } from '$lib/results/overview'
   import type { LevelState, ResultsView } from '$lib/results/view.svelte'
   import { cn } from '$lib/utils'
@@ -34,6 +34,9 @@
   const name = $derived(names[level.level])
   const cutoff = $derived(level.level === 'proteins' ? view.result.proteinFdr : view.result.psmFdr)
   const qId = $derived(`q-filter-${level.level}`)
+  // how many rows the contaminant filter hides (guidance G5: hidden by default, but never silently)
+  const hidden = $derived(hiddenContaminants(view.model, level.level, level.filters))
+  const hiddenNoun = $derived({ proteins: ['protein', 'proteins'], peptides: ['peptide', 'peptides'], psms: ['PSM', 'PSMs'] }[level.level][hidden === 1 ? 0 : 1])
 
   /** The peptide (ProForma) that the PSM table is restricted to ("All n in the PSM table"). */
   const peptide = $derived.by(() => {
@@ -255,7 +258,7 @@
   {/each}
   {#if level.filters.hideContaminants}
     <button type="button" class={chip} onclick={() => (level.filters.hideContaminants = false)}>
-      Contaminants hidden<XIcon class="size-3" aria-hidden="true" /><span class="sr-only">(show them)</span>
+      {hidden > 0 ? `${hidden.toLocaleString('en-US')} contaminant ${hiddenNoun} hidden` : 'Contaminants hidden'}<XIcon class="size-3" aria-hidden="true" /><span class="sr-only">(show them)</span>
     </button>
   {/if}
   {#if level.filters.showDecoys}

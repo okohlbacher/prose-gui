@@ -86,7 +86,10 @@ ProSE's optional columns `search_status` (`EXECUTION_OK`, `INPUT_FILE_EMPTY`, `U
 `decoy_psm_count`, `psm_rows` (its rows in `quantms.psm.parquet`), `rescoring_applied` (null: the search did not
 rescore), `rescoring_skipped_reason`, `rescoring_warning`, `prediction_nce`, `precursor_error_median_ppm`,
 `precursor_error_mad_ppm`, `precursor_tolerance_recommended_ppm`, `fragment_error_median_ppm`,
-`fragment_error_mad_ppm`, `fragment_tolerance_recommended_ppm` (null: no estimate), `search_seconds`.
+`fragment_error_mad_ppm`, `fragment_tolerance_recommended_ppm` (null: no estimate), `search_seconds`; of a later ProSE
+`psm_fdr_applied`, and `profile_spectra_count` and `charge_out_of_range_spectra_count` (int64: the input's MS2 spectra
+in profile mode, which ProSE searches as they are, and those it does not search because their recorded precursor charge
+is outside the charge range), read when the view has them.
 
 The provenance view's `parameters` (the tool's documentation): of `peptide_search` `database_file`, `enzyme`,
 `enzyme_specificity`, `missed_cleavages`, `peptide_min_length`, `peptide_max_length`,
@@ -234,6 +237,7 @@ ion for ion.
 | `files[].peptdeepNce` | run `prediction_nce` (the NCE of the file's predictions) | **added in #10676** (run view) |
 | `files[].precursorError`, `fragmentError` | run `precursor_error_median_ppm`, `precursor_error_mad_ppm`, `precursor_tolerance_recommended_ppm` / `fragment_…` (null: no estimate), doubles | **added in #10676** (run view) |
 | `files[].secondsSearch` | run `search_seconds` | **added in #10676** (run view) |
+| `files[].profileSpectra`, `chargeOutOfRange` (the app's) | run `profile_spectra_count`, `charge_out_of_range_spectra_count` with the provenance's `min_charge`, `max_charge`; absent when the run view has no such column (a ProSE before them) or a null. With `ms2Spectra` 0 they give the notes on the inputs' spectra above the results and in Overview's file list (`src/lib/results/overview.ts`, `inputWarnings`) | optional run-view columns of a later ProSE |
 | `search.databaseFile`, `enzyme`, `openSearch`, `chunked`, `decoyMode`, `indexedPeptides`, `indexedFragments`, `secondsIndexBuild`, `secondsTotal` | provenance `peptide_search` `database_file`, `enzyme`, `open_search`, `chunked`, `decoy_mode`, `indexed_peptides`, `indexed_fragments`, `seconds_index_build`, `seconds_total` (the time until the QPX views are written, the end of the run) | **added in #10676** (provenance) |
 | `search.calibration` | provenance `calibration` | **added in #10676** (provenance) |
 | `search.targetProteins`, `decoyProteins` | provenance `db_target_proteins`, `db_decoy_proteins` | **added in #10676** (provenance) |

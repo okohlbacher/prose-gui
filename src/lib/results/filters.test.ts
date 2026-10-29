@@ -555,3 +555,16 @@ describe('PSM charge and range filters, and the decoy/target line', () => {
     expect(td.targets + td.decoys).toBe(all.length)
   })
 })
+
+it('the contaminants hidden by default are counted on the chip', async () => {
+  const { sampleDesign, sampleTables } = await import('./fixtures')
+  const { buildModel } = await import('./model')
+  const { hiddenContaminants, initialFilters } = await import('./filters')
+  const m = buildModel(sampleTables(), sampleDesign(), { showTechReplicates: false, psmFdr: 1, proteinFdr: 1 })
+  const f = initialFilters(m, 'proteins')
+  expect(f.hideContaminants).toBe(true)
+  // one contaminant protein (CON__ trypsin) and its one peptide
+  expect(hiddenContaminants(m, 'proteins', f)).toBe(1)
+  expect(hiddenContaminants(m, 'peptides', initialFilters(m, 'peptides'))).toBe(1)
+  expect(hiddenContaminants(m, 'proteins', { ...f, hideContaminants: false })).toBe(0)
+})

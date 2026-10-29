@@ -6,16 +6,34 @@ import { formatPercent } from '$lib/format/fdr'
 import { baseName } from './model'
 import { psmFdrSkipped } from './overview'
 import type { ProSEMultiSummary } from './types'
+import type { AcceptedCheck } from '../search/checks'
 
 export type MethodsInput = {
   summary: ProSEMultiSummary
   settings: { database: string; contaminants: boolean; fixedMods: string[]; parameters: Record<string, unknown>; rescore: boolean; peptdeep: boolean }
   version: string
+  /** The red flags New search was overridden for (`OpenResult.accepted`). */
+  accepted?: AcceptedCheck[]
+}
+
+/**
+ * The red flags the methods text names when the search confirmed them (ProSE reports the same about the files):
+ * a flag the search did not confirm was a false alarm and is left out (guidance G10).
+ */
+const CONFIRMED: Record<string, { held: (s: ProSEMultiSummary) => boolean; text: string }> = {
+  'profile-ms2': {
+    held: (s) => s.files.some((f) => (f.profileSpectra ?? 0) > 0),
+    text: 'Some MS2 spectra were recorded in profile mode and were searched as they are, without centroiding.',
+  },
+  'no-ms2': {
+    held: (s) => s.files.some((f) => f.ms2Spectra === 0),
+    text: 'Some input files had no MS2 spectra.',
+  },
 }
 
 const count = (n: number) => n.toLocaleString('en')
 
-export function methodsText({ summary: s, settings, version }: MethodsInput): string {
+export function methodsText({ summary: s, settings, version, accepted = [] }: MethodsInput): string {
   const files = s.files.length
   const db = baseName(settings.database)
   const parts: string[] = []
@@ -52,5 +70,6 @@ export function methodsText({ summary: s, settings, version }: MethodsInput): st
       ? `Protein groups were filtered at ${formatPercent(s.proteinFdr)} protein-level FDR.`
       : 'No protein-level FDR was applied; the protein groups reported are not FDR-controlled.',
   )
+  for (const id of new Set(accepted.map((a) => a.id))) if (CONFIRMED[id]?.held(s)) parts.push(CONFIRMED[id].text)
   return parts.join(' ')
 }

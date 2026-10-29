@@ -165,6 +165,11 @@ impl DecoyStatistics {
         }
     }
 
+    /// The entries whose accession has a decoy affix (as prefix or as suffix, whichever is more).
+    pub fn decoys(&self) -> usize {
+        self.prefixes.max(self.suffixes)
+    }
+
     /// The marker of the database's decoys as ProSE detects it; None: the database has no decoys.
     pub fn marker(&self, decoy_prefix: &str) -> Option<Marker> {
         let proteins = self.proteins as f64;

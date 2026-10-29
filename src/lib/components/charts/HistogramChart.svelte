@@ -30,6 +30,7 @@
     yLabel = 'PSMs',
     zeroLine = false,
     marker = null,
+    ranges = [],
     unit = '',
     height = 230,
   }: {
@@ -44,6 +45,11 @@
     zeroLine?: boolean
     /** A vertical marker with its label, e.g. the median. */
     marker?: { x: number; label: string } | null
+    /**
+     * Windows drawn as brackets over the plot (e.g. the searched and the recommended mass tolerance): `searched`
+     * solid, `recommended` dashed; a side beyond the axis is drawn at its edge with an arrow.
+     */
+    ranges?: { from: number; to: number; label: string; kind: 'searched' | 'recommended' }[]
     /** Appended to the range in the tooltip ("ppm"). */
     unit?: string
     height?: number
@@ -139,6 +145,15 @@
     hover ? [range(hover.bin), ...series.map((s) => `${s.name} · ${formatCount(s.counts[hover!.bin] ?? 0)} PSMs`)] : [],
   )
 
+  // the windows: their sides within the axis (a side beyond it sits at the edge, marked), their labels above
+  const rangeMarks = $derived(
+    ranges.map((r, k) => {
+      const lo = Math.max(r.from, edges[0])
+      const hi = Math.min(r.to, edges[nBins])
+      return { ...r, x1: x(lo), x2: x(hi), clipLo: r.from < edges[0], clipHi: r.to > edges[nBins], y: M.top - 4 + k * 9 }
+    }),
+  )
+
   // The marker's label sits beside the line (to its right, else to its left); a long label that fits on
   // neither side stands at the top of the plot, within its edges
   const markerAt = $derived(marker ? x(marker.x) : 0)
@@ -182,6 +197,18 @@
     {#if zeroLine && edges[0] < 0 && edges[nBins] > 0}
       <line x1={px(x(0))} x2={px(x(0))} y1={M.top} y2={plotBottom} stroke="var(--plot-zero)" stroke-width="1" data-testid="zero-line" />
     {/if}
+
+    {#each rangeMarks as r (r.kind)}
+      {@const dash = r.kind === 'recommended' ? '4 3' : undefined}
+      {@const color = r.kind === 'recommended' ? 'var(--plot-muted)' : ink}
+      <g data-testid="range-{r.kind}">
+        <line x1={px(r.x1)} x2={px(r.x1)} y1={r.y} y2={plotBottom} stroke={color} stroke-width="1" stroke-dasharray={dash} />
+        <line x1={px(r.x2)} x2={px(r.x2)} y1={r.y} y2={plotBottom} stroke={color} stroke-width="1" stroke-dasharray={dash} />
+        <line x1={px(r.x1)} x2={px(r.x2)} y1={r.y} y2={r.y} stroke={color} stroke-width="1" stroke-dasharray={dash} />
+        <text x={px((r.x1 + r.x2) / 2)} y={r.y - 2} text-anchor="middle" font-size="9.5" fill={color}
+          >{r.clipLo ? '← ' : ''}{r.label}{r.clipHi ? ' →' : ''}</text>
+      </g>
+    {/each}
 
     {#each bars as bar, i (i)}
       <path d={bar.path} fill={bar.series.color} data-testid={bar.series.testid} data-bin={bar.bin} />

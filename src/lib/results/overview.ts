@@ -2,6 +2,7 @@
 
 import { formatPercent, formatQ } from '../format/fdr'
 import type { ProSEFileStatus, ProSEFileSummary, ProSEMultiSummary } from '../results/types'
+import { formatCount } from './display'
 import { baseName, type ResultModel } from './model'
 
 /** An engine's long text, with the short plain line the table shows (the long one goes in its tooltip). */
@@ -81,6 +82,8 @@ export type FileRow = {
   status: { ok: boolean; label: string }
   /** The PSM FDR was requested but not applied to the file's PSMs (no decoy PSM): they have no q-value. */
   psmFdrSkipped: boolean
+  /** What ProSE reports about the file's spectra that limits its search (`inputWarnings`). */
+  inputWarnings: InputWarning[]
 }
 
 /** One row per searched file, in the order of the search (the summary lists its files in that order). */
@@ -100,8 +103,66 @@ export function fileRows(m: ResultModel, summary: ProSEMultiSummary): FileRow[] 
       seconds: f?.secondsSearch ?? null,
       status: f ? fileStatus(f.status) : { ok: false, label: 'No report' },
       psmFdrSkipped: f?.psmFdrApplied === false,
+      inputWarnings: f ? inputWarnings(f) : [],
     }
   })
+}
+
+/** A spectra problem of an input that limits its search: a short mark for the file list and the full sentence. */
+export type InputWarning = { kind: 'no-ms2' | 'profile' | 'charge'; short: string; text: string }
+
+/**
+ * What ProSE reports about a file's spectra that limits its search, each only when it applies: no MS2 spectra
+ * (e.g. an MS1-only file: nothing is searched), MS2 spectra in profile mode (ProSE expects centroided spectra and
+ * searches them as they are), MS2 spectra not searched because their recorded precursor charge is outside the
+ * charge range. The last two come from run-view columns of a later ProSE; a summary without them has none.
+ */
+export function inputWarnings(f: ProSEFileSummary): InputWarning[] {
+  const name = baseName(f.path)
+  const m = f.ms2Spectra
+  /** "all 139 MS2 spectra are", "3 of 139 MS2 spectra are", "1 of 139 MS2 spectra is" */
+  const some = (n: number, are: string, is: string) =>
+    n === m ? (m === 1 ? `its MS2 spectrum ${is}` : `all ${formatCount(m)} MS2 spectra ${are}`) : `${formatCount(n)} of ${formatCount(m)} MS2 spectra ${n === 1 ? is : are}`
+  const out: InputWarning[] = []
+  if (m === 0) {
+    out.push({ kind: 'no-ms2', short: 'no MS2 spectra', text: `${name}: no MS2 spectra (e.g. only MS1 data), so nothing in it was searched.` })
+  }
+  const profile = f.profileSpectra ?? 0
+  if (profile > 0 && m > 0) {
+    const one = profile === 1
+    out.push({
+      kind: 'profile',
+      short: `${formatCount(profile)} profile spectra`,
+      text:
+        `${name}: ${some(profile, 'are', 'is')} in profile mode. ProSE expects centroided spectra and searched ` +
+        `${one ? 'it as it is' : 'them as they are'}, which identifies few peptides, if any: centroid (peak-pick) the spectra first.`,
+    })
+  }
+  const charge = f.chargeOutOfRange
+  if (charge && charge.spectra > 0 && m > 0) {
+    const one = charge.spectra === 1
+    const range = Number.isFinite(charge.min) && Number.isFinite(charge.max) ? `the charge range ${charge.min}–${charge.max}` : "the search's charge range"
+    out.push({
+      kind: 'charge',
+      short: `${formatCount(charge.spectra)} not searched (charge)`,
+      text: `${name}: ${some(charge.spectra, 'were', 'was')} not searched: ${one ? 'its' : 'their'} recorded precursor charge is outside ${range}.`,
+    })
+  }
+  return out
+}
+
+/** At most this many input warnings are listed above the results; the file list of Overview marks every file. */
+export const LISTED_INPUT_WARNINGS = 3
+
+/**
+ * The notices above the results about the inputs' spectra (`inputWarnings` of every file, in file order); beyond
+ * `LISTED_INPUT_WARNINGS`, one line says how many more there are. Empty: nothing to say.
+ */
+export function inputNotices(summary: ProSEMultiSummary): string[] {
+  const all = summary.files.flatMap((f) => inputWarnings(f).map((w) => w.text))
+  if (all.length <= LISTED_INPUT_WARNINGS) return all
+  const more = all.length - LISTED_INPUT_WARNINGS + 1
+  return [...all.slice(0, LISTED_INPUT_WARNINGS - 1), `${more} more notes on the files' spectra: see the file list in Overview.`]
 }
 
 /** The files whose PSM FDR was requested but not applied (ProSE skips it for a file without decoy PSMs). */

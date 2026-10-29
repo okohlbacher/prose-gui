@@ -7,6 +7,8 @@ import {
   fileRows,
   fileStatus,
   formatSeconds,
+  inputNotices,
+  inputWarnings,
   percolatorStatus,
   psmFdrAppliedToNone,
   psmFdrFact,
@@ -164,5 +166,75 @@ describe('the PSM FDR that ProSE skipped', () => {
     // a file without any PSM does not count for "applied to none"
     expect(psmFdrAppliedToNone(summary([file('/a.mzML', skipped), file('/b.mzML', { psmFdrApplied: false, targetPSMs: 0, decoyPSMs: 0 })]))).toBe(true)
     expect(psmFdrAppliedToNone(summary([file('/a.mzML', { psmFdrApplied: false, targetPSMs: 0, decoyPSMs: 0 })]))).toBe(false)
+  })
+})
+
+describe("ProSE's notes on the inputs' spectra", () => {
+  const texts = (f: ProSEFileSummary) => inputWarnings(f).map((w) => w.text)
+
+  it('say nothing when nothing applies, or when the summary has no such counts (a ProSE before them)', () => {
+    expect(inputWarnings(file('/input/0/a.mzML'))).toEqual([])
+    expect(inputWarnings(file('/input/0/a.mzML', { profileSpectra: 0, chargeOutOfRange: { spectra: 0, min: 2, max: 5 } }))).toEqual([])
+    expect(inputNotices(summary([file('/a.mzML'), file('/b.mzML')]))).toEqual([])
+  })
+
+  it('a file without MS2 spectra: nothing in it was searched', () => {
+    const f = file('/input/0/ms1only.mzML', { ms2Spectra: 0, targetPSMs: 0, decoyPSMs: 0, profileSpectra: 0, chargeOutOfRange: { spectra: 0, min: 2, max: 5 } })
+    expect(inputWarnings(f)).toEqual([
+      { kind: 'no-ms2', short: 'no MS2 spectra', text: 'ms1only.mzML: no MS2 spectra (e.g. only MS1 data), so nothing in it was searched.' },
+    ])
+    // (also from a ProSE without the new columns: the MS2 count is in every run view)
+    expect(texts(file('/ms1only.mzML', { ms2Spectra: 0 }))).toHaveLength(1)
+  })
+
+  it('profile spectra: searched as they are, which identifies few peptides', () => {
+    expect(inputWarnings(file('/input/0/raw.mzML', { ms2Spectra: 1500, profileSpectra: 1500 }))).toEqual([
+      {
+        kind: 'profile',
+        short: '1,500 profile spectra',
+        text:
+          'raw.mzML: all 1,500 MS2 spectra are in profile mode. ProSE expects centroided spectra and searched them as they are, ' +
+          'which identifies few peptides, if any: centroid (peak-pick) the spectra first.',
+      },
+    ])
+    expect(texts(file('/raw.mzML', { ms2Spectra: 1000, profileSpectra: 1 }))).toEqual([
+      'raw.mzML: 1 of 1,000 MS2 spectra is in profile mode. ProSE expects centroided spectra and searched it as it is, ' +
+        'which identifies few peptides, if any: centroid (peak-pick) the spectra first.',
+    ])
+  })
+
+  it('charges outside the range: those spectra were not searched', () => {
+    expect(inputWarnings(file('/input/0/a.mzML', { ms2Spectra: 1000, chargeOutOfRange: { spectra: 12, min: 2, max: 5 } }))).toEqual([
+      {
+        kind: 'charge',
+        short: '12 not searched (charge)',
+        text: 'a.mzML: 12 of 1,000 MS2 spectra were not searched: their recorded precursor charge is outside the charge range 2–5.',
+      },
+    ])
+    expect(texts(file('/a.mzML', { ms2Spectra: 1000, chargeOutOfRange: { spectra: 1, min: 2, max: 5 } }))).toEqual([
+      'a.mzML: 1 of 1,000 MS2 spectra was not searched: its recorded precursor charge is outside the charge range 2–5.',
+    ])
+    expect(texts(file('/a.mzML', { ms2Spectra: 7, chargeOutOfRange: { spectra: 7, min: 3, max: 3 } }))).toEqual([
+      'a.mzML: all 7 MS2 spectra were not searched: their recorded precursor charge is outside the charge range 3–3.',
+    ])
+    // a provenance without the range
+    expect(texts(file('/a.mzML', { chargeOutOfRange: { spectra: 2, min: NaN, max: NaN } }))[0]).toMatch(/outside the search's charge range\.$/)
+  })
+
+  it('are listed above the results (at most three lines) and marked in the file list', () => {
+    const profile = (path: string) => file(path, { profileSpectra: 10 })
+    const two = summary([file('/a.mzML', { ms2Spectra: 0 }), profile('/b.mzML')])
+    expect(inputNotices(two)).toEqual([
+      'a.mzML: no MS2 spectra (e.g. only MS1 data), so nothing in it was searched.',
+      expect.stringMatching(/^b\.mzML: 10 of 1,000 MS2 spectra are in profile mode\./),
+    ])
+    const five = summary(['/a.mzML', '/b.mzML', '/c.mzML', '/d.mzML', '/e.mzML'].map(profile))
+    const listed = inputNotices(five)
+    expect(listed).toHaveLength(3)
+    expect(listed.slice(0, 2).map((t) => t.split(':')[0])).toEqual(['a.mzML', 'b.mzML'])
+    expect(listed[2]).toBe("3 more notes on the files' spectra: see the file list in Overview.")
+    const m = buildModel(sampleTables(), sampleDesign(), { showTechReplicates: false, psmFdr: 0.01, proteinFdr: 0.01 })
+    const rows = fileRows(m, summary([file('/input/0/ctrl_a.mzML'), file('/input/1/egf_a.mzML', { profileSpectra: 3, chargeOutOfRange: { spectra: 2, min: 2, max: 5 } })]))
+    expect(rows.map((r) => r.inputWarnings.map((w) => w.short))).toEqual([[], ['3 profile spectra', '2 not searched (charge)']])
   })
 })

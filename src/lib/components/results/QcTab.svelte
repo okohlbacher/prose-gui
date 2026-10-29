@@ -15,6 +15,8 @@
   import { openHelp } from '$lib/help-link.svelte'
   import { idsByQ, precursorErrors, psmsPerFile, scoreDistribution } from '$lib/results/qc'
   import QCurve from '$lib/components/charts/QCurve.svelte'
+  import GuidanceNotices from './GuidanceNotices.svelte'
+  import { precursorRanges, precursorSample, searchedWindows, toleranceFindings } from '$lib/results/tolerance'
   import type { ResultsView } from '$lib/results/view.svelte'
 
   let { view }: { view: ResultsView } = $props()
@@ -28,7 +30,16 @@
   const decoyColor = COLORS.y
 
   const score = $derived(scoreDistribution(m))
-  const errors = $derived(precursorErrors(m, openSearch))
+  // the searched and recommended precursor windows over the errors, and what they say (guidance G3)
+  const ranges = $derived(precursorRanges(view.result.outcome.summary, view.result.settings.parameters))
+  const errors = $derived(precursorErrors(m, openSearch, Math.max(0, ...ranges.flatMap((r) => [-r.from, r.to]))))
+  const findings = $derived(
+    toleranceFindings(
+      view.result.outcome.summary,
+      view.result.settings.parameters,
+      precursorSample(m, searchedWindows(view.result.settings.parameters).precursor, openSearch),
+    ).filter((f) => f.target === 'precursor'),
+  )
   const files = $derived(psmsPerFile(m))
   const curve = $derived(idsByQ(m))
 
@@ -93,6 +104,9 @@
   {/if}
 
   <!-- precursor error -->
+  {#if findings.length > 0}
+    <div class="xl:col-span-2"><GuidanceNotices result={view.result} items={findings} testid="tolerance-findings" /></div>
+  {/if}
   {#if errors}
     <ChartCard
       testid="qc-precursor"
@@ -117,6 +131,7 @@
         unit="ppm"
         zeroLine
         marker={{ x: errors.median, label: `median precursor error (unmodified) ${signedNumber(errors.median, 1)} ppm` }}
+        {ranges}
         series={[{ name: 'Target PSMs', color: targetColor, counts: errors.counts, testid: 'error-bar' }]} />
     </ChartCard>
   {:else}

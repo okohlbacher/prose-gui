@@ -5,7 +5,7 @@
 
 import { resolveDesign, type DesignInput } from '../design/model'
 import type { DesignFields, DesignUpdate } from '../design/paste'
-import { errorText, exampleFiles, inspectFiles, type FileFacts, type InputFile } from '../desktop'
+import { errorText, exampleFiles, inspectFiles, inspectSpectra, type FileFacts, type InputFile, type SpectraFacts, type FastaSummary } from '../desktop'
 import { changedParameters, copyValue, copyValues, defaultsOf, sameValue, type ParamEntry } from '../settings/parameters'
 import { BUILTIN_PRESETS, DEFAULT_PRESET_ID, deletePreset, loadPresets, renamePreset, savePreset, type Preset } from '../settings/presets'
 import { PROSE_PARAMETERS } from '../settings/prose'
@@ -22,6 +22,9 @@ export type FileRow = DesignFields & {
   problem: string | null
   /** The instrument model of an mzML's header, as SDRF writes it (NT=..;AC=..). */
   instrument?: string
+  /** What its first MS2 spectra say by their flags (`inspectSpectra`, read after the row joins); null: not an
+   * mzML or not readable; undefined: not read yet. */
+  spectraFacts?: SpectraFacts | null
 }
 
 /**
@@ -36,6 +39,8 @@ export type DatabaseChoice = {
   error: string | null
   problem: string | null
   warnings: string[]
+  /** Its entries in numbers (organisms, decoys, ...), once counted. */
+  summary?: FastaSummary
 }
 
 /** A cell of the design table whose text is not valid (`DesignCell`): the search cannot start until it is corrected. */
@@ -158,6 +163,21 @@ class SearchForm {
   /** The values of `parameters` are the form's. */
   #holds(parameters: Record<string, unknown>): boolean {
     return Object.entries(parameters).every(([name, value]) => sameValue(this.values[name], value))
+  }
+
+  /**
+   * The values a guidance re-run changed (tolerance feedback, the diagnosis card: `rerunWith`), marked in the
+   * settings until the form is cleared or another search is opened: from which search, which parameters, as lines.
+   */
+  guided = $state<{ from: string; names: string[]; lines: string[] } | null>(null)
+
+  /** Marks `changes` of the search `from` (whose parameters were `before`) as the guidance's (`guided`). */
+  markGuided(from: string, before: Record<string, unknown>, changes: Record<string, unknown>) {
+    const old = { ...this.defaults, ...before }
+    const show = (v: unknown) => (Array.isArray(v) ? v.join(', ') : String(v))
+    const names = Object.keys(changes).filter((n) => !sameValue(old[n], changes[n]))
+    this.guided = { from, names, lines: names.map((n) => `${n}: ${show(old[n])} → ${show(changes[n])}`) }
+    this.showSettings = true
   }
 
   /** Threads of the search (Advanced); null: all cores. */
@@ -330,6 +350,29 @@ class SearchForm {
     const file: InputFile = { path: facts.path, name: facts.name, size: facts.size }
     const instrument = facts.instrument ? `NT=${facts.instrument.name};AC=${facts.instrument.accession}` : undefined
     this.files.push({ id, file, spectra: facts.spectra, problem: facts.problem ?? null, instrument, ...fields })
+    this.#queueInspect(facts.path)
+  }
+
+  /** The paths whose spectra are to be inspected next (one call for the rows added together). */
+  #inspectQueue: string[] = []
+
+  /** Inspects the spectra of `path` in the background (`inspectSpectra`, cached by the shim): never blocks adding. */
+  #queueInspect(path: string) {
+    this.#inspectQueue.push(path)
+    if (this.#inspectQueue.length === 1) queueMicrotask(() => void this.#flushInspect())
+  }
+
+  async #flushInspect() {
+    const paths = this.#inspectQueue.splice(0)
+    let facts: (SpectraFacts | null)[]
+    try {
+      facts = await inspectSpectra(paths)
+    } catch {
+      facts = paths.map(() => null) // (no shim, or it failed: the status stays unknown)
+    }
+    paths.forEach((p, k) => {
+      for (const r of this.files) if (r.file.path === p) r.spectraFacts = facts[k] ?? null
+    })
   }
 
   removeFile(id: string) {
@@ -368,6 +411,7 @@ class SearchForm {
       replacedWith: { ...left.replacedWith, ...earlier?.replacedWith },
     }
     if (removed.files.length > 0 || removed.database) this.removed = removed
+    this.guided = null
     this.files = []
     this.notices = []
     if (database) this.database = null
@@ -465,6 +509,7 @@ class SearchForm {
         error: null,
         problem: facts.problem ?? null,
         warnings: facts.warnings ?? [],
+        ...(facts.fasta ? { summary: facts.fasta } : {}),
       }
   }
 
@@ -509,6 +554,7 @@ class SearchForm {
   }): Promise<boolean> {
     const generation = ++this.#restoring
     this.#leaveExample()
+    this.guided = null
     this.files = []
     this.notices = []
     this.removed = null

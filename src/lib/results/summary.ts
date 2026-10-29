@@ -34,6 +34,13 @@ export interface RunRow {
    * has no such column (ProSE before it), see `toSummary`.
    */
   psm_fdr_applied?: boolean | null
+  /**
+   * MS2 spectra of the run recorded in profile mode (ProSE searches them as they are), and MS2 spectra it did not
+   * search because their recorded precursor charge is outside the charge range. Undefined: the run view has no such
+   * column (ProSE before it); null: a null value.
+   */
+  profile_spectra_count?: number | null
+  charge_out_of_range_spectra_count?: number | null
 }
 
 /** The parameters of a step of the provenance view, by key. */
@@ -69,10 +76,16 @@ const RUN_COLUMNS: (keyof RunRow)[] = [
 ]
 
 /** The columns of the run view that a later ProSE added: read when it has them. */
-const OPTIONAL_RUN_COLUMNS: (keyof RunRow)[] = ['psm_fdr_applied']
+const OPTIONAL_RUN_COLUMNS: (keyof RunRow)[] = ['psm_fdr_applied', 'profile_spectra_count', 'charge_out_of_range_spectra_count']
 
 /** A number of a view (int64 as bigint); `fallback` if it is null. */
 const asNumber = (v: unknown, fallback: number): number => (typeof v === 'bigint' ? Number(v) : typeof v === 'number' ? v : fallback)
+
+/** A count of an optional column: null if it is null or not a count. */
+const optionalCount = (v: unknown): number | null => {
+  const n = asNumber(v, NaN)
+  return Number.isInteger(n) && n >= 0 ? n : null
+}
 
 /** The rows of the run view (bytes of quantms.run.parquet). Throws if a column is missing. */
 export async function readRuns(bytes: Uint8Array): Promise<RunRow[]> {
@@ -103,6 +116,10 @@ export async function readRuns(bytes: Uint8Array): Promise<RunRow[]> {
       r.fragment_tolerance_recommended_ppm === null ? null : asNumber(r.fragment_tolerance_recommended_ppm, NaN),
     search_seconds: asNumber(r.search_seconds, 0),
     ...(optional.includes('psm_fdr_applied') ? { psm_fdr_applied: typeof r.psm_fdr_applied === 'boolean' ? r.psm_fdr_applied : null } : {}),
+    ...(optional.includes('profile_spectra_count') ? { profile_spectra_count: optionalCount(r.profile_spectra_count) } : {}),
+    ...(optional.includes('charge_out_of_range_spectra_count')
+      ? { charge_out_of_range_spectra_count: optionalCount(r.charge_out_of_range_spectra_count) }
+      : {}),
   }))
 }
 
@@ -193,6 +210,17 @@ export function toSummary(
     fragmentError: massError(r.fragment_error_median_ppm, r.fragment_error_mad_ppm, r.fragment_tolerance_recommended_ppm),
     secondsSearch: r.search_seconds,
     psmFdrApplied: psmFdrAppliedOf(r, meta, hasQValues?.[i]),
+    // (only what the run view reports: absent for a ProSE before these columns)
+    ...(typeof r.profile_spectra_count === 'number' ? { profileSpectra: r.profile_spectra_count } : {}),
+    ...(typeof r.charge_out_of_range_spectra_count === 'number'
+      ? {
+          chargeOutOfRange: {
+            spectra: r.charge_out_of_range_spectra_count,
+            min: parameterNumber(s, 'min_charge', NaN),
+            max: parameterNumber(s, 'max_charge', NaN),
+          },
+        }
+      : {}),
   }))
   const openSearch = parameterFlag(s, 'open_search')
   return {
@@ -223,6 +251,34 @@ export function toSummary(
 /** The target PSMs of a search by its run view (the sum of identified_spectra_count); 0 if it says none. */
 export function targetPsmsOf(runs: RunRow[]): number {
   return runs.reduce((n, r) => n + (Number.isFinite(r.identified_spectra_count) ? r.identified_spectra_count : 0), 0)
+}
+
+/** ProSE's parameters as its provenance view records them (peptide_search), by the names of the app's settings. */
+export const QPX_PARAMETERS: [string, string, 'number' | 'text' | 'list'][] = [
+  ['enzyme', 'enzyme', 'text'],
+  ['enzyme_specificity', 'peptide:enzyme_specificity', 'text'],
+  ['missed_cleavages', 'peptide:missed_cleavages', 'number'],
+  ['peptide_min_length', 'peptide:min_size', 'number'],
+  ['peptide_max_length', 'peptide:max_size', 'number'],
+  ['precursor_mass_tolerance_lower', 'precursor:mass_tolerance_lower', 'number'],
+  ['precursor_mass_tolerance_upper', 'precursor:mass_tolerance_upper', 'number'],
+  ['precursor_mass_tolerance_unit', 'precursor:mass_tolerance_unit', 'text'],
+  ['fragment_mass_tolerance', 'fragment:mass_tolerance', 'number'],
+  ['fragment_mass_tolerance_unit', 'fragment:mass_tolerance_unit', 'text'],
+  ['min_charge', 'precursor:min_charge', 'number'],
+  ['max_charge', 'precursor:max_charge', 'number'],
+  ['fixed_modifications', 'modifications:fixed', 'list'],
+  ['variable_modifications', 'modifications:variable', 'list'],
+]
+
+export function qpxParameters(search: Map<string, string>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, name, kind] of QPX_PARAMETERS) {
+    const v = search.get(key)
+    if (v === undefined || v === '') continue
+    out[name] = kind === 'number' ? Number(v) : kind === 'list' ? v.split(/,\s*/).filter(Boolean) : v
+  }
+  return out
 }
 
 //------------------------------------------------------------------------------

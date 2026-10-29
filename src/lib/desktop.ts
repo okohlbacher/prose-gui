@@ -21,7 +21,31 @@ import { errorText } from './format/error'
 
 /** The ProSE tool the app runs: its version, where it is, and whether it has ONNX Runtime (PeptDeep). */
 /** `sdrf`: the tool has -sdrf (the QPX run and sample views from an SDRF). */
-export type ToolInfo = { version: string; path: string; onnx: boolean; sdrf?: boolean }
+/** `inspect`: the tool has -inspect_out (ProSE's own spectrum inspector; the app reads the mzML flags itself until then). */
+export type ToolInfo = { version: string; path: string; onnx: boolean; sdrf?: boolean; inspect?: boolean }
+
+/**
+ * What the first MS2 spectra of an mzML say, by their flags (src-tauri/src/spectra.rs; guidance G1): not
+ * verified against the peaks. `source` 'prose' is for ProSE's own inspector (-inspect_out) once the tool has it.
+ */
+export type SpectraFacts = {
+  source?: 'flags' | 'prose'
+  peakPicking: boolean
+  analyzers: string[]
+  /** Spectra read per MS level ("1", "2", ...). */
+  levels: Record<string, number>
+  /** The whole spectrum list was read (the counts are the file's). */
+  complete: boolean
+  ms2Centroid: number
+  ms2Profile: number
+  ms2WithCharge: number
+  ms2WithPrecursor: number
+  activation: Record<string, number>
+  isolationCentres: number
+  isolationWidth: number | null
+  ms2Analyzer: Record<string, number>
+  filter: string | null
+}
 
 /** A file the user chose, by path (never read by the page; the shim reads it where it is). */
 export type InputFile = { path: string; name: string; size: number }
@@ -44,6 +68,21 @@ export type FileFacts = InputFile & {
   warnings: string[]
   /** An mzML's instrument model from its header (PSI-MS). */
   instrument?: { name: string; accession: string } | null
+  /** A FASTA's entries in numbers (src-tauri/src/content.rs `FastaSummary`; guidance G6). */
+  fasta?: FastaSummary | null
+}
+
+/** A FASTA's entries in numbers: organisms (OS=), UniProt headers, isoforms, contaminants, decoys and their marker. */
+export type FastaSummary = {
+  /** [organism, entries], most entries first (at most 5). */
+  organisms: [string, number][]
+  withOrganism: number
+  organismCount: number
+  uniprot: number
+  isoforms: number
+  contaminants: number
+  decoys: number
+  decoyMarker: string | null
 }
 
 /** The search request of the shim (src-tauri/src/args.rs `SearchRequest`, camelCase). */
@@ -181,6 +220,11 @@ export function searchFiles(searchId: string): SearchFiles {
 /** Sizes and counts of files given by path (the open dialog, drag and drop, the example). */
 export function inspectFiles(paths: string[]): Promise<FileFacts[]> {
   return invoke<FileFacts[]>('inspect_files', { paths })
+}
+
+/** What the first MS2 spectra of each mzML say (null: not an mzML), off the add-files path. */
+export function inspectSpectra(paths: string[]): Promise<(SpectraFacts | null)[]> {
+  return invoke<(SpectraFacts | null)[]>('inspect_spectra', { paths })
 }
 
 /** The cores the search's threads may use (`navigator.hardwareConcurrency` is capped by the webview). */

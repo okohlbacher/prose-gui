@@ -117,7 +117,7 @@ fn history_lists_an_incomplete_folder_with_its_message() {
     fs::create_dir_all(dir.join("4-0")).unwrap();
     fs::write(
         dir.join("4-0/search.json"),
-        r#"{"schema":2,"id":"4-0","name":"future"}"#,
+        r#"{"schema":3,"id":"4-0","name":"future"}"#,
     )
     .unwrap();
     fs::create_dir_all(dir.join("5-0")).unwrap();
@@ -156,7 +156,7 @@ fn history_lists_an_incomplete_folder_with_its_message() {
     assert!(get("2-0").error.as_ref().unwrap().contains("search.json"));
     let newer = get("4-0").error.as_ref().unwrap();
     assert!(
-        newer.contains("newer version of ProSE") && newer.contains("schema 2"),
+        newer.contains("newer version of ProSE") && newer.contains("schema 3"),
         "{newer}"
     );
     // the good one first, the broken ones after
@@ -266,7 +266,7 @@ fn save_refuses_what_is_not_a_record() {
     let (_tmp, dir) = searches();
     fs::create_dir_all(dir.join("1-0")).unwrap();
     assert!(save_record(&dir, "1-0", "not json").is_err());
-    assert!(save_record(&dir, "1-0", r#"{"schema":2,"id":"1-0"}"#).is_err());
+    assert!(save_record(&dir, "1-0", r#"{"schema":3,"id":"1-0"}"#).is_err());
     assert!(
         save_record(&dir, "1-0", &record("other", "x")).is_err(),
         "the id is the folder's"
@@ -453,11 +453,15 @@ fn import_needs_a_record_of_this_schema() {
     assert!(import(&dir, &frame(&[("search.json", b"{")])).is_err());
     assert!(import(&dir, &frame(&[("search.json", b"{}")])).is_err());
     // a newer schema: refused, with a message
-    let err = import(&dir, &frame(&[("search.json", br#"{"schema":2}"#)])).unwrap_err();
+    let err = import(&dir, &frame(&[("search.json", br#"{"schema":3}"#)])).unwrap_err();
     assert!(
-        err.contains("newer version of ProSE") && err.contains("schema 2"),
+        err.contains("newer version of ProSE") && err.contains("schema 3"),
         "{err}"
     );
+    // schema 0 is no schema of the app's
+    assert!(import(&dir, &frame(&[("search.json", br#"{"schema":0}"#)]))
+        .unwrap_err()
+        .contains("unknown schema 0"));
     // nothing is empty
     assert!(import(&dir, &[]).is_err());
     assert_eq!(fs::read_dir(&dir).unwrap().count(), 0);

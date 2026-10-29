@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fastaLine } from '$lib/search/database'
   // The protein database: the FASTA file, decoys (ProSE's `decoys`) and the cRAP contaminants. Under it, why
   // ProSE cannot search the file (the search does not start), and what ProSE may mishandle in it (notices).
   import * as Card from '$lib/components/ui/card'
@@ -98,6 +99,11 @@
         ]}
         onChange={(v) => (form.contaminants = v === 'crap')} />
     </div>
+    {#if form.database?.summary && form.database.proteins}
+      <p class="truncate text-xs text-muted-foreground md:col-span-3" data-testid="fasta-summary" title={fastaLine(form.database.summary, form.database.proteins)}>
+        {fastaLine(form.database.summary, form.database.proteins)}
+      </p>
+    {/if}
     <div class="flex flex-wrap items-center gap-2 text-xs md:col-span-3" data-testid="proteome-download">
       <span class="text-muted-foreground">{form.database ? 'Or download' : 'No FASTA? Download'} the reference proteome from UniProt:</span>
       <div class="w-72"><ChoiceSelect id="organism" value={organism} options={organismOptions} onChange={(v) => (organism = v)} /></div>

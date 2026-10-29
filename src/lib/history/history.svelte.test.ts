@@ -83,7 +83,7 @@ describe('History', () => {
   test('history lists an incomplete folder with its message', async () => {
     await finished('1-0', 'good', '2026-10-20T09:00:00.000Z')
     disk.addFolder('2-0', { 'search.json': '{ broken' })
-    disk.addFolder('3-0', { 'search.json': JSON.stringify({ schema: 2, id: '3-0', name: 'future' }) })
+    disk.addFolder('3-0', { 'search.json': JSON.stringify({ schema: 3, id: '3-0', name: 'future' }) })
     // a finished search that was not saved (no record): listed as such, so that it can be deleted
     disk.addFolder('4-0', { 'qpx/quantms.psm.parquet': 'x' })
     await refreshHistory()
@@ -242,5 +242,24 @@ describe('History', () => {
     disk.chosen = '/p/absent.prose'
     await expect(openProjectFile()).rejects.toBeInstanceOf(ProjectError)
     await expect(openProjectFile()).rejects.toThrow(/cannot be read/)
+  })
+})
+
+describe('the command line of a search', () => {
+  test('placeholders as written, or the paths of inputs.json and the database', async () => {
+    const { commandLineOf } = await import('./history.svelte')
+    disk.addFolder('9-0', {
+      'search.json': '{}',
+      'command.txt': 'ProSE -in <input 1> <input 2> -database <database> -ini <search folder>/prose.ini\n',
+      'inputs.json': JSON.stringify([
+        { path: '/runs/a b.mzML', index: 0 },
+        { path: '/runs/c.mzML', index: 1 },
+      ]),
+      'database-source.json': JSON.stringify({ path: '/db/human.fasta' }),
+    })
+    expect(await commandLineOf('9-0', false)).toBe('ProSE -in <input 1> <input 2> -database <database> -ini <search folder>/prose.ini')
+    expect(await commandLineOf('9-0', true)).toBe('ProSE -in "/runs/a b.mzML" /runs/c.mzML -database /db/human.fasta -ini <search folder>/prose.ini')
+    disk.addFolder('9-1', { 'search.json': '{}' })
+    expect(await commandLineOf('9-1', true)).toBeNull()
   })
 })

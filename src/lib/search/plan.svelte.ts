@@ -15,6 +15,10 @@ import { withoutLocalPaths } from '../design/sdrf-table'
 import { CRAP_PROTEINS, searchForm as form } from './form.svelte'
 import { runSearch, searchRun } from './session.svelte'
 import { toolState } from './tool.svelte'
+import { ms2Analyzer, spectraChecks } from './spectra'
+import { databaseChecks, sdrfOrganisms } from './database'
+import { sdrfChemistryChecks } from './chemistry'
+import { accept, acceptedOf, firstBlock, ION_TRAP_FRAGMENT_DA, ionTrapPpm, loadAccepted, startChecks, withoutExpected, type Check } from './checks'
 
 /** The FDR parameters, which a search without decoys does not send (src-tauri/src/args.rs `FDR_PARAMETERS`). */
 export const FDR_PARAMETERS = ['FDR:PSM', 'FDR:protein', 'FDR:protein_inference_PSM'] as const
@@ -27,6 +31,29 @@ function unknownMessage(names: string[]): string {
     `${names.length === 1 ? 'Unknown modification' : 'Unknown modifications'}: ${names.join(', ')}. ` +
     `ProSE does not know ${names.length === 1 ? 'this name' : 'these names'}. Choose from the list instead.`
   )
+}
+
+/** The red flags and advice of the form (warn and info checks, and red flags that block): `checks.ts`. */
+function adviceChecks(): Check[] {
+  const out: (Check | null)[] = [
+    ...sdrfChemistryChecks(sdrfSession.table, form.value<string[]>('modifications:fixed') ?? [], form.value<string[]>('modifications:variable') ?? []),
+    ...databaseChecks(form.database?.summary, String(form.value('decoys')), sdrfOrganisms(sdrfSession.table), (v) => form.setParam('decoys', v)),
+    ...spectraChecks(form.files.map((r) => ({ path: r.file.path, name: r.file.name, facts: r.spectraFacts }))),
+    ionTrapPpm(
+      form.files.map((r) => ({
+        path: r.file.path,
+        name: r.file.name,
+        instrument: /NT=([^;]*)/.exec(r.instrument ?? '')?.[1] ?? null,
+        ms2Analyzer: r.spectraFacts ? ms2Analyzer(r.spectraFacts) : null,
+      })),
+      String(form.value('fragment:mass_tolerance_unit')),
+      () => {
+        form.setParam('fragment:mass_tolerance', ION_TRAP_FRAGMENT_DA)
+        form.setParam('fragment:mass_tolerance_unit', 'Da')
+      },
+    ),
+  ]
+  return out.filter((c): c is Check => c !== null)
 }
 
 class SearchPlan {
@@ -86,30 +113,54 @@ class SearchPlan {
   /** Settings outside the bounds ProSE gives them (charges 1–20, ...): ProSE would refuse them, so the search waits. */
   outside = $derived(outOfBounds(form.values, PROSE_PARAMETERS))
 
+  /** The red flags the user chose to search anyway (per check and file, kept on this computer: `checks.ts`). */
+  accepted = $state<Set<string>>(loadAccepted())
+
+  /** What keeps the search from starting, in order (`startChecks`). */
+  startChecks = $derived(
+    startChecks({
+      files: form.files.map((r) => ({ path: r.file.path, name: r.file.name, problem: r.problem })),
+      adding: form.adding > 0,
+      sdrfProblem: sdrfSession.problem,
+      invalidCell: (() => {
+        const cells = form.invalidCellList
+        return cells.length > 0 ? { label: cells[0].label, text: cells[0].text, more: cells.length - 1 } : null
+      })(),
+      database: form.database
+        ? {
+            name: form.database.file.name,
+            error: form.database.error,
+            counted: form.database.proteins !== null,
+            problem: form.database.problem,
+          }
+        : null,
+      inverted: this.inverted.length > 0 ? rangeMessage(this.inverted[0], form.values) : null,
+      outside: this.outside.length > 0 ? boundsMessage(this.outside[0], form.values) : null,
+      psmFdrMissing: !this.fdrBlocked && !(Number(form.value('FDR:PSM')) > 0),
+      unknownMods: this.unknownMods.length > 0 ? unknownMessage(this.unknownMods) : null,
+      toolError: toolState.status === 'failed' ? toolState.error : null,
+    }),
+  )
+
+  /** Red flags and advice about the inputs and settings (warn and info), without those the preset expects. */
+  advice = $derived(withoutExpected(adviceChecks(), form.preset?.expected))
+
+  /** Every check of the form: the start checks, then the advice. */
+  checks = $derived([...this.startChecks, ...this.advice])
+
+  /** The first check that stops Start; a red flag (`overridable`) can be searched anyway. */
+  blocking = $derived(firstBlock(this.checks, this.accepted))
+
   /** Why the search cannot start yet. */
-  problem = $derived.by(() => {
-    if (form.files.length === 0) return 'Add mzML files to start.'
-    if (form.adding > 0) return 'Adding files…'
-    if (sdrfSession.problem) return sdrfSession.problem
-    const unsearchable = form.files.filter((r) => r.problem)
-    if (unsearchable.length === 1) return `${unsearchable[0].problem} Remove it to start the search.`
-    if (unsearchable.length > 1) return `${unsearchable.length} files cannot be searched (see Spectra). Remove them to start the search.`
-    const cells = form.invalidCellList
-    if (cells.length > 0) {
-      const more = cells.length > 1 ? ` (and ${cells.length - 1} more)` : ''
-      return `${cells[0].label}${more}: “${cells[0].text}” is not a whole number of at least 1. Correct it, or empty the cell.`
-    }
-    if (!form.database) return 'Choose a FASTA database to start.'
-    if (form.database.error) return `${form.database.file.name} cannot be read (${form.database.error}). Choose it again, or another FASTA file.`
-    if (form.database.proteins === null) return 'Counting the proteins of the database…'
-    if (form.database.problem) return `${form.database.problem} Choose another FASTA file.`
-    if (this.inverted.length > 0) return rangeMessage(this.inverted[0], form.values)
-    if (this.outside.length > 0) return boundsMessage(this.outside[0], form.values)
-    if (!this.fdrBlocked && !(Number(form.value('FDR:PSM')) > 0)) return 'Set a PSM FDR above 0 %.'
-    if (this.unknownMods.length > 0) return unknownMessage(this.unknownMods)
-    if (toolState.status === 'failed') return `ProSE cannot be run: ${toolState.error}`
-    return null
-  })
+  problem = $derived(this.blocking?.message ?? null)
+
+  /** The red flags the user accepted for this search's files (recorded with the search). */
+  acceptedChecks = $derived(acceptedOf(this.checks, this.accepted))
+
+  /** "Search anyway" of the red flag that stops Start: accepted for its files, on this computer. */
+  searchAnyway() {
+    if (this.blocking?.overridable) this.accepted = accept(this.blocking, this.accepted)
+  }
 
   /** The problem is shown in the footer (with files; without, the plan line says "No spectra yet"). */
   problemShown = $derived(this.problem !== null && form.files.length > 0)
@@ -152,6 +203,8 @@ export async function startSearch(): Promise<void> {
   const id = await runSearch(request, {
     design: $state.snapshot(form.design),
     ...(sdrfSession.table ? { sdrf: { name: sdrfSession.name, text: sdrfSession.text() } } : {}),
+    ...(searchPlan.acceptedChecks.length > 0 ? { accepted: $state.snapshot(searchPlan.acceptedChecks) } : {}),
+    spectra: Object.fromEntries(form.files.filter((r) => r.spectra !== null).map((r) => [r.file.name, r.spectra!])),
     instruments: Object.fromEntries(form.files.filter((r) => r.instrument).map((r) => [r.file.name, r.instrument!])),
     // no FDR (a search without decoys; the protein FDR off, 0): no cutoff, every PSM or protein counts (the results'
     // cutoffs are q-values above 0)

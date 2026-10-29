@@ -14,6 +14,11 @@ export type Preset = {
   builtin: boolean
   database?: string
   contaminants?: boolean
+  /**
+   * Checks this setup makes expected (ids of `search/checks.ts` and the result's diagnosis), which are then not
+   * shown: an ion-trap setup expects fewer identifications, an open search a wide precursor window.
+   */
+  expected?: string[]
 }
 
 /** Where the user presets are kept. */
@@ -73,6 +78,8 @@ export const BUILTIN_PRESETS: Preset[] = [
     id: 'iontrap-cid-tryptic',
     name: 'Ion trap CID · tryptic',
     builtin: true,
+    // low-resolution fragments identify fewer spectra than an Orbitrap run (guidance G4)
+    expected: ['low-id-rate'],
     parameters: {
       ...tryptic,
       'precursor:mass_tolerance_lower': 10,
@@ -103,6 +110,8 @@ export const BUILTIN_PRESETS: Preset[] = [
     id: 'open-search',
     name: 'Open search · ±500 Da',
     builtin: true,
+    // the wide window is the point of an open search (guidance G3)
+    expected: ['tolerance-too-wide'],
     parameters: {
       ...tryptic,
       'modifications:variable': [],

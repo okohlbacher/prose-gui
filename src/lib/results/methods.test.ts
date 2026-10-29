@@ -23,6 +23,14 @@ test('never claims a protein FDR that was not applied, and leaks no paths', () =
   expect(methodsText({ summary: summary(false, 0), settings, version: '' })).toContain('not FDR-controlled')
 })
 
+test('names a red flag searched anyway only when the search confirmed it', () => {
+  const accepted = [{ id: 'profile-ms2', files: ['/r/a.mzML'], message: 'Profile.' }]
+  const confirmed = { ...summary(true), files: [{ profileSpectra: 12, ms2Spectra: 100 }] } as unknown as ProSEMultiSummary
+  const notConfirmed = { ...summary(true), files: [{ profileSpectra: 0, ms2Spectra: 100 }] } as unknown as ProSEMultiSummary
+  expect(methodsText({ summary: confirmed, settings, version: '', accepted })).toContain('recorded in profile mode')
+  expect(methodsText({ summary: notConfirmed, settings, version: '', accepted })).not.toContain('profile mode')
+})
+
 test('says what ProSE did: Percolator and the PSM FDR skipped are not claimed', () => {
   const s = summary(true)
   ;(s as unknown as { files: unknown[] }).files = [

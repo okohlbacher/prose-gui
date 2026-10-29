@@ -330,3 +330,12 @@ export function sortRows(
   for (let i = 0; i < n; i++) sorted[i] = rows[order[i]]
   return sorted
 }
+
+/**
+ * The rows of `level` that the contaminant filter alone hides under filters `f` (0 when it is off): the count the
+ * chip shows ("12 contaminant proteins hidden"), so that hiding them by default does not hide that they are there.
+ */
+export function hiddenContaminants(m: ResultModel, level: Level, f: FilterState): number {
+  if (!f.hideContaminants) return 0
+  return applyFilters(m, level, { ...f, hideContaminants: false }).length - applyFilters(m, level, f).length
+}
