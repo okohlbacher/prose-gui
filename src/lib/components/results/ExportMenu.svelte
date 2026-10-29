@@ -3,7 +3,7 @@
   import { buttonVariants } from '$lib/components/ui/button'
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu'
   import { saveProjectFile } from '$lib/history/history.svelte'
-  import { exportCsv, exportDesign, exportIdXML, exportXlsx, idXMLFile } from '$lib/results/exports'
+  import { exportCsv, exportDesign, exportIdXML, exportSdrf, exportXlsx, idXMLFile } from '$lib/results/exports'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { cn } from '$lib/utils'
   import ChevronDown from '@lucide/svelte/icons/chevron-down'
@@ -83,6 +83,7 @@
     <DropdownMenu.Item disabled={view.level === null || view.exporting} onSelect={() => guard(() => exportXlsx(view))}
       >Excel .xlsx (current view)</DropdownMenu.Item>
     <DropdownMenu.Item onSelect={() => guard(() => exportDesign(view.result))}>Design (design.tsv)</DropdownMenu.Item>
+    <DropdownMenu.Item onSelect={() => guard(() => exportSdrf(view.result))}>SDRF (with the search's settings)</DropdownMenu.Item>
     <DropdownMenu.Item
       disabled={!canSpectrum}
       title={canSpectrum ? undefined : 'Open a PSM with a stored spectrum first'}

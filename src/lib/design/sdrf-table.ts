@@ -81,14 +81,28 @@ export function setCell(t: SdrfTable, row: number, col: number, value: string) {
   r[col] = value.replace(/[\t\r\n]+/g, ' ')
 }
 
-/** Appends a column (empty in every data row, `fill` if given) and returns its index. */
+/**
+ * Adds a column where SDRF puts it (`fill` in every data row) and returns its index: a factor value at the end,
+ * a characteristic before assay name (or the first comment), anything else before the factor values.
+ */
 export function addColumn(t: SdrfTable, header: string, fill = ''): number {
-  const col = t.headers.length
-  t.headers.push(header)
-  for (const [i, r] of t.rows.entries()) {
+  const key = columnKey(header)
+  const keys = t.headers.map(columnKey)
+  const first = (test: (k: string) => boolean) => {
+    const i = keys.findIndex(test)
+    return i < 0 ? t.headers.length : i
+  }
+  const factor = (k: string) => k.startsWith('factor value[')
+  const col = factor(key)
+    ? t.headers.length
+    : key.startsWith('characteristics[')
+      ? first((k) => k === 'assay name' || k === 'technology type' || k.startsWith('comment[') || factor(k))
+      : first(factor)
+  t.headers.splice(col, 0, header)
+  for (const r of t.rows) {
     if (isBlank(r)) continue
     while (r.length < col) r.push('')
-    setCell(t, i, col, fill)
+    r.splice(col, 0, fill.replace(/[\t\r\n]+/g, ' '))
   }
   return col
 }

@@ -114,7 +114,7 @@ describe('syncDesign', () => {
     syncDesign(t, [
       { fileName: 'x.mzML', before: { condition: 'p/q' }, after: { condition: 'r/s' }, resolved: { replicate: 1, fraction: 1, techReplicate: 1 } },
     ])
-    expect(t.rows[0]).toEqual(['s', 'x.mzML', 'r', 's', '1'])
+    expect(t.rows[0]).toEqual(['s', 'x.mzML', '1', 'r', 's'])
   })
 })
 

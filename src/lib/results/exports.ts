@@ -2,9 +2,13 @@
 // where the user chooses (the system's save dialog).
 
 import { writeDesignTsv } from '../design/design-tsv'
+import { exportSdrf as sdrfOf } from '../design/sdrf-export'
 import { saveBytes, saveSearchFile } from '../desktop'
 import { download } from '../download'
+import { APP_VERSION } from '../history/history'
 import type { OpenResult } from '../search/session.svelte'
+import { defaultsOf } from '../settings/parameters'
+import { PROSE_PARAMETERS } from '../settings/prose'
 import { resultName } from './display'
 import type { ResultsView } from './view.svelte'
 
@@ -50,6 +54,13 @@ export async function exportXlsx(view: ResultsView): Promise<boolean> {
 /** The design of the searched files as `<name>_design.tsv` (OpenMS' one-table format). */
 export async function exportDesign(result: OpenResult): Promise<void> {
   await download(`${exportName(result)}_design.tsv`, writeDesignTsv(result.design), 'text/tab-separated-values')
+}
+
+/** The SDRF of the search (`sdrf-export`): the one it was started with, else one of its design, with the search's settings. */
+export async function exportSdrf(result: OpenResult): Promise<void> {
+  const values = { ...defaultsOf(PROSE_PARAMETERS), ...result.settings.parameters }
+  const text = sdrfOf(result.sdrf?.text ?? null, result.design, { values, appVersion: APP_VERSION })
+  await download(result.sdrf?.name ?? `${exportName(result)}.sdrf.tsv`, text, 'text/tab-separated-values')
 }
 
 /**
