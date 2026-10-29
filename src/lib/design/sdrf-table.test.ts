@@ -10,6 +10,7 @@ import {
   lastSegment,
   parseSdrfTable,
   sdrfAnnotations,
+  sdrfFilterOptions,
   syncDesign,
   validateSdrf,
   writeSdrfTable,
@@ -131,6 +132,17 @@ describe('sdrfAnnotations', () => {
       ['tmt_run1.mzML', 'TMT126', 'Homo sapiens|1|control'],
       ['tmt_run1.mzML', 'TMT127N', 'Homo sapiens|1|EGF'],
       ['other.mzML.gz', '', '||'],
+    ])
+  })
+})
+
+describe('sdrfFilterOptions', () => {
+  it('offers the columns whose values tell the searched files apart', () => {
+    const t = parseSdrfTable(fixture('tmt.sdrf.tsv'))
+    expect(sdrfFilterOptions(t, ['tmt_run1.mzML', 'tmt_run2.mzML'])).toEqual([
+      { column: 'characteristics[biological replicate]', values: [{ value: '1', files: [0] }, { value: '2', files: [1] }] },
+      // (both runs have both treatments, one per channel)
+      { column: 'factor value[treatment]', values: [{ value: 'control', files: [0, 1] }, { value: 'EGF', files: [0, 1] }] },
     ])
   })
 })

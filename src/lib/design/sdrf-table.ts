@@ -287,3 +287,24 @@ export function sdrfAnnotations(
   })
   return { headers: cols.map((c) => t.headers[c].trim()), label: new Set(rows.map((r) => r.label)).size > 1, rows }
 }
+
+/**
+ * The values of the SDRF's characteristics[...] and factor value[...] columns that tell searched files apart, for
+ * a filter of the result tables: per column (with at least two values among the files), each value with the
+ * searched files (indices into `fileNames`) whose SDRF rows have it.
+ */
+export function sdrfFilterOptions(t: SdrfTable, fileNames: string[]): { column: string; values: { value: string; files: number[] }[] }[] {
+  const a = sdrfAnnotations(t, fileNames.map((fileName) => ({ fileName, sample: '' })))
+  return a.headers.flatMap((column, c) => {
+    const byValue = new Map<string, Set<number>>()
+    for (const row of a.rows) {
+      const v = row.values[c]
+      if (v === '') continue
+      fileNames.forEach((name, i) => {
+        if (name === row.fileName) byValue.set(v, (byValue.get(v) ?? new Set()).add(i))
+      })
+    }
+    if (byValue.size < 2) return []
+    return [{ column, values: [...byValue].map(([value, files]) => ({ value, files: [...files].sort((x, y) => x - y) })) }]
+  })
+}

@@ -292,6 +292,27 @@ describe('applyFilters', () => {
   })
 })
 
+describe('the SDRF filter', () => {
+  it('keeps the PSMs of its files, and the peptides and proteins with such a PSM within the PSM FDR', () => {
+    const m = model()
+    const ps = m.tables.psms
+    for (const files of [[0], [1], [0, 1], []]) {
+      const f = { ...all, sdrf: { column: 'factor value[treatment]', value: 'x', files } }
+      const psms = [...applyFilters(m, 'psms', f)]
+      expect(psms).toEqual([...applyFilters(m, 'psms', all)].filter((i) => files.includes(ps.file[i])))
+      const evidence = new Set(
+        [...Array(ps.count).keys()].filter((i) => files.includes(ps.file[i]) && ps.qValue[i] <= m.psmFdr).map((i) => ps.peptide[i]),
+      )
+      expect([...applyFilters(m, 'peptides', f)]).toEqual([...applyFilters(m, 'peptides', all)].filter((k) => evidence.has(k)))
+      const { offsets, peptide } = m.protein.members
+      const hasEvidence = (p: number) => peptide.slice(offsets[p], offsets[p + 1]).some((k) => evidence.has(k))
+      expect([...applyFilters(m, 'proteins', f)]).toEqual([...applyFilters(m, 'proteins', all)].filter(hasEvidence))
+    }
+    // the fixture has PSMs in more than one file, so the filter does something
+    expect(new Set(ps.file).size).toBeGreaterThan(1)
+  })
+})
+
 describe('the protein text filter', () => {
   it("also finds a protein by the sequence of one of its peptides", () => {
     const m = model()

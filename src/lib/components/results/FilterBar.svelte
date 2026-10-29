@@ -7,6 +7,7 @@
   import * as Popover from '$lib/components/ui/popover'
   import * as Tooltip from '$lib/components/ui/tooltip'
   import { formatPercent, formatQ } from '$lib/format/fdr'
+  import { parseSdrfTable, sdrfFilterOptions } from '$lib/design/sdrf-table'
   import { formatCount, parseAccession } from '$lib/results/display'
   import type { LevelState, ResultsView } from '$lib/results/view.svelte'
   import { cn } from '$lib/utils'
@@ -88,6 +89,11 @@
       label: `Found in ≥ ${i + 2} replicates of a condition`,
     })),
   ])
+
+  /** The SDRF columns the result's files can be filtered by (a result started with an SDRF). */
+  const sdrfOptions = $derived(
+    view.result.sdrf ? sdrfFilterOptions(parseSdrfTable(view.result.sdrf.text), view.result.design.rows.map((r) => r.fileName)) : [],
+  )
 
   const chip =
     'inline-flex h-7 items-center gap-1.5 rounded-full border bg-background pr-2 pl-3 text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none'
@@ -172,6 +178,12 @@
       <span class="max-w-[16rem] truncate">Peptide: {peptide}</span><XIcon class="size-3 shrink-0" aria-hidden="true" /><span class="sr-only">(remove the filter)</span>
     </button>
   {/if}
+  {#if level.filters.sdrf}
+    {@const f = level.filters.sdrf}
+    <button type="button" class={chip} title="{f.files.length} of {view.result.design.rows.length} files" data-testid="sdrf-filter-chip" onclick={() => (level.filters.sdrf = undefined)}>
+      <span class="max-w-[18rem] truncate">{f.column.replace(/^(factor value|characteristics)\[(.*)\]$/i, '$2')}: {f.value}</span><XIcon class="size-3 shrink-0" aria-hidden="true" /><span class="sr-only">(remove the filter)</span>
+    </button>
+  {/if}
   {#if level.filters.hideContaminants}
     <button type="button" class={chip} onclick={() => (level.filters.hideContaminants = false)}>
       Contaminants hidden<XIcon class="size-3" aria-hidden="true" /><span class="sr-only">(show them)</span>
@@ -190,6 +202,21 @@
     <DropdownMenu.Content class="w-auto min-w-48">
       <DropdownMenu.CheckboxItem bind:checked={level.filters.hideContaminants}>Hide contaminants</DropdownMenu.CheckboxItem>
       <DropdownMenu.CheckboxItem bind:checked={level.filters.showDecoys}>Show decoys</DropdownMenu.CheckboxItem>
+      {#if sdrfOptions.length > 0}
+        <DropdownMenu.Separator />
+        <DropdownMenu.Label class="text-xs text-muted-foreground">SDRF</DropdownMenu.Label>
+        {#each sdrfOptions as option (option.column)}
+          <DropdownMenu.Sub>
+            <DropdownMenu.SubTrigger>{option.column}</DropdownMenu.SubTrigger>
+            <DropdownMenu.SubContent>
+              {#each option.values as v (v.value)}
+                <DropdownMenu.Item onSelect={() => (level.filters.sdrf = { column: option.column, value: v.value, files: v.files })}
+                  >{v.value} <span class="ml-auto pl-3 text-muted-foreground">{v.files.length} {v.files.length === 1 ? 'file' : 'files'}</span></DropdownMenu.Item>
+              {/each}
+            </DropdownMenu.SubContent>
+          </DropdownMenu.Sub>
+        {/each}
+      {/if}
     </DropdownMenu.Content>
   </DropdownMenu.Root>
 
