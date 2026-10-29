@@ -1,9 +1,11 @@
 // The browser UI tests (npm run test:ui): the page in Chromium against the Vite dev server, in the page's browser
 // mode (no Tauri; History in memory). `?fixture=<name>` opens a result of src/lib/results/fixtures (src/lib/dev/
 // fixture.ts, dev only). The desktop app's own end-to-end tests are e2e/ (WebdriverIO, tauri-driver, Linux only).
+// The vision checks (vision.spec.ts) run only with npm run test:ui:vision (PW_VISION=1), and skip without VISION_API_KEY.
 import { defineConfig, devices } from '@playwright/test'
 
 const port = 5179
+const vision = !!process.env.PW_VISION
 
 export default defineConfig({
   testDir: '.',
@@ -19,7 +21,11 @@ export default defineConfig({
     viewport: { width: 1400, height: 900 },
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1400, height: 900 } } }],
+  projects: [
+    vision
+      ? { name: 'vision', testMatch: 'vision.spec.ts', use: { ...devices['Desktop Chrome'], viewport: { width: 1400, height: 900 } } }
+      : { name: 'chromium', testIgnore: 'vision.spec.ts', use: { ...devices['Desktop Chrome'], viewport: { width: 1400, height: 900 } } },
+  ],
   webServer: {
     command: `npx vite --port ${port} --strictPort`,
     cwd: '..',

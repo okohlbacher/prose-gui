@@ -219,6 +219,12 @@ export function searchFiles(searchId: string): SearchFiles {
 
 /** Sizes and counts of files given by path (the open dialog, drag and drop, the example). */
 export function inspectFiles(paths: string[]): Promise<FileFacts[]> {
+  // the page's browser mode reads no file: each is missing (Re-run of a result then names them, as for moved files)
+  if (!isDesktop()) {
+    return Promise.resolve(
+      paths.map((path) => ({ path, name: path.split(/[\\/]/).pop() ?? path, size: 0, spectra: null, proteins: null, residues: null, error: 'not readable in the browser', problem: null, warnings: [] })),
+    )
+  }
   return invoke<FileFacts[]>('inspect_files', { paths })
 }
 
@@ -278,10 +284,27 @@ export async function onFileDrop(handlers: { over: (on: boolean) => void; drop: 
 }
 
 /**
+ * The page's browser mode (`vite dev` without the shell, the browser UI tests of e2e-web/): a save is the browser's
+ * download of `name`, which resolves with the name (there is no path).
+ */
+function browserDownload(name: string, blob: Blob): string {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  document.body.append(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return name
+}
+
+/**
  * Saves text (CSV, design.tsv, SVG) where the user chooses in the system's save dialog, suggesting
  * `name`. Resolves with the path, or null if the user cancelled.
  */
 export function saveText(name: string, contents: string): Promise<string | null> {
+  if (!isDesktop()) return Promise.resolve(browserDownload(name, new Blob([contents], { type: 'text/plain;charset=utf-8' })))
   return oneDialog(null, () => invoke<string | null>('save_text', { name, contents }))
 }
 
@@ -310,6 +333,7 @@ export function downloadProteome(proteome: string, reviewed: boolean): Promise<s
 
 /** Binary contents (an .xlsx) written where the user chooses, suggesting `name`; the path, or null if cancelled. */
 export function saveBytes(name: string, contents: Uint8Array): Promise<string | null> {
+  if (!isDesktop()) return Promise.resolve(browserDownload(name, new Blob([contents as Uint8Array<ArrayBuffer>], { type: 'application/octet-stream' })))
   return oneDialog(null, () => invoke<string | null>('save_bytes', contents, { headers: { 'x-file-name': encodeURIComponent(name) } }))
 }
 

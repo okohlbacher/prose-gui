@@ -44,9 +44,12 @@
     return settings.peptdeep && applied > 0 ? `${percolator} with PeptDeep predictions` : percolator
   })
 
-  // the tool that searched: ProSE's version (that of this session's tool, or the stored search's)
+  // the tool that searched: ProSE's version as the result's provenance records it, else that of the stored search or
+  // of this session's tool ('unknown': History did not know it)
+  const version = $derived(
+    result.outcome.toolVersion || [result.stored?.moduleVersion, toolState.info?.version].find((v) => v !== undefined && v !== '' && v !== 'unknown') || '',
+  )
   const engine = $derived.by(() => {
-    const version = result.stored?.moduleVersion ?? toolState.info?.version ?? ''
     const short = /^\d+\.\d+/.exec(version)?.[0] ?? version
     return {
       value: short ? `ProSE ${short}` : 'ProSE',
@@ -73,7 +76,7 @@
   )
   const ppm = (e: { median: number; mad: number } | null) => (e ? `${e.median.toFixed(2)} ± ${e.mad.toFixed(2)}` : '–')
 
-  const methods = $derived(methodsText({ summary, settings, version: result.stored?.moduleVersion ?? toolState.info?.version ?? '', accepted: result.accepted }))
+  const methods = $derived(methodsText({ summary, settings, version, accepted: result.accepted }))
   let copied = $state(false)
   async function copyMethods() {
     await navigator.clipboard.writeText(methods)

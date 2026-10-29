@@ -88,7 +88,8 @@
   {#each stats as s (s.testid)}
     <div class="min-w-0 px-3.5 py-2" title={s.title}>
       <div class="text-lg leading-tight font-semibold tracking-tight tabular-nums" data-testid={s.testid}>{s.value}</div>
-      <div class="truncate text-xs text-muted-foreground">{s.note}</div>
+      <!-- wraps, never cut off: the note says which FDR controls the count (an ellipsis would hide "no peptide FDR") -->
+      <div class="text-xs text-balance text-muted-foreground">{s.note}</div>
     </div>
   {/each}
 </div>

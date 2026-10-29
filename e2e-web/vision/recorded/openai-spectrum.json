@@ -1,0 +1,20 @@
+{
+  "id": "chatcmpl-recorded-fake",
+  "object": "chat.completion",
+  "model": "gpt-test",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "{\"peak_labels\": [\"b2\", \"b3\", \"b4\", \"b5\", \"b6\", \"b7\", \"b8\", \"b9\", \"y2\", \"y3\", \"y4\", \"y6\", \"y7\", \"y8\", \"y9\"], \"b_ion_colour\": \"blue\", \"y_ion_colour\": \"orange\", \"x_axis_label\": \"m/z\", \"y_axis_label\": null, \"y_axis_tick_labels\": [\"100 %\", \"50 %\"], \"text_clipped_or_overlapping\": false, \"clipped_or_overlapping_items\": []}",
+        "refusal": null
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1200,
+    "completion_tokens": 110
+  }
+}

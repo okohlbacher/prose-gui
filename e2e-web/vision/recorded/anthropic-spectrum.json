@@ -1,0 +1,23 @@
+{
+  "id": "msg_recorded_fake",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5-5",
+  "content": [
+    {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "fake"
+    },
+    {
+      "type": "text",
+      "text": "{\"peak_labels\": [\"b2\", \"b3\", \"b4\", \"b5\", \"b6\", \"b7\", \"b8\", \"b9\", \"y2\", \"y3\", \"y4\", \"y6\", \"y7\", \"y8\", \"y9\"], \"b_ion_colour\": \"blue\", \"y_ion_colour\": \"orange\", \"x_axis_label\": \"m/z\", \"y_axis_label\": null, \"y_axis_tick_labels\": [\"100 %\", \"50 %\"], \"text_clipped_or_overlapping\": false, \"clipped_or_overlapping_items\": []}"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_details": null,
+  "usage": {
+    "input_tokens": 1650,
+    "output_tokens": 120
+  }
+}

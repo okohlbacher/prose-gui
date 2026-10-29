@@ -26,7 +26,7 @@ import {
 } from '../search/session.svelte'
 import { sdrfSession } from '../design/sdrf-session.svelte'
 import { searchForm } from '../search/form.svelte'
-import { canSearchAgain, searchAgain, searchPlan, startSearch } from '../search/plan.svelte'
+import { canSearchAgain, parametersToSearchAgain, searchAgain, searchPlan, startSearch } from '../search/plan.svelte'
 import { acceptedKeys } from '../search/checks'
 import { toolState } from '../search/tool.svelte'
 import {
@@ -322,7 +322,7 @@ export async function reopenInNewSearch(id: string, start: boolean, changes: Rec
     }),
     database,
     databaseName: record.database,
-    settings: { ...record.settings, parameters: { ...record.settings.parameters, ...changes } },
+    settings: { ...record.settings, parameters: { ...parametersToSearchAgain(record.settings.parameters, record.psmFdr), ...changes } },
   })
   // the red flags searched anyway then are not asked again (they are recorded per file: `checks.ts`)
   if (record.accepted) searchPlan.accepted = new Set([...searchPlan.accepted, ...acceptedKeys(record.accepted)])

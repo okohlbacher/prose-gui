@@ -53,6 +53,8 @@ export interface SearchMeta {
   search: Parameters
   /** the parameters of the FDR filtering (step 'target_decoy_fdr') */
   fdr: Parameters
+  /** the version of the tool of the database search (its step's tool_version); '' if not recorded */
+  toolVersion: string
 }
 
 const RUN_COLUMNS: (keyof RunRow)[] = [
@@ -125,24 +127,32 @@ export async function readRuns(bytes: Uint8Array): Promise<RunRow[]> {
 
 /** The parameters of each step of the provenance view (bytes of quantms.provenance.parquet), by step name. */
 export async function readSteps(bytes: Uint8Array): Promise<Map<string, Parameters>> {
+  return (await readStepsWithVersions(bytes)).steps
+}
+
+/** The steps' parameters (as readSteps) and their tools' versions (tool_version; '' if not recorded), by step name. */
+async function readStepsWithVersions(bytes: Uint8Array): Promise<{ steps: Map<string, Parameters>; versions: Map<string, string> }> {
   const file = openParquet(bytes)
-  const rows = await readObjects(file, ['step_name', 'parameters'])
+  const versioned = file.tree.children.some((c) => c.element.name === 'tool_version')
+  const rows = await readObjects(file, versioned ? ['step_name', 'tool_version', 'parameters'] : ['step_name', 'parameters'])
   const steps = new Map<string, Parameters>()
+  const versions = new Map<string, string>()
   for (const r of rows) {
     const parameters = new Map<string, string>()
     for (const p of (r.parameters as { key: string; value: string }[] | null) ?? []) parameters.set(p.key, p.value ?? '')
     steps.set(String(r.step_name), parameters)
+    versions.set(String(r.step_name), typeof r.tool_version === 'string' ? r.tool_version : '')
   }
-  return steps
+  return { steps, versions }
 }
 
 /** The search's meta data from the bytes of the run and provenance views. Throws if a step is missing. */
 export async function readMeta(runBytes: Uint8Array, provenanceBytes: Uint8Array): Promise<SearchMeta> {
-  const [runs, steps] = await Promise.all([readRuns(runBytes), readSteps(provenanceBytes)])
+  const [runs, { steps, versions }] = await Promise.all([readRuns(runBytes), readStepsWithVersions(provenanceBytes)])
   const search = steps.get('peptide_search')
   const fdr = steps.get('target_decoy_fdr')
   if (!search || !fdr) throw new Error('the provenance view has not the steps of ProSE (peptide_search, target_decoy_fdr)')
-  return { runs, search, fdr }
+  return { runs, search, fdr, toolVersion: versions.get('peptide_search') ?? '' }
 }
 
 /** A number parameter; `fallback` if it is missing or not a number. */

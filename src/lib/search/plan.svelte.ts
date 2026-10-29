@@ -238,16 +238,27 @@ export function canSearchAgain(result: { design: { rows: { fileName: string }[] 
 }
 
 /**
+ * The parameters of a search to search it again: its `parameters`, with its PSM FDR `psmFdr` where they lack it. A
+ * search made from a QPX folder (Open QPX folder…) has the parameters ProSE's provenance records, which are not the
+ * app's FDR parameters: without this its PSM FDR would be ProSE's default (0, no cutoff), not the one it was searched
+ * with. (A search without FDR has psmFdr 1, which is no cutoff to restore.)
+ */
+export function parametersToSearchAgain(parameters: Record<string, unknown>, psmFdr: number | null | undefined): Record<string, unknown> {
+  if ('FDR:PSM' in parameters || psmFdr === null || psmFdr === undefined || !(psmFdr > 0 && psmFdr < 1)) return parameters
+  return { ...parameters, 'FDR:PSM': psmFdr }
+}
+
+/**
  * Back to New search with the inputs and settings of `result`, changed by `changes` (parameters,
  * e.g. { 'FDR:protein': 0.05 }). The user starts the search there.
  */
 export function searchAgain(
-  result: { settings: { presetId?: string; parameters: Record<string, unknown>; rescore: boolean; peptdeep: boolean; contaminants: boolean } },
+  result: { psmFdr?: number; settings: { presetId?: string; parameters: Record<string, unknown>; rescore: boolean; peptdeep: boolean; contaminants: boolean } },
   changes: Record<string, unknown>,
 ): void {
   const s = result.settings
   if (s.presetId !== undefined && form.presets.some((p) => p.id === s.presetId)) form.presetId = s.presetId
-  form.overrides = copyValues({ ...s.parameters, ...changes })
+  form.overrides = copyValues({ ...parametersToSearchAgain(s.parameters, result.psmFdr), ...changes })
   form.rescore = s.rescore
   form.peptdeep = s.peptdeep
   form.contaminants = s.contaminants
