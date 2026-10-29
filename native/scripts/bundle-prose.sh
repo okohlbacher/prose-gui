@@ -236,6 +236,14 @@ LICENSE-AlphaPeptDeep.txt.
 NOTICE
 fi
 
+# The Thermo RAW reader's managed half (WITH_THERMO_RAW): ThermoWrapperManaged.dll, its runtimeconfig and Thermo's
+# CommonCore assemblies, in bin/managed, where the bridge looks when OpenMS' share directory has no copy
+# (ThermoRawScanReader.cpp resolveManagedDirectory; on the build machine that directory is the source tree's, so
+# share/OpenMS of the bundle would not be asked). It runs on the .NET runtime (8 or later) of the computer.
+if [ -f "$BUILD/lib/managed/ThermoWrapperManaged.dll" ]; then
+  cp -R "$BUILD/lib/managed" "$OUT/bin/managed"
+fi
+
 # --- Licences -------------------------------------------------------------------------------------
 lic=$share/LICENSES
 mkdir -p "$lic/vcpkg"

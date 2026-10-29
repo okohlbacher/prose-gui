@@ -428,3 +428,37 @@ fn an_sdrf_annotates_the_qpx_views_of_a_tool_that_has_sdrf() {
     assert!(log.contains("SDRF: sample metadata of 2 of 2 input(s)"), "{log}");
     assert!(parquet(&folder.join("qpx/quantms.sample.parquet")));
 }
+
+/// Vendor inputs ProSE reads without conversion: a Thermo .raw file (`PROSE_RAW_FILE`) and a Bruker timsTOF .d folder
+/// (`PROSE_D_FOLDER`, e.g. OpenTIMS' test.d), each searched against the example's FASTA with `PROSE_BIN`. Skipped without them.
+#[test]
+fn searches_thermo_raw_and_bruker_d_inputs() {
+    let Some(real) = real() else { return };
+    let inputs: Vec<PathBuf> = ["PROSE_RAW_FILE", "PROSE_D_FOLDER"]
+        .iter()
+        .filter_map(|v| std::env::var_os(v).map(PathBuf::from))
+        .collect();
+    if inputs.is_empty() {
+        eprintln!("skipped: set PROSE_RAW_FILE and/or PROSE_D_FOLDER");
+        return;
+    }
+    for input in inputs {
+        let work = TempDir::new("vendor");
+        let out = work.path().join("out.idXML");
+        let run = std::process::Command::new(&real.bin)
+            .arg("-in")
+            .arg(&input)
+            .arg("-database")
+            .arg(real.example.join(FASTA))
+            .arg("-out_idxml")
+            .arg(&out)
+            .args(["-threads", "4", "-Search:rescore", "false"])
+            .env("OPENMS_DISABLE_UPDATE_CHECK", "ON")
+            .output()
+            .unwrap();
+        let log = String::from_utf8_lossy(&run.stdout).into_owned() + &String::from_utf8_lossy(&run.stderr);
+        assert!(run.status.success(), "{} was not searched:\n{log}", input.display());
+        assert!(out.is_file(), "{}: no idXML written:\n{log}", input.display());
+        assert!(log.contains("MS2 spectra"), "{}: ProSE read no spectra:\n{log}", input.display());
+    }
+}

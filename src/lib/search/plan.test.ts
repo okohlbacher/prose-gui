@@ -26,13 +26,18 @@ const facts = (path: string): FileFacts => {
     spectra: fasta ? null : 139,
     proteins: fasta ? 4136 : null,
     residues: fasta ? 1306000 : null,
-    error: null,
+    // (a path in /missing/ is no longer there, for History's Re-run)
+    error: path.includes('/missing/') ? `${path} cannot be read (not found).` : null,
     problem: null,
     warnings: [],
   }
 }
 vi.mock('../desktop', () => ({
-  inspectFiles: vi.fn(async (paths: string[]) => paths.map(facts)),
+  // (paths in /slow/ take a while to inspect: an earlier restore still waits while a later one starts)
+  inspectFiles: vi.fn(async (paths: string[]) => {
+    if (paths.some((p) => p.includes('/slow/'))) await new Promise((r) => setTimeout(r, 50))
+    return paths.map(facts)
+  }),
   exampleFiles: vi.fn(async () => ({
     spectra: ['/data/example/Ecoli_1.mzML', '/data/example/Ecoli_2.mzML'],
     database: '/app/resources/example/Ecoli_K12_proteome.fasta',
@@ -464,5 +469,54 @@ describe('the footer', () => {
     expect(searchPlan.problem).toBeNull()
     await request()
     expect(vi.mocked(runSearch).mock.calls.at(-1)![1]).toMatchObject({ accepted: [{ id: 'profile-ms2', files: ['/flag/p.mzML'] }] })
+  })
+})
+
+describe('restoring a saved search (History: Settings, Re-run)', () => {
+  const settings = { parameters: { 'fragment:mass_tolerance': 0.5 }, rescore: false, peptdeep: false, contaminants: false }
+
+  test('files no longer there are named and left out, and the restore is not complete', async () => {
+    const complete = await form.restoreSearch({
+      name: 'old search',
+      inputs: [
+        { path: '/data/a/run.mzML', fields: { condition: 'control', replicate: 1 } },
+        { path: '/data/missing/treated.mzML', fields: { condition: 'treated', replicate: 1 } },
+      ],
+      database: '/db/human.fasta',
+      databaseName: 'human.fasta',
+      settings,
+    })
+    expect(complete).toBe(false)
+    expect(form.files.map((r) => r.file.path)).toEqual(['/data/a/run.mzML'])
+    expect(form.files[0].condition).toBe('control')
+    expect(form.notices.some((n) => n.includes('treated.mzML') && n.includes('no longer there'))).toBe(true)
+    expect(form.value('fragment:mass_tolerance')).toBe(0.5)
+  })
+
+  test('two files of one name in different folders keep their own design', async () => {
+    const complete = await form.restoreSearch({
+      name: 'two runs',
+      inputs: [
+        { path: '/data/A/run.mzML', fields: { condition: 'control' } },
+        { path: '/data/B/run.mzML', fields: { condition: 'treated' } },
+      ],
+      database: '/db/human.fasta',
+      databaseName: 'human.fasta',
+      settings,
+    })
+    expect(complete).toBe(true)
+    expect(form.files.map((r) => [r.file.path, r.condition])).toEqual([
+      ['/data/A/run.mzML', 'control'],
+      ['/data/B/run.mzML', 'treated'],
+    ])
+  })
+
+  test('a later restore supersedes one that is still inspecting its files', async () => {
+    const first = form.restoreSearch({ name: 'A', inputs: [{ path: '/data/slow/a.mzML', fields: {} }], database: '/db/a.fasta', databaseName: 'a.fasta', settings })
+    const second = form.restoreSearch({ name: 'B', inputs: [{ path: '/data/b/b.mzML', fields: {} }], database: '/db/b.fasta', databaseName: 'b.fasta', settings })
+    expect(await second).toBe(true)
+    expect(await first).toBe(false)
+    expect(form.files.map((r) => r.file.path)).toEqual(['/data/b/b.mzML'])
+    expect(form.database?.file.path).toBe('/db/b.fasta')
   })
 })
