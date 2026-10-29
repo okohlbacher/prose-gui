@@ -17,6 +17,7 @@
   import ChoiceSelect from './ChoiceSelect.svelte'
   import ModificationsField from './ModificationsField.svelte'
   import NumberField from './NumberField.svelte'
+  import Help from './Help.svelte'
   import PresetPicker from './PresetPicker.svelte'
   import RangeField from './RangeField.svelte'
   import ToleranceField from './ToleranceField.svelte'
@@ -68,59 +69,91 @@
       String(form.value('enzyme')),
       `${upper} ${form.value('precursor:mass_tolerance_unit')} precursor`,
       `${form.value('fragment:mass_tolerance')} ${form.value('fragment:mass_tolerance_unit')} fragment`,
-      (form.value<string[]>('modifications:variable') ?? []).join(', ') || 'no variable modifications',
-      `PSM FDR ${Number(form.value('FDR:PSM')) * 100} %`,
+      `fixed: ${(form.value<string[]>('modifications:fixed') ?? []).join(', ') || 'none'}`,
     ].join(' · '),
   )
   const modOptions = $derived(form.entry('modifications:variable')?.validStrings)
   const fixedOptions = $derived(form.entry('modifications:fixed')?.validStrings)
 </script>
 
+<!-- Basic: the setup (instrument), what was done to the sample (variable modifications) and how strict the results are
+(FDR); everything the setup decides is under "Advanced settings", with a one-line summary while it is closed. -->
 <Card.Root size="sm" class="gap-3 rounded-lg shadow-none">
   <Card.Header class="flex flex-wrap items-center gap-x-2.5 gap-y-2">
     <Card.Title class="text-[14px] font-semibold">Search settings</Card.Title>
+    <span class="text-xs text-muted-foreground">Setup <Help topic="setup" /></span>
     <PresetPicker />
     <div class="flex-1"></div>
-    <Button
-      variant="ghost"
-      size="sm"
-      class="h-7 px-2 text-xs text-muted-foreground"
-      aria-expanded={form.showSettings}
-      aria-controls="search-settings-grid"
-      data-testid="show-settings"
-      onclick={() => (form.showSettings = !form.showSettings)}>
-      {form.showSettings ? 'Hide settings' : 'Show settings'}<ChevronRightIcon class="size-3.5 transition-transform {form.showSettings ? 'rotate-90' : ''}" />
-    </Button>
-    {#if form.showSettings}
-    <Button
-      variant="ghost"
-      size="sm"
-      class="h-7 px-2 text-xs text-muted-foreground"
-      aria-expanded={form.advancedSettings}
-      aria-controls="advanced-settings"
-      onclick={() => (form.advancedSettings = !form.advancedSettings)}>
-      Advanced<ChevronRightIcon class="size-3.5 transition-transform {form.advancedSettings ? 'rotate-90' : ''}" />
-    </Button>
     <Button variant="ghost" size="sm" class="h-7 px-2 text-xs text-muted-foreground" onclick={() => (dialogOpen = true)}>
       All {count} parameters<ChevronRightIcon class="size-3.5" />
     </Button>
-    {/if}
   </Card.Header>
 
-  {#if !form.showSettings}
-    <Card.Content>
-      <p class="truncate text-xs text-muted-foreground" title={summary} data-testid="settings-summary">
-        {summary}{form.modified ? ' · changed from the setup' : ''}
-      </p>
-    </Card.Content>
-  {:else}
-  <Card.Content id="search-settings-grid" class="grid grid-cols-2 gap-x-4 gap-y-3.5 md:grid-cols-4">
+  <Card.Content class="grid grid-cols-2 gap-x-4 gap-y-3.5 md:grid-cols-4">
+    <div class="col-span-2 grid min-w-0 gap-1">
+      <span id="variable-mods-label" class="text-xs font-medium">Variable modifications <Help topic="variableMods" /></span>
+      <ModificationsField
+        labelId="variable-mods-label"
+        kind="variable"
+        value={form.value<string[]>('modifications:variable') ?? []}
+        options={modOptions}
+        onChange={(v) => form.setParam('modifications:variable', v)} />
+    </div>
+
+    {#if searchPlan.fdrBlocked}
+      <!-- without decoys: no FDR (both off and disabled; the values come back with the decoys) -->
+      <div class="col-span-2 grid min-w-0 grid-cols-2 content-start gap-x-4 gap-y-1">
+        <Label for="psm-fdr" class="text-xs">PSM FDR <Help topic="psmFdr" /></Label>
+        <Label for="protein-fdr" class="text-xs">Protein FDR <Help topic="proteinFdr" /></Label>
+        <FdrInput id="psm-fdr" off disabled value={0} aria-describedby="no-fdr-hint" class={fdrClass} />
+        <FdrInput id="protein-fdr" off disabled value={0} aria-describedby="no-fdr-hint" class={fdrClass} />
+        <p id="no-fdr-hint" class="col-span-2 text-xs text-muted-foreground" data-testid="no-fdr-hint">{NO_FDR_HINT}</p>
+      </div>
+    {:else}
+      <div class="grid min-w-0 content-start gap-1">
+        <Label for="psm-fdr" class="text-xs">PSM FDR <Help topic="psmFdr" /></Label>
+        <FdrInput
+          id="psm-fdr"
+          class={fdrClass}
+          bind:value={() => form.value<number>('FDR:PSM'), (v) => form.setParam('FDR:PSM', v)} />
+      </div>
+      <div class="grid min-w-0 content-start gap-1">
+        <Label for="protein-fdr" class="text-xs">Protein FDR <Help topic="proteinFdr" /></Label>
+        <!-- off (0): ProSE applies no protein FDR (the example's setting) -->
+        <FdrInput
+          id="protein-fdr"
+          off
+          class={fdrClass}
+          bind:value={() => form.value<number>('FDR:protein'), (v) => form.setParam('FDR:protein', v)} />
+      </div>
+    {/if}
+
+    <div class="col-span-2 flex min-w-0 items-center gap-2 border-t pt-3 md:col-span-4">
+      <Button
+        variant="ghost"
+        size="sm"
+        class="-ml-2 h-7 px-2 text-xs"
+        aria-expanded={form.showSettings}
+        aria-controls="advanced-search-settings"
+        data-testid="show-settings"
+        onclick={() => (form.showSettings = !form.showSettings)}>
+        <ChevronRightIcon class="size-3.5 transition-transform {form.showSettings ? 'rotate-90' : ''}" />Advanced settings
+      </Button>
+      {#if !form.showSettings}
+        <p class="min-w-0 truncate text-xs text-muted-foreground" title={summary} data-testid="settings-summary">
+          {summary}{form.modified ? ' · changed from the setup' : ' · from the setup'}
+        </p>
+      {/if}
+    </div>
+
+    {#if form.showSettings}
+      <div id="advanced-search-settings" class="col-span-2 grid grid-cols-2 gap-x-4 gap-y-3.5 md:col-span-4 md:grid-cols-4">
     <div class="grid min-w-0 gap-1">
-      <Label for="enzyme" class="text-xs">Enzyme</Label>
+      <Label for="enzyme" class="text-xs">Enzyme <Help topic="enzyme" /></Label>
       <ChoiceSelect id="enzyme" value={String(form.value('enzyme'))} options={enzymeOptions} onChange={(v) => form.setParam('enzyme', v)} />
     </div>
     <div class="grid min-w-0 gap-1">
-      <Label for="missed-cleavages" class="text-xs">Missed cleavages</Label>
+      <Label for="missed-cleavages" class="text-xs">Missed cleavages <Help topic="missedCleavages" /></Label>
       <NumberField
         id="missed-cleavages"
         kind="int"
@@ -129,7 +162,7 @@
         onChange={(v) => form.setParam('peptide:missed_cleavages', v)} />
     </div>
     <div class="grid min-w-0 gap-1">
-      <Label for="precursor-tolerance" class="text-xs">Precursor tolerance</Label>
+      <Label for="precursor-tolerance" class="text-xs">Precursor tolerance <Help topic="precursorTolerance" /></Label>
       <ToleranceField
         id="precursor-tolerance"
         label="Precursor tolerance"
@@ -142,7 +175,7 @@
       {/if}
     </div>
     <div class="grid min-w-0 gap-1">
-      <Label for="fragment-tolerance" class="text-xs">Fragment tolerance</Label>
+      <Label for="fragment-tolerance" class="text-xs">Fragment tolerance <Help topic="fragmentTolerance" /></Label>
       <ToleranceField
         id="fragment-tolerance"
         label="Fragment tolerance"
@@ -153,7 +186,7 @@
     </div>
 
     <div class="col-span-2 grid min-w-0 gap-1">
-      <span id="fixed-mods-label" class="text-xs font-medium">Fixed modifications</span>
+      <span id="fixed-mods-label" class="text-xs font-medium">Fixed modifications <Help topic="fixedMods" /></span>
       <ModificationsField
         labelId="fixed-mods-label"
         kind="fixed"
@@ -161,45 +194,8 @@
         options={fixedOptions}
         onChange={(v) => form.setParam('modifications:fixed', v)} />
     </div>
-    <div class="col-span-2 grid min-w-0 gap-1">
-      <span id="variable-mods-label" class="text-xs font-medium">Variable modifications</span>
-      <ModificationsField
-        labelId="variable-mods-label"
-        kind="variable"
-        value={form.value<string[]>('modifications:variable') ?? []}
-        options={modOptions}
-        onChange={(v) => form.setParam('modifications:variable', v)} />
-    </div>
-
-    {#if searchPlan.fdrBlocked}
-      <!-- without decoys: no FDR (both off and disabled; the values come back with the decoys) -->
-      <div class="col-span-2 grid min-w-0 grid-cols-2 content-start gap-x-4 gap-y-1">
-        <Label for="psm-fdr" class="text-xs">PSM FDR</Label>
-        <Label for="protein-fdr" class="text-xs">Protein FDR</Label>
-        <FdrInput id="psm-fdr" off disabled value={0} aria-describedby="no-fdr-hint" class={fdrClass} />
-        <FdrInput id="protein-fdr" off disabled value={0} aria-describedby="no-fdr-hint" class={fdrClass} />
-        <p id="no-fdr-hint" class="col-span-2 text-xs text-muted-foreground" data-testid="no-fdr-hint">{NO_FDR_HINT}</p>
-      </div>
-    {:else}
-      <div class="grid min-w-0 content-start gap-1">
-        <Label for="psm-fdr" class="text-xs">PSM FDR</Label>
-        <FdrInput
-          id="psm-fdr"
-          class={fdrClass}
-          bind:value={() => form.value<number>('FDR:PSM'), (v) => form.setParam('FDR:PSM', v)} />
-      </div>
-      <div class="grid min-w-0 content-start gap-1">
-        <Label for="protein-fdr" class="text-xs">Protein FDR</Label>
-        <!-- off (0): ProSE applies no protein FDR (the example's setting) -->
-        <FdrInput
-          id="protein-fdr"
-          off
-          class={fdrClass}
-          bind:value={() => form.value<number>('FDR:protein'), (v) => form.setParam('FDR:protein', v)} />
-      </div>
-    {/if}
     <div class="grid min-w-0 content-start gap-1">
-      <span id="charges-label" class="text-xs font-medium">Charges</span>
+      <span id="charges-label" class="text-xs font-medium">Charges <Help topic="charges" /></span>
       <RangeField
         labelId="charges-label"
         from={form.value<number>('precursor:min_charge')}
@@ -217,7 +213,7 @@
       {/if}
     </div>
     <div class="grid min-w-0 content-start gap-1">
-      <span id="length-label" class="text-xs font-medium">Peptide length</span>
+      <span id="length-label" class="text-xs font-medium">Peptide length <Help topic="length" /></span>
       <RangeField
         labelId="length-label"
         from={form.value<number>('peptide:min_size')}
@@ -234,8 +230,7 @@
       {/if}
     </div>
 
-    {#if form.advancedSettings}
-      <div id="advanced-settings" class="col-span-2 grid grid-cols-2 gap-x-4 gap-y-3.5 border-t pt-3.5 md:col-span-4 md:grid-cols-4" data-testid="advanced-settings">
+      <div class="col-span-2 grid grid-cols-2 gap-x-4 gap-y-3.5 border-t pt-3.5 md:col-span-4 md:grid-cols-4" data-testid="advanced-settings">
         <div class="grid min-w-0 content-start gap-1">
           <Label for="threads" class="text-xs">Threads</Label>
           <NumberField
@@ -278,9 +273,9 @@
           </div>
         </div>
       </div>
+      </div>
     {/if}
   </Card.Content>
-  {/if}
 </Card.Root>
 
 <AllParametersDialog bind:open={dialogOpen} />

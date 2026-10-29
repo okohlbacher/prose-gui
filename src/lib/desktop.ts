@@ -189,17 +189,19 @@ export function exampleFiles(): Promise<{ spectra: string[]; database: string }>
 }
 
 /**
- * The system's open dialog for spectra (several files: mzML, mzPeak, Thermo .raw), Bruker .d folders (several) or a
- * database; the chosen paths ([] if cancelled).
+ * The system's open dialog for spectra (several: mzML, mzPeak, Thermo .raw, and Bruker .d folders by their analysis.tdf,
+ * as the system's file dialog picks files or folders, not both) or a database; the chosen paths ([] if cancelled).
  */
-export function chooseFiles(kind: 'spectra' | 'bruker' | 'database'): Promise<string[]> {
+export function chooseFiles(kind: 'spectra' | 'database'): Promise<string[]> {
   return oneDialog<string[]>([], async () => {
     const chosen = await open(
       kind === 'spectra'
-        ? { multiple: true, title: 'Add spectrum files', filters: [{ name: 'Spectra (mzML, mzPeak, Thermo RAW)', extensions: ['mzML', 'mzml', 'gz', 'mzpeak', 'raw'] }] }
-        : kind === 'bruker'
-          ? { multiple: true, directory: true, title: 'Add Bruker .d folders' }
-          : { multiple: false, title: 'Choose a FASTA database', filters: [{ name: 'FASTA', extensions: ['fasta', 'fa', 'faa'] }] },
+        ? {
+            multiple: true,
+            title: 'Add spectrum files (for a Bruker .d folder, choose its analysis.tdf)',
+            filters: [{ name: 'Spectra (mzML, mzPeak, Thermo .raw, Bruker analysis.tdf)', extensions: ['mzML', 'mzml', 'gz', 'mzpeak', 'raw', 'tdf'] }],
+          }
+        : { multiple: false, title: 'Choose a FASTA database', filters: [{ name: 'FASTA', extensions: ['fasta', 'fa', 'faa'] }] },
     )
     if (chosen === null) return []
     return Array.isArray(chosen) ? chosen : [chosen]
@@ -229,6 +231,11 @@ export async function onFileDrop(handlers: { over: (on: boolean) => void; drop: 
  */
 export function saveText(name: string, contents: string): Promise<string | null> {
   return oneDialog(null, () => invoke<string | null>('save_text', { name, contents }))
+}
+
+/** UniProt's reference proteome `proteome` as a FASTA in the app's databases folder (downloaded once): its path. */
+export function downloadProteome(proteome: string, reviewed: boolean): Promise<string> {
+  return invoke<string>('download_proteome', { proteome, reviewed })
 }
 
 /** Binary contents (an .xlsx) written where the user chooses, suggesting `name`; the path, or null if cancelled. */

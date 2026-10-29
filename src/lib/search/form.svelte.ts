@@ -11,7 +11,7 @@ import { BUILTIN_PRESETS, DEFAULT_PRESET_ID, deletePreset, loadPresets, renamePr
 import { PROSE_PARAMETERS } from '../settings/prose'
 import { formatBytes } from '../format/bytes'
 import { formatPercent } from '../format/fdr'
-import { isFasta, isSpectrum } from './files'
+import { brukerFolder, isFasta, isSpectrum } from './files'
 
 export type FileRow = DesignFields & {
   id: string
@@ -277,7 +277,7 @@ class SearchForm {
    * start with them. Resolves when the rows are there.
    */
   async addFiles(paths: Iterable<string>) {
-    const list = [...paths]
+    const list = [...paths].map(brukerFolder)
     const skipped = list.filter((p) => !isSpectrum(fileName(p)) && !isFasta(fileName(p))).map(fileName)
     const database = list.filter((p) => isFasta(fileName(p))).pop()
     const listed = new Set([...this.files.map((r) => r.file.path), ...this.#pending])

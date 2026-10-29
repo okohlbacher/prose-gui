@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isFasta, isSpectrum } from './files'
+import { brukerFolder, isFasta, isSpectrum } from './files'
 
 // (the spectrum and protein counts moved to the shim: src-tauri/tests/files.rs)
 describe('files', () => {
@@ -15,4 +15,10 @@ describe('files', () => {
     expect(isFasta('db.fas')).toBe(false)
     expect(isFasta('db.txt')).toBe(false)
   })
+})
+
+it('a Bruker analysis.tdf stands for its .d folder', () => {
+  expect(brukerFolder('/data/run.d/analysis.tdf')).toBe('/data/run.d')
+  expect(brukerFolder('C:\\data\\run.d\\analysis.tdf_bin')).toBe('C:\\data\\run.d')
+  expect(brukerFolder('/data/run.mzML')).toBe('/data/run.mzML')
 })

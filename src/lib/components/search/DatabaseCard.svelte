@@ -3,7 +3,9 @@
   // ProSE cannot search the file (the search does not start), and what ProSE may mishandle in it (notices).
   import * as Card from '$lib/components/ui/card'
   import { Label } from '$lib/components/ui/label'
-  import { chooseFiles } from '$lib/desktop'
+  import { chooseFiles, downloadProteome } from '$lib/desktop'
+  import { ORGANISMS } from '$lib/settings/organisms'
+  import Help from './Help.svelte'
   import { CRAP_PROTEINS, searchForm as form } from '$lib/search/form.svelte'
   import { choiceLabel } from '$lib/settings/labels'
   import ChoiceSelect from './ChoiceSelect.svelte'
@@ -22,6 +24,26 @@
   )
 
   const proteins = $derived(form.database?.proteins ?? null)
+
+  // a database without a FASTA at hand: the organism's reference proteome from UniProt (the app's databases folder)
+  let organism = $state(ORGANISMS[0].id)
+  let otherId = $state('')
+  let reviewed = $state(true)
+  let downloading = $state(false)
+  let downloadError = $state<string | null>(null)
+  const organismOptions = [...ORGANISMS.map((o) => ({ value: o.id, label: `${o.name} · ${o.id}` })), { value: 'other', label: 'Other proteome (UniProt id)…' }]
+  async function download() {
+    downloadError = null
+    downloading = true
+    try {
+      const id = organism === 'other' ? otherId.trim().toUpperCase() : organism
+      await form.setDatabase(await downloadProteome(id, reviewed))
+    } catch (e) {
+      downloadError = String((e as Error)?.message ?? e)
+    } finally {
+      downloading = false
+    }
+  }
 </script>
 
 <Card.Root size="sm" class="gap-3 rounded-lg shadow-none">
@@ -30,7 +52,7 @@
   </Card.Header>
   <Card.Content class="grid gap-x-4 gap-y-3.5 md:grid-cols-[2fr_1fr_1fr]">
     <div class="grid min-w-0 gap-1">
-      <Label for="fasta-file" class="text-xs">FASTA</Label>
+      <Label for="fasta-file" class="text-xs">FASTA <Help topic="database" /></Label>
       <button
         id="fasta-file"
         type="button"
@@ -55,7 +77,7 @@
       </button>
     </div>
     <div class="grid min-w-0 gap-1">
-      <Label for="decoys" class="text-xs">Decoys</Label>
+      <Label for="decoys" class="text-xs">Decoys <Help topic="decoys" /></Label>
       <ChoiceSelect
         id="decoys"
         value={String(form.value('decoys') ?? 'auto')}
@@ -63,15 +85,35 @@
         onChange={(v) => form.setParam('decoys', v)} />
     </div>
     <div class="grid min-w-0 gap-1">
-      <Label for="contaminants" class="text-xs">Contaminants</Label>
+      <Label for="contaminants" class="text-xs">Contaminants <Help topic="contaminants" /></Label>
       <ChoiceSelect
         id="contaminants"
         value={form.contaminants ? 'crap' : 'none'}
         options={[
-          { value: 'crap', label: `Add cRAP (${CRAP_PROTEINS})` },
+          { value: 'crap', label: `Add cRAP (${CRAP_PROTEINS} common contaminants)` },
           { value: 'none', label: 'None' },
         ]}
         onChange={(v) => (form.contaminants = v === 'crap')} />
+    </div>
+    <div class="flex flex-wrap items-center gap-2 text-xs md:col-span-3" data-testid="proteome-download">
+      <span class="text-muted-foreground">{form.database ? 'Or download' : 'No FASTA? Download'} the reference proteome from UniProt:</span>
+      <div class="w-72"><ChoiceSelect id="organism" value={organism} options={organismOptions} onChange={(v) => (organism = v)} /></div>
+      {#if organism === 'other'}
+        <input
+          class="h-8 w-36 rounded-md border border-input bg-background px-2 font-mono text-[12.5px]"
+          placeholder="UP000005640"
+          aria-label="UniProt proteome id"
+          bind:value={otherId} />
+      {/if}
+      <label class="flex items-center gap-1.5" title="Swiss-Prot: manually reviewed entries only. Smaller and faster; leave it off for organisms with few reviewed proteins.">
+        <input type="checkbox" bind:checked={reviewed} /> Reviewed entries only
+      </label>
+      <button
+        type="button"
+        class="h-8 rounded-md border px-3 hover:bg-muted disabled:opacity-50"
+        disabled={downloading || (organism === 'other' && !/^UP\d{9}$/i.test(otherId.trim()))}
+        onclick={download}>{downloading ? 'Downloading…' : 'Download'}</button>
+      {#if downloadError}<p class="w-full text-destructive" role="alert">{downloadError}</p>{/if}
     </div>
     {#if form.database?.problem || (form.database?.warnings.length ?? 0) > 0}
       <div class="flex flex-col gap-2 md:col-span-3">

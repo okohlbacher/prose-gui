@@ -181,6 +181,46 @@ fn searches_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .join("searches"))
 }
 
+/// The reference proteome `proteome` (a UniProt proteome id, `UP` and nine digits) as a FASTA in the app's
+/// `databases/` folder, downloaded from UniProt's REST API with curl (macOS, Windows 10 and Linux have it) unless it
+/// is there already; `reviewed`: Swiss-Prot entries only. The only network contact of the app, and only on this
+/// request of the user. -> the FASTA's path.
+#[tauri::command]
+async fn download_proteome(app: AppHandle, proteome: String, reviewed: bool) -> Result<String, String> {
+    if !(proteome.len() == 11 && proteome.starts_with("UP") && proteome[2..].bytes().all(|b| b.is_ascii_digit())) {
+        return Err(format!("{proteome} is not a UniProt proteome id (UP and nine digits, e.g. UP000005640)."));
+    }
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("databases");
+    tauri::async_runtime::spawn_blocking(move || {
+        std::fs::create_dir_all(&dir).map_err(|e| format!("{} cannot be made ({e}).", dir.display()))?;
+        let path = dir.join(format!("{proteome}{}.fasta", if reviewed { "_reviewed" } else { "" }));
+        if std::fs::metadata(&path).map(|m| m.len() > 0).unwrap_or(false) {
+            return Ok(path.to_string_lossy().into_owned());
+        }
+        let query = format!("%28proteome%3A{proteome}%29{}", if reviewed { "%20AND%20%28reviewed%3Atrue%29" } else { "" });
+        let url = format!("https://rest.uniprot.org/uniprotkb/stream?compressed=false&format=fasta&query={query}");
+        let partial = path.with_extension("fasta.partial");
+        let out = std::process::Command::new("curl")
+            .args(["-fsSL", "--retry", "2", "--connect-timeout", "20", "-o"])
+            .arg(&partial)
+            .arg(&url)
+            .output()
+            .map_err(|e| format!("curl cannot be started ({e}); download the FASTA from https://www.uniprot.org/proteomes/{proteome} instead."))?;
+        let size = std::fs::metadata(&partial).map(|m| m.len()).unwrap_or(0);
+        if !out.status.success() || size == 0 {
+            let _ = std::fs::remove_file(&partial);
+            return Err(format!(
+                "The download from UniProt failed ({}). Check the internet connection, or download the FASTA from https://www.uniprot.org/proteomes/{proteome}.",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        std::fs::rename(&partial, &path).map_err(|e| e.to_string())?;
+        Ok(path.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// A file of a search (see `files::read_search_file`), as raw bytes.
 #[tauri::command]
 async fn read_search_file(
@@ -678,6 +718,7 @@ pub fn run() {
             cpu_count,
             example_files,
             save_text,
+            download_proteome,
             save_bytes,
             save_search_file,
             history_list,
