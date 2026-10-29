@@ -187,7 +187,7 @@
       <Tabs.Root bind:value={view.tab} class="flex min-h-0 flex-1 flex-col gap-3">
         <div class="flex flex-wrap items-center justify-between gap-2" class:hidden={psmOpen}>
           <!-- scrolls sideways where the window is too narrow for all tabs -->
-          <Tabs.List class="max-w-full overflow-x-auto">
+          <Tabs.List class="max-w-full overflow-x-auto" data-testid="results-tabs">
             {#each tabs as t (t.value)}
               <Tabs.Trigger value={t.value} class="px-3 text-[13px]">
                 {t.label}{#if t.count !== undefined}<span class="ml-1 text-xs font-normal text-muted-foreground tabular-nums"

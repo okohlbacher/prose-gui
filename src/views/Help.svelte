@@ -3,6 +3,7 @@
   // and where to learn more (videos, the ProSE web app and code). Links open in the system's browser.
   import { openUrl } from '$lib/desktop'
   import { helpTarget } from '$lib/help-link.svelte'
+  import { shortcuts } from '$lib/shortcuts.svelte'
   import { tick } from 'svelte'
   import { HELP, type HelpKey } from '$lib/settings/help'
 
@@ -72,6 +73,7 @@
       {#each [['how', 'How a search works'], ['fdr', 'Decoys and the FDR'], ['settings', 'The settings'], ['results', 'Reading the results'], ['learn', 'Videos and links']] as [id, label] (id)}
         <button type="button" class="jump" onclick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })}>{label}</button>
       {/each}
+      <button type="button" class="jump" onclick={() => (shortcuts.open = true)}>Keyboard shortcuts</button>
     </nav>
   </header>
 

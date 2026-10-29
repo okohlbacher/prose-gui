@@ -1,5 +1,6 @@
 <script lang="ts">
   import CloseGuard from '$lib/components/CloseGuard.svelte'
+  import Shortcuts from '$lib/components/Shortcuts.svelte'
   import TopBar from '$lib/components/TopBar.svelte'
   import { Toaster } from '$lib/components/ui/sonner'
   import * as Tooltip from '$lib/components/ui/tooltip'
@@ -22,6 +23,7 @@
 </script>
 
 <svelte:window onhashchange={readHash} />
+<Shortcuts />
 
 <Tooltip.Provider delayDuration={300}>
   <!-- the results use the whole width and the height of the window below the top bar (which wraps on
