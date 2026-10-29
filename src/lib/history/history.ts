@@ -356,7 +356,7 @@ export const LEVEL = 1
  * Files of the folder that a project leaves out: the database copy (`proteins.fasta` has the sequences)
  * and the tool's log (its first line is the full command line, with paths of this computer). As `project.rs` `LEFT_OUT`.
  */
-export const LEFT_OUT: ReadonlySet<string> = new Set(['database.fasta', 'database.json', 'prose.log'])
+export const LEFT_OUT: ReadonlySet<string> = new Set(['database.fasta', 'database.json', 'database-source.json', 'prose.log'])
 
 /**
  * `inputs.json` as a project holds it: the files by name only, not the paths of this computer.

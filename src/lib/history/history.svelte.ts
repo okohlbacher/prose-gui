@@ -24,6 +24,8 @@ import {
   type EndedSearch,
   type OpenResult,
 } from '../search/session.svelte'
+import { searchForm } from '../search/form.svelte'
+import { searchPlan, startSearch } from '../search/plan.svelte'
 import { toolState } from '../search/tool.svelte'
 import {
   APP_VERSION,
@@ -32,7 +34,9 @@ import {
   exportProject,
   importProject,
   openSearch,
+  parseRecord,
   ProjectError,
+  RECORD_FILE,
   proteinsFasta,
   psmsOfSearch,
   recordOf,
@@ -282,6 +286,45 @@ export async function openProjectFile(): Promise<boolean> {
   if (id === null) return false
   await refreshHistory()
   await show(id)
+  return true
+}
+
+/**
+ * The search `id` of History in New search: its files (by their paths in inputs.json), their design, the database
+ * (its path in database.json, else none: it was copied with the contaminants) and the settings; then, with `start`,
+ * the search starts once the form can (Re-run). Resolves with whether it started.
+ */
+export async function reopenInNewSearch(id: string, start: boolean): Promise<boolean> {
+  const record = parseRecord(new TextDecoder().decode(await backend.read(id, RECORD_FILE)))
+  const inputs = JSON.parse(new TextDecoder().decode(await backend.read(id, 'inputs.json'))) as { path: string; name: string; index: number }[]
+  // the user's FASTA: database.json (searched as it is), database-source.json (searched with contaminants)
+  let database: string | null = null
+  for (const name of ['database.json', 'database-source.json']) {
+    try {
+      database = (JSON.parse(new TextDecoder().decode(await backend.read(id, name))) as { path?: string }).path ?? null
+      if (database) break
+    } catch {
+      // (not there: an older search, or one from a project)
+    }
+  }
+  const rowOf = new Map(record.design.rows.map((r) => [r.fileName, r]))
+  const ordered = [...inputs].sort((a, b) => a.index - b.index)
+  navigate({ view: 'search' })
+  await searchForm.restoreSearch({
+    name: record.name,
+    inputs: ordered.map((i) => {
+      const r = rowOf.get(i.name)
+      return { path: i.path, fields: r ? { condition: r.condition ?? undefined, replicate: r.replicate, fraction: r.fraction, techReplicate: r.techReplicate } : {} }
+    }),
+    database,
+    databaseName: record.database,
+    settings: record.settings,
+  })
+  if (!start) return false
+  // (the database's proteins are counted in the background: start once the form allows it)
+  for (let tries = 0; tries < 100 && !searchPlan.canStart; tries++) await new Promise((r) => setTimeout(r, 100))
+  if (!searchPlan.canStart) return false
+  await startSearch()
   return true
 }
 

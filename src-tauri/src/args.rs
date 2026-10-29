@@ -193,6 +193,8 @@ pub const DATABASE_FILE: &str = "database.fasta";
 /// The record of the user's database in the search folder when ProSE searches it as it is (no contaminants):
 /// `{"path": "<absolute path>"}`, the one absolute path the reader may read (`files::resolve_search_file`).
 pub const DATABASE_RECORD: &str = "database.json";
+/// The user's FASTA of a search with contaminants (which searched the folder's copy): for Re-run only.
+pub const DATABASE_SOURCE: &str = "database-source.json";
 
 /// The QPX output of ProSE in the search folder: `-out_qpx`, with `-qpx_extended` (the columns and the footer
 /// the results reader needs, docs/parity.md).

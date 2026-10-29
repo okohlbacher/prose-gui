@@ -26,7 +26,7 @@ pub const INPUTS: &str = "inputs.json";
 /// Files of the folder that a project leaves out: the database copy (`proteins.fasta` has the sequences),
 /// the path of a database searched without contaminants, and the tool's log (its first line is the full
 /// command line, with paths of this computer).
-pub const LEFT_OUT: [&str; 3] = ["database.fasta", "database.json", "prose.log"];
+pub const LEFT_OUT: [&str; 4] = ["database.fasta", "database.json", "database-source.json", "prose.log"];
 /// The most a project may unpack to (the front end reads it into memory).
 pub const MAX_UNPACKED: u64 = 3 * 1024 * 1024 * 1024;
 /// The most entries of a zip without zip64.

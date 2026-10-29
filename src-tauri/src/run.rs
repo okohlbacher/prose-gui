@@ -34,6 +34,7 @@ use crate::args::{
     build_args_with, humanize, input_placements, input_records_with, reserved_stem,
     with_contaminants, InputLinks, InputRecord, Placement, SearchRequest, DATABASE_FILE,
     DATABASE_RECORD,
+    DATABASE_SOURCE,
 };
 use crate::decoys::DecoyRules;
 use crate::history::{finish_partial, lock_partial, remove_partial, with_backoff};
@@ -1276,6 +1277,10 @@ fn prepare_folder(
             std::io::ErrorKind::InvalidData => e.to_string(),
             _ => format!("The database with contaminants cannot be written ({e})."),
         })?;
+        // where the user's FASTA was, for History's Re-run only (never read as a database, and not in projects)
+        let source = serde_json::json!({ "path": request.database }).to_string();
+        fs::write(dir.join(DATABASE_SOURCE), source)
+            .map_err(|e| format!("{DATABASE_SOURCE} cannot be written ({e})."))?;
     } else {
         // the one file outside the folder that the results reader may read (files::resolve_search_file)
         let record = serde_json::json!({ "path": request.database }).to_string();

@@ -494,6 +494,49 @@ class SearchForm {
     }
   }
 
+  /**
+   * A saved search's files, design, database and settings in the form ("Open in New search" and "Re-run" of
+   * History, survey P0-9). Files that are no longer where they were are named in a notice and left out (the search
+   * cannot start with fewer files unnoticed: the notice stays); a missing database leaves the FASTA to choose.
+   */
+  async restoreSearch(s: {
+    name: string
+    inputs: { path: string; fields: DesignFields }[]
+    database: string | null
+    databaseName: string
+    settings: { parameters: Record<string, unknown>; rescore: boolean; peptdeep: boolean; contaminants: boolean; presetId?: string }
+  }) {
+    this.#leaveExample()
+    this.files = []
+    this.notices = []
+    this.removed = null
+    this.database = null
+    this.presetId = this.presets.some((p) => p.id === s.settings.presetId) ? s.settings.presetId! : DEFAULT_PRESET_ID
+    this.overrides = copyValues(s.settings.parameters)
+    this.rescore = s.settings.rescore
+    this.peptdeep = s.settings.peptdeep
+    this.contaminants = s.settings.contaminants
+    this.showSettings = true
+    this.adding++
+    try {
+      const facts = await inspectFiles(s.inputs.map((i) => i.path))
+      const missing = facts.filter((f) => f.error !== null)
+      facts.forEach((f, k) => {
+        if (f.error === null) this.#addRow(f, s.inputs[k].fields)
+      })
+      if (missing.length > 0) {
+        this.notices.push(`From “${s.name}”, ${missing.length === 1 ? 'this file is' : 'these files are'} no longer there: ${missing.map((f) => f.name).join(', ')}. Add ${missing.length === 1 ? 'it' : 'them'} again to search the same files.`)
+      }
+    } finally {
+      this.adding--
+    }
+    if (s.database) await this.setDatabase(s.database)
+    const chosen = this.database as DatabaseChoice | null
+    if (!chosen || chosen.error) {
+      this.notices.push(`Choose the database of “${s.name}” again: ${s.databaseName}${s.database ? ` is no longer at ${s.database}` : ''}.`)
+    }
+  }
+
   /** "6 files · 1.9 GB" */
   get filesLine(): string {
     const bytes = this.files.reduce((sum, r) => sum + r.file.size, 0)

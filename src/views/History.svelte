@@ -13,7 +13,7 @@
   import * as Table from '$lib/components/ui/table'
   import { formatBytes } from '$lib/format/bytes'
   import { formatCount } from '$lib/results/display'
-  import { history, openFromHistory, openProjectFile, openQpxFolderFile, refreshHistory, removeFromHistory, rename } from '$lib/history/history.svelte'
+  import { history, openFromHistory, openProjectFile, openQpxFolderFile, refreshHistory, removeFromHistory, rename, reopenInNewSearch } from '$lib/history/history.svelte'
   import type { HistoryEntry } from '$lib/history/history'
   import { distinguishing, entryFacts } from '$lib/history/details'
   import { searchForm } from '$lib/search/form.svelte'
@@ -72,6 +72,19 @@
       await openProjectFile()
     } catch (e) {
       problem = { title: 'Could not open', text: `The project file could not be opened: ${message(e)}` }
+    } finally {
+      busy = null
+    }
+  }
+
+  /** "Settings" (into New search) and "Re-run" (and start it): the search's files, design, database and settings. */
+  async function reopen(entry: HistoryEntry, start: boolean) {
+    problem = null
+    busy = entry.id
+    try {
+      await reopenInNewSearch(entry.id, start)
+    } catch (e) {
+      problem = { title: 'Could not open', text: `The settings of ${entry.name ?? entry.id} could not be read: ${message(e)}` }
     } finally {
       busy = null
     }
@@ -247,6 +260,20 @@
                   <Button size="xs" disabled={busy !== null || entry.error !== null} aria-label="Open {entry.name ?? entry.id}" onclick={() => open(entry)}>
                     {busy === entry.id ? 'Opening…' : 'Open'}
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    disabled={busy !== null || entry.error !== null}
+                    title="Its files, design, database and settings in New search, to change and start"
+                    aria-label="Open the settings of {entry.name ?? entry.id} in New search"
+                    onclick={() => reopen(entry, false)}>Settings</Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    disabled={busy !== null || entry.error !== null}
+                    title="Search the same files again with the same settings"
+                    aria-label="Re-run {entry.name ?? entry.id}"
+                    onclick={() => reopen(entry, true)}>Re-run</Button>
                   <!-- (not while it opens) -->
                   <Button variant="outline" size="xs" disabled={busy === entry.id || entry.error !== null} aria-label="Rename {entry.name ?? entry.id}" onclick={() => startRename(entry)}
                     >Rename</Button>
