@@ -69,10 +69,12 @@
     <h2 id="how-h">How a database search works</h2>
     <p>
       In bottom-up proteomics, proteins are cut into peptides by an enzyme (usually trypsin). The mass spectrometer measures
-      each peptide's mass (the <em>precursor</em>, in the MS1 scan), then breaks it apart and measures the masses of the
-      pieces (the <em>fragments</em>, in the MS2 spectrum). A peptide breaks mostly along its backbone, so its fragments form
-      two ladders: <b style:color={b}>b ions</b> carry the start of the sequence, <b style:color={y}>y ions</b> the end.
-      The mass differences between neighbouring rungs are the masses of single amino acids.
+      the mass-to-charge ratio (m/z) of each peptide ion (the <em>precursor</em>, in the MS1 scan; with its charge this gives the
+      peptide's mass), then breaks it apart and measures the m/z of the pieces (the <em>fragments</em>, in the MS2 spectrum). In
+      the usual CID/HCD fragmentation a peptide breaks mostly along its backbone, so its fragments form two ladders:
+      <b style:color={b}>b ions</b> carry the start (N-terminus) of the sequence, <b style:color={y}>y ions</b> the end
+      (C-terminus). Neighbouring rungs of one ladder differ by the mass of one amino-acid residue (with any modification on it).
+      Not every rung is observed in a real spectrum.
     </p>
 
     <!-- 1. fragmentation into b and y ions -->
@@ -95,7 +97,7 @@
           <marker id="ay" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10z" fill={y} /></marker>
         </defs>
       </svg>
-      <figcaption>A peptide breaks between its residues. Each break gives a b ion (the part with the start) and a y ion (the part with the end).</figcaption>
+      <figcaption>A peptide breaks between its residues. A break can give a b ion (the part with the start) and a y ion (the part with the end); often only one of them is seen.</figcaption>
     </figure>
 
     <p>
@@ -133,17 +135,19 @@
           <line x1={x} x2={x} y1="85" y2="135" stroke-width="4" stroke-linecap="round" stroke={kind === 'b' ? b : y} opacity="0.5" />
         {/each}
         <text x="30" y="18" class="sub">measured spectrum</text>
-        <text x="30" y="160" class="sub">predicted b and y ions of the candidate peptide</text>
+        <text x="30" y="160" class="sub">theoretical b and y ion positions (m/z) of the candidate peptide</text>
       </svg>
       <figcaption>
-        Coloured peaks line up with predicted ions; grey ones are explained by nothing. The more intense peaks a peptide explains,
-        the better its score. The Results view shows every PSM this way.
+        Coloured peaks match the candidate's b and y ions within the fragment tolerance; grey peaks are unassigned (other fragment
+        types, other peptides or noise). Explaining more measured peaks, above all intense ones, gives a higher score. The Results
+        view shows every PSM this way.
       </figcaption>
     </figure>
     <p>
-      ProSE then rescores the matches with <em>Percolator</em> (when it is installed): a learned combination of many features
-      (score, mass error, charge, number of matched ions and, with PeptDeep, how well predicted fragment intensities and
-      retention times agree). From the peptides it infers the proteins, and finally it estimates how many of the results are wrong.
+      With rescoring on (and Percolator installed), ProSE then rescores the matches with <em>Percolator</em>: a learned combination
+      of many features (score, mass error, charge, number of matched ions and, with PeptDeep, how well predicted fragment
+      intensities and retention times agree). From the peptides it infers the proteins, and finally it estimates how many of the
+      results are wrong.
     </p>
   </section>
 
@@ -151,20 +155,21 @@
     <h2 id="fdr-h">Decoys and the false discovery rate</h2>
     <p>
       Every spectrum gets a best match, even a spectrum of noise or of a peptide that is not in the database. To tell how many
-      of the matches are wrong, ProSE also searches <em>decoys</em>: the protein sequences reversed or shuffled, which do not
-      occur in the sample. A wrong match is about as likely to land on a decoy as on a real (target) sequence, so the decoys
-      above a score cutoff estimate the wrong targets above it.
+      of the matches are wrong, ProSE also searches <em>decoys</em>: artificial sequences (the proteins reversed or shuffled) built to
+      model wrong matches. The method assumes that a wrong match is about as likely to land on a decoy as on a real (target)
+      sequence, so the decoys above a score cutoff estimate the wrong targets above it.
     </p>
     <figure>
       <svg viewBox="0 0 640 190" role="img" aria-labelledby="fig4">
         <title id="fig4">Scores of target and decoy matches; above the cutoff, decoys divided by targets estimates the FDR</title>
-        <path d="M40 160 C120 160 150 60 210 60 C270 60 300 160 380 160 Z" fill={y} opacity="0.35" />
+        <path d="M40 160 C120 160 150 60 210 60 C270 60 310 140 370 152 C410 158 440 160 470 160 Z" fill={y} opacity="0.35" />
+        <text x="420" y="150" text-anchor="middle" font-size="10" fill={y}>decoys above the cutoff</text>
         <path d="M40 160 C140 160 170 70 230 70 C290 70 320 150 360 140 C420 120 440 30 500 30 C560 30 580 160 610 160 Z" fill={b} opacity="0.35" />
         <line x1="40" x2="620" y1="160" y2="160" class="axis" />
         <line x1="370" x2="370" y1="20" y2="165" class="cut" />
         <text x="378" y="30" class="sub">score cutoff</text>
         <text x="210" y="52" text-anchor="middle" font-size="11" fill={y}>decoys (wrong)</text>
-        <text x="500" y="22" text-anchor="middle" font-size="11" fill={b}>targets (mostly right)</text>
+        <text x="500" y="22" text-anchor="middle" font-size="11" fill={b}>targets (right + some wrong)</text>
         <text x="40" y="182" class="sub">low score</text><text x="620" y="182" text-anchor="end" class="sub">high score</text>
       </svg>
       <figcaption>FDR above the cutoff ≈ decoy matches ÷ target matches above it. ProSE chooses the cutoff that gives the FDR you set (e.g. 1 %).</figcaption>
@@ -177,14 +182,19 @@
         can contain far more than 1 % wrong proteins. Keep the protein FDR on for protein lists. When it is off, the app says so.
       </li>
       <li>Counts of peptides are not FDR-controlled at the peptide level; they come from the PSMs at the PSM FDR.</li>
+      <li>
+        Only PSMs that pass the search's PSM FDR are kept. A stricter cutoff in the results filters them further; to see matches
+        below the original cutoff, search again with a higher FDR.
+      </li>
     </ul>
   </section>
 
   <section id="settings" aria-labelledby="settings-h">
     <h2 id="settings-h">The settings</h2>
     <p>
-      For most searches only three things need choosing: the <b>setup</b> of your instrument, the <b>database</b> of your organism,
-      and the <b>variable modifications</b> of your sample preparation. The rest follows from the setup and is under “Advanced settings”.
+      Start with the <b>setup</b> of your instrument, the <b>database</b> of your organism and the <b>variable modifications</b> of your
+      sample preparation. The instrument-dependent rest comes from the setup and is under “Advanced settings”, but the built-in
+      setups assume a tryptic digest and alkylated cysteines: check the enzyme and the fixed modifications against your protocol.
       The same explanations are behind the <span aria-hidden="true">?</span> beside each setting.
     </p>
     <dl class="settings">
@@ -200,11 +210,12 @@
   <section id="results" aria-labelledby="results-h">
     <h2 id="results-h">Reading the results</h2>
     <ul>
-      <li><b>Overview:</b> what was searched, the files, and ProSE's mass accuracy with recommended tolerances for the next search. Its methods text can be copied into a paper.</li>
+      <li><b>Overview:</b> what was searched, the files, and the observed precursor and fragment mass errors with recommended tolerances for the next search. Its methods text can be copied into a paper.</li>
+      <li><b>Protein groups:</b> a peptide can occur in several proteins. Proteins that share all their identified peptides cannot be told apart and form one group; the evidence for a group is not unique evidence for each protein or isoform in it.</li>
       <li><b>Proteins, Peptides, PSMs:</b> click a row to go deeper: a protein opens its coverage and peptides, a peptide its PSMs, a PSM its spectrum. Accessions are links to their protein.</li>
       <li><b>Spectrum:</b> measured peaks above, predicted (PeptDeep) or theoretical ions below. Drag across it to zoom, double-click to zoom out. Hovering an ion in the table marks its peak.</li>
       <li><b>QC:</b> the scores, mass errors and PSMs per file. The score chart shows only PSMs that passed the FDR, so it is not a full target-decoy separation plot.</li>
-      <li><b>Modification positions</b> are where the search placed them, not localized with a site score.</li>
+      <li><b>Modification positions</b> are where the search placed them, not localized with a site score. An open-search mass shift is a mass difference, not an identified modification.</li>
       <li><b>Export:</b> CSV or Excel of the table you see, the idXML for other OpenMS tools, or a .prose project for colleagues.</li>
     </ul>
   </section>
