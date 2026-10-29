@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- ProSE: the OpenMS mirrored spectrum (its gradient, orange to blue) seen through a search lens, on white (light theme) -->
+  <defs>
+    <linearGradient id="g" gradientUnits="userSpaceOnUse" x1="40" x2="394" y1="0" y2="0">
+      <stop offset="0" stop-color="#ffb401"/>
+      <stop offset=".22" stop-color="#ff7501"/>
+      <stop offset=".54" stop-color="#ff03cb"/>
+      <stop offset=".77" stop-color="#b503ff"/>
+      <stop offset="1" stop-color="#3157e9"/>
+    </linearGradient>
+    <clipPath id="lens"><circle cx="452" cy="452" r="232"/></clipPath>
+  </defs>
+  <rect x="72" y="72" width="880" height="880" rx="196" fill="#ffffff" stroke="#dcdcdc" stroke-width="16"/>
+  <!-- the mirror: peaks above the axis, the prediction below -->
+  <g clip-path="url(#lens)" fill="url(#g)">
+    <g transform="translate(235 0)">
+      <rect x="40"  y="372" width="34" height="80" rx="8"/>
+      <rect x="104" y="262" width="34" height="190" rx="8"/>
+      <rect x="168" y="332" width="34" height="120" rx="8"/>
+      <rect x="232" y="232" width="34" height="220" rx="8"/>
+      <rect x="296" y="302" width="34" height="150" rx="8"/>
+      <rect x="360" y="392" width="34" height="60" rx="8"/>
+      <rect x="40"  y="472" width="34" height="60" rx="8" opacity=".45"/>
+      <rect x="104" y="472" width="34" height="150" rx="8" opacity=".45"/>
+      <rect x="168" y="472" width="34" height="100" rx="8" opacity=".45"/>
+      <rect x="232" y="472" width="34" height="180" rx="8" opacity=".45"/>
+      <rect x="296" y="472" width="34" height="120" rx="8" opacity=".45"/>
+      <rect x="360" y="472" width="34" height="40" rx="8" opacity=".45"/>
+    </g>
+  </g>
+  <!-- the lens and its handle -->
+  <circle cx="452" cy="452" r="252" fill="none" stroke="#231f20" stroke-width="40"/>
+  <path d="M640 640 L820 820" stroke="#231f20" stroke-width="72" stroke-linecap="round"/>
+</svg>
