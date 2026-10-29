@@ -40,8 +40,9 @@ pub fn parse_ols(body: &str) -> Result<Vec<Term>, String> {
 }
 
 /// Terms of `ontologies` (OLS ids: ncbitaxon, uberon, cl, mondo, efo, ms, pride, ...) matching `query`: from the
-/// cache in `cache_dir`, else from OLS4 (and then cached). Offline without a cached answer: an error.
-pub fn ols_search(cache_dir: &Path, query: &str, ontologies: &[String]) -> Result<Vec<Term>, String> {
+/// cache in `cache_dir`, else, if `online`, from OLS4 (and then cached). Offline without a cached answer: an
+/// error; not `online` without one: no terms (typing consults the cache only; the user asks OLS explicitly).
+pub fn ols_search(cache_dir: &Path, query: &str, ontologies: &[String], online: bool) -> Result<Vec<Term>, String> {
     let query = query.trim();
     if query.len() < 2 {
         return Ok(vec![]);
@@ -51,6 +52,9 @@ pub fn ols_search(cache_dir: &Path, query: &str, ontologies: &[String]) -> Resul
     let cached = cache_dir.join(format!("{:016x}.json", h.finish()));
     if let Ok(body) = std::fs::read_to_string(&cached) {
         return parse_ols(&body);
+    }
+    if !online {
+        return Ok(vec![]);
     }
     let url = format!(
         "https://www.ebi.ac.uk/ols4/api/search?q={}&ontology={}&rows=20&fieldList=label,obo_id",
@@ -133,7 +137,9 @@ mod tests {
         let mut h = DefaultHasher::new();
         ("liver".to_string(), &ont).hash(&mut h);
         std::fs::write(dir.join(format!("{:016x}.json", h.finish())), r#"{"response":{"docs":[{"label":"liver","obo_id":"UBERON:0002107"}]}}"#).unwrap();
-        assert_eq!(ols_search(&dir, " Liver ", &ont).unwrap()[0].accession, "UBERON:0002107");
+        assert_eq!(ols_search(&dir, " Liver ", &ont, false).unwrap()[0].accession, "UBERON:0002107");
+        // not cached and not online: no terms, and no request
+        assert_eq!(ols_search(&dir, "kidney", &ont, false).unwrap(), vec![]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

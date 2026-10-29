@@ -12,6 +12,23 @@ use std::time::Duration;
 /// Set by `cancel`: the running download stops after killing curl.
 pub static CANCEL: AtomicBool = AtomicBool::new(false);
 
+/// The folder the user chose in the system's dialog for downloads (`choose_download_folder`): the only one
+/// `download_data_files` writes into; the page never names it.
+pub static FOLDER: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+/// The folder of the last `choose_download_folder`; an error if none was chosen.
+pub fn chosen_folder() -> Result<PathBuf, String> {
+    FOLDER.lock().map_err(|e| e.to_string())?.clone().ok_or_else(|| "Choose the folder for the download first.".to_string())
+}
+
+/// The protocols curl may use, also after a redirect: HTTPS only (the unit tests' local server speaks HTTP).
+const PROTO: &str = if cfg!(test) { "=http,https" } else { "=https" };
+
+/// An address the app downloads from: HTTPS (PRIDE's FTP addresses are made HTTPS by `https_of`).
+pub fn allowed_url(url: &str) -> bool {
+    url.starts_with("https://") || (cfg!(test) && url.starts_with("http://127.0.0.1:"))
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RemoteFile {
     pub name: String,
@@ -31,11 +48,12 @@ pub fn https_of(url: &str) -> String {
         .unwrap_or_else(|| url.to_string())
 }
 
-/// The files of one page of `projects/<PXD>/files`.
-pub fn parse_files(body: &str) -> Result<Vec<RemoteFile>, String> {
+/// The files of one page of `projects/<PXD>/files` (those with an FTP or HTTP location), and how many entries
+/// the page had (with those without one: the page's length decides whether another page follows).
+pub fn parse_files(body: &str) -> Result<(Vec<RemoteFile>, usize), String> {
     let v: serde_json::Value = serde_json::from_str(body).map_err(|e| format!("PRIDE answered no JSON ({e})."))?;
     let list = v.as_array().ok_or("PRIDE answered without a file list.")?;
-    Ok(list
+    let files = list
         .iter()
         .filter_map(|f| {
             let name = f["fileName"].as_str()?;
@@ -46,12 +64,17 @@ pub fn parse_files(body: &str) -> Result<Vec<RemoteFile>, String> {
                 .find(|u| u.starts_with("ftp://") || u.starts_with("http"))?;
             Some(RemoteFile { name: name.to_string(), size: f["fileSizeBytes"].as_u64().unwrap_or(0), url: https_of(url) })
         })
-        .collect())
+        .collect();
+    Ok((files, list.len()))
 }
+
+/// Pages of `PAGE_SIZE` files read at most: 50,000 files.
+const PAGE_SIZE: usize = 500;
+const MAX_PAGES: usize = 100;
 
 fn curl_text(url: &str) -> Result<String, String> {
     let out = Command::new("curl")
-        .args(["-fsSL", "--max-time", "60", url])
+        .args(["-fsSL", "--proto", PROTO, "--proto-redir", PROTO, "--max-time", "60", url])
         .output()
         .map_err(|e| format!("curl cannot be started ({e})."))?;
     if !out.status.success() {
@@ -66,21 +89,32 @@ pub fn project_files(pxd: &str) -> Result<Vec<RemoteFile>, String> {
         return Err(format!("{pxd} is not a ProteomeXchange accession (PXD and digits)."));
     }
     let mut all = Vec::new();
-    for page in 0..50 {
-        let url = format!("https://www.ebi.ac.uk/pride/ws/archive/v3/projects/{pxd}/files?pageSize=500&page={page}");
-        let files = parse_files(&curl_text(&url)?)?;
-        let last = files.len() < 500;
+    for page in 0..MAX_PAGES {
+        let url = format!("https://www.ebi.ac.uk/pride/ws/archive/v3/projects/{pxd}/files?pageSize={PAGE_SIZE}&page={page}");
+        let (files, entries) = parse_files(&curl_text(&url)?)?;
         all.extend(files);
-        if last {
-            break;
+        if entries < PAGE_SIZE {
+            return Ok(all);
         }
     }
-    Ok(all)
+    Err(format!("{pxd} has more than {} files in PRIDE; ProSE reads no more of its list.", PAGE_SIZE * MAX_PAGES))
 }
 
-/// A file name to write into the chosen folder: no folders, nothing hidden.
+/// A file name to write into the chosen folder on any system: no folders, nothing hidden, no drive or stream
+/// (`C:x.raw`, `a:b`), no control characters or characters Windows refuses, no name Windows reserves (`CON`,
+/// `NUL.raw`, `COM1`), no trailing dot or space.
 pub fn safe_name(name: &str) -> bool {
-    !name.is_empty() && !name.starts_with('.') && !name.contains(['/', '\\']) && name != ".."
+    const RESERVED: [&str; 22] = [
+        "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9", "lpt1", "lpt2",
+        "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+    ];
+    let device = name.split('.').next().unwrap_or("").trim_end().to_lowercase();
+    !name.is_empty()
+        && !name.starts_with('.')
+        && !name.ends_with(['.', ' '])
+        && !name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|'])
+        && !name.chars().any(char::is_control)
+        && !RESERVED.contains(&device.as_str())
 }
 
 #[derive(Serialize, Clone)]
@@ -102,8 +136,8 @@ pub fn download(folder: &Path, files: &[RemoteFile], progress: impl Fn(Progress)
         if !safe_name(&f.name) {
             return Err(format!("{} is not a file name ProSE writes.", f.name));
         }
-        if !(f.url.starts_with("https://") || f.url.starts_with("http://") || f.url.starts_with("ftp://")) {
-            return Err(format!("{} has no http, https or ftp address.", f.name));
+        if !allowed_url(&f.url) {
+            return Err(format!("{} has no HTTPS address ({}): the app downloads over HTTPS only.", f.name, f.url));
         }
         // the server's size: PRIDE's file list has outdated sizes for some files (its generated/ ones)
         let size = remote_size(&f.url).unwrap_or(f.size);
@@ -125,7 +159,10 @@ pub fn download(folder: &Path, files: &[RemoteFile], progress: impl Fn(Progress)
 
 /// The size the server gives for `url` (the Content-Length of a HEAD request, after redirects); None if it says none.
 pub fn remote_size(url: &str) -> Option<u64> {
-    let out = Command::new("curl").args(["-sIL", "--connect-timeout", "30", "--max-time", "60", url]).output().ok()?;
+    let out = Command::new("curl")
+        .args(["-sIL", "--proto", PROTO, "--proto-redir", PROTO, "--connect-timeout", "30", "--max-time", "60", url])
+        .output()
+        .ok()?;
     if !out.status.success() {
         return None;
     }
@@ -162,7 +199,7 @@ pub fn fetch(url: &str, partial: &Path, size: u64, progress: impl Fn(u64)) -> Re
             return Ok(());
         }
         let mut cmd = Command::new("curl");
-        cmd.args(["-fsSL", "--connect-timeout", "30"]);
+        cmd.args(["-fsSL", "--proto", PROTO, "--proto-redir", PROTO, "--connect-timeout", "30"]);
         if offset > 0 {
             cmd.args(["-C", &offset.to_string()]);
         }
@@ -233,10 +270,49 @@ mod tests {
             {"fileName":"b.raw","publicFileLocations":[]}]"#;
         assert_eq!(
             parse_files(body).unwrap(),
-            vec![RemoteFile { name: "a.raw".into(), size: 12, url: "https://ftp.pride.ebi.ac.uk/pride/data/archive/2012/03/PXD000001/a.raw".into() }]
+            (
+                vec![RemoteFile { name: "a.raw".into(), size: 12, url: "https://ftp.pride.ebi.ac.uk/pride/data/archive/2012/03/PXD000001/a.raw".into() }],
+                // (the page had two entries: the one without a location counts for the paging)
+                2
+            )
         );
         assert!(valid_accession("PXD000001") && !valid_accession("PXD12;rm") && !valid_accession("PX"));
-        assert!(safe_name("a.raw") && !safe_name("../a") && !safe_name(".hidden") && !safe_name("a/b"));
+    }
+
+    #[test]
+    fn writes_only_names_safe_on_every_system_and_downloads_over_https_only() {
+        for ok in ["a.raw", "A1.wiff.scan", "run 1.mzML", "console.raw"] {
+            assert!(safe_name(ok), "{ok}");
+        }
+        for bad in ["../a", ".hidden", "a/b", "a\\b", "C:x.raw", "foo:stream", "CON", "nul.raw", "com1.txt", "a\u{7}.raw", "a.raw.", "a.raw ", "a*b", ".."] {
+            assert!(!safe_name(bad), "{bad}");
+        }
+        assert!(allowed_url("https://ftp.pride.ebi.ac.uk/x"));
+        assert!(!allowed_url("ftp://ftp.pride.ebi.ac.uk/x") && !allowed_url("http://example.org/x") && !allowed_url("file:///etc/hosts"));
+        let dir = tmp("proto");
+        let ftp = RemoteFile { name: "x.raw".into(), size: 5, url: "ftp://example.org/x.raw".into() };
+        assert!(download(&dir, &[ftp], |_| {}).unwrap_err().contains("HTTPS"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn downloads_go_only_into_the_folder_chosen_in_the_dialog() {
+        *FOLDER.lock().unwrap() = None;
+        assert!(chosen_folder().unwrap_err().contains("Choose the folder"));
+        *FOLDER.lock().unwrap() = Some(PathBuf::from("/chosen"));
+        assert_eq!(chosen_folder().unwrap(), PathBuf::from("/chosen"));
+        *FOLDER.lock().unwrap() = None;
+    }
+
+    #[test]
+    fn replaces_a_final_file_of_another_size() {
+        let dir = tmp("replace");
+        let b = body();
+        std::fs::write(dir.join("f.raw"), b"old and short").unwrap();
+        let url = serve(b.clone(), true, None);
+        download(&dir, &[RemoteFile { name: "f.raw".into(), size: b.len() as u64, url }], |_| {}).unwrap();
+        assert_eq!(std::fs::read(dir.join("f.raw")).unwrap(), b);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A one-connection-at-a-time HTTP server for `body`: honours a Range header if `ranges`, and cuts the

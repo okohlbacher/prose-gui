@@ -239,6 +239,8 @@ export class ResultsView {
       text: '',
       maxQ: m.psmFdr,
       proteinFilter: 'protein' in what ? index : undefined,
+      charges: undefined,
+      ranges: undefined,
       peptideFilter: 'peptide' in what ? index : undefined,
       hideContaminants: contaminant ? false : f.hideContaminants,
       showDecoys: decoy ? true : f.showDecoys,
@@ -265,6 +267,8 @@ export class ResultsView {
         proteinFilter: undefined,
         peptideFilter: undefined,
         sdrf: undefined,
+        charges: undefined,
+        ranges: undefined,
         hideContaminants: m.peptide.contaminant[ps.peptide[i]] ? false : f.hideContaminants,
         showDecoys: ps.decoy[i] ? true : f.showDecoys,
       }
@@ -295,6 +299,8 @@ export class ResultsView {
       proteinFilter: protein,
       peptideFilter: peptide ?? undefined,
       sdrf: undefined,
+      charges: undefined,
+      ranges: undefined,
       hideContaminants: m.peptide.contaminant[ps.peptide[i]] ? false : restore.hideContaminants,
       showDecoys: ps.decoy[i] ? true : restore.showDecoys,
     }

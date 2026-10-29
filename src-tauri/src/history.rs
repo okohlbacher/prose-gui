@@ -614,11 +614,28 @@ fn reserve_import(dir: &Path) -> Result<(String, PathBuf, fs::File), String> {
 /// to be of this schema (a newer one is refused with a message), and the record's `id` becomes the
 /// folder's. The folder is made as `<id>.partial` and renamed when complete.
 pub fn import(dir: &Path, body: &[u8]) -> Result<String, String> {
-    import_entries(dir, parse_frames(body)?)
+    import_entries(dir, parse_frames(body)?.into_iter().map(|(n, d)| (n, Entry::Bytes(d))).collect())
 }
 
 /// [`import`] of entries given as (name, bytes): a project's, or those of an opened QPX folder ([`import_qpx`]).
-fn import_entries<D: AsRef<[u8]>>(dir: &Path, entries: Vec<(String, D)>) -> Result<String, String> {
+/// An entry of [`import_entries`]: bytes (a project's, the record), or a file copied as it is (a QPX folder's,
+/// streamed rather than read into memory).
+pub enum Entry<'a> {
+    Bytes(&'a [u8]),
+    File(PathBuf),
+}
+
+impl Entry<'_> {
+    /// The bytes of a small entry (the record); a file is read.
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        match self {
+            Entry::Bytes(b) => Ok(b.to_vec()),
+            Entry::File(p) => fs::read(p).map_err(|e| e.to_string()),
+        }
+    }
+}
+
+fn import_entries(dir: &Path, entries: Vec<(String, Entry<'_>)>) -> Result<String, String> {
     if entries.is_empty() {
         return Err("The project is empty.".to_string());
     }
@@ -649,7 +666,8 @@ fn import_entries<D: AsRef<[u8]>>(dir: &Path, entries: Vec<(String, D)>) -> Resu
             "The project has no {RECORD}: it is not a ProSE project."
         ));
     };
-    let text = std::str::from_utf8(record.as_ref()).map_err(|_| format!("{RECORD} is not text."))?;
+    let record = record.bytes()?;
+    let text = std::str::from_utf8(&record).map_err(|_| format!("{RECORD} is not text."))?;
     let mut map = parse_record(text)?;
     // the name is a name (as `rename` and `save` have it); the search is marked as imported, whatever
     // the project says: the database path of its database.json is not served (`files::resolve_search_file`)
@@ -686,8 +704,11 @@ fn import_entries<D: AsRef<[u8]>>(dir: &Path, entries: Vec<(String, D)>) -> Resu
                 .create_new(true)
                 .open(&path)
                 .map_err(|e| format!("{name} cannot be written ({e})."))?;
-            file.write_all(data.as_ref())
-                .map_err(|e| format!("{name} cannot be written ({e})."))?;
+            match data {
+                Entry::Bytes(b) => file.write_all(b),
+                Entry::File(source) => fs::File::open(source).and_then(|mut f| std::io::copy(&mut f, &mut file).map(|_| ())),
+            }
+            .map_err(|e| format!("{name} cannot be written ({e})."))?;
         }
         map.insert("id".to_string(), serde_json::Value::String(id.clone()));
         let text = serde_json::to_vec_pretty(&map).map_err(|e| e.to_string())?;
@@ -714,7 +735,7 @@ fn import_entries<D: AsRef<[u8]>>(dir: &Path, entries: Vec<(String, D)>) -> Resu
 
 /// The QPX view of a folder the user chose: the folder itself if it holds `quantms.psm.parquet`, else its
 /// `qpx` subfolder (a search folder of ProSE run by hand, `-out_qpx <folder>/qpx`).
-fn qpx_dir(folder: &Path) -> Option<PathBuf> {
+pub fn qpx_dir(folder: &Path) -> Option<PathBuf> {
     [folder.to_path_buf(), folder.join("qpx")]
         .into_iter()
         .find(|d| d.join("quantms.psm.parquet").is_file() && d.join("runs").is_dir())
@@ -751,31 +772,32 @@ pub fn qpx_stems(folder: &Path) -> Result<Vec<String>, String> {
 /// record and inputs.json the page made from [`qpx_stems`]. The files are copied: History owns its folders.
 pub fn import_qpx(dir: &Path, folder: &Path, record: &str, inputs: &str) -> Result<String, String> {
     let qpx = qpx_dir(folder).ok_or_else(|| format!("{} has no QPX results.", folder.display()))?;
-    let mut entries: Vec<(String, Vec<u8>)> = vec![
-        (RECORD.to_string(), record.as_bytes().to_vec()),
-        ("inputs.json".to_string(), inputs.as_bytes().to_vec()),
+    let mut entries: Vec<(String, Entry)> = vec![
+        (RECORD.to_string(), Entry::Bytes(record.as_bytes())),
+        ("inputs.json".to_string(), Entry::Bytes(inputs.as_bytes())),
     ];
-    fn walk(base: &Path, at: &Path, prefix: &str, out: &mut Vec<(String, Vec<u8>)>) -> Result<(), String> {
+    // regular files only: a link (to a file anywhere on the disk, or a loop) is not followed into History
+    fn walk(at: &Path, prefix: &str, out: &mut Vec<(String, Entry)>) -> Result<(), String> {
         for e in fs::read_dir(at).map_err(|e| e.to_string())? {
             let e = e.map_err(|e| e.to_string())?;
             let name = e.file_name().into_string().map_err(|_| "a file name is not UTF-8".to_string())?;
-            let path = e.path();
-            if path.is_dir() {
-                walk(base, &path, &format!("{prefix}{name}/"), out)?;
-            } else if path.is_file() {
-                out.push((format!("{prefix}{name}"), fs::read(&path).map_err(|e| format!("{name}: {e}"))?));
+            let kind = e.file_type().map_err(|e| e.to_string())?;
+            if kind.is_dir() {
+                walk(&e.path(), &format!("{prefix}{name}/"), out)?;
+            } else if kind.is_file() {
+                out.push((format!("{prefix}{name}"), Entry::File(e.path())));
             }
         }
         Ok(())
     }
-    walk(&qpx, &qpx, "qpx/", &mut entries)?;
-    let mods = qpx.parent().map(|p| p.join("mods")).filter(|m| m.is_dir());
-    if let Some(mods) = mods {
-        walk(&mods, &mods, "mods/", &mut entries)?;
+    walk(&qpx, "qpx/", &mut entries)?;
+    let regular = |p: &Path, dir: bool| fs::symlink_metadata(p).map(|m| if dir { m.is_dir() } else { m.is_file() }).unwrap_or(false);
+    if let Some(mods) = qpx.parent().map(|p| p.join("mods")).filter(|m| regular(m, true)) {
+        walk(&mods, "mods/", &mut entries)?;
     }
     // the protein sequences (coverage), if the folder has its database beside the QPX view
-    if let Some(fasta) = qpx.parent().map(|p| p.join("database.fasta")).filter(|f| f.is_file()) {
-        entries.push(("database.fasta".to_string(), fs::read(&fasta).map_err(|e| e.to_string())?));
+    if let Some(fasta) = qpx.parent().map(|p| p.join("database.fasta")).filter(|f| regular(f, false)) {
+        entries.push(("database.fasta".to_string(), Entry::File(fasta)));
     }
     import_entries(dir, entries)
 }

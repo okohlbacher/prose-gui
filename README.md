@@ -5,7 +5,7 @@ native `ProSE` command-line tool as the only native code, and the screens of the
 shadcn-svelte components and colours). Design and plan: `docs/superpowers/`.
 
 The packages come from CI (`.github/workflows/desktop.yml`); they bundle ProSE with its libraries and the PeptDeep
-models (`native/README.md`). Everything runs on the computer: the app makes no network connection except when you ask it to download a proteome from UniProt (New search › Protein database; ProSE's
+models (`native/README.md`). Everything runs on the computer: the app makes no network connection except when you ask for one: a proteome download from UniProt (New search › Protein database), a data-file download from PRIDE and ontology lookups at EBI OLS (SDRF), and links you open from Help (ProSE's
 update check is off, `native/README.md`).
 
 ## Install
@@ -64,8 +64,8 @@ libglvnd-gles` (Fedora).
 Export › Project (`.prose`) writes a search as one zip, which Open project (History) opens on another computer.
 It holds the search's folder as the app keeps it: ProSE's outputs (the QPX Parquet files, the idXML, the
 open-search tables), `search.json`, `proteins.fasta`, and `inputs.json` with the files' names only. Left out are
-ProSE's log, the database copy with the contaminants and `database.json` (the path of a database searched without
-them). **ProSE's outputs name folders of the computer that searched** (e.g. the database's path and all of ProSE's
+ProSE's log, the database copy with the contaminants, `database.json` (the path of a database searched without
+them) and `database-source.json` (the path of one searched with them, for Re-run). **ProSE's outputs name folders of the computer that searched** (e.g. the database's path and all of ProSE's
 parameters in the QPX provenance view, the input and database paths in the idXML), and the project carries them as they are: share it
 where that is fine. A search saved by an earlier version of the app (with `summary.yaml` and OpenMS' own Parquet
 files, or without the QPX run and provenance views) does not open in this one: History and Open project say so. A project file holds at

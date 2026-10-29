@@ -37,7 +37,10 @@
     downloading = true
     try {
       const id = organism === 'other' ? otherId.trim().toUpperCase() : organism
-      await form.setDatabase(await downloadProteome(id, reviewed))
+      const before = form.database
+      const path = await downloadProteome(id, reviewed)
+      // (a FASTA chosen while it downloaded stays chosen)
+      if (form.database === before) await form.setDatabase(path)
     } catch (e) {
       downloadError = String((e as Error)?.message ?? e)
     } finally {

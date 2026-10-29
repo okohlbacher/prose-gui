@@ -378,9 +378,12 @@ export function chooseFile(title: string): Promise<string | null> {
   })
 }
 
-/** Ontology terms from OLS4 for the SDRF editor (cached on disk by the shim; rejects offline without a cached answer). */
-export function olsSearch(query: string, ontologies: string[]): Promise<{ label: string; accession: string }[]> {
-  return invoke('ols_search', { query, ontologies })
+/**
+ * Ontology terms for the SDRF editor: from the shim's on-disk cache, and only with `online` from OLS4 (then cached;
+ * rejects offline without a cached answer).
+ */
+export function olsSearch(query: string, ontologies: string[], online: boolean): Promise<{ label: string; accession: string }[]> {
+  return invoke('ols_search', { query, ontologies, online })
 }
 
 /** sdrf-pipelines' validator on an SDRF's text (`available` false when parse_sdrf is not installed). */
@@ -395,15 +398,19 @@ export function prideFiles(pxd: string): Promise<{ name: string; size: number; u
 
 export type DownloadProgress = { file: number; files: number; name: string; received: number; size: number }
 
-/** Downloads `files` into `folder` (resumed, checked against their sizes); `onProgress` while it runs. -> the paths. */
-export async function downloadDataFiles(
-  files: { name: string; size: number; url: string }[],
-  folder: string,
-  onProgress: (p: DownloadProgress) => void,
-): Promise<string[]> {
+/** The system's folder dialog for a download; the shim keeps the folder (the page cannot name another). Null if cancelled. */
+export function chooseDownloadFolder(title: string): Promise<string | null> {
+  return oneDialog(null, () => invoke<string | null>('choose_download_folder', { title }))
+}
+
+/**
+ * Downloads `files` into the folder of `chooseDownloadFolder` (resumed, checked against their sizes); `onProgress`
+ * while it runs. -> the paths.
+ */
+export async function downloadDataFiles(files: { name: string; size: number; url: string }[], onProgress: (p: DownloadProgress) => void): Promise<string[]> {
   const unlisten = await listen<DownloadProgress>('download://progress', (e) => onProgress(e.payload))
   try {
-    return await invoke<string[]>('download_data_files', { files, folder })
+    return await invoke<string[]>('download_data_files', { files })
   } finally {
     unlisten()
   }

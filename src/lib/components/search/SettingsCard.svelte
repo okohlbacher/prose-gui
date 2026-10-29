@@ -65,7 +65,7 @@
   const chargesInverted = $derived(searchPlan.inverted.some((r) => r.min === 'precursor:min_charge'))
   const lengthInverted = $derived(searchPlan.inverted.some((r) => r.min === 'peptide:min_size'))
 
-  // the one line New search shows of the settings until they are opened: what a setup decides
+  // the one line New search shows of the settings until they are opened: what a preset decides
   const summary = $derived(
     [
       String(form.value('enzyme')),
@@ -78,13 +78,13 @@
   const fixedOptions = $derived(form.entry('modifications:fixed')?.validStrings)
 </script>
 
-<!-- Basic: the setup (instrument), what was done to the sample (variable modifications) and how strict the results are
-(FDR); everything the setup decides is under "Advanced settings", with a one-line summary while it is closed. -->
+<!-- Basic: the preset (instrument), what was done to the sample (variable modifications) and how strict the results are
+(FDR); everything the preset decides is under "Advanced settings", with a one-line summary while it is closed. -->
 <Card.Root size="sm" class="gap-3 rounded-lg shadow-none">
   <Card.Header class="flex flex-wrap items-center gap-x-2.5 gap-y-2">
     <Card.Title class="text-[14px] font-semibold">Search settings</Card.Title>
-    <span class="text-xs text-muted-foreground">Setup <Help topic="setup" /></span>
     <PresetPicker />
+    <Help topic="setup" />
     <div class="flex-1"></div>
     <Button variant="ghost" size="sm" class="h-7 px-2 text-xs text-muted-foreground" onclick={() => (dialogOpen = true)}>
       All {count} parameters<ChevronRightIcon class="size-3.5" />
@@ -149,7 +149,7 @@
       </Button>
       {#if !form.showSettings}
         <p class="min-w-0 truncate text-xs text-muted-foreground" title={summary} data-testid="settings-summary">
-          {summary}{form.modified ? ' · changed from the setup' : ' · from the setup'}
+          {summary}{form.modified ? ' · changed from the preset' : ' · from the preset'}
         </p>
       {/if}
     </div>

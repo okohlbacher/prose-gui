@@ -22,15 +22,24 @@ const facts = (path: string): FileFacts => ({
 
 const shim = vi.hoisted(() => ({
   located: [] as { exact: string | null; mzml: string | null }[],
+  /** Replaces `located` when set: the look-up's answer for these names. */
+  locate: null as null | ((names: string[]) => Promise<{ exact: string | null; mzml: string | null }[]>),
+  asked: [] as string[][],
+  chosen: null as string | null,
   downloads: [] as { files: { name: string; url: string }[]; folder: string }[],
 }))
 vi.mock('$lib/desktop', () => ({
   inspectFiles: vi.fn(async (paths: string[]) => paths.map(facts)),
-  locateDataFiles: vi.fn(async () => shim.located),
+  locateDataFiles: vi.fn(async (_sdrf: string, names: string[]) => {
+    shim.asked.push(names)
+    return shim.locate ? shim.locate(names) : shim.located
+  }),
   chooseFolder: vi.fn(async () => '/downloads'),
-  chooseFile: vi.fn(async () => null),
+  chooseDownloadFolder: vi.fn(async () => '/downloads'),
+  chooseFile: vi.fn(async () => shim.chosen),
   prideFiles: vi.fn(async () => [{ name: 'Ecoli_3.mzML', size: 10, url: 'https://ftp.pride.ebi.ac.uk/x/Ecoli_3.mzML' }]),
-  downloadDataFiles: vi.fn(async (files: { name: string; url: string }[], folder: string) => {
+  downloadDataFiles: vi.fn(async (files: { name: string; url: string }[]) => {
+    const folder = '/downloads'
     shim.downloads.push({ files, folder })
     shim.located = [
       { exact: '/sdrf/Ecoli_1.mzML', mzml: '/sdrf/Ecoli_1.mzML' },
@@ -67,6 +76,9 @@ beforeEach(async () => {
     { exact: null, mzml: null },
   ]
   shim.downloads = []
+  shim.locate = null
+  shim.asked = []
+  shim.chosen = null
   await sdrf.load('/sdrf/PXD000001_ecoli.sdrf.tsv', ecoli)
 })
 afterEach(() => {
@@ -125,5 +137,76 @@ describe('an SDRF in New search', () => {
     form.setField(form.files[0].id, 'replicate', 7)
     sdrf.commitDesign()
     expect(sdrf.table!.rows[0][column(sdrf.table!, 'characteristics[biological replicate]')]).toBe('7')
+  })
+
+  it('a look-up of an earlier SDRF changes nothing of the one loaded since', async () => {
+    form.files = []
+    let answerA!: (v: { exact: string | null; mzml: string | null }[]) => void
+    shim.locate = () => new Promise((resolve) => (answerA = resolve))
+    const a = sdrf.load('/a/A.sdrf.tsv', ecoli)
+    shim.locate = async (names) => names.map(() => ({ exact: null, mzml: null }))
+    await sdrf.load('/b/B.sdrf.tsv', ecoli.replace(/Ecoli_/g, 'Other_'))
+    answerA([
+      { exact: '/a/Ecoli_1.mzML', mzml: null },
+      { exact: '/a/Ecoli_2.raw', mzml: null },
+      { exact: null, mzml: null },
+    ])
+    await a
+    expect(sdrf.name).toBe('B.sdrf.tsv')
+    expect(sdrf.files.map((f) => [f.name, f.path])).toEqual([
+      ['Other_1.mzML', null],
+      ['Other_2.raw', null],
+      ['Other_3.mzML', null],
+    ])
+    expect(form.files).toEqual([])
+  })
+
+  it('gives its design to files that were in the table before it was loaded', async () => {
+    sdrf.clear()
+    form.files = []
+    await form.addFiles(['/sdrf/Ecoli_1.mzML'])
+    expect(form.files[0].condition).toBeUndefined()
+    await sdrf.load('/sdrf/ecoli.sdrf.tsv', ecoli)
+    expect(form.files.map((r) => [r.file.name, r.condition, r.replicate])).toEqual([
+      ['Ecoli_1.mzML', 'wild type', 1],
+      ['Ecoli_2.mzML', 'wild type', 2],
+    ])
+    // a later look-up (Locate folder…) leaves what the user changed since
+    form.setField(form.files[0].id, 'condition', 'changed')
+    await sdrf.load('/sdrf/ecoli.sdrf.tsv', ecoli)
+    expect(form.files[0].condition).toBe('wild type') // (a new load is a new SDRF: its design again)
+  })
+
+  it('looks a data file renamed in the editor up under its new name', async () => {
+    const col = column(sdrf.table!, 'comment[data file]')
+    shim.asked = []
+    sdrf.update((t) => (t.rows[2][col] = 'Ecoli_4.mzML'))
+    await tick()
+    expect(sdrf.files.map((f) => f.name)).toEqual(['Ecoli_1.mzML', 'Ecoli_2.raw', 'Ecoli_4.mzML'])
+    expect(sdrf.files.slice(0, 2).map((f) => f.status)).toEqual(['found', 'mzml'])
+    expect(shim.asked).toEqual([['Ecoli_1.mzML', 'Ecoli_2.raw', 'Ecoli_4.mzML']])
+  })
+
+  it('Locate… of a Bruker .d takes the folder of the analysis.tdf chosen', async () => {
+    shim.chosen = '/data/run3.d/analysis.tdf'
+    await sdrf.locateFile('Ecoli_3.mzML')
+    expect(sdrf.files[2].path).toBe('/data/run3.d')
+  })
+
+  it('asks OLS only on Enter: typing consults the cache', async () => {
+    const { olsSearch } = await import('$lib/desktop')
+    const ols = vi.mocked(olsSearch)
+    ols.mockClear()
+    shown.push(mount(SdrfEditor, { target: document.body, props: { open: true } }))
+    flushSync()
+    await tick()
+    const cell = document.querySelector<HTMLInputElement>('[data-testid="sdrf-editor"] input[aria-label^="characteristics[organism] of row 2"]')!
+    cell.value = 'Escherichia'
+    cell.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise((r) => setTimeout(r, 200))
+    expect(ols.mock.calls.map((c) => c[2])).toEqual([false])
+    cell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await tick()
+    expect(ols.mock.calls.map((c) => c[2])).toEqual([false, true])
   })
 })

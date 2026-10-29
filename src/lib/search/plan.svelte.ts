@@ -11,6 +11,7 @@ import { PROSE_PARAMETERS } from '../settings/prose'
 import { boundsMessage, invertedRanges, outOfBounds, rangeMessage } from '../settings/ranges'
 import { keepsOpenResult, showFinished } from './finished'
 import { sdrfSession } from '../design/sdrf-session.svelte'
+import { withoutLocalPaths } from '../design/sdrf-table'
 import { CRAP_PROTEINS, searchForm as form } from './form.svelte'
 import { runSearch, searchRun } from './session.svelte'
 import { toolState } from './tool.svelte'
@@ -170,7 +171,7 @@ export function searchRequest(): SearchRequest | null {
   if (searchPlan.chimericBlocked) delete parameters['chimeric:enabled']
   if (searchPlan.fdrBlocked) for (const name of FDR_PARAMETERS) delete parameters[name]
   return {
-    ...(toolState.info?.sdrf && sdrfSession.table ? { sdrf: sdrfSession.text() } : {}),
+    ...(toolState.info?.sdrf && sdrfSession.table ? { sdrf: withoutLocalPaths(sdrfSession.text()) } : {}),
     files: form.files.map((r) => ({ id: r.id, path: r.file.path })),
     database: form.database.file.path,
     contaminants: form.contaminants,

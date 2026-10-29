@@ -72,8 +72,8 @@ pub fn sdrf_for_inputs(text: &str, records: &[InputRecord]) -> String {
     for line in lines {
         let mut cells: Vec<String> = line.split('\t').map(str::to_string).collect();
         if let Some(cell) = cells.get_mut(col) {
-            let stem = input_stem(&base(cell.trim())).to_lowercase();
-            if let Some(r) = records.iter().find(|r| input_stem(&r.name).to_lowercase() == stem) {
+            let stem = crate::locate::data_file_stem(&base(cell.trim()));
+            if let Some(r) = records.iter().find(|r| crate::locate::data_file_stem(&r.name) == stem) {
                 *cell = r.link.clone();
             }
         }
@@ -478,8 +478,12 @@ fn check_file(
     }
     let meta =
         fs::metadata(path).map_err(|e| format!("The {kind} {path} cannot be read ({e})."))?;
-    if !meta.is_file() && !(meta.is_dir() && is_bruker_d(&file_name(path))) {
-        return Err(format!("The {kind} {path} is not a file."));
+    // a Bruker .d is a folder (and only a folder); every other input a file
+    if is_bruker_d(&file_name(path)) != meta.is_dir() || !(meta.is_file() || meta.is_dir()) {
+        return Err(format!(
+            "The {kind} {path} is not a {}.",
+            if is_bruker_d(&file_name(path)) { "Bruker .d folder" } else { "file" }
+        ));
     }
     if !accepted(&file_name(path)) {
         return Err(format!("The {kind} {path} is not {expected}."));

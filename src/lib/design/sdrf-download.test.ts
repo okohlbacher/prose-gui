@@ -6,14 +6,16 @@ import { parseSdrfTable } from './sdrf-table'
 const fixture = (name: string) => readFileSync(new URL(`./sdrf-fixtures/${name}`, import.meta.url), 'utf8')
 
 describe('downloadPlan', () => {
-  it('takes the file URI and pairs the associated files by position', () => {
+  it('takes the file URI over HTTPS (PRIDE FTP made HTTPS, other FTP refused) and pairs the associated files by position', () => {
     const t = parseSdrfTable(fixture('lfq.sdrf.tsv'))
     const plan = downloadPlan(t, ['A1.wiff', 'B1.d'], [])
     expect(plan.files).toEqual([
       { name: 'A1.wiff', size: 0, url: 'https://ftp.pride.ebi.ac.uk/pride/data/archive/2020/01/PXD000001/A1.wiff' },
-      { name: 'A1.wiff.scan', size: 0, url: 'ftp://x/A1.wiff.scan' },
     ])
-    expect(plan.notFound).toEqual(['B1.d'])
+    // ftp://x/A1.wiff.scan is no HTTPS address
+    expect(plan.notFound).toEqual(['A1.wiff.scan', 'B1.d'])
+    const https = parseSdrfTable(fixture('lfq.sdrf.tsv').replace('ftp://x/A1.wiff.scan', 'https://x/A1.wiff.scan'))
+    expect(downloadPlan(https, ['A1.wiff'], []).files[1]).toEqual({ name: 'A1.wiff.scan', size: 0, url: 'https://x/A1.wiff.scan' })
   })
 
   it('finds the rest in the PRIDE file list, by name in any case', () => {

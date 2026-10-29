@@ -4,6 +4,7 @@
 
 import { formatPercent } from '$lib/format/fdr'
 import { baseName } from './model'
+import { psmFdrSkipped } from './overview'
 import type { ProSEMultiSummary } from './types'
 import type { AcceptedCheck } from '../search/checks'
 
@@ -51,9 +52,19 @@ export function methodsText({ summary: s, settings, version, accepted = [] }: Me
   if (s.openSearch) parts.push('The search was an open search (wide precursor window); mass shifts are reported unlocalized.')
   const changed = Object.entries(settings.parameters).filter(([k]) => !/file|path/i.test(k))
   if (changed.length) parts.push(`Parameters changed from the ProSE defaults: ${changed.map(([k, v]) => `${k} = ${String(v)}`).join('; ')}.`)
-  if (settings.rescore) parts.push(`PSMs were rescored with Percolator${settings.peptdeep ? ', with PeptDeep fragment-intensity and retention-time predictions as features' : ''}.`)
+  // (what ProSE did, not what was asked: Percolator and the PSM FDR can be skipped per file)
+  const rescored = s.files.filter((f) => f.percolator?.applied).length
+  if (rescored > 0) {
+    const which = rescored < files ? ` (${rescored} of ${files} files; Percolator was skipped for the others)` : ''
+    parts.push(`PSMs were rescored with Percolator${settings.peptdeep ? ', with PeptDeep fragment-intensity and retention-time predictions as features' : ''}${which}.`)
+  }
+  const skipped = s.psmFdr === 0 ? [] : psmFdrSkipped(s)
   if (s.psmFdr === 0) parts.push('The database had no decoys, so no FDR was estimated; the PSMs are not FDR-controlled.')
-  else parts.push(`PSMs were filtered at ${formatPercent(s.psmFdr)} PSM-level FDR (target-decoy). No peptide-level FDR was estimated.`)
+  else if (skipped.length === files) parts.push('No PSM matched a decoy, so no PSM FDR could be estimated; the PSMs are not FDR-controlled.')
+  else {
+    parts.push(`PSMs were filtered at ${formatPercent(s.psmFdr)} PSM-level FDR (target-decoy). No peptide-level FDR was estimated.`)
+    if (skipped.length > 0) parts.push(`For ${skipped.length} of ${files} files no PSM matched a decoy, so their PSMs are not FDR-controlled.`)
+  }
   parts.push(
     s.proteinFdrApplied
       ? `Protein groups were filtered at ${formatPercent(s.proteinFdr)} protein-level FDR.`

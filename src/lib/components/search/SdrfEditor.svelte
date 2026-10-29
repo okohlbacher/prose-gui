@@ -1,8 +1,9 @@
 <script lang="ts">
   // "Edit metadata…" of the SDRF panel: every column of the SDRF, one row per SDRF row. A cell offers the reserved
-  // values and the column's bundled terms; in a column with an ontology, typing looks the term up in OLS (cached,
-  // so offline it offers what was looked up before). Rows can be selected and a value applied to them; templates of
-  // sdrf-pipelines add their required and recommended columns; parse_sdrf validates when it is installed.
+  // values and the column's bundled terms; in a column with an ontology, Enter looks the term up in OLS, and typing
+  // offers the terms looked up before (the shim's cache; nothing leaves the computer while typing). Rows can be
+  // selected and a value applied to them; templates of sdrf-pipelines add their required and recommended columns;
+  // parse_sdrf validates when it is installed.
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
   import { sdrfSession as sdrf } from '$lib/design/sdrf-session.svelte'
@@ -31,20 +32,27 @@
     return picked.length > 0 ? picked : rows
   }
 
+  /**
+   * Terms of the column's ontologies for `text`: while typing (`online` false) only those looked up before (the
+   * shim's cache, no request leaves the computer); on Enter (`online`) from OLS.
+   */
   let timer: ReturnType<typeof setTimeout> | undefined
-  function search(col: number, text: string) {
+  function search(col: number, text: string, online: boolean) {
     const kind = kinds[col]
     clearTimeout(timer)
     if (!isDesktop() || kind.ontologies.length === 0 || text.trim().length < 3 || text.startsWith('NT=')) return
-    timer = setTimeout(async () => {
+    const ask = async () => {
       try {
-        const terms = await olsSearch(text, kind.ontologies)
+        if (online) lookup = `Looking “${text.trim()}” up in OLS…`
+        const terms = await olsSearch(text, kind.ontologies, online)
         suggestions[col] = terms.map((term) => termValue(kind, term))
-        lookup = null
+        lookup = online && terms.length === 0 ? `OLS has no term for “${text.trim()}”.` : null
       } catch (e) {
         lookup = errorText(e)
       }
-    }, 300)
+    }
+    if (online) void ask()
+    else timer = setTimeout(ask, 150)
   }
 
   function set(row: number, col: number, value: string) {
@@ -83,8 +91,8 @@
     <Dialog.Header>
       <Dialog.Title>Metadata of {sdrf.name}</Dialog.Title>
       <Dialog.Description>
-        Every column of the SDRF. Choose a value from a cell's list or type it; columns with an ontology look terms up as
-        you type. Select rows to apply a value to them with ↓ in the column's header (without a selection: all rows).
+        Every column of the SDRF. Choose a value from a cell's list or type it; in a column with an ontology, Enter looks the term up in OLS
+        (online); while you type, only terms looked up before are offered. Select rows to apply a value to them with ↓ in the column's header (without a selection: all rows).
       </Dialog.Description>
     </Dialog.Header>
     <div class="flex flex-wrap items-center gap-2 text-xs">
@@ -137,7 +145,8 @@
                       title={issue?.message ?? cell(t, r, c)}
                       list="sdrf-list-{c}"
                       value={cell(t, r, c)}
-                      oninput={(e) => search(c, e.currentTarget.value)}
+                      oninput={(e) => search(c, e.currentTarget.value, false)}
+                      onkeydown={(e) => e.key === 'Enter' && search(c, e.currentTarget.value, true)}
                       onchange={(e) => set(r, c, e.currentTarget.value)} />
                   </td>
                 {/each}

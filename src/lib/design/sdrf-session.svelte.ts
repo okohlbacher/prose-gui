@@ -5,6 +5,7 @@
 
 import {
   cancelDownload,
+  chooseDownloadFolder,
   chooseFile,
   chooseFolder,
   downloadDataFiles,
@@ -14,7 +15,7 @@ import {
   prideFiles,
   type DownloadProgress,
 } from '../desktop'
-import { isSpectrum } from '../search/files'
+import { brukerFolder, isSpectrum } from '../search/files'
 import { fileName, searchForm as form } from '../search/form.svelte'
 import { parseDesignTsv } from './design-tsv'
 import type { DesignInput } from './model'
@@ -118,6 +119,10 @@ class SdrfSession {
   toFill = $state<string[]>([])
   /** The design fields of each data file as loaded, by its name. */
   #loaded = new Map<string, Partial<DesignInput>>()
+  /** The SDRF loaded (counted up by load, create and clear): a look-up of an earlier one changes nothing. */
+  #generation = 0
+  /** The rows of the design table that got their fields from this SDRF (by path); later look-ups leave them. */
+  #seeded = new Set<string>()
 
   name = $derived(this.path ? fileName(this.path) : '')
   /** The `toFill` columns that some row still has as "not available". */
@@ -141,24 +146,31 @@ class SdrfSession {
     return this.files.find((f) => f.path === path)
   }
 
-  async load(path: string, text: string) {
-    const table = parseSdrfTable(text)
+  /** One entry per distinct data file of `table`; entries of `keep` (by name) keep where they were found. */
+  #filesOf(table: SdrfTable, keep: SdrfFile[] = []): SdrfFile[] {
     const fileCol = column(table, 'comment[data file]')
     const uriCol = column(table, 'comment[file uri]')
+    const files: SdrfFile[] = []
+    for (const r of dataRows(table)) {
+      const name = cell(table, r, fileCol)
+      if (name === '' || files.some((f) => f.name === name)) continue
+      const known = keep.find((f) => f.name === name)
+      files.push(known ? { ...known, uri: cell(table, r, uriCol) } : { name, status: 'missing', path: null, uri: cell(table, r, uriCol) })
+    }
+    return files
+  }
+
+  async load(path: string, text: string) {
+    const table = parseSdrfTable(text)
+    this.#generation++
+    this.#seeded = new Set()
     this.path = path
     this.table = table
     this.issues = validateSdrf(table)
     this.skipMissing = false
     this.toFill = []
     this.#loaded = new Map(parseSdrf(text).inputs.map((i) => [i.fileName!, i]))
-    const seen = new Set<string>()
-    this.files = []
-    for (const r of dataRows(table)) {
-      const name = cell(table, r, fileCol)
-      if (name === '' || seen.has(name)) continue
-      seen.add(name)
-      this.files.push({ name, status: 'missing', path: null, uri: cell(table, r, uriCol) })
-    }
+    this.files = this.#filesOf(table)
     const notices = parseSdrf(text).notices.map((n) => `${this.name}: ${n.message}`)
     form.notices.push(...notices)
     this.folder = rememberedFolder(path)
@@ -175,6 +187,7 @@ class SdrfSession {
     const instruments = Object.fromEntries(form.files.filter((r) => r.instrument).map((r) => [r.file.name, r.instrument!]))
     const text = exportSdrf(null, form.design, { values: $state.snapshot(form.values) as Record<string, unknown>, appVersion: APP_VERSION, instruments })
     const table = parseSdrfTable(text)
+    this.#generation++
     this.path = 'experiment.sdrf.tsv'
     this.table = table
     this.issues = validateSdrf(table)
@@ -183,6 +196,7 @@ class SdrfSession {
     this.toFill = [...SAMPLE_COLUMNS]
     this.#loaded = new Map(parseSdrf(text).inputs.map((i) => [i.fileName!, i]))
     this.files = form.files.map((r) => ({ name: r.file.name, status: 'found', path: r.file.path, uri: '' }))
+    this.#seeded = new Set(form.files.map((r) => r.file.path))
   }
 
   /** Changes the SDRF (the metadata editor): `change` edits a copy, which is then checked again. */
@@ -199,6 +213,13 @@ class SdrfSession {
     this.#loaded = new Map(parseSdrf(writeSdrfTable(table)).inputs.map((i) => [i.fileName!, i]))
     this.table = table
     this.issues = validateSdrf(table)
+    // a data file renamed in the editor is looked for under its new name
+    const names = (files: SdrfFile[]) => files.map((f) => f.name).join('\0')
+    const files = this.#filesOf(table, this.files)
+    if (names(files) !== names(this.files)) {
+      this.files = files
+      if (files.some((f) => f.path === null)) void this.#resolve()
+    }
   }
 
   /** The design table's edits written into the SDRF itself (before the metadata editor shows it). */
@@ -225,10 +246,10 @@ class SdrfSession {
         this.downloadError = `No download address for ${plan.notFound.join(', ')}. ${this.pxd ? `PRIDE's ${this.pxd} does not list them.` : 'Enter the ProteomeXchange accession (PXD…).'}`
         return
       }
-      const folder = await chooseFolder(`Download ${plan.files.length} ${plan.files.length === 1 ? 'file' : 'files'} into…`)
+      const folder = await chooseDownloadFolder(`Download ${plan.files.length} ${plan.files.length === 1 ? 'file' : 'files'} into…`)
       if (!folder) return
       this.download = { file: 0, files: plan.files.length, name: plan.files[0].name, received: 0, size: plan.files[0].size }
-      await downloadDataFiles(plan.files, folder, (p) => (this.download = p))
+      await downloadDataFiles(plan.files, (p) => (this.download = p))
       if (plan.notFound.length > 0) this.downloadError = `Not found anywhere: ${plan.notFound.join(', ')}.`
       this.folder = folder
       rememberFolder(this.path, folder)
@@ -257,8 +278,10 @@ class SdrfSession {
 
   /** "Locate…" of one data file: the user picks it. */
   async locateFile(name: string) {
-    const path = await chooseFile(`Locate ${name}`)
-    if (!path) return
+    const chosen = await chooseFile(`Locate ${name}`)
+    if (!chosen) return
+    // (a Bruker .d is chosen by its analysis.tdf)
+    const path = brukerFolder(chosen)
     const file = this.files.find((f) => f.name === name)
     if (!file) return
     Object.assign(file, { status: isSpectrum(fileName(path)) ? 'found' : 'vendor', path })
@@ -273,30 +296,42 @@ class SdrfSession {
     this.files = []
     this.toFill = []
     this.#loaded = new Map()
+    this.#generation++
+    this.#seeded = new Set()
   }
 
   async #resolve() {
     if (!this.path) return
+    const generation = this.#generation
+    const files = this.files
     this.busy = true
     try {
-      const located = await locateDataFiles(this.path, this.files.map((f) => f.name), this.folder)
-      this.files.forEach((f, i) => Object.assign(f, fileStatus(f.name, located[i], f.uri)))
+      const located = await locateDataFiles(this.path, files.map((f) => f.name), this.folder)
+      // (another SDRF loaded meanwhile, or the data files renamed: this look-up is not theirs)
+      if (generation !== this.#generation || files !== this.files) return
+      files.forEach((f, i) => Object.assign(f, fileStatus(f.name, located[i], f.uri)))
       await this.#addFound()
     } catch (e) {
-      form.notices.push(`${this.name}: the data files could not be looked for (${errorText(e)}).`)
+      if (generation === this.#generation) form.notices.push(`${this.name}: the data files could not be looked for (${errorText(e)}).`)
     } finally {
-      this.busy = false
+      if (generation === this.#generation) this.busy = false
     }
   }
 
-  /** Found files join the table (as `addFiles` would add them) with the SDRF's design fields. */
+  /**
+   * Found files join the table (as `addFiles` would add them), and get the SDRF's design fields, also when they were
+   * in the table before the SDRF was loaded; once per SDRF: a row that has them keeps what the user changed since.
+   */
   async #addFound() {
-    // (rows already in the table keep their fields: the user may have changed them)
+    const generation = this.#generation
     const listed = new Set(form.files.map((r) => r.file.path))
-    const usable = this.files.filter((f) => f.path && !listed.has(f.path) && (f.status === 'found' || f.status === 'mzml'))
+    const usable = this.files.filter((f) => f.path && !this.#seeded.has(f.path) && (f.status === 'found' || f.status === 'mzml'))
     if (usable.length === 0) return
-    await form.addFiles(usable.map((f) => f.path!))
+    const fresh = usable.filter((f) => !listed.has(f.path!))
+    if (fresh.length > 0) await form.addFiles(fresh.map((f) => f.path!))
+    if (generation !== this.#generation) return
     for (const f of usable) {
+      this.#seeded.add(f.path!)
       const row = form.files.find((r) => r.file.path === f.path)
       const fields = this.#loaded.get(f.name)
       if (row && fields) {

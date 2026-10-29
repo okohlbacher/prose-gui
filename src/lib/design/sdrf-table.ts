@@ -168,7 +168,7 @@ export function validateSdrf(t: SdrfTable): SdrfIssue[] {
           level: 'error',
           row: r,
           col: assayCol,
-          message: `Source name, assay name and label repeat those of row ${first + 1}: each must be unique.`,
+          message: `Source name, assay name and label repeat those of line ${first + 2} (the header is line 1): each must be unique.`,
         })
     }
 
@@ -225,7 +225,8 @@ export function syncDesign(t: SdrfTable, design: SdrfDesignRow[]) {
   if (fileCol < 0) return
   const byFile = new Map(design.map((d) => [d.fileName, d]))
   const rows = dataRows(t)
-  const rowsOf = (d: SdrfDesignRow) => rows.filter((r) => cell(t, r, fileCol) === d.fileName)
+  // (the column of the data file is looked up each time: a column added before it moves it)
+  const rowsOf = (d: SdrfDesignRow) => rows.filter((r) => cell(t, r, column(t, 'comment[data file]')) === d.fileName)
 
   for (const [field, name] of Object.entries(FIELD_COLUMNS) as [keyof typeof FIELD_COLUMNS, string][]) {
     const changed = design.filter((d) => d.after[field] !== d.before[field])
@@ -234,7 +235,7 @@ export function syncDesign(t: SdrfTable, design: SdrfDesignRow[]) {
       if (changed.length === 0 && field !== 'techReplicate') continue
       col = addColumn(t, name, field === 'techReplicate' ? '1' : 'not available')
       for (const r of rows) {
-        const d = byFile.get(cell(t, r, fileCol))
+        const d = byFile.get(cell(t, r, column(t, 'comment[data file]')))
         if (d) setCell(t, r, col, String(d.resolved[field]))
       }
       continue
@@ -258,10 +259,15 @@ export function syncDesign(t: SdrfTable, design: SdrfDesignRow[]) {
 
 /** The stem a QPX run_file_name has: the file name without folders and without its extension (`.mzML.gz` whole). */
 export function runStem(name: string): string {
-  const base = name.slice(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1).replace(/\.gz$/i, '')
-  const dot = base.lastIndexOf('.')
-  return (dot > 0 ? base.slice(0, dot) : base).toLowerCase()
+  const base = name.slice(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1)
+  return base.replace(/\.gz$/i, '').replace(STEM_EXTENSIONS, '').toLowerCase()
 }
+
+/**
+ * The extensions of mass spectrometry data files that a data file's stem leaves out (one, after a .gz): the same
+ * rule as src-tauri/src/locate.rs `data_file_stem`; both are tested on sdrf-fixtures/stems.json.
+ */
+const STEM_EXTENSIONS = /(?<=.)\.(mzml|mzxml|mzpeak|mgf|raw|d|wiff2?)$/i
 
 /**
  * The SDRF's characteristics[...] and factor value[...] per searched file, joined on the file stem (a search of
@@ -307,4 +313,32 @@ export function sdrfFilterOptions(t: SdrfTable, fileNames: string[]): { column: 
     if (byValue.size < 2) return []
     return [{ column, values: [...byValue].map(([value, files]) => ({ value, files: [...files].sort((x, y) => x - y) })) }]
   })
+}
+
+/** A local path or file URI: absolute (`/x`, `C:\x`, `\\server\x`), `file:`, or with folders. */
+const LOCAL = /^(file:|\/|[a-z]:[\\/]|\\\\)/i
+
+/**
+ * The SDRF `text` as it may leave this computer (a search's record, a project file, the tool's copy): data file
+ * names without folders, and a file URI that names a local file (`file:`, an absolute path) "not available".
+ * Everything else is byte for byte as it was.
+ */
+export function withoutLocalPaths(text: string): string {
+  const t = parseSdrfTable(text)
+  let changed = false
+  const fix = (cols: number[], value: (v: string) => string) => {
+    for (const r of dataRows(t))
+      for (const c of cols) {
+        const v = cell(t, r, c)
+        const now = value(v)
+        if (now !== v) {
+          setCell(t, r, c, now)
+          changed = true
+        }
+      }
+  }
+  const base = (v: string) => v.slice(Math.max(v.lastIndexOf('/'), v.lastIndexOf('\\')) + 1)
+  fix([...columns(t, 'comment[data file]'), ...columns(t, 'comment[associated data file]')], (v) => (/[\\/]/.test(v) ? base(v) : v))
+  fix([...columns(t, 'comment[file uri]'), ...columns(t, 'comment[associated file uri]')], (v) => (LOCAL.test(v) ? 'not available' : v))
+  return changed ? writeSdrfTable(t) : text
 }

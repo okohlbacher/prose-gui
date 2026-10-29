@@ -1,0 +1,20 @@
+[
+  ["a.mzML", "a"],
+  ["a.mzML.gz", "a"],
+  ["A.MZML.GZ", "a"],
+  ["A1.wiff", "a1"],
+  ["A1.wiff2", "a1"],
+  ["b.d", "b"],
+  ["c.raw", "c"],
+  ["c.RAW", "c"],
+  ["d.mzpeak", "d"],
+  ["e.mzXML", "e"],
+  ["f.mgf", "f"],
+  ["run.1.raw", "run.1"],
+  ["sample.tar", "sample.tar"],
+  ["x.wiff.scan", "x.wiff.scan"],
+  [".raw", ".raw"],
+  ["dir/sub/g.raw", "g"],
+  ["C:\\data\\h.mzML", "h"],
+  ["0__Ecoli_1.mzML", "0__ecoli_1"]
+]

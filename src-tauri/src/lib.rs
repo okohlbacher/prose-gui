@@ -14,9 +14,10 @@
 //! - `example_files()` -> `{ spectra: [path, path], database }`
 //! - `open_design_file()` -> `{ path, text }` of an SDRF or design.tsv chosen (null if cancelled);
 //!   `locate_data_files(sdrf, names, folder?)` -> `[{ exact?, mzml? }]` (`locate`)
-//! - `ols_search(query, ontologies)` -> `[{ label, accession }]`; `validate_sdrf(text, template?)` ->
+//! - `ols_search(query, ontologies, online)` -> `[{ label, accession }]` (the cache only unless `online`); `validate_sdrf(text, template?)` ->
 //!   `{ available, ok, output }` (`sdrf_tools`)
-//! - `pride_files(pxd)` -> `[{ name, size, url }]`; `download_data_files(files, folder)` -> paths, events
+//! - `pride_files(pxd)` -> `[{ name, size, url }]`; `choose_download_folder(title)` -> the folder (the system's
+//!   dialog; kept in Rust); `download_data_files(files)` -> paths into it, events
 //!   `download://progress` `{ file, files, name, received, size }`; `cancel_download()` (`pride`)
 //! - `save_text(name, contents)` and `save_search_file(searchId, name, suggested)`: a save dialog of
 //!   the system, then the file written where the user chose (-> the path, or null if cancelled)
@@ -211,8 +212,8 @@ fn open_url(url: String) -> Result<(), String> {
 
 /// The reference proteome `proteome` (a UniProt proteome id, `UP` and nine digits) as a FASTA in the app's
 /// `databases/` folder, downloaded from UniProt's REST API with curl (macOS, Windows 10 and Linux have it) unless it
-/// is there already; `reviewed`: Swiss-Prot entries only. The only network contact of the app, and only on this
-/// request of the user. -> the FASTA's path.
+/// is there already; `reviewed`: Swiss-Prot entries only. Only on this request of the user (like the PRIDE and OLS
+/// contacts of the SDRF features). -> the FASTA's path.
 #[tauri::command]
 async fn download_proteome(app: AppHandle, proteome: String, reviewed: bool) -> Result<String, String> {
     if !(proteome.len() == 11 && proteome.starts_with("UP") && proteome[2..].bytes().all(|b| b.is_ascii_digit())) {
@@ -570,9 +571,9 @@ async fn locate_data_files(sdrf: String, names: Vec<String>, folder: Option<Stri
 
 /// Ontology terms for the SDRF editor (`sdrf_tools::ols_search`), cached in the app's data folder.
 #[tauri::command]
-async fn ols_search(app: AppHandle, query: String, ontologies: Vec<String>) -> Result<Vec<sdrf_tools::Term>, String> {
+async fn ols_search(app: AppHandle, query: String, ontologies: Vec<String>, online: bool) -> Result<Vec<sdrf_tools::Term>, String> {
     let cache = app.path().app_data_dir().map_err(|e| e.to_string())?.join("ols-cache");
-    tauri::async_runtime::spawn_blocking(move || sdrf_tools::ols_search(&cache, &query, &ontologies))
+    tauri::async_runtime::spawn_blocking(move || sdrf_tools::ols_search(&cache, &query, &ontologies, online))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -594,11 +595,32 @@ async fn pride_files(pxd: String) -> Result<Vec<pride::RemoteFile>, String> {
         .map_err(|e| e.to_string())?
 }
 
-/// Downloads `files` into `folder` (`pride::download`); events `download://progress`. -> the paths.
+/// The system's folder dialog for downloads; the folder is kept here (`pride::FOLDER`) for
+/// `download_data_files`. -> the folder, or null if cancelled.
 #[tauri::command]
-async fn download_data_files(app: AppHandle, files: Vec<pride::RemoteFile>, folder: String) -> Result<Vec<String>, String> {
+async fn choose_download_folder(app: AppHandle, title: String) -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let paths = pride::download(Path::new(&folder), &files, |p| {
+        let chosen = match test_dialog_path() {
+            Some(path) => Some(path),
+            None => match app.dialog().file().set_title(title).blocking_pick_folder() {
+                None => None,
+                Some(p) => Some(p.into_path().map_err(|e| e.to_string())?),
+            },
+        };
+        *pride::FOLDER.lock().map_err(|e| e.to_string())? = chosen.clone();
+        Ok(chosen.map(|p| p.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Downloads `files` into the folder of `choose_download_folder` (`pride::download`); events
+/// `download://progress`. -> the paths.
+#[tauri::command]
+async fn download_data_files(app: AppHandle, files: Vec<pride::RemoteFile>) -> Result<Vec<String>, String> {
+    let folder = pride::chosen_folder()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let paths = pride::download(&folder, &files, |p| {
             let _ = app.emit("download://progress", p);
         })?;
         Ok(paths.iter().map(|p| p.to_string_lossy().into_owned()).collect())
@@ -627,7 +649,7 @@ async fn open_qpx_folder(app: AppHandle) -> Result<Option<serde_json::Value>, St
         let Some(folder) = chosen else { return Ok(None) };
         let stems = history::qpx_stems(&folder)?;
         // (the run and provenance views, small, for the record: PSMs, cutoffs, database)
-        let qpx = if folder.join("quantms.psm.parquet").is_file() { folder.clone() } else { folder.join("qpx") };
+        let qpx = history::qpx_dir(&folder).ok_or("The folder has no QPX results.")?;
         let read = |name: &str| std::fs::read(qpx.join(name)).map_err(|e| format!("{name}: {e}"));
         Ok(Some(serde_json::json!({
             "folder": folder,
@@ -844,6 +866,7 @@ pub fn run() {
             ols_search,
             validate_sdrf,
             pride_files,
+            choose_download_folder,
             download_data_files,
             cancel_download,
             history_import_qpx,

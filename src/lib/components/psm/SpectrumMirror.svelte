@@ -324,6 +324,8 @@
     {onpointermove}
     {onpointerdown}
     {onpointerup}
+    onpointercancel={() => (brush = null)}
+    onlostpointercapture={() => (brush = null)}
     ondblclick={() => (zoom = null)}
     onpointerleave={() => {
       tip = null
