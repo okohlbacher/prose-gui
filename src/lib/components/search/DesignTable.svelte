@@ -20,6 +20,7 @@
   import { cn } from '$lib/utils'
   import { formatBytes } from '$lib/format/bytes'
   import { searchForm as form } from '$lib/search/form.svelte'
+  import { batchStatus } from '$lib/search/spectra'
   import DesignCell from './DesignCell.svelte'
   import NoticeList from './NoticeList.svelte'
   import PasteDialog from './PasteDialog.svelte'
@@ -94,6 +95,10 @@
     ...(saveError ? [{ message: saveError, onDismiss: () => (saveError = null) }] : []),
   ])
 
+  // what the files' first MS2 spectra say by their flags (G1): one line for the batch, a mark where a file differs
+  const status = $derived(batchStatus(form.files.map((r) => ({ path: r.file.path, facts: r.spectraFacts }))))
+  const inspecting = $derived(form.files.some((r) => r.spectraFacts === undefined && /\.mzml(\.gz)?$/i.test(r.file.name)))
+
   /** The files ProSE cannot search (`FileRow.problem`), as the Spectra card lists them. */
   const problems = $derived(form.files.filter((r) => r.problem).map((r) => `${r.problem} Remove it to start the search.`))
 
@@ -163,6 +168,12 @@
       </div>
     {/if}
 
+    {#if status || inspecting}
+      <p class="text-xs text-muted-foreground" data-testid="spectra-status">
+        {#if status}MS2 spectra by their flags (not verified): <span class="text-foreground">{status.line}</span>{#if status.differ.size > 0}; {status.differ.size}
+            {status.differ.size === 1 ? 'file differs' : 'files differ'} (marked){/if}{:else}Reading the spectra's flags…{/if}
+      </p>
+    {/if}
     <SdrfPanel />
     <!-- a bounded scroll box: long or wide tables scroll inside it, and it is the sticky header's context -->
     <div class="relative max-h-[70vh] w-full overflow-auto" data-testid="design-scroll">
@@ -253,7 +264,12 @@
                 <td class="px-2.5 py-1.5 text-right text-xs whitespace-nowrap text-destructive" title={file.problem}
                   ><TriangleAlertIcon class="mr-1 inline size-3.5 align-[-2px]" aria-hidden="true" />unusable</td>
               {:else}
-                <td class="px-2.5 py-1.5 text-right">{file.spectra?.toLocaleString('en-US') ?? '–'}</td>
+                <td class="px-2.5 py-1.5 text-right"
+                  >{file.spectra?.toLocaleString('en-US') ?? '–'}{#if status?.differ.has(file.file.path)}<span
+                      class="block truncate text-[11px] text-amber-700 dark:text-amber-400"
+                      data-testid="spectra-differs"
+                      title="By the spectra's flags (not verified): {status.differ.get(file.file.path)}">{status.differ.get(file.file.path)}</span
+                    >{/if}</td>
               {/if}
               <td class="px-2.5 py-1.5 text-right whitespace-nowrap">{formatBytes(file.file.size)}</td>
               <td class="px-1 py-1.5 text-center">

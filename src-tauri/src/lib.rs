@@ -10,6 +10,7 @@
 //! - `read_search_file(searchId, name, tail?, offset?, length?)` -> the bytes of a file of the search's folder
 //!   (with `tail`: its last `tail` bytes; with `offset` and `length`: those bytes), or of the database its database.json records (`files`; rejects `{ notFound, message }`)
 //! - `inspect_files(paths)` -> `[{ path, name, size, spectra?, proteins?, residues?, error?, problem?, warnings }]`
+//! - `inspect_spectra(paths)` -> per path the facts of its first MS2 spectra, or null (`spectra`)
 //! - `cpu_count()` -> the cores the search's threads may use
 //! - `example_files()` -> `{ spectra: [path, path], database }`
 //! - `open_design_file()` -> `{ path, text }` of an SDRF or design.tsv chosen (null if cancelled);
@@ -46,6 +47,7 @@ pub mod history;
 pub mod locate;
 pub mod pride;
 pub mod sdrf_tools;
+pub mod spectra;
 pub mod progress;
 pub mod project;
 pub mod run;
@@ -281,6 +283,15 @@ async fn read_search_file(
 #[tauri::command]
 async fn inspect_files(paths: Vec<String>) -> Result<Vec<files::FileFacts>, String> {
     tauri::async_runtime::spawn_blocking(move || files::inspect_all(&paths))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// What the first MS2 spectra of each mzML say (`spectra`, guidance G1), off the add-files path: New search asks
+/// once the rows are there. None for a file that is no mzML (or cannot be read).
+#[tauri::command]
+async fn inspect_spectra(paths: Vec<String>) -> Result<Vec<Option<spectra::SpectraFacts>>, String> {
+    tauri::async_runtime::spawn_blocking(move || paths.iter().map(|p| spectra::inspect_cached(p)).collect())
         .await
         .map_err(|e| e.to_string())
 }
@@ -845,6 +856,7 @@ pub fn run() {
             cancel_search,
             read_search_file,
             inspect_files,
+            inspect_spectra,
             cpu_count,
             example_files,
             save_text,

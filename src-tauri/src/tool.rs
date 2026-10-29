@@ -15,6 +15,9 @@ pub struct ToolInfo {
     pub onnx: bool,
     /// Whether the tool has `-sdrf` (its help lists it): New search then passes its SDRF.
     pub sdrf: bool,
+    /// Whether the tool has `-inspect_out` (ProSE's own spectrum inspector, guidance G1): not used yet; the app
+    /// reads the mzML flags itself (`spectra`) until it is there.
+    pub inspect: bool,
 }
 
 pub const EXE: &str = if cfg!(windows) { "ProSE.exe" } else { "ProSE" };
@@ -204,5 +207,6 @@ pub fn probe(path: &Path) -> Result<ToolInfo, String> {
         path: path.to_string_lossy().into_owned(),
         onnx: has_onnx(path),
         sdrf: help.contains("-sdrf <file>"),
+        inspect: help.contains("-inspect_out <file>"),
     })
 }

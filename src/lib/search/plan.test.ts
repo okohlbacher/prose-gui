@@ -449,4 +449,20 @@ describe('the footer', () => {
     expect(form.files.map((r) => r.file.name)).toEqual(['run.mzML'])
     expect(form.notices[0]).toMatch(/^Not a spectrum file ProSE reads \(mzML, mzPeak, Thermo \.raw, Bruker \.d\): run\.wiff\./)
   })
+
+  test('a red flag of the spectra blocks Start until "Search anyway", which the search records', async () => {
+    await form.addFiles(['/flag/p.mzML', '/db/db.fasta'])
+    await settle()
+    form.files[0].spectraFacts = {
+      peakPicking: false, analyzers: [], levels: { '2': 10 }, complete: true, ms2Centroid: 0, ms2Profile: 10,
+      ms2WithCharge: 10, ms2WithPrecursor: 10, activation: {}, isolationCentres: 10, isolationWidth: 2, ms2Analyzer: {}, filter: null,
+    }
+    expect(searchPlan.blocking).toMatchObject({ id: 'profile-ms2', overridable: true })
+    expect(searchPlan.problem).toMatch(/^p\.mzML: the MS2 spectra are flagged as profile/)
+    expect(searchPlan.canStart).toBe(false)
+    searchPlan.searchAnyway()
+    expect(searchPlan.problem).toBeNull()
+    await request()
+    expect(vi.mocked(runSearch).mock.calls.at(-1)![1]).toMatchObject({ accepted: [{ id: 'profile-ms2', files: ['/flag/p.mzML'] }] })
+  })
 })

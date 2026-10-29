@@ -15,6 +15,7 @@ import { withoutLocalPaths } from '../design/sdrf-table'
 import { CRAP_PROTEINS, searchForm as form } from './form.svelte'
 import { runSearch, searchRun } from './session.svelte'
 import { toolState } from './tool.svelte'
+import { ms2Analyzer, spectraChecks } from './spectra'
 import { accept, acceptedOf, firstBlock, ION_TRAP_FRAGMENT_DA, ionTrapPpm, loadAccepted, startChecks, withoutExpected, type Check } from './checks'
 
 /** The FDR parameters, which a search without decoys does not send (src-tauri/src/args.rs `FDR_PARAMETERS`). */
@@ -33,8 +34,14 @@ function unknownMessage(names: string[]): string {
 /** The red flags and advice of the form (warn and info checks, and red flags that block): `checks.ts`. */
 function adviceChecks(): Check[] {
   const out: (Check | null)[] = [
+    ...spectraChecks(form.files.map((r) => ({ path: r.file.path, name: r.file.name, facts: r.spectraFacts }))),
     ionTrapPpm(
-      form.files.map((r) => ({ path: r.file.path, name: r.file.name, instrument: /NT=([^;]*)/.exec(r.instrument ?? '')?.[1] ?? null })),
+      form.files.map((r) => ({
+        path: r.file.path,
+        name: r.file.name,
+        instrument: /NT=([^;]*)/.exec(r.instrument ?? '')?.[1] ?? null,
+        ms2Analyzer: r.spectraFacts ? ms2Analyzer(r.spectraFacts) : null,
+      })),
       String(form.value('fragment:mass_tolerance_unit')),
       () => {
         form.setParam('fragment:mass_tolerance', ION_TRAP_FRAGMENT_DA)
