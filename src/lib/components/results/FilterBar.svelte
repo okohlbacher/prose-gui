@@ -121,9 +121,15 @@
     const others = (level.filters.ranges ?? []).filter((r) => r.key !== key)
     level.filters.ranges = [...others, { key, min: Math.floor(lo * 100) / 100, max: Math.ceil(hi * 100) / 100 }]
   }
-  function setRange(key: RangeKey, side: 'min' | 'max', value: number) {
-    if (!Number.isFinite(value)) return
-    level.filters.ranges = (level.filters.ranges ?? []).map((r) => (r.key === key ? { ...r, [side]: value } : r))
+  // an emptied field keeps its bound (Number('') would be 0); From above To swaps them, as the user meant the range
+  function setRange(key: RangeKey, side: 'min' | 'max', text: string) {
+    const value = Number(text)
+    if (text.trim() === '' || !Number.isFinite(value)) return
+    level.filters.ranges = (level.filters.ranges ?? []).map((r) => {
+      if (r.key !== key) return r
+      const next = { ...r, [side]: value }
+      return next.min <= next.max ? next : { ...next, min: next.max, max: next.min }
+    })
   }
   const narrowed = $derived(
     level.level === 'psms' &&
@@ -240,8 +246,8 @@
       <Popover.Content class="w-72" align="start">
         <div class="grid grid-cols-2 gap-2 text-xs">
           <p class="col-span-2 font-medium">{RANGE_KEYS[r.key]}</p>
-          <label class="grid gap-1">From<input type="number" step="any" class="h-8 rounded-md border bg-background px-2" value={r.min} onchange={(e) => setRange(r.key, 'min', Number(e.currentTarget.value))} /></label>
-          <label class="grid gap-1">To<input type="number" step="any" class="h-8 rounded-md border bg-background px-2" value={r.max} onchange={(e) => setRange(r.key, 'max', Number(e.currentTarget.value))} /></label>
+          <label class="grid gap-1">From<input type="number" step="any" class="h-8 rounded-md border bg-background px-2" value={r.min} onchange={(e) => setRange(r.key, 'min', e.currentTarget.value)} /></label>
+          <label class="grid gap-1">To<input type="number" step="any" class="h-8 rounded-md border bg-background px-2" value={r.max} onchange={(e) => setRange(r.key, 'max', e.currentTarget.value)} /></label>
           <button type="button" class="col-span-2 justify-self-start text-destructive underline underline-offset-2" onclick={() => (level.filters.ranges = (level.filters.ranges ?? []).filter((x) => x.key !== r.key))}>Remove this filter</button>
         </div>
       </Popover.Content>
