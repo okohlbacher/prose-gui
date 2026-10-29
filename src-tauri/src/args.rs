@@ -72,8 +72,8 @@ pub fn sdrf_for_inputs(text: &str, records: &[InputRecord]) -> String {
     for line in lines {
         let mut cells: Vec<String> = line.split('\t').map(str::to_string).collect();
         if let Some(cell) = cells.get_mut(col) {
-            let stem = input_stem(&base(cell.trim())).to_lowercase();
-            if let Some(r) = records.iter().find(|r| input_stem(&r.name).to_lowercase() == stem) {
+            let stem = crate::locate::data_file_stem(&base(cell.trim()));
+            if let Some(r) = records.iter().find(|r| crate::locate::data_file_stem(&r.name) == stem) {
                 *cell = r.link.clone();
             }
         }

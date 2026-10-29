@@ -2491,7 +2491,7 @@ fn the_sdrf_names_the_links_prose_sees() {
         path: format!("/d/{name}"),
     };
     let records = [rec(0, "Ecoli_1.mzML"), rec(1, "Ecoli_2.mzML")];
-    let text = "source name\tComment[Data File]\tfactor value[x]\r\na\tEcoli_1.mzML\tp\r\nb\tecoli_2.raw\tq\r\nc\tother.raw\tr\r\n";
+    let text = "source name\tComment[Data File]\tfactor value[x]\r\na\tEcoli_1.wiff\tp\r\nb\tecoli_2.raw\tq\r\nc\tother.raw\tr\r\n";
     assert_eq!(
         sdrf_for_inputs(text, &records),
         "source name\tComment[Data File]\tfactor value[x]\r\na\t0__Ecoli_1.mzML\tp\r\nb\t1__Ecoli_2.mzML\tq\r\nc\tother.raw\tr\r\n"

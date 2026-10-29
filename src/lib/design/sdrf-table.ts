@@ -168,7 +168,7 @@ export function validateSdrf(t: SdrfTable): SdrfIssue[] {
           level: 'error',
           row: r,
           col: assayCol,
-          message: `Source name, assay name and label repeat those of row ${first + 1}: each must be unique.`,
+          message: `Source name, assay name and label repeat those of line ${first + 2} (the header is line 1): each must be unique.`,
         })
     }
 
@@ -225,7 +225,8 @@ export function syncDesign(t: SdrfTable, design: SdrfDesignRow[]) {
   if (fileCol < 0) return
   const byFile = new Map(design.map((d) => [d.fileName, d]))
   const rows = dataRows(t)
-  const rowsOf = (d: SdrfDesignRow) => rows.filter((r) => cell(t, r, fileCol) === d.fileName)
+  // (the column of the data file is looked up each time: a column added before it moves it)
+  const rowsOf = (d: SdrfDesignRow) => rows.filter((r) => cell(t, r, column(t, 'comment[data file]')) === d.fileName)
 
   for (const [field, name] of Object.entries(FIELD_COLUMNS) as [keyof typeof FIELD_COLUMNS, string][]) {
     const changed = design.filter((d) => d.after[field] !== d.before[field])
@@ -234,7 +235,7 @@ export function syncDesign(t: SdrfTable, design: SdrfDesignRow[]) {
       if (changed.length === 0 && field !== 'techReplicate') continue
       col = addColumn(t, name, field === 'techReplicate' ? '1' : 'not available')
       for (const r of rows) {
-        const d = byFile.get(cell(t, r, fileCol))
+        const d = byFile.get(cell(t, r, column(t, 'comment[data file]')))
         if (d) setCell(t, r, col, String(d.resolved[field]))
       }
       continue
@@ -258,10 +259,15 @@ export function syncDesign(t: SdrfTable, design: SdrfDesignRow[]) {
 
 /** The stem a QPX run_file_name has: the file name without folders and without its extension (`.mzML.gz` whole). */
 export function runStem(name: string): string {
-  const base = name.slice(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1).replace(/\.gz$/i, '')
-  const dot = base.lastIndexOf('.')
-  return (dot > 0 ? base.slice(0, dot) : base).toLowerCase()
+  const base = name.slice(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1)
+  return base.replace(/\.gz$/i, '').replace(STEM_EXTENSIONS, '').toLowerCase()
 }
+
+/**
+ * The extensions of mass spectrometry data files that a data file's stem leaves out (one, after a .gz): the same
+ * rule as src-tauri/src/locate.rs `data_file_stem`; both are tested on sdrf-fixtures/stems.json.
+ */
+const STEM_EXTENSIONS = /(?<=.)\.(mzml|mzxml|mzpeak|mgf|raw|d|wiff2?)$/i
 
 /**
  * The SDRF's characteristics[...] and factor value[...] per searched file, joined on the file stem (a search of

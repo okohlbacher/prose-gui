@@ -9,6 +9,7 @@ import {
   dataRows,
   lastSegment,
   parseSdrfTable,
+  runStem,
   sdrfAnnotations,
   sdrfFilterOptions,
   syncDesign,
@@ -144,5 +145,28 @@ describe('sdrfFilterOptions', () => {
       // (both runs have both treatments, one per channel)
       { column: 'factor value[treatment]', values: [{ value: 'control', files: [0, 1] }, { value: 'EGF', files: [0, 1] }] },
     ])
+  })
+})
+
+describe('runStem', () => {
+  it('follows the stem rule shared with the Rust side (sdrf-fixtures/stems.json)', () => {
+    const table = JSON.parse(fixture('stems.json')) as [string, string][]
+    for (const [name, stem] of table) expect(runStem(name), name).toBe(stem)
+  })
+})
+
+describe('syncDesign after adding a column before the data file', () => {
+  it('still finds the rows of the file (review repro)', () => {
+    const t = parseSdrfTable('source name\tcomment[data file]\tfactor value[condition]\ns\ta.mzML\tcontrol\n')
+    syncDesign(t, [
+      { fileName: 'a.mzML', before: { condition: 'control' }, after: { condition: 'treated', replicate: 2 }, resolved: { replicate: 2, fraction: 1, techReplicate: 1 } },
+    ])
+    expect(cell(t, 0, column(t, 'characteristics[biological replicate]'))).toBe('2')
+    expect(cell(t, 0, column(t, 'factor value[condition]'))).toBe('treated')
+  })
+
+  it('names the line of the first of two rows with the same source, assay and label', () => {
+    const t = parseSdrfTable('source name\tassay name\tcomment[label]\tcomment[data file]\ns\tr\tL\ta\ns\tr\tL\tb\n')
+    expect(validateSdrf(t).find((i) => i.row === 1)!.message).toContain('line 2')
   })
 })

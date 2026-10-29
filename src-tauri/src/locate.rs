@@ -17,13 +17,26 @@ pub struct Located {
     pub mzml: Option<String>,
 }
 
-fn stem(name: &str) -> &str {
-    let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
-    let base = base.strip_suffix(".gz").or_else(|| base.strip_suffix(".GZ")).unwrap_or(base);
+/// The extensions of mass spectrometry data files that a data file's stem leaves out (one, after a `.gz`).
+const STEM_EXTENSIONS: [&str; 8] = ["mzml", "mzxml", "mzpeak", "mgf", "raw", "d", "wiff", "wiff2"];
+
+/// A data file's stem, in lower case: no folders, no `.gz`, no mass spectrometry extension (`A1.wiff` and
+/// `a1.mzML.gz` are `a1`). The same rule as `runStem` in src/lib/design/sdrf-table.ts; both are tested on
+/// src/lib/design/sdrf-fixtures/stems.json.
+pub fn data_file_stem(name: &str) -> String {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or(name).to_lowercase();
+    let base = base.strip_suffix(".gz").unwrap_or(&base).to_string();
     match base.rfind('.') {
-        Some(i) if i > 0 => &base[..i],
+        Some(i) if i > 0 && STEM_EXTENSIONS.contains(&&base[i + 1..]) => base[..i].to_string(),
         _ => base,
     }
+}
+
+/// The stem with its case, for the names of the converted files looked for (`A1.wiff` -> `A1`).
+fn stem(name: &str) -> &str {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    let n = data_file_stem(base).len();
+    &base[..n]
 }
 
 fn exists(p: &Path) -> bool {
@@ -107,6 +120,16 @@ pub fn locate(base: &Path, names: &[String], folder: Option<&Path>) -> Vec<Locat
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_stem_rule_is_the_front_ends() {
+        let table: Vec<(String, String)> =
+            serde_json::from_str(include_str!("../../src/lib/design/sdrf-fixtures/stems.json")).unwrap();
+        for (name, expected) in table {
+            assert_eq!(data_file_stem(&name), expected, "{name}");
+        }
+        assert_eq!(stem("A1.WIFF"), "A1");
+    }
 
     #[test]
     fn finds_beside_the_sdrf_then_below_a_folder() {

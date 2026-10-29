@@ -112,7 +112,7 @@ export function exportSdrf(sdrf: string | null, design: DesignResolution, s: Exp
   const fileCol = column(t, 'comment[data file]')
   // (by stem: the SDRF may name the vendor file of a searched mzML)
   const designOf = (r: number) => {
-    const stem = runStem(cell(t, r, fileCol))
+    const stem = runStem(cell(t, r, column(t, 'comment[data file]')))
     return design.rows.find((d) => runStem(d.fileName) === stem)
   }
 
