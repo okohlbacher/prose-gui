@@ -5,6 +5,9 @@
   // the unmodified logo of OpenMS/Assets (src/assets/logo/README.txt), 180 px: sharp at 36 px on HiDPI screens;
   // its lettering is black, so in dark it stands on a light plate
   import openmsLogo from '../../assets/logo/openms-logo.png'
+  // the ProSE mark in two versions, switched with the theme (the dark one on the OpenMS ink, the light one on white)
+  import proseDark from '../../assets/logo/prose-dark.svg'
+  import proseLight from '../../assets/logo/prose-light.svg'
   import { Badge } from '$lib/components/ui/badge'
   import { formatHash, type Route, type View } from '$lib/route'
   import { exportName } from '$lib/results/exports'
@@ -21,6 +24,7 @@
     { view: 'search', label: 'New search' },
     { view: 'results', label: 'Results' },
     { view: 'history', label: 'History' },
+    { view: 'help', label: 'Help' },
   ]
 
   // "Results" returns to the result that was open last
@@ -50,8 +54,10 @@
 <header
   class="flex min-h-[52px] flex-wrap items-center gap-x-6 gap-y-1.5 border-b bg-background px-5 py-2.5 *:shrink-0 max-[1101px]:gap-x-4">
   <div class="flex items-center gap-2 text-[15px] font-semibold tracking-tight whitespace-nowrap">
-    <img src={openmsLogo} alt="OpenMS" width="36" height="36" class="size-9 select-none dark:rounded-md dark:bg-zinc-100 dark:p-0.5" draggable="false" data-testid="openms-logo" />
-    <span>ProSE<small class="ml-1.5 text-xs font-normal text-muted-foreground max-[1101px]:hidden">OpenMS search engine</small></span>
+    <img src={proseLight} alt="ProSE" width="32" height="32" class="size-8 select-none dark:hidden" draggable="false" data-testid="prose-logo" />
+    <img src={proseDark} alt="ProSE" width="32" height="32" class="hidden size-8 select-none dark:block" draggable="false" />
+    <span>ProSE<small class="ml-1.5 text-xs font-normal text-muted-foreground max-[1101px]:hidden">search engine of</small></span>
+    <img src={openmsLogo} alt="OpenMS" width="28" height="28" class="size-7 select-none dark:rounded-md dark:bg-zinc-100 dark:p-0.5" draggable="false" data-testid="openms-logo" />
   </div>
   <nav aria-label="Main" class="flex gap-1">
     {#each items as item (item.view)}

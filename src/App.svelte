@@ -7,6 +7,7 @@
   import { readHash, router } from '$lib/route.svelte'
   import { loadTool } from '$lib/search/tool.svelte'
   import { initTheme } from '$lib/theme/theme.svelte'
+  import Help from './views/Help.svelte'
   import History from './views/History.svelte'
   import NewSearch from './views/NewSearch.svelte'
   import Results from './views/Results.svelte'
@@ -35,6 +36,8 @@
       <main class="mx-auto max-w-[1120px] px-5 pt-6 pb-24">
         {#if router.route.view === 'search'}
           <NewSearch />
+        {:else if router.route.view === 'help'}
+          <Help />
         {:else}
           <History />
         {/if}

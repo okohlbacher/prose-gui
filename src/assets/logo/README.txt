@@ -10,3 +10,6 @@ OpenMS code, without implying ownership or endorsement by OpenMS Inc. Do not mod
 
 The lettering is black: in the dark theme the top bar puts the logo on a light plate (TopBar.svelte), so
 that it always stands on a light background.
+
+prose-light.svg and prose-dark.svg are the ProSE mark (src-tauri/icons/source/prose-icon.svg) for the light and the dark
+theme; the top bar shows the one of the active theme.

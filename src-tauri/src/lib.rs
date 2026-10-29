@@ -184,6 +184,25 @@ fn searches_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .join("searches"))
 }
 
+/// Opens `url` (https only: the Help page's links) in the system's browser.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") || url.chars().any(|c| c.is_whitespace() || c == '"') {
+        return Err(format!("{url} is not an https link."));
+    }
+    #[cfg(target_os = "macos")]
+    let mut cmd = std::process::Command::new("open");
+    #[cfg(target_os = "linux")]
+    let mut cmd = std::process::Command::new("xdg-open");
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("rundll32");
+        c.arg("url.dll,FileProtocolHandler");
+        c
+    };
+    cmd.arg(&url).spawn().map(|_| ()).map_err(|e| format!("The browser cannot be opened ({e})."))
+}
+
 /// The reference proteome `proteome` (a UniProt proteome id, `UP` and nine digits) as a FASTA in the app's
 /// `databases/` folder, downloaded from UniProt's REST API with curl (macOS, Windows 10 and Linux have it) unless it
 /// is there already; `reviewed`: Swiss-Prot entries only. The only network contact of the app, and only on this
@@ -758,6 +777,7 @@ pub fn run() {
             example_files,
             save_text,
             download_proteome,
+            open_url,
             save_bytes,
             save_search_file,
             history_list,
