@@ -35,9 +35,11 @@ vi.mock('$lib/desktop', () => ({
     return shim.locate ? shim.locate(names) : shim.located
   }),
   chooseFolder: vi.fn(async () => '/downloads'),
+  chooseDownloadFolder: vi.fn(async () => '/downloads'),
   chooseFile: vi.fn(async () => shim.chosen),
   prideFiles: vi.fn(async () => [{ name: 'Ecoli_3.mzML', size: 10, url: 'https://ftp.pride.ebi.ac.uk/x/Ecoli_3.mzML' }]),
-  downloadDataFiles: vi.fn(async (files: { name: string; url: string }[], folder: string) => {
+  downloadDataFiles: vi.fn(async (files: { name: string; url: string }[]) => {
+    const folder = '/downloads'
     shim.downloads.push({ files, folder })
     shim.located = [
       { exact: '/sdrf/Ecoli_1.mzML', mzml: '/sdrf/Ecoli_1.mzML' },

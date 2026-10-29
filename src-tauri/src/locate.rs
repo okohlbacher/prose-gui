@@ -39,8 +39,19 @@ fn stem(name: &str) -> &str {
     &base[..n]
 }
 
+/// A file or folder that is itself there, not a symbolic link (which could lead out of the folders searched).
 fn exists(p: &Path) -> bool {
-    p.is_file() || p.is_dir()
+    std::fs::symlink_metadata(p).is_ok_and(|m| m.is_file() || m.is_dir())
+}
+
+/// A data file name the app looks for: a plain name, no folders, nothing absolute, no `..`, no drive or stream
+/// (`C:x`, `a:b`), no control characters. Anything else is not looked for at all.
+pub fn plain_name(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && !name.contains(['/', '\\', ':'])
+        && !name.chars().any(char::is_control)
 }
 
 fn text(p: &Path) -> String {
@@ -53,14 +64,16 @@ pub fn locate(base: &Path, names: &[String], folder: Option<&Path>) -> Vec<Locat
     let mut out: Vec<Located> = names
         .iter()
         .map(|n| {
+            if !plain_name(n) {
+                return Located::default();
+            }
             let s = stem(n);
-            let dir = base.join(n).parent().map(Path::to_path_buf).unwrap_or_else(|| base.to_path_buf());
             Located {
                 exact: Some(base.join(n)).filter(|p| exists(p)).map(|p| text(&p)),
                 mzml: [format!("{s}.mzML"), format!("{s}.mzML.gz")]
                     .iter()
-                    .map(|m| dir.join(m))
-                    .find(|p| p.is_file())
+                    .map(|m| base.join(m))
+                    .find(|p| exists(p) && p.is_file())
                     .map(|p| text(&p)),
             }
         })
@@ -73,6 +86,9 @@ pub fn locate(base: &Path, names: &[String], folder: Option<&Path>) -> Vec<Locat
     // lower-case file name -> (index, exact?) for what is still missing
     let mut wanted: HashMap<String, Vec<(usize, bool)>> = HashMap::new();
     for (i, (n, l)) in names.iter().zip(&out).enumerate() {
+        if !plain_name(n) {
+            continue;
+        }
         let base = n.rsplit(['/', '\\']).next().unwrap_or(n).to_lowercase();
         let s = stem(n).to_lowercase();
         if l.exact.is_none() {
@@ -98,7 +114,12 @@ pub fn locate(base: &Path, names: &[String], folder: Option<&Path>) -> Vec<Locat
                 continue;
             }
             let path = entry.path();
-            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let Ok(kind) = entry.file_type() else { continue };
+            // (a symbolic link could lead out of the folder searched)
+            if kind.is_symlink() {
+                continue;
+            }
+            let is_dir = kind.is_dir();
             if let Some(hits) = wanted.get(&name.to_lowercase()) {
                 for &(i, exact) in hits {
                     let slot = if exact { &mut out[i].exact } else { &mut out[i].mzml };
@@ -135,16 +156,16 @@ mod tests {
     fn finds_beside_the_sdrf_then_below_a_folder() {
         let root = std::env::temp_dir().join(format!("prose-locate-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(root.join("sdrf/raw")).unwrap();
+        std::fs::create_dir_all(root.join("sdrf")).unwrap();
         std::fs::create_dir_all(root.join("data/deep/B1.d")).unwrap();
         std::fs::create_dir_all(root.join("data/.hidden")).unwrap();
-        std::fs::write(root.join("sdrf/raw/a.mzML"), "").unwrap();
+        std::fs::write(root.join("sdrf/a.mzML"), "").unwrap();
         std::fs::write(root.join("data/deep/C1.mzML.gz"), "").unwrap();
         std::fs::write(root.join("data/.hidden/D1.mzML"), "").unwrap();
-        let names: Vec<String> = ["raw/a.mzML", "b1.d", "C1.raw", "D1.mzML"].iter().map(|s| s.to_string()).collect();
+        let names: Vec<String> = ["a.mzML", "b1.d", "C1.raw", "D1.mzML"].iter().map(|s| s.to_string()).collect();
 
         let near = locate(&root.join("sdrf"), &names, None);
-        assert!(near[0].exact.as_deref().unwrap().ends_with("raw/a.mzML"));
+        assert!(near[0].exact.as_deref().unwrap().ends_with("sdrf/a.mzML"));
         assert_eq!(near[0].mzml, near[0].exact);
         assert_eq!(near[1], Located::default());
 
@@ -153,6 +174,27 @@ mod tests {
         assert_eq!(found[2].exact, None);
         assert!(found[2].mzml.as_deref().unwrap().ends_with("C1.mzML.gz"));
         assert_eq!(found[3], Located::default());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn looks_for_plain_names_only_and_not_through_links() {
+        let root = std::env::temp_dir().join(format!("prose-locate-unsafe-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("sdrf/sub")).unwrap();
+        std::fs::create_dir_all(root.join("outside")).unwrap();
+        std::fs::write(root.join("outside/secret.raw"), "").unwrap();
+        std::fs::write(root.join("sdrf/sub/x.raw"), "").unwrap();
+        let names: Vec<String> = ["../outside/secret.raw", "sub/x.raw", "/etc/hosts", "C:x.raw", "a\u{1}.raw", "..", "linked.raw"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(root.join("outside/secret.raw"), root.join("sdrf/linked.raw")).unwrap();
+        for l in locate(&root.join("sdrf"), &names, Some(&root.join("sdrf"))) {
+            assert_eq!(l, Located::default());
+        }
+        assert!(plain_name("A1.wiff") && plain_name("run.d") && !plain_name("a/b") && !plain_name("x:y"));
         let _ = std::fs::remove_dir_all(&root);
     }
 }

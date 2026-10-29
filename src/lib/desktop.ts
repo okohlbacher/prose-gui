@@ -395,15 +395,19 @@ export function prideFiles(pxd: string): Promise<{ name: string; size: number; u
 
 export type DownloadProgress = { file: number; files: number; name: string; received: number; size: number }
 
-/** Downloads `files` into `folder` (resumed, checked against their sizes); `onProgress` while it runs. -> the paths. */
-export async function downloadDataFiles(
-  files: { name: string; size: number; url: string }[],
-  folder: string,
-  onProgress: (p: DownloadProgress) => void,
-): Promise<string[]> {
+/** The system's folder dialog for a download; the shim keeps the folder (the page cannot name another). Null if cancelled. */
+export function chooseDownloadFolder(title: string): Promise<string | null> {
+  return oneDialog(null, () => invoke<string | null>('choose_download_folder', { title }))
+}
+
+/**
+ * Downloads `files` into the folder of `chooseDownloadFolder` (resumed, checked against their sizes); `onProgress`
+ * while it runs. -> the paths.
+ */
+export async function downloadDataFiles(files: { name: string; size: number; url: string }[], onProgress: (p: DownloadProgress) => void): Promise<string[]> {
   const unlisten = await listen<DownloadProgress>('download://progress', (e) => onProgress(e.payload))
   try {
-    return await invoke<string[]>('download_data_files', { files, folder })
+    return await invoke<string[]>('download_data_files', { files })
   } finally {
     unlisten()
   }

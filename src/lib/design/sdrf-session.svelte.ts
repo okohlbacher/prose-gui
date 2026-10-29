@@ -5,6 +5,7 @@
 
 import {
   cancelDownload,
+  chooseDownloadFolder,
   chooseFile,
   chooseFolder,
   downloadDataFiles,
@@ -245,10 +246,10 @@ class SdrfSession {
         this.downloadError = `No download address for ${plan.notFound.join(', ')}. ${this.pxd ? `PRIDE's ${this.pxd} does not list them.` : 'Enter the ProteomeXchange accession (PXD…).'}`
         return
       }
-      const folder = await chooseFolder(`Download ${plan.files.length} ${plan.files.length === 1 ? 'file' : 'files'} into…`)
+      const folder = await chooseDownloadFolder(`Download ${plan.files.length} ${plan.files.length === 1 ? 'file' : 'files'} into…`)
       if (!folder) return
       this.download = { file: 0, files: plan.files.length, name: plan.files[0].name, received: 0, size: plan.files[0].size }
-      await downloadDataFiles(plan.files, folder, (p) => (this.download = p))
+      await downloadDataFiles(plan.files, (p) => (this.download = p))
       if (plan.notFound.length > 0) this.downloadError = `Not found anywhere: ${plan.notFound.join(', ')}.`
       this.folder = folder
       rememberFolder(this.path, folder)

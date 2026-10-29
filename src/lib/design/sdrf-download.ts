@@ -16,8 +16,10 @@ export function accessionOf(t: SdrfTable, fileName: string): string {
   return /(PXD\d{6,})/.exec(fileName)?.[1] ?? ''
 }
 
-const remote = (uri: string) => /^(https?|ftp):\/\//i.test(uri)
-const https = (url: string) => url.replace(/^ftp:\/\/ftp\.pride\.ebi\.ac\.uk\//, 'https://ftp.pride.ebi.ac.uk/')
+/** PRIDE's FTP address as HTTPS (the same server serves both); other addresses as they are. */
+const https = (url: string) => url.replace(/^ftp:\/\/ftp\.pride\.ebi\.ac\.uk\//i, 'https://ftp.pride.ebi.ac.uk/')
+/** An address the app downloads from: HTTPS only (the shim refuses others), PRIDE's FTP ones made HTTPS. */
+const remote = (uri: string) => /^https:\/\//i.test(https(uri))
 
 /** The files to download for the data files `names` (those not found), and the names nothing was found for. */
 export function downloadPlan(t: SdrfTable, names: string[], pride: RemoteFile[]): { files: RemoteFile[]; notFound: string[] } {

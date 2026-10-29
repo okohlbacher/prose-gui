@@ -16,7 +16,8 @@
 //!   `locate_data_files(sdrf, names, folder?)` -> `[{ exact?, mzml? }]` (`locate`)
 //! - `ols_search(query, ontologies)` -> `[{ label, accession }]`; `validate_sdrf(text, template?)` ->
 //!   `{ available, ok, output }` (`sdrf_tools`)
-//! - `pride_files(pxd)` -> `[{ name, size, url }]`; `download_data_files(files, folder)` -> paths, events
+//! - `pride_files(pxd)` -> `[{ name, size, url }]`; `choose_download_folder(title)` -> the folder (the system's
+//!   dialog; kept in Rust); `download_data_files(files)` -> paths into it, events
 //!   `download://progress` `{ file, files, name, received, size }`; `cancel_download()` (`pride`)
 //! - `save_text(name, contents)` and `save_search_file(searchId, name, suggested)`: a save dialog of
 //!   the system, then the file written where the user chose (-> the path, or null if cancelled)
@@ -594,11 +595,32 @@ async fn pride_files(pxd: String) -> Result<Vec<pride::RemoteFile>, String> {
         .map_err(|e| e.to_string())?
 }
 
-/// Downloads `files` into `folder` (`pride::download`); events `download://progress`. -> the paths.
+/// The system's folder dialog for downloads; the folder is kept here (`pride::FOLDER`) for
+/// `download_data_files`. -> the folder, or null if cancelled.
 #[tauri::command]
-async fn download_data_files(app: AppHandle, files: Vec<pride::RemoteFile>, folder: String) -> Result<Vec<String>, String> {
+async fn choose_download_folder(app: AppHandle, title: String) -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let paths = pride::download(Path::new(&folder), &files, |p| {
+        let chosen = match test_dialog_path() {
+            Some(path) => Some(path),
+            None => match app.dialog().file().set_title(title).blocking_pick_folder() {
+                None => None,
+                Some(p) => Some(p.into_path().map_err(|e| e.to_string())?),
+            },
+        };
+        *pride::FOLDER.lock().map_err(|e| e.to_string())? = chosen.clone();
+        Ok(chosen.map(|p| p.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Downloads `files` into the folder of `choose_download_folder` (`pride::download`); events
+/// `download://progress`. -> the paths.
+#[tauri::command]
+async fn download_data_files(app: AppHandle, files: Vec<pride::RemoteFile>) -> Result<Vec<String>, String> {
+    let folder = pride::chosen_folder()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let paths = pride::download(&folder, &files, |p| {
             let _ = app.emit("download://progress", p);
         })?;
         Ok(paths.iter().map(|p| p.to_string_lossy().into_owned()).collect())
@@ -844,6 +866,7 @@ pub fn run() {
             ols_search,
             validate_sdrf,
             pride_files,
+            choose_download_folder,
             download_data_files,
             cancel_download,
             history_import_qpx,
