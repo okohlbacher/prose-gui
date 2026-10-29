@@ -10,7 +10,13 @@
   import Marker from './Marker.svelte'
   import ProteinRefs from './ProteinRefs.svelte'
 
-  let { view, level }: { view: ResultsView; level: LevelState } = $props()
+  // a row opens its PSMs in the PSM table (`onOpen`); a protein accession opens the protein's panel
+  let {
+    view,
+    level,
+    onOpen,
+    onOpenProtein,
+  }: { view: ResultsView; level: LevelState; onOpen: (peptide: number) => void; onOpenProtein: (protein: number) => void } = $props()
 
   const m = $derived(view.model)
   const pt = $derived(m.tables.peptides)
@@ -51,7 +57,7 @@
 {/snippet}
 
 {#snippet proteinsCell(k: number)}
-  <ProteinRefs model={m} peptide={k} />
+  <ProteinRefs model={m} peptide={k} onOpen={onOpenProtein} />
 {/snippet}
 
 <DataTable
@@ -60,6 +66,9 @@
   {columns}
   sort={level.effectiveSort}
   onSort={(key) => level.sortBy(key)}
-  onRowClick={(k) => (level.selected = k)}
+  onRowClick={(k) => {
+    level.selected = k
+    onOpen(k)
+  }}
   selected={level.selected}
   empty={level.emptyText} />

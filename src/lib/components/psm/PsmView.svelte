@@ -310,6 +310,8 @@
   }
 
   let mirror = $state<SpectrumMirror | null>(null)
+  /** The m/z that the ion table and the spectrum highlight together. */
+  let hoverMz = $state<number | null>(null)
   function exportSvg() {
     const svg = mirror?.svgElement()
     if (!svg) return
@@ -571,6 +573,7 @@
         title={spectrumTitle}
         description={spectrumDescription}
         errors={{ matches: shown, tolerance }}
+        bind:hover={hoverMz}
         onTheoretical={() => (view.psmOptions.bottom = 'theoretical')} />
       {#if hiddenOnePlus}
         <p class="flex flex-wrap items-center gap-2 pb-1 text-xs text-muted-foreground" role="status" data-testid="oneplus-hint">
@@ -624,7 +627,7 @@
   <div class="mt-3 flex flex-wrap items-start gap-3">
     <div class="max-w-full min-w-0 flex-none rounded-lg border bg-background px-2 py-2">
       {#if table}
-        <IonTable {table} {peptide} label={sequence} />
+        <IonTable {table} {peptide} label={sequence} bind:hover={hoverMz} />
       {:else}
         <p class="px-2 py-6 text-center text-xs text-muted-foreground">
           {annotationError ? `No ion table: ${annotationError}` : 'Computing the fragment ions…'}

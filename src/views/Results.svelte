@@ -93,6 +93,13 @@
     panel?.focus()
   }
 
+  /** A protein accession in the Peptides or PSM table: the Proteins tab with the protein's panel open. */
+  async function openProteinTab(protein: number) {
+    if (!view) return
+    view.tab = 'proteins'
+    await openProtein(protein)
+  }
+
   async function closePanel() {
     if (!view) return
     const protein = view.panel
@@ -174,7 +181,7 @@
         <p class="text-xs text-amber-700 dark:text-amber-400" data-testid="results-warnings">{view.result.outcome.warnings.join(' ')}</p>
       {/if}
       {#if !panelOpen && !psmOpen}
-        <KeyFigures {figures} proteinFdr={view.result.proteinFdr} proteinFdrApplied={view.result.outcome.summary.proteinFdrApplied} />
+        <KeyFigures {figures} proteinFdr={view.result.proteinFdr} proteinFdrApplied={view.result.outcome.summary.proteinFdrApplied} psmFdr={view.model.psmFdr} />
       {/if}
 
       <Tabs.Root bind:value={view.tab} class="flex min-h-0 flex-1 flex-col gap-3">
@@ -218,9 +225,9 @@
             {:else if level.level === 'proteins'}
               <ProteinsTable bind:this={proteinsTable} {view} {level} onOpen={openProtein} />
             {:else if level.level === 'peptides'}
-              <PeptidesTable {view} {level} />
+              <PeptidesTable {view} {level} onOpen={(peptide) => openInPsmTable({ peptide })} onOpenProtein={openProteinTab} />
             {:else}
-              <PsmsTable bind:this={psmsTable} {view} {level} onOpen={openPsm} compact={psmOpen} />
+              <PsmsTable bind:this={psmsTable} {view} {level} onOpen={openPsm} compact={psmOpen} onOpenProtein={openProteinTab} />
             {/if}
             {#if level.level !== 'proteins' && !psmOpen}
               <p class="-mt-1 text-xs text-muted-foreground" data-testid="mod-legend">

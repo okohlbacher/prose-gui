@@ -6,9 +6,11 @@
   import { formatPercent, formatQ } from '$lib/format/fdr'
   import { formatCount } from '$lib/results/display'
   import { levelRows } from '$lib/results/figures'
+  import { baseName } from '$lib/results/model'
   import { fileRows, formatSeconds, psmFdrFact, totalsOf, type EngineNote } from '$lib/results/overview'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { toolState } from '$lib/search/tool.svelte'
+  import { methodsText } from '$lib/results/methods'
   import DeltaMassPanel from './DeltaMassPanel.svelte'
 
   let { view }: { view: ResultsView } = $props()
@@ -55,6 +57,18 @@
     { name: 'Engine', ...engine },
   ])
 
+  // the mass accuracy that ProSE measured per file, and the tolerances it recommends from it (advisory)
+  const accuracy = $derived(summary.files.filter((f) => f.precursorError || f.fragmentError))
+  const ppm = (e: { median: number; mad: number } | null) => (e ? `${e.median.toFixed(2)} ± ${e.mad.toFixed(2)}` : '–')
+
+  const methods = $derived(methodsText({ summary, settings, version: result.stored?.moduleVersion ?? toolState.info?.version ?? '' }))
+  let copied = $state(false)
+  async function copyMethods() {
+    await navigator.clipboard.writeText(methods)
+    copied = true
+    setTimeout(() => (copied = false), 1500)
+  }
+
   const head = 'h-auto border-b px-2.5 py-1.5 font-medium text-muted-foreground'
   const cell = 'border-b px-2.5 py-1.5'
   const foot = 'px-2.5 py-1.5 font-medium'
@@ -74,6 +88,12 @@
 {/snippet}
 
 <div class="flex flex-col gap-6 pb-6">
+  {#if !summary.proteinFdrApplied}
+    <div role="note" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" data-testid="no-protein-fdr">
+      <span class="font-medium">No protein-level FDR.</span> The protein groups and their counts come from the PSMs at the PSM FDR and are not
+      FDR-controlled themselves. Peptide counts are not FDR-controlled at peptide level either.
+    </div>
+  {/if}
   <section aria-labelledby="overview-search">
     <h2 id="overview-search" class="mb-2 text-[13px] font-semibold">Search</h2>
     <dl class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-x-6 gap-y-2 text-xs" data-testid="search-facts">
@@ -145,6 +165,48 @@
         {/if}
       </Table.Root>
     </div>
+  </section>
+
+  {#if accuracy.length > 0}
+    <section aria-labelledby="overview-accuracy" data-testid="mass-accuracy">
+      <h2 id="overview-accuracy" class="mb-1 text-[13px] font-semibold">Mass accuracy</h2>
+      <p class="mb-2 text-xs text-muted-foreground">
+        Measured by ProSE on the PSMs that passed the FDR (median ± MAD, ppm). The recommended tolerances are advisory: they rest on
+        passing PSMs only.
+      </p>
+      <div class="rounded-lg border bg-background">
+        <Table.Root class="text-xs tabular-nums" aria-label="Mass accuracy per file">
+          <Table.Header>
+            <Table.Row class="hover:bg-transparent">
+              <Table.Head scope="col" class="{head} text-left">File</Table.Head>
+              <Table.Head scope="col" class="{head} text-right">Precursor error</Table.Head>
+              <Table.Head scope="col" class="{head} text-right">Recommended precursor tol.</Table.Head>
+              <Table.Head scope="col" class="{head} text-right">Fragment error</Table.Head>
+              <Table.Head scope="col" class="{head} text-right">Recommended fragment tol.</Table.Head>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
+            {#each accuracy as f (f.path)}
+              <Table.Row>
+                <Table.Cell class="{cell} text-left font-medium">{baseName(f.path)}</Table.Cell>
+                <Table.Cell class="{cell} text-right">{ppm(f.precursorError)}</Table.Cell>
+                <Table.Cell class="{cell} text-right">{f.precursorError ? `${f.precursorError.recommended.toFixed(1)} ppm` : '–'}</Table.Cell>
+                <Table.Cell class="{cell} text-right">{ppm(f.fragmentError)}</Table.Cell>
+                <Table.Cell class="{cell} text-right">{f.fragmentError ? `${f.fragmentError.recommended.toFixed(1)} ppm` : '–'}</Table.Cell>
+              </Table.Row>
+            {/each}
+          </Table.Body>
+        </Table.Root>
+      </div>
+    </section>
+  {/if}
+
+  <section aria-labelledby="overview-methods" data-testid="methods">
+    <div class="mb-1 flex items-center gap-2">
+      <h2 id="overview-methods" class="text-[13px] font-semibold">Methods text</h2>
+      <button type="button" class="rounded border px-2 py-0.5 text-xs hover:bg-muted" onclick={copyMethods}>{copied ? 'Copied' : 'Copy'}</button>
+    </div>
+    <p class="max-w-[60rem] rounded-lg border bg-background px-3 py-2 text-xs leading-relaxed select-text">{methods}</p>
   </section>
 
   {#if summary.openSearch}

@@ -6,7 +6,13 @@
   import { modTitle, type PeptideView } from '$lib/format/peptide'
   import type { IonTable } from '$lib/psm/psm'
 
-  let { table, peptide, label }: { table: IonTable; peptide: PeptideView; label: string } = $props()
+  // `hover`: the m/z under the pointer or focus, shared with the spectrum (a matched cell highlights its peak, a
+  // peak its cell; survey P0-5). Matched cells take the focus, so the keyboard reaches every matched ion.
+  let { table, peptide, label, hover = $bindable(null) }: { table: IonTable; peptide: PeptideView; label: string; hover?: number | null } = $props()
+  const near = (mz: number) => hover !== null && Math.abs(mz - hover) < 0.05
+  const enter = (cell: { mz: number; matched: boolean } | null) => {
+    if (cell?.matched) hover = cell.mz
+  }
 
   const n = $derived(peptide.residues.length)
 
@@ -38,7 +44,12 @@
               data-type={table.n[j].type}
               data-ion={cell?.ion}
               data-matched={cell ? String(cell.matched) : undefined}
-              class={cell ? cellClass(table.n[j].type, cell.matched) : ''}
+              class="{cell ? cellClass(table.n[j].type, cell.matched) : ''} {cell && near(cell.mz) ? 'hl' : ''}"
+              tabindex={cell?.matched ? 0 : undefined}
+              onmouseenter={() => enter(cell)}
+              onfocus={() => enter(cell)}
+              onmouseleave={() => (hover = null)}
+              onblur={() => (hover = null)}
               >{#if cell}{cell.mz.toFixed(4)}{#if cell.matched}<span class="sr-only"> matched</span>{/if}{/if}</td>
           {/each}
           <th scope="row" class="aa" title={r.mod ? modTitle(r.mod) : undefined}
@@ -48,7 +59,12 @@
               data-type={table.c[j].type}
               data-ion={cell?.ion}
               data-matched={cell ? String(cell.matched) : undefined}
-              class={cell ? cellClass(table.c[j].type, cell.matched) : ''}
+              class="{cell ? cellClass(table.c[j].type, cell.matched) : ''} {cell && near(cell.mz) ? 'hl' : ''}"
+              tabindex={cell?.matched ? 0 : undefined}
+              onmouseenter={() => enter(cell)}
+              onfocus={() => enter(cell)}
+              onmouseleave={() => (hover = null)}
+              onblur={() => (hover = null)}
               >{#if cell}{cell.mz.toFixed(4)}{#if cell.matched}<span class="sr-only"> matched</span>{/if}{/if}</td>
           {/each}
           <td class="text-muted-foreground">{n - row.index}</td>
@@ -78,6 +94,10 @@
     text-align: center;
     font-weight: 600;
     font-family: var(--font-sequence);
+  }
+  .hl {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
   }
   .matched {
     font-weight: 600;

@@ -54,8 +54,8 @@
   {#if score}
     <ChartCard
       testid="qc-score"
-      title="Score distribution"
-      subtitle="PSMs at the search FDR ({fdr}) · decoys included"
+      title="Score of the PSMs that passed the PSM FDR"
+      subtitle="Passing PSMs only ({fdr}) · the decoys shown are only those that passed, so this is not a target/decoy separation plot"
       notes={score.unscored > 0 ? [`${formatCount(score.unscored)} PSMs have no score because Percolator could not rescore them. They are left out.`] : []}
       legend={[
         { label: 'Targets', color: targetColor, value: formatCount(score.nTargets) },

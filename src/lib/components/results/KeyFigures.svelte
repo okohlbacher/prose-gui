@@ -4,7 +4,15 @@
   import { formatCount } from '$lib/results/display'
   import type { KeyFigures } from '$lib/results/figures'
 
-  let { figures, proteinFdr, proteinFdrApplied }: { figures: KeyFigures; proteinFdr: number; proteinFdrApplied: boolean } = $props()
+  let {
+    figures,
+    proteinFdr,
+    proteinFdrApplied,
+    psmFdr,
+  }: { figures: KeyFigures; proteinFdr: number; proteinFdrApplied: boolean; psmFdr: number } = $props()
+
+  // the FDR that controls each count, said on the tile and not only in its tooltip (survey P0-1)
+  const psmScope = $derived(`at ${formatPercent(psmFdr)} PSM FDR`)
 
   // proteins that cannot be told apart count once here, but each has a row in the Proteins tab
   const groupTitle = $derived.by(() => {
@@ -46,13 +54,13 @@
     },
     {
       value: formatCount(figures.peptides),
-      note: noFdr ? 'peptides · no PSM FDR' : 'peptides',
-      title: `Target peptides at the PSM FDR. Each modified form counts as its own peptide.${noFdr ? fdrTitle : ''}`,
+      note: noFdr ? 'peptides · no PSM FDR' : `peptides · ${psmScope} · no peptide FDR`,
+      title: `Target peptides of the PSMs at the PSM FDR. Each modified form counts as its own peptide. No peptide-level FDR was estimated, so the peptide FDR can be higher than the PSM FDR.${noFdr ? fdrTitle : ''}`,
       testid: 'peptide-count',
     },
     {
       value: formatCount(figures.psms),
-      note: ['PSMs', fdrNote, severalPerSpectrum ? `${formatCount(figures.spectra)} spectra` : null, share].filter(Boolean).join(' · '),
+      note: ['PSMs', fdrNote ?? psmScope, severalPerSpectrum ? `${formatCount(figures.spectra)} spectra` : null, share].filter(Boolean).join(' · '),
       title:
         (severalPerSpectrum
           ? `Target PSMs at the PSM FDR. They identify ${formatCount(figures.spectra)} of the ${formatCount(figures.ms2)} MS2 spectra: with co-isolated precursors a spectrum can have several PSMs.`

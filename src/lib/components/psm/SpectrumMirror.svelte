@@ -42,6 +42,7 @@
     description,
     onTheoretical,
     errors = null,
+    hover = $bindable(null),
   }: {
     mz: Float32Array
     intensity: Float32Array
@@ -58,6 +59,8 @@
     onTheoretical?: () => void
     /** The fragment mass errors under the spectrum: the matches shown and the search's fragment tolerance. */
     errors?: { matches: PeakMatch[]; tolerance: Tolerance } | null
+    /** The m/z highlighted together with the ion table (a matched peak under the pointer, or an ion cell's). */
+    hover?: number | null
   } = $props()
 
   const uid = $props.id()
@@ -123,7 +126,13 @@
   }
 
   const bottomIons = $derived(bottom.kind === 'ions' ? bottom.ions : [])
-  const domain = $derived(mzDomain([mz, bottomIons.map((b) => b.mz)]))
+  const fullDomain = $derived(mzDomain([mz, bottomIons.map((b) => b.mz)]))
+  // zoom (survey P0-6): drag across the plot to zoom into an m/z range; double-click or "Reset zoom" goes back.
+  // ponytail: the y scale stays that of the whole spectrum; rescale to the peaks in view if users ask for it.
+  let zoom = $state<[number, number] | null>(null)
+  let brush = $state<{ from: number; to: number } | null>(null)
+  const domain = $derived(zoom ?? fullDomain)
+  const inView = (v: number) => v >= domain[0] && v <= domain[1]
   const x = $derived(scale(domain, [M.left, Math.max(M.left + 10, width - M.right)]))
   const ref = $derived(reference.intensity > 0 ? reference.intensity : 1)
   /** Upper half: the ratio to the reference (0–1) to y, with room for the labels of the tallest peaks. */
@@ -158,7 +167,7 @@
 
   /** The labels of the matched peaks, the most intense first; those without room are left out. */
   const labels = $derived.by(() => {
-    const order = [...groups].sort((p, q) => q.intensity - p.intensity)
+    const order = groups.filter((g) => inView(g.mz)).sort((p, q) => q.intensity - p.intensity)
     const ys = placeLabels(
       order.map((g) => {
         const r = g.intensity / ref
@@ -243,13 +252,36 @@
     return best
   }
 
+  const toMz = (px0: number) => domain[0] + ((px0 - M.left) / (width - M.left - M.right)) * (domain[1] - domain[0])
+  const localX = (event: PointerEvent) => event.clientX - (svg?.getBoundingClientRect().left ?? 0)
+
+  function onpointerdown(event: PointerEvent) {
+    const px0 = localX(event)
+    if (event.button !== 0 || px0 < M.left || px0 > width - M.right) return
+    brush = { from: px0, to: px0 }
+    svg?.setPointerCapture(event.pointerId)
+  }
+
+  function onpointerup() {
+    if (brush && Math.abs(brush.to - brush.from) > 5) {
+      const [a, b] = [toMz(Math.min(brush.from, brush.to)), toMz(Math.max(brush.from, brush.to))]
+      zoom = [a, b]
+    }
+    brush = null
+  }
+
   function onpointermove(event: PointerEvent) {
     if (!svg) return
     const box = svg.getBoundingClientRect()
     const px0 = event.clientX - box.left
     const py = event.clientY - box.top
-    if (px0 < M.left - 4 || px0 > width - M.right + 4 || py < plotTop - 4 || py > plotBottom) return void (tip = null)
-    const at = domain[0] + ((px0 - M.left) / (width - M.left - M.right)) * (domain[1] - domain[0])
+    if (brush) {
+      brush.to = Math.min(width - M.right, Math.max(M.left, px0))
+      tip = null
+      return
+    }
+    if (px0 < M.left - 4 || px0 > width - M.right + 4 || py < plotTop - 4 || py > plotBottom) return void ((tip = null), (hover = null))
+    const at = toMz(px0)
     if (py <= mid) {
       const i = strongestNear(mz, intensity, at)
       if (i < 0) return void (tip = null)
@@ -257,6 +289,7 @@
       const share = (intensity[i] / ref) * 100
       const lines = [`m/z ${mz[i].toFixed(4)} · ${share.toFixed(1)} %${share > 100 ? ' (clipped)' : ''}`]
       // (the error in the search's unit, as the strip below gives it)
+      hover = g ? mz[i] : null
       if (g) for (const m of g.matches) lines.push(`${ionLabel(m.ion)} · ${errors ? errorText(errorOf(m)) : `${signedNumber(m.errorPpm, 2)} ppm`}`)
       else lines.push('unmatched')
       tip = { x: x(mz[i]), y: py, lines }
@@ -289,7 +322,18 @@
     font-family={font}
     class="block"
     {onpointermove}
-    onpointerleave={() => (tip = null)}>
+    {onpointerdown}
+    {onpointerup}
+    ondblclick={() => (zoom = null)}
+    onpointerleave={() => {
+      tip = null
+      hover = null
+    }}
+    style:cursor="crosshair"
+    style:touch-action="none">
+    <defs>
+      <clipPath id="{uid}-clip"><rect x={M.left} y="0" width={Math.max(0, width - M.left - M.right)} height={H} /></clipPath>
+    </defs>
     <title id="{uid}-title">{title}</title>
     <desc id="{uid}-desc">{description}{errorDescription}</desc>
 
@@ -299,6 +343,7 @@
       {#if errors}<line x1={px(x(t))} x2={px(x(t))} y1={errorTop} y2={errorBottom} stroke="var(--plot-band)" stroke-width="1" />{/if}
     {/each}
 
+    <g clip-path="url(#{uid}-clip)">
     <!-- the observed peaks: unmatched light grey and thin, matched in their series' colour -->
     {#each sticks as s (s.color)}
       {@const matched = s.color !== COLORS.unmatched}
@@ -336,6 +381,8 @@
         data-no-export="">{bottom.message}</text>
     {/if}
 
+    </g>
+
     <!-- the fragment mass errors, under their peaks -->
     {#if errors}
       <g data-testid="mass-error">
@@ -357,6 +404,7 @@
           <text x={M.left - 6} y={px(ey(t) + 3.5)} text-anchor="end" font-size="10" fill={muted}>{errorTick(t)}</text>
         {/each}
         <text x={M.left - 6} y={errorTop - 10} text-anchor="end" font-size="10" fill={muted} data-testid="error-unit">{unit}</text>
+        <g clip-path="url(#{uid}-clip)">
         {#each dots as d, i (i)}
           <circle
             cx={px(x(mz[d.m.peak]))}
@@ -371,7 +419,16 @@
             data-mz={mz[d.m.peak]}
             ><title>{ionLabel(d.m.ion)} · m/z {mz[d.m.peak].toFixed(4)} · {errorText(d.error)}</title></circle>
         {/each}
+        </g>
       </g>
+    {/if}
+
+    <!-- the m/z highlighted with the ion table, and the zoom brush (page only) -->
+    {#if hover !== null && inView(hover)}
+      <line x1={px(x(hover))} x2={px(x(hover))} y1={plotTop} y2={axisBase} stroke="var(--color-ring)" stroke-width="2" stroke-dasharray="3 2" data-no-export="" data-testid="hover-line" />
+    {/if}
+    {#if brush}
+      <rect x={Math.min(brush.from, brush.to)} y={plotTop} width={Math.abs(brush.to - brush.from)} height={plotBottom - plotTop} fill="var(--color-ring)" fill-opacity="0.15" data-no-export="" />
     {/if}
 
     <!-- the axis: the halves' baseline, the m/z labels below everything -->
@@ -437,6 +494,14 @@
         data-stacked={stacked ? '' : undefined}>{similarity}</text>
     {/if}
   </svg>
+
+  {#if zoom}
+    <button
+      type="button"
+      class="absolute top-0 right-3 rounded-md border bg-background px-2 py-0.5 text-xs hover:bg-muted"
+      data-testid="reset-zoom"
+      onclick={() => (zoom = null)}>Reset zoom (m/z {zoom[0].toFixed(0)}–{zoom[1].toFixed(0)})</button>
+  {/if}
 
   {#if bottom.kind === 'status' && bottom.failed && onTheoretical}
     <button
