@@ -105,20 +105,38 @@ pub fn download(folder: &Path, files: &[RemoteFile], progress: impl Fn(Progress)
         if !(f.url.starts_with("https://") || f.url.starts_with("http://") || f.url.starts_with("ftp://")) {
             return Err(format!("{} has no http, https or ftp address.", f.name));
         }
+        // the server's size: PRIDE's file list has outdated sizes for some files (its generated/ ones)
+        let size = remote_size(&f.url).unwrap_or(f.size);
         let path = folder.join(&f.name);
-        if f.size > 0 && std::fs::metadata(&path).map(|m| m.len() == f.size).unwrap_or(false) {
+        if size > 0 && len(&path) == size {
             done.push(path);
             continue;
         }
         let partial = folder.join(format!("{}.partial", f.name));
-        fetch(&f.url, &partial, f.size, |received| {
-            progress(Progress { file: i, files: files.len(), name: f.name.clone(), received, size: f.size })
+        fetch(&f.url, &partial, size, |received| {
+            progress(Progress { file: i, files: files.len(), name: f.name.clone(), received, size })
         })
         .map_err(|e| format!("{}: {e}", f.name))?;
         std::fs::rename(&partial, &path).map_err(|e| e.to_string())?;
         done.push(path);
     }
     Ok(done)
+}
+
+/// The size the server gives for `url` (the Content-Length of a HEAD request, after redirects); None if it says none.
+pub fn remote_size(url: &str) -> Option<u64> {
+    let out = Command::new("curl").args(["-sIL", "--connect-timeout", "30", "--max-time", "60", url]).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let head = String::from_utf8_lossy(&out.stdout);
+    // (the last response's: a redirect has its own)
+    let last = head.rsplit("\r\n\r\n").find(|block| !block.trim().is_empty())?;
+    last.lines()
+        .filter_map(|l| l.split_once(':'))
+        .find(|(k, _)| k.trim().eq_ignore_ascii_case("content-length"))
+        .and_then(|(_, v)| v.trim().parse().ok())
+        .filter(|&n: &u64| n > 0)
 }
 
 /// Attempts at one file; each resumes from the size the partial file actually has.
@@ -179,7 +197,7 @@ pub fn fetch(url: &str, partial: &Path, size: u64, progress: impl Fn(u64)) -> Re
         if overrun || (size > 0 && received > size) {
             // (more bytes than the file has: never keep them)
             let _ = std::fs::remove_file(partial);
-            last = format!("the server sent more than the {size} bytes PRIDE lists");
+            last = format!("the server sent more than the {size} bytes it gives as the file's size");
             continue;
         }
         if status.success() {
@@ -187,7 +205,7 @@ pub fn fetch(url: &str, partial: &Path, size: u64, progress: impl Fn(u64)) -> Re
                 progress(received);
                 return Ok(());
             }
-            last = format!("{received} bytes downloaded, PRIDE lists {size}");
+            last = format!("{received} bytes downloaded, the server gives {size}");
             continue;
         }
         let mut err = String::new();
@@ -232,10 +250,14 @@ mod tests {
             for stream in listener.incoming().flatten() {
                 let mut reader = BufReader::new(stream.try_clone().unwrap());
                 let mut from = 0usize;
+                let mut head_only = false;
                 loop {
                     let mut line = String::new();
                     if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
                         break;
+                    }
+                    if line.starts_with("HEAD ") {
+                        head_only = true;
                     }
                     if let Some(r) = line.to_ascii_lowercase().strip_prefix("range: bytes=") {
                         from = r.trim().trim_end_matches('-').parse().unwrap_or(0);
@@ -250,6 +272,9 @@ mod tests {
                     format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", data.len())
                 };
                 let _ = out.write_all(head.as_bytes());
+                if head_only {
+                    continue;
+                }
                 let n = match cut { Some(c) if first => c.min(data.len()), _ => data.len() };
                 let _ = out.write_all(&data[..n]);
                 first = false;
@@ -295,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    fn a_partial_file_larger_than_the_file_is_thrown_away_and_a_wrong_size_is_an_error() {
+    fn a_partial_file_larger_than_the_file_is_thrown_away_and_the_servers_size_counts() {
         let dir = tmp("size");
         let b = body();
         let mut big = b.clone();
@@ -305,11 +330,11 @@ mod tests {
         let ok = RemoteFile { name: "f.raw".into(), size: b.len() as u64, url: url.clone() };
         download(&dir, &[ok], |_| {}).unwrap();
         assert_eq!(std::fs::read(dir.join("f.raw")).unwrap(), b);
-        // PRIDE lists another size than the server sends: an error, no file
-        let wrong = RemoteFile { name: "g.raw".into(), size: b.len() as u64 + 10, url };
-        let e = download(&dir, &[wrong], |_| {}).unwrap_err();
-        assert!(e.contains("PRIDE lists"), "{e}");
-        assert!(!dir.join("g.raw").exists());
+        // PRIDE lists another size than the server gives (its list is outdated for some files): the server's counts
+        let outdated = RemoteFile { name: "g.raw".into(), size: b.len() as u64 + 10, url: url.clone() };
+        download(&dir, &[outdated], |p| assert_eq!(p.size, b.len() as u64)).unwrap();
+        assert_eq!(std::fs::read(dir.join("g.raw")).unwrap(), b);
+        assert_eq!(remote_size(&url), Some(b.len() as u64));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -318,6 +343,36 @@ mod tests {
         let dir = tmp("refuse");
         let f = RemoteFile { name: "x.txt".into(), size: 5, url: "file:///etc/hosts".into() };
         assert!(download(&dir, &[f], |_| {}).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Against PRIDE itself (network; `cargo test -- --ignored`): PXD000001's file list, a download cancelled
+    /// half-way and resumed, ending with PRIDE's size.
+    #[test]
+    #[ignore]
+    fn live_pride_download_cancelled_and_resumed() {
+        let files = project_files("PXD000001").unwrap();
+        let f = files.into_iter().find(|f| f.name == "PRIDE_Exp_Complete_Ac_22134.pride.mgf.gz").unwrap();
+        // (PRIDE's list says 16,448,103 bytes for this file; the server has 5,984,662)
+        let size = remote_size(&f.url).unwrap();
+        let dir = tmp("live");
+        let watcher = {
+            let partial = dir.join(format!("{}.partial", f.name));
+            std::thread::spawn(move || loop {
+                if len(&partial) > 2_000_000 {
+                    CANCEL.store(true, Ordering::SeqCst);
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            })
+        };
+        let e = download(&dir, std::slice::from_ref(&f), |_| {}).unwrap_err();
+        watcher.join().unwrap();
+        assert!(e.contains("cancelled"), "{e}");
+        let partial = len(&dir.join(format!("{}.partial", f.name)));
+        assert!(partial > 0 && partial < size, "{partial}");
+        download(&dir, std::slice::from_ref(&f), |p| assert!(p.received <= p.size)).unwrap();
+        assert_eq!(len(&dir.join(&f.name)), size);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
