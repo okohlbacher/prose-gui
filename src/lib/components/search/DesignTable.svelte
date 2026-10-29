@@ -21,6 +21,8 @@
   import { formatBytes } from '$lib/format/bytes'
   import { searchForm as form } from '$lib/search/form.svelte'
   import { batchStatus } from '$lib/search/spectra'
+  import { fractionsWithoutReplicates, scopeLine } from '$lib/search/scope'
+  import { searchPlan } from '$lib/search/plan.svelte'
   import DesignCell from './DesignCell.svelte'
   import NoticeList from './NoticeList.svelte'
   import PasteDialog from './PasteDialog.svelte'
@@ -91,6 +93,7 @@
           action: n.kind === 'techReplicate' ? { label: 'Change', run: () => change(n) } : undefined,
         }))
       : []),
+    ...(multi && fractionsWithoutReplicates(design) ? [{ message: fractionsWithoutReplicates(design)! }] : []),
     ...form.notices.map((message, k) => ({ message, onDismiss: () => form.notices.splice(k, 1) })),
     ...(saveError ? [{ message: saveError, onDismiss: () => (saveError = null) }] : []),
   ])
@@ -291,6 +294,7 @@
       </p>
     {/if}
 
+    <p class="text-xs text-muted-foreground" data-testid="fdr-scope">{scopeLine(form.files.length, form.values, searchPlan.fdrBlocked)}</p>
     {#if problems.length > 0}
       <!-- what ProSE cannot search: the search does not start until these files are removed -->
       <ul class="flex flex-col gap-1 text-[12.5px] text-destructive" data-testid="file-problems">
