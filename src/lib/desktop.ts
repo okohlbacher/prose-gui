@@ -68,6 +68,21 @@ export type FileFacts = InputFile & {
   warnings: string[]
   /** An mzML's instrument model from its header (PSI-MS). */
   instrument?: { name: string; accession: string } | null
+  /** A FASTA's entries in numbers (src-tauri/src/content.rs `FastaSummary`; guidance G6). */
+  fasta?: FastaSummary | null
+}
+
+/** A FASTA's entries in numbers: organisms (OS=), UniProt headers, isoforms, contaminants, decoys and their marker. */
+export type FastaSummary = {
+  /** [organism, entries], most entries first (at most 5). */
+  organisms: [string, number][]
+  withOrganism: number
+  organismCount: number
+  uniprot: number
+  isoforms: number
+  contaminants: number
+  decoys: number
+  decoyMarker: string | null
 }
 
 /** The search request of the shim (src-tauri/src/args.rs `SearchRequest`, camelCase). */

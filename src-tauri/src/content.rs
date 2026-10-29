@@ -261,7 +261,30 @@ pub struct FastaFacts {
     pub residues: u64,
     pub problems: Vec<String>,
     pub warnings: Vec<String>,
+    pub summary: FastaSummary,
 }
+
+/// What the database card shows of a FASTA's entries (guidance G6): counts from the headers only.
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FastaSummary {
+    /// The organisms of UniProt-style headers (`OS=`), most entries first (at most [`TOP_ORGANISMS`]), and the
+    /// entries with an `OS=` at all, and how many organisms there are.
+    pub organisms: Vec<(String, u64)>,
+    pub with_organism: u64,
+    pub organism_count: u64,
+    /// Entries with a UniProt accession (`sp|` or `tr|`), and isoforms among them (`sp|P04637-2|`).
+    pub uniprot: u64,
+    pub isoforms: u64,
+    /// Contaminant entries (`CON__`, or a header that says cRAP or contaminant).
+    pub contaminants: u64,
+    /// Entries whose accession carries a decoy affix, and the marker ProSE would detect (None: no decoys).
+    pub decoys: u64,
+    pub decoy_marker: Option<String>,
+}
+
+/// The organisms the summary names (the rest are counted).
+pub const TOP_ORGANISMS: usize = 5;
 
 /// How often something occurs in the entries, and the first entry it occurs in (its accession, and a detail).
 #[derive(Default)]
@@ -328,6 +351,11 @@ struct FastaScan {
     /// a FASTA or the contaminants added twice: ProSE searches it once).
     duplicates: Tally,
     repeated: Tally,
+    /// The header line being read (its first KiB), for the summary.
+    header: Vec<u8>,
+    organisms: HashMap<String, u64>,
+    summary: FastaSummary,
+    decoys: crate::decoys::DecoyStatistics,
     no_accession: u64,
     empty: Tally,
     too_long: Tally,
@@ -391,6 +419,32 @@ impl FastaScan {
         self.invalid_here = None;
     }
 
+    /// The header line is complete: its organism, accession style, contaminant and decoy marks for the summary.
+    fn end_header(&mut self) {
+        let header = String::from_utf8_lossy(&std::mem::take(&mut self.header)).into_owned();
+        let accession = header.split_whitespace().next().unwrap_or("");
+        let s = &mut self.summary;
+        if let Some(at) = header.find(" OS=") {
+            let rest = &header[at + 4..];
+            // (the organism ends at the next field: " OX=", " GN=", " PE=", " SV=")
+            let end = [" OX=", " GN=", " PE=", " SV="].iter().filter_map(|f| rest.find(f)).min().unwrap_or(rest.len());
+            *self.organisms.entry(rest[..end].trim().to_string()).or_default() += 1;
+            s.with_organism += 1;
+        }
+        if accession.starts_with("sp|") || accession.starts_with("tr|") {
+            s.uniprot += 1;
+            let id = accession.split('|').nth(1).unwrap_or("");
+            if id.rsplit_once('-').is_some_and(|(_, n)| !n.is_empty() && n.bytes().all(|c| c.is_ascii_digit())) {
+                s.isoforms += 1;
+            }
+        }
+        let lower = header.to_ascii_lowercase();
+        if accession.starts_with("CON__") || lower.contains("crap") || lower.contains("contaminant") {
+            s.contaminants += 1;
+        }
+        self.decoys.count(accession, "DECOY_");
+    }
+
     fn end_accession(&mut self) {
         if !self.collecting {
             return;
@@ -414,6 +468,7 @@ impl FastaScan {
             if b == b'\n' || b == b'\r' {
                 if self.in_header {
                     self.end_accession();
+                    self.end_header();
                     self.in_header = false;
                 }
                 self.line_start = true;
@@ -429,6 +484,9 @@ impl FastaScan {
             }
             self.line_start = false;
             if self.in_header {
+                if self.header.len() < 1024 {
+                    self.header.push(b);
+                }
                 if self.collecting {
                     if b == b' ' || b == b'\t' {
                         // (leading blanks before the accession are skipped)
@@ -465,7 +523,18 @@ impl FastaScan {
     fn finish(mut self, name: &str) -> FastaFacts {
         if self.in_header {
             self.end_accession();
+            self.end_header();
         }
+        let mut organisms: Vec<(String, u64)> = std::mem::take(&mut self.organisms).into_iter().collect();
+        organisms.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        self.summary.organism_count = organisms.len() as u64;
+        organisms.truncate(TOP_ORGANISMS);
+        self.summary.organisms = organisms;
+        self.summary.decoys = self.decoys.decoys() as u64;
+        self.summary.decoy_marker = self.decoys.marker("DECOY_").map(|m| match m {
+            crate::decoys::Marker::Prefix(p) => format!("{p}…"),
+            crate::decoys::Marker::Suffix(s) => format!("…{s}"),
+        });
         self.end_entry();
         let mut problems = Vec::new();
         let mut warnings = Vec::new();
@@ -534,6 +603,7 @@ impl FastaScan {
             residues: self.residues,
             problems,
             warnings,
+            summary: self.summary,
         }
     }
 }
@@ -581,6 +651,22 @@ mod tests {
         assert_eq!(thousands(999), "999");
         assert_eq!(thousands(65_535), "65,535");
         assert_eq!(thousands(2_000_000), "2,000,000");
+    }
+
+    #[test]
+    fn the_summary_counts_organisms_styles_isoforms_contaminants_and_decoys() {
+        let fasta = b">sp|P04637|P53_HUMAN Cellular tumor antigen p53 OS=Homo sapiens OX=9606 GN=TP53 PE=1 SV=4\nMEEP\n\
+>sp|P04637-2|P53_HUMAN Isoform 2 OS=Homo sapiens OX=9606\nMEEPQ\n\
+>tr|Q0P8X1|Q0P8X1_ECOLI x OS=Escherichia coli (strain K12) OX=83333\nMKV\n\
+>CON__P00761 Trypsin\nIVGG\n\
+>DECOY_sp|P04637|P53_HUMAN\nPEEM\n";
+        let s = fasta_of(fasta, "db.fasta").summary;
+        assert_eq!(s.organisms, vec![("Homo sapiens".to_string(), 2), ("Escherichia coli (strain K12)".to_string(), 1)]);
+        assert_eq!((s.with_organism, s.organism_count), (3, 2));
+        assert_eq!((s.uniprot, s.isoforms, s.contaminants, s.decoys), (3, 1, 1, 1));
+        // one decoy of five is no decoy database by OpenMS' rule, but ProSE's literal check finds DECOY_
+        assert_eq!(s.decoy_marker.as_deref(), Some("DECOY_…"));
+        assert_eq!(fasta_of(b">a\nPEPTIDE\n", "x").summary.decoy_marker, None);
     }
 
     #[test]

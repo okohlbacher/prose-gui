@@ -5,7 +5,7 @@
 
 import { resolveDesign, type DesignInput } from '../design/model'
 import type { DesignFields, DesignUpdate } from '../design/paste'
-import { errorText, exampleFiles, inspectFiles, inspectSpectra, type FileFacts, type InputFile, type SpectraFacts } from '../desktop'
+import { errorText, exampleFiles, inspectFiles, inspectSpectra, type FileFacts, type InputFile, type SpectraFacts, type FastaSummary } from '../desktop'
 import { changedParameters, copyValue, copyValues, defaultsOf, sameValue, type ParamEntry } from '../settings/parameters'
 import { BUILTIN_PRESETS, DEFAULT_PRESET_ID, deletePreset, loadPresets, renamePreset, savePreset, type Preset } from '../settings/presets'
 import { PROSE_PARAMETERS } from '../settings/prose'
@@ -39,6 +39,8 @@ export type DatabaseChoice = {
   error: string | null
   problem: string | null
   warnings: string[]
+  /** Its entries in numbers (organisms, decoys, ...), once counted. */
+  summary?: FastaSummary
 }
 
 /** A cell of the design table whose text is not valid (`DesignCell`): the search cannot start until it is corrected. */
@@ -507,6 +509,7 @@ class SearchForm {
         error: null,
         problem: facts.problem ?? null,
         warnings: facts.warnings ?? [],
+        ...(facts.fasta ? { summary: facts.fasta } : {}),
       }
   }
 

@@ -289,6 +289,8 @@ pub struct FileFacts {
     pub warnings: Vec<String>,
     /// An mzML's instrument model (for an SDRF's comment[instrument]).
     pub instrument: Option<content::Instrument>,
+    /// A FASTA's summary (organisms, header style, decoys, contaminants, isoforms; guidance G6).
+    pub fasta: Option<content::FastaSummary>,
 }
 
 /// The bytes of the regular files in `dir` and below (links not followed).
@@ -324,6 +326,7 @@ pub fn inspect(path: &str) -> FileFacts {
         problem: None,
         warnings: Vec::new(),
         instrument: None,
+        fasta: None,
     };
     if !Path::new(path).is_absolute() {
         facts.error = Some(format!("{path} is not an absolute path."));
@@ -357,6 +360,7 @@ pub fn inspect(path: &str) -> FileFacts {
             facts.residues = Some(f.residues);
             facts.problem = (!f.problems.is_empty()).then(|| f.problems.join(" "));
             facts.warnings = f.warnings;
+            facts.fasta = Some(f.summary);
         })
     } else if suffix_start(&name, ".mzml").is_none() && suffix_start(&name, ".mzml.gz").is_none() {
         // ponytail: mzPeak and vendor files are not looked into here; ProSE says what it cannot read
