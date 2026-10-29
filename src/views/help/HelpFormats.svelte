@@ -52,7 +52,7 @@
     OX=9606 GN=ALB</code>) give the tables their accessions, gene names and organisms. A FASTA that already has decoys
     (reversed or shuffled entries with a prefix such as <code>DECOY_</code> or <code>rev_</code>) is recognised; otherwise
     ProSE makes its own. Proteomes downloaded from UniProt in the database card are saved as <code>UP…fasta</code> in the
-    app's data folder and shown with their organism.
+    <code>databases</code> folder of the app's data folder and shown with their organism.
   </p>
 
   <h3 id="formats-design">Experimental design</h3>

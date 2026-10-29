@@ -1,5 +1,6 @@
 <script lang="ts">
-  // The Spectra card before any file is added: add or drop mzML files, or try the example. Files are
+  // The Spectra card before any file is added: add or drop spectra (with a FASTA and an SDRF or design.tsv, if at hand), or
+  // try the example. Files are
   // chosen in the system's dialog (their paths; nothing is copied).
   import StepNumber from './StepNumber.svelte'
   import { Button } from '$lib/components/ui/button'

@@ -53,7 +53,7 @@
     measured peaks above, the predicted ions of its peptide below.
   </p>
   <p>
-    With rescoring on (the Percolator switch of New search), ProSE then rescores the matches with <em>Percolator</em>: a learned
+    With rescoring on (the Percolator switch under Rescoring, step 4 of New search), ProSE then rescores the matches with <em>Percolator</em>: a learned
     combination of many features (score, mass error, charge, number of matched ions and, with PeptDeep, how well predicted
     fragment intensities and retention times agree). Percolator is part of ProSE. When a file has too few confident matches to
     learn from, Percolator falls back to a single score; Overview › Files › Percolator says so, and why. From the peptides ProSE

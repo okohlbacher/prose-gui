@@ -39,7 +39,8 @@ libglvnd-gles` (Fedora).
   PeptDeep models among them).
 - Memory as the search needs it: ProSE has no limit of its own. The example takes well under 1 GB; a semi-tryptic
   TMT search of a 78 MB mzML against the human reference proteome (no database chunks) peaked at 7.1 GB. Larger
-  searches can split the database (Settings › Advanced, `database:chunk_size`). The results are read into the
+  searches can split the database (New search › Search settings › Advanced settings › Database chunk size,
+  `database:chunk_size`). The results are read into the
   app's page: see "Known limitations".
 - Disk: each search keeps ProSE's QPX outputs, most of it the spectra of the PSMs (the QPX mz view of each input: the
   100 most intense peaks per 100 m/z and every annotated peak): about 3.6 MB per thousand PSMs of an Orbitrap HCD
@@ -51,13 +52,15 @@ libglvnd-gles` (Fedora).
 - The searches (History): a folder per search in the app's data folder, `searches/<id>/`: ProSE's outputs, the
   record `search.json`, `proteins.fasta` (the proteins of the result, so that the search opens without its
   database), `prose.ini` (the parameters ProSE was given; ProSE's defaults of the recorded version for the rest),
-  `command.txt` (its command line, the paths as placeholders: Overview and History copy it) and links to the inputs. The app's data folder is
+  `command.txt` (its command line, the paths as placeholders: "Copy command line" in Overview and "Command line" in History copy it) and links to the inputs. The app's data folder is
   - Linux: `~/.local/share/org.openms.prose.desktop/` (`$XDG_DATA_HOME`)
   - macOS: `~/Library/Application Support/org.openms.prose.desktop/`
   - Windows: `%APPDATA%\org.openms.prose.desktop\`
 - The log of the last search that failed: `logs/last-failure.log` there (the error names it).
+- Proteomes downloaded from UniProt (New search › Protein database): `databases/UP…fasta` there.
 - Presets: the app's webview keeps them, on this computer.
-- The mzML and FASTA files are read where they are: never copied, and nothing is written beside them. Deleting a
+- The spectrum files (mzML, mzPeak, Thermo .raw, Bruker .d) and the FASTA are read where they are: never copied, and
+  nothing is written beside them. Deleting a
   search in History removes its folder; uninstalling leaves the data folder, which can be deleted by hand.
 
 ## Project files
@@ -150,7 +153,11 @@ The browser UI tests (`e2e-web/`, Playwright with Chromium; any OS, no Tauri, CI
 against the Vite dev server in its browser mode. In dev, `?fixture=<name>` (`src/lib/dev/fixture.ts`, not in the
 build) opens a result of `src/lib/results/fixtures` through an in-memory History, e.g.
 `http://localhost:1420/?fixture=example#/results`. The theme tests write full-page screenshots of the main
-screens, light and dark, to `e2e-web/screenshots/` (gitignored).
+screens, light and dark, to `e2e-web/screenshots/` (gitignored). Beyond rendering, `oracle.spec.ts` checks the numbers
+Results shows against the same numbers recomputed from the fixture's QPX files (`e2e-web/oracle/`), and
+`metamorphic.spec.ts` relations that must hold whatever the numbers are (a tighter cutoff never shows more rows,
+filters commute, Re-run brings back the settings). The vision checks (`vision.spec.ts`: one question per screenshot to a
+vision model, compared with the oracle) run only with `npm run test:ui:vision` and `VISION_API_KEY`.
 
 ```bash
 npx playwright install chromium   # once

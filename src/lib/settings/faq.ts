@@ -251,7 +251,7 @@ export const FAQ: FaqEntry[] = [
       'The SDRF lists a file the app cannot read.',
     ],
     fixes: [
-      'In the SDRF panel, use “Locate folder…” for the folder that holds the files, or “Locate…” for each missing file.',
+      'In the SDRF panel, use “Locate folder…” for the folder that holds the files, or “Locate…” for each missing file. For a PRIDE dataset, “Download missing…” fetches them (the PRIDE project is taken from the SDRF or its file name; otherwise type its PXD accession).',
       'For a file the app cannot read, convert it to mzML and locate it again.',
       'Tick “Search without them” only when you mean to leave those files out; the search then describes a different experiment than the SDRF.',
       'Correct the design cell to a whole number of at least 1, or empty it.',
@@ -340,7 +340,7 @@ export const FAQ: FaqEntry[] = [
     id: 'faq-conversion',
     group: 'inputs',
     question: 'The app reads .raw and .d directly: when do I still convert, and how do I convert well?',
-    symptoms: 'A converted file identifies far fewer spectra than the original, its activation (HCD, CID, ETD) looks wrong in the design table’s Spectra column, or several of the checks of this group fire for it.',
+    symptoms: 'A converted file identifies far fewer spectra than the original, its activation (HCD, CID, ETD) looks wrong in the line “MS2 spectra by their flags” of the Spectra card, or several of the checks of this group fire for it.',
     causes: [
       'Peak picking missing or not first in the filter chain (profile spectra).',
       'Precursor information lost: no charges (timsTOF converted without PASEF precursors), precursor m/z on the wrong isotope or rounded.',
@@ -350,7 +350,7 @@ export const FAQ: FaqEntry[] = [
     fixes: [
       'Prefer the original Thermo .raw or Bruker timsTOF .d where you have it: that avoids what an extra conversion step can lose. Do not convert timsTOF .d files to mzML for a DDA search.',
       'For other vendors convert with a current msconvert, peakPicking first: msconvert input --mzML --filter "peakPicking vendor msLevel=1-". Keep 64-bit m/z precision.',
-      'Compare the design table’s Spectra column (centroid or profile, activation, analyzer) with the acquisition method.',
+      'Compare the line “MS2 spectra by their flags” of the Spectra card (centroid or profile, activation, analyzer; a file that differs from the others is marked in its Spectra column) with the acquisition method.',
       'For verified ETD-type data without activation information, set ions:add_c_ions and ions:add_zp1_ions in the “All parameters” dialog.',
     ],
     checks: [],
@@ -431,7 +431,7 @@ export const FAQ: FaqEntry[] = [
     ],
     fixes: [
       'Leave Decoys on “Use the database’s, else generate”: ProSE then reuses decoys it recognises (common markers such as rev_, DECOY_, as prefix or suffix) or makes its own.',
-      'With Generate, ProSE removes the database’s recognised decoys and makes new ones from the targets: either way each target gets one decoy. “Use the database’s decoys” keeps the database’s own, e.g. when you must report how they were made.',
+      'With Generate, ProSE removes the database’s recognised decoys and makes new ones from the targets: either way each target gets one decoy. To keep the database’s own (e.g. when you must report how they were made), click “Use the database’s decoys” in the warning, which sets Decoys back to “Use the database’s, else generate”.',
       'When all q-values of a file are 0, check before you trust its FDR. Without Percolator a short list can give this legitimately (ProSE’s q-values are then decoys ÷ targets, 0 above the best decoy). Otherwise look at the decoy count of the database summary; if the decoys were not recognised, use a target-only FASTA and let ProSE generate the decoys, then search again.',
       'Never report the results of a search without decoys, or of a file marked “no FDR”, as FDR-controlled.',
     ],
@@ -601,7 +601,7 @@ export const FAQ: FaqEntry[] = [
     ],
     fixes: [
       'Start from the search itself: History › Settings opens its files, design, database and settings in New search, History › Re-run starts it again. A preset holds only settings (and a database), not the Percolator and PeptDeep switches.',
-      'Keep with the results: the version and the methods text (Overview), the command line (“Copy command line”), the FASTA, and the input files.',
+      'Keep with the results: the version and the methods text (Overview), the command line (“Copy command line” in Overview, “Command line” in History), the FASTA, and the input files.',
       'Compare two searches only at the same version, settings, database and FDR; if they differ when everything matches, report both records.',
       'A .prose project (Export) holds the results and the search record for colleagues to view, but not the spectra, the full searched FASTA or the log (it keeps only the sequences of the proteins in the results): to repeat the search they need those too.',
       'When reporting a problem, give the app and ProSE versions, the command line, the log, and, if you can, a small input that shows it.',

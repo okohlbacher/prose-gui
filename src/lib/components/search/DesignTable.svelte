@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The Spectra card: the mzML files and, from two files on, the experimental design (File ·
+  // The Spectra card: the spectrum files and, from two files on, the experimental design (File ·
   // Condition · Replicate · Fraction; Advanced: Tech. replicate, Fraction group, Sample). Assumed values
   // are greyed; notices go below the table, the summary above it.
   import StepNumber from './StepNumber.svelte'

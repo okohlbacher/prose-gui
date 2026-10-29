@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Help: six pages (`HELP_PAGES`, #/help/<page>) beside a navigation, troubleshooting first for someone whose search
+  // Help: seven pages (`HELP_PAGES`, #/help/<page>) beside a navigation, troubleshooting first for someone whose search
   // just went wrong: what to do about each check (`settings/faq.ts`), how to read the results, decoys and the FDR,
-  // the settings, how a search works (with drawings and animations), and where to learn more. The pages are in
+  // the settings, the file formats, how a search works (with drawings and animations), and where to learn more. The pages are in
   // `views/help/`; their shared look is here (`:global` under `.help`).
   import { helpTarget } from '$lib/help-link.svelte'
   import { HELP_PAGES, type HelpPage } from '$lib/route'

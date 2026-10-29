@@ -1,7 +1,7 @@
 <script lang="ts">
-  // The QC tab: three charts of the search's quality, each for the PSMs the search kept (its PSM FDR):
-  // how well targets and decoys score, how far the precursor masses are off, and how many PSMs each
-  // file gave. Targets are blue and decoys orange (a validated pair); every chart says in its subtitle
+  // The QC tab: four charts of the search's quality, each for the PSMs the search kept (its PSM FDR):
+  // how well targets and decoys score, how far the precursor masses are off, how many PSMs and peptides
+  // each q-value cutoff keeps, and how many PSMs each file gave. Targets are blue and decoys orange (a validated pair); every chart says in its subtitle
   // which PSMs it shows and has a table of its numbers.
   import ChartCard from '$lib/components/charts/ChartCard.svelte'
   import FileBars from '$lib/components/charts/FileBars.svelte'
