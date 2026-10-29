@@ -162,7 +162,8 @@
     <figure>
       <svg viewBox="0 0 640 190" role="img" aria-labelledby="fig4">
         <title id="fig4">Scores of target and decoy matches; above the cutoff, decoys divided by targets estimates the FDR</title>
-        <path d="M40 160 C120 160 150 60 210 60 C270 60 300 160 380 160 Z" fill={y} opacity="0.35" />
+        <path d="M40 160 C120 160 150 60 210 60 C270 60 310 140 370 152 C410 158 440 160 470 160 Z" fill={y} opacity="0.35" />
+        <text x="420" y="150" text-anchor="middle" font-size="10" fill={y}>decoys above the cutoff</text>
         <path d="M40 160 C140 160 170 70 230 70 C290 70 320 150 360 140 C420 120 440 30 500 30 C560 30 580 160 610 160 Z" fill={b} opacity="0.35" />
         <line x1="40" x2="620" y1="160" y2="160" class="axis" />
         <line x1="370" x2="370" y1="20" y2="165" class="cut" />
