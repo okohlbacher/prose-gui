@@ -22,6 +22,7 @@
 
 import { strToU8, unzipSync } from 'fflate'
 import type { DesignResolution } from '../design/model'
+import { withoutLocalPaths } from '../design/sdrf-table'
 import { readSearch, RUNS, type ByteRange, type SearchFiles } from '../results/read'
 import type { ResultTables } from '../results/types'
 import { formatBytes } from '../format/bytes'
@@ -201,7 +202,8 @@ export function endedRecordOf(search: EndedSearch, name: string, toolVersion: st
     psmFdr: search.psmFdr,
     proteinFdr: search.proteinFdr,
     seconds: search.seconds,
-    ...(search.sdrf ? { sdrf: search.sdrf } : {}),
+    // (no path of this computer: the record goes into project files)
+    ...(search.sdrf ? { sdrf: { name: search.sdrf.name, text: withoutLocalPaths(search.sdrf.text) } } : {}),
     ...(search.instruments ? { instruments: search.instruments } : {}),
   }
 }

@@ -192,4 +192,21 @@ describe('an SDRF in New search', () => {
     await sdrf.locateFile('Ecoli_3.mzML')
     expect(sdrf.files[2].path).toBe('/data/run3.d')
   })
+
+  it('asks OLS only on Enter: typing consults the cache', async () => {
+    const { olsSearch } = await import('$lib/desktop')
+    const ols = vi.mocked(olsSearch)
+    ols.mockClear()
+    shown.push(mount(SdrfEditor, { target: document.body, props: { open: true } }))
+    flushSync()
+    await tick()
+    const cell = document.querySelector<HTMLInputElement>('[data-testid="sdrf-editor"] input[aria-label^="characteristics[organism] of row 2"]')!
+    cell.value = 'Escherichia'
+    cell.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise((r) => setTimeout(r, 200))
+    expect(ols.mock.calls.map((c) => c[2])).toEqual([false])
+    cell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await tick()
+    expect(ols.mock.calls.map((c) => c[2])).toEqual([false, true])
+  })
 })

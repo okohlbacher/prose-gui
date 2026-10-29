@@ -14,7 +14,7 @@
 //! - `example_files()` -> `{ spectra: [path, path], database }`
 //! - `open_design_file()` -> `{ path, text }` of an SDRF or design.tsv chosen (null if cancelled);
 //!   `locate_data_files(sdrf, names, folder?)` -> `[{ exact?, mzml? }]` (`locate`)
-//! - `ols_search(query, ontologies)` -> `[{ label, accession }]`; `validate_sdrf(text, template?)` ->
+//! - `ols_search(query, ontologies, online)` -> `[{ label, accession }]` (the cache only unless `online`); `validate_sdrf(text, template?)` ->
 //!   `{ available, ok, output }` (`sdrf_tools`)
 //! - `pride_files(pxd)` -> `[{ name, size, url }]`; `choose_download_folder(title)` -> the folder (the system's
 //!   dialog; kept in Rust); `download_data_files(files)` -> paths into it, events
@@ -571,9 +571,9 @@ async fn locate_data_files(sdrf: String, names: Vec<String>, folder: Option<Stri
 
 /// Ontology terms for the SDRF editor (`sdrf_tools::ols_search`), cached in the app's data folder.
 #[tauri::command]
-async fn ols_search(app: AppHandle, query: String, ontologies: Vec<String>) -> Result<Vec<sdrf_tools::Term>, String> {
+async fn ols_search(app: AppHandle, query: String, ontologies: Vec<String>, online: bool) -> Result<Vec<sdrf_tools::Term>, String> {
     let cache = app.path().app_data_dir().map_err(|e| e.to_string())?.join("ols-cache");
-    tauri::async_runtime::spawn_blocking(move || sdrf_tools::ols_search(&cache, &query, &ontologies))
+    tauri::async_runtime::spawn_blocking(move || sdrf_tools::ols_search(&cache, &query, &ontologies, online))
         .await
         .map_err(|e| e.to_string())?
 }

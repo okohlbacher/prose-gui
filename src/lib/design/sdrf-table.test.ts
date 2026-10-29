@@ -10,6 +10,7 @@ import {
   lastSegment,
   parseSdrfTable,
   runStem,
+  withoutLocalPaths,
   sdrfAnnotations,
   sdrfFilterOptions,
   syncDesign,
@@ -168,5 +169,21 @@ describe('syncDesign after adding a column before the data file', () => {
   it('names the line of the first of two rows with the same source, assay and label', () => {
     const t = parseSdrfTable('source name\tassay name\tcomment[label]\tcomment[data file]\ns\tr\tL\ta\ns\tr\tL\tb\n')
     expect(validateSdrf(t).find((i) => i.row === 1)!.message).toContain('line 2')
+  })
+})
+
+describe('withoutLocalPaths', () => {
+  it('leaves no path of this computer in an SDRF that leaves it', () => {
+    const text =
+      'source name\tcomment[data file]\tcomment[file uri]\tcomment[associated data file]\tcomment[associated file uri]\n' +
+      's1\t/Users/me/raw/a.raw\tfile:///Users/me/raw/a.raw\tC:\\data\\a.wiff.scan\tC:\\data\\a.wiff.scan\n' +
+      's2\tb.raw\thttps://ftp.pride.ebi.ac.uk/x/b.raw\t\t\n'
+    expect(withoutLocalPaths(text)).toBe(
+      'source name\tcomment[data file]\tcomment[file uri]\tcomment[associated data file]\tcomment[associated file uri]\n' +
+        's1\ta.raw\tnot available\ta.wiff.scan\tnot available\n' +
+        's2\tb.raw\thttps://ftp.pride.ebi.ac.uk/x/b.raw\t\t\n',
+    )
+    const clean = fixture('lfq.sdrf.tsv')
+    expect(withoutLocalPaths(clean)).toBe(clean)
   })
 })

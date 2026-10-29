@@ -314,3 +314,31 @@ export function sdrfFilterOptions(t: SdrfTable, fileNames: string[]): { column: 
     return [{ column, values: [...byValue].map(([value, files]) => ({ value, files: [...files].sort((x, y) => x - y) })) }]
   })
 }
+
+/** A local path or file URI: absolute (`/x`, `C:\x`, `\\server\x`), `file:`, or with folders. */
+const LOCAL = /^(file:|\/|[a-z]:[\\/]|\\\\)/i
+
+/**
+ * The SDRF `text` as it may leave this computer (a search's record, a project file, the tool's copy): data file
+ * names without folders, and a file URI that names a local file (`file:`, an absolute path) "not available".
+ * Everything else is byte for byte as it was.
+ */
+export function withoutLocalPaths(text: string): string {
+  const t = parseSdrfTable(text)
+  let changed = false
+  const fix = (cols: number[], value: (v: string) => string) => {
+    for (const r of dataRows(t))
+      for (const c of cols) {
+        const v = cell(t, r, c)
+        const now = value(v)
+        if (now !== v) {
+          setCell(t, r, c, now)
+          changed = true
+        }
+      }
+  }
+  const base = (v: string) => v.slice(Math.max(v.lastIndexOf('/'), v.lastIndexOf('\\')) + 1)
+  fix([...columns(t, 'comment[data file]'), ...columns(t, 'comment[associated data file]')], (v) => (/[\\/]/.test(v) ? base(v) : v))
+  fix([...columns(t, 'comment[file uri]'), ...columns(t, 'comment[associated file uri]')], (v) => (LOCAL.test(v) ? 'not available' : v))
+  return changed ? writeSdrfTable(t) : text
+}

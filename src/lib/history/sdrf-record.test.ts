@@ -24,4 +24,11 @@ describe('the SDRF in the search record', () => {
     expect('sdrf' in record).toBe(false)
     expect(() => parseRecord(JSON.stringify({ ...record, sdrf: { name: 1 } }))).toThrow('sdrf is broken')
   })
+
+  it('holds no path of this computer (it goes into project files)', () => {
+    const sdrf = { name: 'x.sdrf.tsv', text: 'source name\tcomment[data file]\tcomment[file uri]\ns\t/Users/me/a.mzML\tfile:///Users/me/a.mzML\n' }
+    const record = endedRecordOf({ ...search, sdrf }, 'n', '1', 0)
+    expect(record.sdrf!.text).toBe('source name\tcomment[data file]\tcomment[file uri]\ns\ta.mzML\tnot available\n')
+    expect(JSON.stringify(record)).not.toContain('/Users/me')
+  })
 })
