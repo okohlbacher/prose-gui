@@ -233,6 +233,11 @@ export function saveText(name: string, contents: string): Promise<string | null>
   return oneDialog(null, () => invoke<string | null>('save_text', { name, contents }))
 }
 
+/** Opens an https link in the system's browser (the Help page). */
+export function openUrl(url: string): Promise<void> {
+  return invoke('open_url', { url })
+}
+
 /** UniProt's reference proteome `proteome` as a FASTA in the app's databases folder (downloaded once): its path. */
 export function downloadProteome(proteome: string, reviewed: boolean): Promise<string> {
   return invoke<string>('download_proteome', { proteome, reviewed })

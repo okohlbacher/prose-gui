@@ -1,13 +1,14 @@
-// The views of the app and their URL hashes: #/search, #/results[/<id>], #/history.
+// The views of the app and their URL hashes: #/search, #/results[/<id>], #/history, #/help.
 
-export type View = 'search' | 'results' | 'history'
+export type View = 'search' | 'results' | 'history' | 'help'
 
 export type Route =
   | { view: 'search' }
   | { view: 'results'; id: string | null }
   | { view: 'history' }
+  | { view: 'help' }
 
-export const views: readonly View[] = ['search', 'results', 'history']
+export const views: readonly View[] = ['search', 'results', 'history', 'help']
 
 /** The route of a location hash; anything unknown or malformed is the search view. */
 export function parseHash(hash: string): Route {
@@ -15,6 +16,8 @@ export function parseHash(hash: string): Route {
   switch (segments[0]) {
     case 'history':
       return { view: 'history' }
+    case 'help':
+      return { view: 'help' }
     case 'results':
       try {
         return { view: 'results', id: segments[1] === undefined ? null : decodeURIComponent(segments[1]) }

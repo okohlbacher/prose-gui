@@ -24,6 +24,7 @@
     { view: 'search', label: 'New search' },
     { view: 'results', label: 'Results' },
     { view: 'history', label: 'History' },
+    { view: 'help', label: 'Help' },
   ]
 
   // "Results" returns to the result that was open last
