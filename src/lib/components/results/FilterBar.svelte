@@ -10,7 +10,7 @@
   import { parseSdrfTable, sdrfFilterOptions } from '$lib/design/sdrf-table'
   import { formatCount, parseAccession } from '$lib/results/display'
   import { hiddenContaminants, psmValue, RANGE_KEYS, targetDecoyOf, type RangeKey } from '$lib/results/filters'
-  import { psmFdrOff } from '$lib/results/overview'
+  import { psmFdrOff, PSM_FDR_SKIPPED_WHY } from '$lib/results/overview'
   import type { LevelState, ResultsView } from '$lib/results/view.svelte'
   import { cn } from '$lib/utils'
   import ChevronDown from '@lucide/svelte/icons/chevron-down'
@@ -175,7 +175,7 @@
       <Tooltip.Content class="max-w-xs" role="tooltip"
         >{level.level === 'proteins'
           ? 'This search did not apply a protein FDR, so the proteins have no q-values to filter by.'
-          : 'This search did not apply the PSM FDR (no PSM matched a decoy), so the PSMs have no q-values to filter by.'}</Tooltip.Content>
+          : `This search did not apply the PSM FDR, so the PSMs have no q-values to filter by. ${PSM_FDR_SKIPPED_WHY}`}</Tooltip.Content>
     </Tooltip.Root>
   {:else}
     <Popover.Root>

@@ -7,6 +7,7 @@
   import { formatCount } from '$lib/results/display'
   import { levelRows } from '$lib/results/figures'
   import { baseName } from '$lib/results/model'
+  import { PSM_FDR_SKIPPED_WHY } from '$lib/results/overview'
   import { fileRows, formatSeconds, psmFdrFact, totalsOf, type EngineNote } from '$lib/results/overview'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { toolState } from '$lib/search/tool.svelte'
@@ -153,7 +154,7 @@
                 >{r.targets === null ? '–' : formatCount(r.targets)}{#if r.psmFdrSkipped}<span
                     class="block font-normal text-amber-700"
                     data-testid="no-psm-fdr"
-                    title="The PSM FDR was not applied to this file: no PSM matched a decoy, so its PSMs have no q-value and are not FDR-controlled."
+                    title="The PSM FDR was not applied to this file, so its PSMs have no q-value and are not FDR-controlled. {PSM_FDR_SKIPPED_WHY}"
                     >no FDR</span
                   >{/if}</Table.Cell>
               <Table.Cell data-column="decoys" class="{cell} text-right">{r.decoys === null ? '–' : formatCount(r.decoys)}</Table.Cell>

@@ -2,6 +2,7 @@
   // The key figures above the tables: what the search found at its own cutoffs.
   import { formatPercent } from '$lib/format/fdr'
   import { formatCount } from '$lib/results/display'
+  import { PSM_FDR_SKIPPED_WHY } from '$lib/results/overview'
   import type { KeyFigures } from '$lib/results/figures'
 
   let {
@@ -33,9 +34,9 @@
     noFdr
       ? figures.fdrOff
         ? ' The search had no decoys, so no FDR was applied: the PSMs have no q-value and are not FDR-controlled.'
-        : ' The PSM FDR was not applied: no PSM matched a decoy, so the PSMs have no q-value and are not FDR-controlled.'
+        : ` The PSM FDR was not applied, so the PSMs have no q-value and are not FDR-controlled. ${PSM_FDR_SKIPPED_WHY}`
       : someWithoutFdr
-        ? ` ${formatCount(figures.psmsWithoutFdr)} of them have no q-value: the PSM FDR was not applied to their files (no PSM matched a decoy), so they are not FDR-controlled.`
+        ? ` ${formatCount(figures.psmsWithoutFdr)} of them have no q-value: the PSM FDR was not applied to their files, so they are not FDR-controlled. ${PSM_FDR_SKIPPED_WHY}`
         : '',
   )
   const stats = $derived([

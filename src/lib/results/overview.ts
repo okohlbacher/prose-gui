@@ -194,15 +194,22 @@ export function psmFdrOff(summary: ProSEMultiSummary): boolean {
 
 const NO_DECOYS = 'The search had no decoys, so ProSE could not estimate an FDR and applied none'
 
+/**
+ * Why ProSE can report the PSM FDR as not applied to a file, in one sentence for every message: an earlier ProSE skipped
+ * it for a file in which no PSM matched a decoy; the current one applies a conservative estimate (1 / T) instead.
+ */
+export const PSM_FDR_SKIPPED_WHY =
+  'ProSE reported the PSM FDR as not applied (an earlier ProSE skipped it for a file in which no PSM matched a decoy; the current one applies a conservative estimate instead).'
+
 /** The Overview's "PSM FDR": the cutoff, and to which files it was not applied. */
 export function psmFdrFact(summary: ProSEMultiSummary): { value: string; title: string } {
   if (psmFdrOff(summary)) return { value: 'off (no decoys)', title: `${NO_DECOYS}: the PSMs have no q-value and are not FDR-controlled.` }
   const cutoff = `${formatPercent(summary.psmFdr)} (${formatQ(summary.psmFdr)})`
   const skipped = psmFdrSkipped(summary)
-  const why = 'ProSE skips the PSM FDR of a file whose PSMs match no decoy: without decoys it cannot estimate the FDR.'
+  const why = PSM_FDR_SKIPPED_WHY
   if (skipped.length === 0) return { value: cutoff, title: cutoff }
   if (skipped.length === summary.files.length) {
-    return { value: 'not applied (no decoy PSMs)', title: `${cutoff} was requested but not applied. ${why} The PSMs are not FDR-controlled.` }
+    return { value: 'not applied', title: `${cutoff} was requested but not applied. ${why} The PSMs are not FDR-controlled.` }
   }
   return {
     value: `${cutoff}, not applied to ${skipped.length} of ${summary.files.length} files`,
@@ -231,7 +238,7 @@ export function psmFdrNotice(summary: ProSEMultiSummary): string | null {
         ? names.join(', ')
         : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more files`
   return (
-    `The PSM FDR of ${cutoff} was not applied to ${which}: no PSM matched a decoy, so ProSE could not estimate the FDR. ` +
+    `The PSM FDR of ${cutoff} was not applied to ${which}. ${PSM_FDR_SKIPPED_WHY} ` +
     `${skipped.length === summary.files.length ? 'The' : 'Their'} PSMs have no q-value and are not FDR-controlled: treat them with care, ` +
     `or search with decoys (and more spectra).`
   )

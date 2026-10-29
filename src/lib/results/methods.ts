@@ -60,10 +60,10 @@ export function methodsText({ summary: s, settings, version, accepted = [] }: Me
   }
   const skipped = s.psmFdr === 0 ? [] : psmFdrSkipped(s)
   if (s.psmFdr === 0) parts.push('The database had no decoys, so no FDR was estimated; the PSMs are not FDR-controlled.')
-  else if (skipped.length === files) parts.push('No PSM matched a decoy, so no PSM FDR could be estimated; the PSMs are not FDR-controlled.')
+  else if (skipped.length === files) parts.push('ProSE reported the PSM FDR as not applied, so the PSMs are not FDR-controlled.')
   else {
     parts.push(`PSMs were filtered at ${formatPercent(s.psmFdr)} PSM-level FDR (target-decoy). No peptide-level FDR was estimated.`)
-    if (skipped.length > 0) parts.push(`For ${skipped.length} of ${files} files no PSM matched a decoy, so their PSMs are not FDR-controlled.`)
+    if (skipped.length > 0) parts.push(`For ${skipped.length} of ${files} files ProSE reported the PSM FDR as not applied, so their PSMs are not FDR-controlled.`)
   }
   parts.push(
     s.proteinFdrApplied

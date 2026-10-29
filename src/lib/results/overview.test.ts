@@ -14,6 +14,7 @@ import {
   psmFdrFact,
   psmFdrNotice,
   totalsOf,
+  PSM_FDR_SKIPPED_WHY,
 } from './overview'
 
 const file = (path: string, more: Partial<ProSEFileSummary> = {}): ProSEFileSummary => ({
@@ -147,7 +148,7 @@ describe('the PSM FDR that ProSE skipped', () => {
     expect(psmFdrFact(some).value).toBe('1 % (q ≤ 0.01), not applied to 1 of 2 files')
     expect(psmFdrFact(some).title).toContain('Not applied to egf_a.mzML.')
     expect(psmFdrNotice(some)).toBe(
-      'The PSM FDR of 1 % was not applied to egf_a.mzML: no PSM matched a decoy, so ProSE could not estimate the FDR. ' +
+      'The PSM FDR of 1 % was not applied to egf_a.mzML. ' + PSM_FDR_SKIPPED_WHY + ' ' +
         'Their PSMs have no q-value and are not FDR-controlled: treat them with care, or search with decoys (and more spectra).',
     )
     expect(psmFdrAppliedToNone(some)).toBe(false)
@@ -155,8 +156,8 @@ describe('the PSM FDR that ProSE skipped', () => {
     expect(fileRows(m, some).map((r) => r.psmFdrSkipped)).toEqual([false, true])
 
     const none = summary([file('/input/0/ctrl_a.mzML', skipped), b])
-    expect(psmFdrFact(none).value).toBe('not applied (no decoy PSMs)')
-    expect(psmFdrNotice(none)).toMatch(/^The PSM FDR of 1 % was not applied to the search: .* The PSMs have no q-value/)
+    expect(psmFdrFact(none).value).toBe('not applied')
+    expect(psmFdrNotice(none)).toMatch(/^The PSM FDR of 1 % was not applied to the search. .* The PSMs have no q-value/)
     expect(psmFdrAppliedToNone(none)).toBe(true)
   })
 
