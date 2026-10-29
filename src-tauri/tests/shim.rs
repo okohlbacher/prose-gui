@@ -529,6 +529,9 @@ fn input_paths_are_validated() {
     let bruker = i.dir.path().join("data/c.d");
     std::fs::create_dir_all(&bruker).unwrap();
     assert!(build_args(&request(&[&bruker], &i.fasta, false, json!({})), &out).is_ok());
+    // a regular file named .d is no Bruker folder
+    let fake = i.dir.write("data/fake.d", "x");
+    assert!(build_args(&request(&[&fake], &i.fasta, false, json!({})), &out).unwrap_err().contains("Bruker .d folder"));
     assert!(
         build_args(&request(&[&i.mzml], &text, false, json!({})), &out)
             .unwrap_err()

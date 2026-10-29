@@ -24,11 +24,11 @@
 
 <svg viewBox="0 0 {W} {H}" class="h-auto w-full" role="img" aria-label={title} font-size="11">
   <desc>{description}</desc>
-  {#each yTicks as t (t)}
+  {#each yTicks as t, i (i)}
     <line x1={M.left} x2={W - M.right} y1={y(t)} y2={y(t)} stroke="var(--plot-band, #e5e7eb)" />
     <text x={M.left - 6} y={y(t) + 3.5} text-anchor="end" fill="var(--plot-muted, #6b7280)">{formatCount(t)}</text>
   {/each}
-  {#each xTicks as t (t)}
+  {#each xTicks as t, i (i)}
     <text x={x(t)} y={H - M.bottom + 15} text-anchor="middle" fill="var(--plot-muted, #6b7280)">{pct(t)}</text>
   {/each}
   <text x={(M.left + W - M.right) / 2} y={H - 4} text-anchor="middle" fill="var(--plot-muted, #6b7280)">q-value cutoff</text>

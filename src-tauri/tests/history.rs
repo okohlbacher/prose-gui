@@ -5,7 +5,7 @@ mod common;
 
 use common::{set_folder_modified, TempDir};
 use prose_desktop_lib::history::{
-    delete, finish_partial, folder_files, frame, import, list, lock_partial, read_chosen_project,
+    delete, finish_partial, folder_files, frame, import, import_qpx, list, qpx_stems, lock_partial, read_chosen_project,
     remove_partial, rename, save_proteins, save_record, sweep, with_backoff, BACKOFF_TRIES,
     LOCK_FILE, NOT_A_SEARCH, NO_RECORD, SWEEP_GRACE,
 };
@@ -811,4 +811,25 @@ fn a_partial_folder_is_removed_while_its_lock_is_held() {
     assert!(!partial.exists());
     // a folder that is gone already is fine
     remove_partial(None, &partial).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn a_qpx_folder_is_copied_without_following_links() {
+    let (tmp, dir) = searches();
+    let folder = tmp.path().join("cluster-run");
+    fs::create_dir_all(folder.join("qpx/runs")).unwrap();
+    fs::write(folder.join("qpx/quantms.psm.parquet"), b"PAR1").unwrap();
+    fs::write(folder.join("qpx/runs/1__a.psm.parquet"), b"PAR1").unwrap();
+    fs::write(folder.join("qpx/runs/1__a.mz.parquet"), b"PAR1").unwrap();
+    let secret = tmp.path().join("secret.txt");
+    fs::write(&secret, b"private").unwrap();
+    std::os::unix::fs::symlink(&secret, folder.join("qpx/leak.txt")).unwrap();
+    std::os::unix::fs::symlink(folder.join("qpx"), folder.join("qpx/runs/loop")).unwrap();
+    assert_eq!(qpx_stems(&folder).unwrap(), vec!["1__a".to_string()]);
+    let id = import_qpx(&dir, &folder, &record("x", "cluster run"), "[]").unwrap();
+    let copied = dir.join(&id);
+    assert_eq!(fs::read(copied.join("qpx/runs/1__a.mz.parquet")).unwrap(), b"PAR1");
+    assert!(!copied.join("qpx/leak.txt").exists(), "a link to a file outside is not copied");
+    assert!(!copied.join("qpx/runs/loop").exists(), "a link to a folder is not followed");
 }

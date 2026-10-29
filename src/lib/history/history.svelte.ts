@@ -24,6 +24,7 @@ import {
   type EndedSearch,
   type OpenResult,
 } from '../search/session.svelte'
+import { sdrfSession } from '../design/sdrf-session.svelte'
 import { searchForm } from '../search/form.svelte'
 import { searchPlan, startSearch } from '../search/plan.svelte'
 import { toolState } from '../search/tool.svelte'
@@ -307,25 +308,64 @@ export async function reopenInNewSearch(id: string, start: boolean): Promise<boo
       // (not there: an older search, or one from a project)
     }
   }
-  const rowOf = new Map(record.design.rows.map((r) => [r.fileName, r]))
+  // the design rows are in input order (two files of one name in different folders stay apart)
   const ordered = [...inputs].sort((a, b) => a.index - b.index)
   navigate({ view: 'search' })
-  await searchForm.restoreSearch({
+  // the SDRF of another experiment must not travel with this search; this one's is loaded again by hand
+  sdrfSession.clear()
+  const complete = await searchForm.restoreSearch({
     name: record.name,
-    inputs: ordered.map((i) => {
-      const r = rowOf.get(i.name)
+    inputs: ordered.map((i, k) => {
+      const r = record.design.rows[k]?.fileName === i.name ? record.design.rows[k] : record.design.rows.find((x) => x.fileName === i.name)
       return { path: i.path, fields: r ? { condition: r.condition ?? undefined, replicate: r.replicate, fraction: r.fraction, techReplicate: r.techReplicate } : {} }
     }),
     database,
     databaseName: record.database,
     settings: record.settings,
   })
+  if (record.sdrf) searchForm.notices.push(`“${record.name}” was searched with the SDRF ${record.sdrf.name}. Load it again (Load SDRF…) to search with its metadata.`)
   if (!start) return false
+  // Re-run starts only the same search: every file and the database found, no SDRF to load again
+  if (!complete || record.sdrf) {
+    searchForm.notices.push('Re-run did not start: check the files and the database above, then start the search.')
+    return false
+  }
   // (the database's proteins are counted in the background: start once the form allows it)
   for (let tries = 0; tries < 100 && !searchPlan.canStart; tries++) await new Promise((r) => setTimeout(r, 100))
-  if (!searchPlan.canStart) return false
+  if (!searchPlan.canStart) {
+    searchForm.notices.push('Re-run did not start: the form is not ready; see above.')
+    return false
+  }
   await startSearch()
   return true
+}
+
+/** ProSE's parameters as its provenance view records them (peptide_search), by the names of the app's settings. */
+const QPX_PARAMETERS: [string, string, 'number' | 'text' | 'list'][] = [
+  ['enzyme', 'enzyme', 'text'],
+  ['enzyme_specificity', 'peptide:enzyme_specificity', 'text'],
+  ['missed_cleavages', 'peptide:missed_cleavages', 'number'],
+  ['peptide_min_length', 'peptide:min_size', 'number'],
+  ['peptide_max_length', 'peptide:max_size', 'number'],
+  ['precursor_mass_tolerance_lower', 'precursor:mass_tolerance_lower', 'number'],
+  ['precursor_mass_tolerance_upper', 'precursor:mass_tolerance_upper', 'number'],
+  ['precursor_mass_tolerance_unit', 'precursor:mass_tolerance_unit', 'text'],
+  ['fragment_mass_tolerance', 'fragment:mass_tolerance', 'number'],
+  ['fragment_mass_tolerance_unit', 'fragment:mass_tolerance_unit', 'text'],
+  ['min_charge', 'precursor:min_charge', 'number'],
+  ['max_charge', 'precursor:max_charge', 'number'],
+  ['fixed_modifications', 'modifications:fixed', 'list'],
+  ['variable_modifications', 'modifications:variable', 'list'],
+]
+
+function qpxParameters(search: Map<string, string>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, name, kind] of QPX_PARAMETERS) {
+    const v = search.get(key)
+    if (v === undefined || v === '') continue
+    out[name] = kind === 'number' ? Number(v) : kind === 'list' ? v.split(/,\s*/).filter(Boolean) : v
+  }
+  return out
 }
 
 /**
@@ -340,8 +380,11 @@ export async function openQpxFolderFile(): Promise<boolean> {
     const chosen = await openQpxFolder()
     if (chosen === null) return false
     const meta = await readMeta(chosen.run, chosen.provenance)
-    const names = chosen.stems.map((s) => `${s.replace(/^\d+__/, '')}`)
-    const inputs = chosen.stems.map((stem, index) => ({ id: `f${index + 1}`, index, link: stem, stem, name: names[index], path: names[index] }))
+    // the inputs in ProSE's order (its run view), which the merged PSMs follow; the file names only where it has none
+    const runOrder = meta.runs.map((r) => r.run_accession)
+    const stems = runOrder.every((s) => chosen.stems.includes(s)) && runOrder.length === chosen.stems.length ? runOrder : chosen.stems
+    const names = stems.map((s) => `${s.replace(/^\d+__/, '')}`)
+    const inputs = stems.map((stem, index) => ({ id: `f${index + 1}`, index, link: stem, stem, name: names[index], path: names[index] }))
     const database = baseName(meta.search.get('database_file') ?? 'database')
     const record = {
       schema: SCHEMA_VERSION,
@@ -353,7 +396,13 @@ export async function openQpxFolderFile(): Promise<boolean> {
       files: names,
       database,
       design: resolveDesign(names.map((fileName, k) => ({ id: `f${k + 1}`, fileName, fileSize: 0 }))),
-      settings: { parameters: {}, fixedMods: (meta.search.get('fixed_modifications') ?? '').split(/[,;]\s*/).filter(Boolean), rescore: false, peptdeep: false, contaminants: false },
+      settings: {
+        parameters: qpxParameters(meta.search),
+        fixedMods: (meta.search.get('fixed_modifications') ?? '').split(/[,;]\s*/).filter(Boolean),
+        rescore: meta.runs.some((r) => r.rescoring_applied === true),
+        peptdeep: meta.runs.some((r) => r.prediction_nce !== null),
+        contaminants: false,
+      },
       psms: targetPsmsOf(meta.runs),
       psmFdr: parameterNumber(meta.fdr, 'psm_fdr'),
       proteinFdr: parameterNumber(meta.fdr, 'protein_fdr'),

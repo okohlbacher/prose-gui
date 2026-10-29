@@ -204,9 +204,9 @@
   <section id="settings" aria-labelledby="settings-h">
     <h2 id="settings-h">The settings</h2>
     <p>
-      Start with the <b>setup</b> of your instrument, the <b>database</b> of your organism and the <b>variable modifications</b> of your
-      sample preparation. The instrument-dependent rest comes from the setup and is under “Advanced settings”, but the built-in
-      setups assume a tryptic digest and alkylated cysteines: check the enzyme and the fixed modifications against your protocol.
+      Start with the <b>preset</b> of your instrument, the <b>database</b> of your organism and the <b>variable modifications</b> of your
+      sample preparation. The instrument-dependent rest comes from the preset and is under “Advanced settings”, but the built-in
+      presets assume a tryptic digest and alkylated cysteines: check the enzyme and the fixed modifications against your protocol.
       The same explanations are behind the <span aria-hidden="true">?</span> beside each setting.
     </p>
     <dl class="settings">

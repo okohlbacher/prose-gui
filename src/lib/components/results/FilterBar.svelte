@@ -10,6 +10,7 @@
   import { parseSdrfTable, sdrfFilterOptions } from '$lib/design/sdrf-table'
   import { formatCount, parseAccession } from '$lib/results/display'
   import { psmValue, RANGE_KEYS, targetDecoyOf, type RangeKey } from '$lib/results/filters'
+  import { psmFdrOff } from '$lib/results/overview'
   import type { LevelState, ResultsView } from '$lib/results/view.svelte'
   import { cn } from '$lib/utils'
   import ChevronDown from '@lucide/svelte/icons/chevron-down'
@@ -128,7 +129,8 @@
     level.level === 'psms' &&
       ((level.filters.charges?.length ?? 0) > 0 || (level.filters.ranges?.length ?? 0) > 0 || level.filters.text !== '' || level.filters.sdrf !== undefined),
   )
-  const td = $derived(narrowed ? targetDecoyOf(view.model, level.filters) : null)
+  // (a search without decoys, or whose PSM FDR was skipped everywhere, has no decoys to estimate from)
+  const td = $derived(narrowed && psmFdrApplied && !psmFdrOff(view.result.outcome.summary) ? targetDecoyOf(view.model, level.filters) : null)
 
   const chip =
     'inline-flex h-7 items-center gap-1.5 rounded-full border bg-background pr-2 pl-3 text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none'
