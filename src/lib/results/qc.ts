@@ -180,3 +180,36 @@ export function psmsPerFile(m: ResultModel): FileCount[] {
   for (const i of levelRows(m, 'psms', false)) counts[file[i]]++
   return m.tables.files.map((path, f) => ({ file: baseName(path), count: counts[f] }))
 }
+
+/**
+ * Identifications against the q-value cutoff, from 0 to the search's PSM FDR (survey P0-10): at each of `steps` + 1
+ * cutoffs the target PSMs with q at most it, and the target peptides whose best PSM has q at most it (by best PSM q,
+ * not a peptide-level FDR). Only PSMs that passed are stored, so the curve ends at the search's cutoff. `null`
+ * without q-values (no FDR) or PSMs.
+ */
+export function idsByQ(m: ResultModel, steps = 50): { q: number[]; psms: number[]; peptides: number[] } | null {
+  const fdr = m.psmFdr
+  if (!(fdr > 0)) return null
+  const ps = m.tables.psms
+  const psmQ: number[] = []
+  for (let i = 0; i < ps.count; i++) if (!ps.decoy[i] && ps.qValue[i] === ps.qValue[i]) psmQ.push(ps.qValue[i])
+  if (psmQ.length === 0) return null
+  const pepQ: number[] = []
+  const pt = m.tables.peptides
+  for (let k = 0; k < pt.count; k++) if (!pt.decoy[k] && m.peptide.bestQ[k] === m.peptide.bestQ[k]) pepQ.push(m.peptide.bestQ[k])
+  psmQ.sort((a, b) => a - b)
+  pepQ.sort((a, b) => a - b)
+  // (how many of the sorted values are at most t)
+  const upTo = (sorted: number[], t: number) => {
+    let lo = 0
+    let hi = sorted.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (sorted[mid] <= t) lo = mid + 1
+      else hi = mid
+    }
+    return lo
+  }
+  const q = Array.from({ length: steps + 1 }, (_, s) => (fdr * s) / steps)
+  return { q, psms: q.map((t) => upTo(psmQ, t)), peptides: q.map((t) => upTo(pepQ, t)) }
+}

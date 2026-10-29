@@ -13,7 +13,8 @@
   import { COLORS } from '$lib/psm/psm'
   import { formatCount } from '$lib/results/display'
   import { openHelp } from '$lib/help-link.svelte'
-  import { precursorErrors, psmsPerFile, scoreDistribution } from '$lib/results/qc'
+  import { idsByQ, precursorErrors, psmsPerFile, scoreDistribution } from '$lib/results/qc'
+  import QCurve from '$lib/components/charts/QCurve.svelte'
   import type { ResultsView } from '$lib/results/view.svelte'
 
   let { view }: { view: ResultsView } = $props()
@@ -29,6 +30,7 @@
   const score = $derived(scoreDistribution(m))
   const errors = $derived(precursorErrors(m, openSearch))
   const files = $derived(psmsPerFile(m))
+  const curve = $derived(idsByQ(m))
 
   const range = (edges: number[], b: number) => `${tickLabel(edges[b])} to ${tickLabel(edges[b + 1])}`
   const peak = (counts: number[]) => counts.indexOf(Math.max(...counts))
@@ -122,6 +124,38 @@
       <p class="py-8 text-center text-xs text-muted-foreground">
         {openSearch ? 'No unmodified PSM with a precursor error passes the search FDR.' : 'No PSM with a precursor error passes the search FDR.'}
       </p>
+    </ChartCard>
+  {/if}
+
+  <!-- identifications against the cutoff -->
+  {#if curve}
+    <ChartCard
+      testid="qc-qcurve"
+      title="Identifications by q-value cutoff"
+      subtitle="Target PSMs and peptides up to the search FDR ({fdr}) · peptides by their best PSM's q, not a peptide-level FDR"
+      notes={['A looser cutoff than the search FDR needs a new search: only PSMs that passed are stored.']}
+      legend={[
+        { label: 'PSMs', color: targetColor, value: formatCount(curve.psms.at(-1) ?? 0) },
+        { label: 'Peptides', color: decoyColor, value: formatCount(curve.peptides.at(-1) ?? 0) },
+      ]}
+      table={{
+        name: 'Identifications by q-value cutoff',
+        columns: [
+          { id: 'q', header: 'q ≤', align: 'left' },
+          { id: 'psms', header: 'PSMs' },
+          { id: 'peptides', header: 'Peptides' },
+        ],
+        rows: curve.q.filter((_, i) => i % 5 === 0).map((q, j) => [formatQ(q), formatCount(curve.psms[j * 5]), formatCount(curve.peptides[j * 5])]),
+      }}>
+      <QCurve
+        q={curve.q}
+        cutoff={m.psmFdr}
+        title="Target PSMs and peptides by q-value cutoff"
+        description={`At the search FDR, ${formatCount(curve.psms.at(-1) ?? 0)} target PSMs and ${formatCount(curve.peptides.at(-1) ?? 0)} peptides; at half of it, ${formatCount(curve.psms[Math.floor(curve.q.length / 2)])} PSMs.`}
+        series={[
+          { name: 'PSMs', color: targetColor, counts: curve.psms },
+          { name: 'Peptides', color: decoyColor, counts: curve.peptides, dashed: true },
+        ]} />
     </ChartCard>
   {/if}
 

@@ -9,6 +9,7 @@
   import { formatPercent, formatQ } from '$lib/format/fdr'
   import { parseSdrfTable, sdrfFilterOptions } from '$lib/design/sdrf-table'
   import { formatCount, parseAccession } from '$lib/results/display'
+  import { psmValue, RANGE_KEYS, targetDecoyOf, type RangeKey } from '$lib/results/filters'
   import type { LevelState, ResultsView } from '$lib/results/view.svelte'
   import { cn } from '$lib/utils'
   import ChevronDown from '@lucide/svelte/icons/chevron-down'
@@ -94,6 +95,40 @@
   const sdrfOptions = $derived(
     view.result.sdrf ? sdrfFilterOptions(parseSdrfTable(view.result.sdrf.text), view.result.design.rows.map((r) => r.fileName)) : [],
   )
+
+  // PSMs: the charges the result has, the range filters, and the targets and decoys the filters keep
+  const charges = $derived.by(() => {
+    if (level.level !== 'psms') return []
+    const seen = new Set<number>()
+    for (const z of view.model.tables.psms.charge) seen.add(z)
+    return [...seen].sort((a, b) => a - b)
+  })
+  function toggleCharge(z: number) {
+    const now = level.filters.charges ?? []
+    level.filters.charges = now.includes(z) ? now.filter((c) => c !== z) : [...now, z]
+  }
+  /** A range on `key`, starting at the values of the PSMs (rounded outwards). */
+  function addRange(key: RangeKey) {
+    let lo = Infinity
+    let hi = -Infinity
+    for (let i = 0; i < view.model.tables.psms.count; i++) {
+      const v = psmValue(view.model, key, i)
+      if (v < lo) lo = v
+      if (v > hi) hi = v
+    }
+    if (!Number.isFinite(lo)) return
+    const others = (level.filters.ranges ?? []).filter((r) => r.key !== key)
+    level.filters.ranges = [...others, { key, min: Math.floor(lo * 100) / 100, max: Math.ceil(hi * 100) / 100 }]
+  }
+  function setRange(key: RangeKey, side: 'min' | 'max', value: number) {
+    if (!Number.isFinite(value)) return
+    level.filters.ranges = (level.filters.ranges ?? []).map((r) => (r.key === key ? { ...r, [side]: value } : r))
+  }
+  const narrowed = $derived(
+    level.level === 'psms' &&
+      ((level.filters.charges?.length ?? 0) > 0 || (level.filters.ranges?.length ?? 0) > 0 || level.filters.text !== '' || level.filters.sdrf !== undefined),
+  )
+  const td = $derived(narrowed ? targetDecoyOf(view.model, level.filters) : null)
 
   const chip =
     'inline-flex h-7 items-center gap-1.5 rounded-full border bg-background pr-2 pl-3 text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none'
@@ -184,6 +219,32 @@
       <span class="max-w-[18rem] truncate">{f.column.replace(/^(factor value|characteristics)\[(.*)\]$/i, '$2')}: {f.value}</span><XIcon class="size-3 shrink-0" aria-hidden="true" /><span class="sr-only">(remove the filter)</span>
     </button>
   {/if}
+  {#if charges.length > 1}
+    <div class="flex items-center gap-1" role="group" aria-label="Precursor charges">
+      <span class="text-xs text-muted-foreground">z</span>
+      {#each charges as z (z)}
+        {@const on = level.filters.charges?.includes(z) ?? false}
+        <button
+          type="button"
+          aria-pressed={on}
+          class="h-7 min-w-7 rounded-full border px-2 text-xs tabular-nums {on ? 'border-foreground bg-foreground text-background' : 'bg-background text-muted-foreground hover:text-foreground'}"
+          onclick={() => toggleCharge(z)}>{z}+</button>
+      {/each}
+    </div>
+  {/if}
+  {#each level.filters.ranges ?? [] as r (r.key)}
+    <Popover.Root>
+      <Popover.Trigger class={chip} data-testid="range-chip">{RANGE_KEYS[r.key]}: {r.min} – {r.max}</Popover.Trigger>
+      <Popover.Content class="w-72" align="start">
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <p class="col-span-2 font-medium">{RANGE_KEYS[r.key]}</p>
+          <label class="grid gap-1">From<input type="number" step="any" class="h-8 rounded-md border bg-background px-2" value={r.min} onchange={(e) => setRange(r.key, 'min', Number(e.currentTarget.value))} /></label>
+          <label class="grid gap-1">To<input type="number" step="any" class="h-8 rounded-md border bg-background px-2" value={r.max} onchange={(e) => setRange(r.key, 'max', Number(e.currentTarget.value))} /></label>
+          <button type="button" class="col-span-2 justify-self-start text-destructive underline underline-offset-2" onclick={() => (level.filters.ranges = (level.filters.ranges ?? []).filter((x) => x.key !== r.key))}>Remove this filter</button>
+        </div>
+      </Popover.Content>
+    </Popover.Root>
+  {/each}
   {#if level.filters.hideContaminants}
     <button type="button" class={chip} onclick={() => (level.filters.hideContaminants = false)}>
       Contaminants hidden<XIcon class="size-3" aria-hidden="true" /><span class="sr-only">(show them)</span>
@@ -202,6 +263,13 @@
     <DropdownMenu.Content class="w-auto min-w-48">
       <DropdownMenu.CheckboxItem bind:checked={level.filters.hideContaminants}>Hide contaminants</DropdownMenu.CheckboxItem>
       <DropdownMenu.CheckboxItem bind:checked={level.filters.showDecoys}>Show decoys</DropdownMenu.CheckboxItem>
+      {#if level.level === 'psms'}
+        <DropdownMenu.Separator />
+        <DropdownMenu.Label class="text-xs text-muted-foreground">Range</DropdownMenu.Label>
+        {#each Object.entries(RANGE_KEYS) as [key, label] (key)}
+          <DropdownMenu.Item onSelect={() => addRange(key as RangeKey)}>{label}</DropdownMenu.Item>
+        {/each}
+      {/if}
       {#if sdrfOptions.length > 0}
         <DropdownMenu.Separator />
         <DropdownMenu.Label class="text-xs text-muted-foreground">SDRF</DropdownMenu.Label>
@@ -221,5 +289,10 @@
   </DropdownMenu.Root>
 
   <span class="ml-auto text-xs text-muted-foreground tabular-nums" data-testid="row-count" aria-live="polite"
-    >{formatCount(level.rows.length)} of {formatCount(level.total)}</span>
+    >{formatCount(level.rows.length)} of {formatCount(level.total)}{#if td}<span
+        class="ml-2"
+        data-testid="subset-fdr"
+        title="Decoy and target PSMs that these filters keep. Only PSMs that passed the search's FDR are stored, so this is an estimate within the passing PSMs, not a new FDR."
+        > · targets {formatCount(td.targets)} · decoys {formatCount(td.decoys)} · est. FDR ≈ {td.targets > 0 ? ((td.decoys / td.targets) * 100).toFixed(1) : '–'} % (within the passing set)</span
+      >{/if}</span>
 </div>

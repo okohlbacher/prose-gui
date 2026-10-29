@@ -154,3 +154,18 @@ describe('psmsPerFile', () => {
     expect(psmsPerFile(model({ psmFdr: 0.0001 })).map((f) => f.count)).toEqual([0, 0])
   })
 })
+
+describe('idsByQ', () => {
+  it('rises to the PSMs at the search FDR and never falls', async () => {
+    const { idsByQ } = await import('./qc')
+    const { buildModel } = await import('./model')
+    const { cutoffs, sampleDesign, sampleTables } = await import('./fixtures')
+    const m = buildModel(sampleTables(), sampleDesign(), { showTechReplicates: false, ...cutoffs })
+    const c = idsByQ(m, 10)!
+    expect(c.q.at(-1)).toBeCloseTo(m.psmFdr)
+    for (let i = 1; i < c.psms.length; i++) expect(c.psms[i]).toBeGreaterThanOrEqual(c.psms[i - 1])
+    let targets = 0
+    for (let i = 0; i < m.tables.psms.count; i++) if (!m.tables.psms.decoy[i] && m.tables.psms.qValue[i] <= m.psmFdr) targets++
+    expect(c.psms.at(-1)).toBe(targets)
+  })
+})

@@ -536,3 +536,22 @@ describe('performance', () => {
     expect(ms2).toBeLessThan(300)
   })
 })
+
+describe('PSM charge and range filters, and the decoy/target line', () => {
+  it('keeps only the charges and ranges chosen, and counts decoys of the subset', async () => {
+    const { applyFilters, targetDecoyOf, initialFilters } = await import('./filters')
+    const { buildModel } = await import('./model')
+    const { cutoffs, sampleDesign, sampleTables } = await import('./fixtures')
+    const m = buildModel(sampleTables(), sampleDesign(), { showTechReplicates: false, ...cutoffs })
+    const f = { ...initialFilters(m, 'psms'), showDecoys: true }
+    const all = applyFilters(m, 'psms', f)
+    const charge = m.tables.psms.charge[all[0]]
+    const byCharge = applyFilters(m, 'psms', { ...f, charges: [charge] })
+    expect(byCharge.length).toBeGreaterThan(0)
+    for (const i of byCharge) expect(m.tables.psms.charge[i]).toBe(charge)
+    const none = applyFilters(m, 'psms', { ...f, ranges: [{ key: 'mz', min: -2, max: -1 }] })
+    expect(none.length).toBe(0)
+    const td = targetDecoyOf(m, { ...f, showDecoys: false })
+    expect(td.targets + td.decoys).toBe(all.length)
+  })
+})
