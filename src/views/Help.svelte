@@ -8,6 +8,7 @@
   import { navigate, router } from '$lib/route.svelte'
   import { shortcuts } from '$lib/shortcuts.svelte'
   import { tick } from 'svelte'
+  import { revealSection } from './help/reveal'
   import HelpBasics from './help/HelpBasics.svelte'
   import HelpFdr from './help/HelpFdr.svelte'
   import HelpLearn from './help/HelpLearn.svelte'
@@ -30,20 +31,35 @@
   // troubleshooting page opens that entry), scrolled to once the page has rendered
   // (an object, so that asking for the same section again counts as a new request)
   let target = $state<{ id: string } | null>(null)
+  // (not reactive: whether a section is being shown, so that the change of page does not scroll to the top)
+  let revealing = false
   $effect(() => {
     const id = helpTarget.id
     if (id === null) return
     helpTarget.id = null
+    revealing = true
     target = { id }
     void tick()
       .then(tick)
-      .then(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }))
+      .then(() => {
+        revealSection(id)
+        revealing = false
+      })
+  })
+
+  // a page opened without a section (the navigation, or a link to the page) starts at its top
+  let shown: HelpPage | null = null
+  $effect(() => {
+    const p = page
+    if (p === shown) return
+    shown = p
+    if (revealing) return
+    void tick().then(() => document.getElementById('help-top')?.scrollIntoView({ block: 'start' }))
   })
 
   function show(p: HelpPage) {
     target = null
     navigate({ view: 'help', page: p })
-    void tick().then(() => document.getElementById('help-top')?.scrollIntoView({ block: 'start' }))
   }
 </script>
 

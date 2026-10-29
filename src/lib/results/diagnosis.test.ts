@@ -43,6 +43,15 @@ describe('the diagnosis', () => {
     expect(diagnose(summary([file('a', 1000, SMALL_RUN_PSMS)]), [], 0, false)).toEqual([])
   })
 
+  test('Percolator: a skip or a single-feature fallback is a cause, a shared model is not', () => {
+    const shared = 'Percolator could not rescore any input on its own (too few PSMs or decoys); the PSMs of all 2 inputs are rescored together, with one model.'
+    const single = "Percolator's sanity check rejected the learned model (…), so the PSMs are scored with that feature alone."
+    const ids = (warning: string) => diagnose(summary([file('a', 1000, 500, { percolator: { applied: true, skipped: null, warning } })]), [], 0, false).map((c) => c.id)
+    expect(ids(shared)).toEqual([])
+    expect(ids(single)).toEqual(['percolator'])
+    expect(ids(`${shared} ${single}`)).toEqual(['percolator'])
+  })
+
   test('a window that cuts the errors is a cause, with its re-runs', () => {
     const finding = { id: 'tolerance-offset' as const, target: 'precursor' as const, message: 'Off-centre.', reruns: [{ label: 'Re-run with ±50 ppm', changes: {} }] }
     expect(diagnose(summary([file('a', 1000, 500)]), [finding], 0, false)).toEqual([{ id: 'tolerance-offset', weight: 0.7, message: 'Off-centre.', reruns: finding.reruns }])

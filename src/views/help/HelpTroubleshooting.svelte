@@ -4,6 +4,7 @@
   // A search box filters the entries by their text.
   import { FAQ, FAQ_GROUPS, type FaqEntry } from '$lib/settings/faq'
   import { tick } from 'svelte'
+  import { revealSection } from './reveal'
 
   let { target = null }: { target?: { id: string } | null } = $props()
 
@@ -24,7 +25,8 @@
   function go(id: string) {
     query = ''
     opened = id
-    void tick().then(() => document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
+    // (revealSection opens the entry also when it was closed by hand after an earlier link)
+    void tick().then(() => revealSection(id, true))
   }
 </script>
 
@@ -35,7 +37,8 @@
     <button type="button" class="jump" onclick={() => go('faq-few-ids')}>few or no identifications</button>,
     <button type="button" class="jump" onclick={() => go('faq-settings-rejected')}>the search will not start</button>, or
     <button type="button" class="jump" onclick={() => go('faq-decoys-fdr')}>the FDR looks wrong</button>. The “What to do ›” beside a
-    message of the app opens its entry here.
+    message of the app opens its entry here. A PSM (peptide-spectrum match) is the best-scoring peptide of a spectrum; a
+    q-value is the lowest FDR (false discovery rate) at which it would still be reported.
   </p>
   <h3 id="troubleshooting-checks">What the checks mean, and what they cannot see</h3>
   <ul class="prose-list">
@@ -46,9 +49,11 @@
     </li>
     <li><b>Amber</b> notices are advice: the search can start, and after it the Overview cards say what may have gone wrong.</li>
     <li>
-      Before Start, the app reads the flags of the first 200 MS2 spectra of mzML files: whether they are flagged centroid or
-      profile, their charges, activation and isolation windows. It does not look at the peaks, so a mislabelled file passes; Thermo
-      .raw, Bruker .d and mzPeak files are checked only after the search.
+      Before Start, the app reads the flags of up to the first 200 MS2 spectra (within the first 64 MiB) of mzML files: whether
+      they are flagged centroid or profile, their charges, activation and isolation windows. It does not look at the peaks, so a
+      mislabelled file passes. Thermo .raw, Bruker .d and mzPeak files are not inspected before Start; after the search ProSE
+      reports for them only no MS2 spectra, profile spectra and charges outside the range, not the DIA, missing-charge or
+      analyzer checks.
     </li>
     <li>No warning does not mean the data or settings are right: the checks catch what they can see.</li>
   </ul>
@@ -76,7 +81,7 @@
           <summary>{e.question}</summary>
           <div class="body">
             <p>{e.symptoms}</p>
-            <p class="label">Likely causes, most likely first</p>
+            <p class="label">Possible causes, the usual ones first</p>
             <ol class="prose-list">
               {#each e.causes as c, k (k)}<li>{c}</li>{/each}
             </ol>

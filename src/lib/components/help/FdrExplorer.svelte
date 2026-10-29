@@ -1,7 +1,7 @@
 <script lang="ts">
   // Help, interactive: the score histogram of a simulated search, targets and decoys, and a cutoff to drag. Above
-  // the cutoff, (decoys + 1) ÷ targets estimates the FDR, as ProSE counts it (the +1 keeps a short list from looking
-  // perfect); "1 % FDR" moves the cutoff to where that estimate first falls
+  // the cutoff, (decoys + 1) ÷ targets estimates the FDR, as Percolator counts it (the +1 keeps a short list from
+  // looking perfect); "1 % FDR" moves the cutoff to where that estimate first falls
   // to 1 %. The scores are drawn once from fixed seeds (wrong matches score like decoys; right ones higher).
   function rng(seed: number) {
     let s = seed
@@ -62,13 +62,16 @@
   </svg>
   <div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
     <label class="flex items-center gap-2">Cutoff
-      <input type="range" min={LO} max={HI} step="0.05" bind:value={cutoff} aria-label="Score cutoff" class="w-56" />
+      <input type="range" min={LO} max={HI} step="0.01" bind:value={cutoff} aria-label="Score cutoff" class="w-56 max-w-full" />
     </label>
-    <button type="button" class="h-7 rounded-md border bg-background px-2 hover:bg-muted" onclick={onePercent}>Set to 1 % FDR</button>
-    <span class="tabular-nums" aria-live="polite">above it: <b>{t}</b> targets · <b>{d}</b> decoys · estimated FDR ≈ (decoys + 1) ÷ targets = <b>{(fdr * 100).toFixed(1)} %</b></span>
+    <button type="button" class="h-7 rounded-md border bg-background px-2 hover:bg-muted" onclick={onePercent}>Set to ≤ 1 % FDR</button>
+    <span class="tabular-nums" aria-live="polite">above it: <b>{t}</b> targets · <b>{d}</b> decoys · {#if t > 0}estimated FDR ≈ (decoys + 1) ÷ targets = <b>{(fdr * 100).toFixed(1)} %</b>{:else}no targets: no FDR can be estimated{/if}</span>
   </div>
   <figcaption>
     Simulated scores. Wrong matches score like decoys, so the decoys above a cutoff estimate how many of the targets above it
-    are wrong (ProSE adds one decoy to the count, so that a short list cannot claim no errors). A lower cutoff gives more identifications and a higher FDR. ProSE picks the cutoff for the FDR you set.
+    are wrong. This simulation uses Percolator's estimate, which adds one to the decoys so that a short list cannot claim
+    no errors. A lower cutoff usually gives more identifications and a higher FDR, but the estimate jumps about for short
+    lists: a high cutoff with few targets can show a higher FDR than a lower one. That is why a PSM's q-value is the lowest
+    estimate of all the cutoffs that would still report it. ProSE picks the cutoff for the FDR you set.
   </figcaption>
 </figure>

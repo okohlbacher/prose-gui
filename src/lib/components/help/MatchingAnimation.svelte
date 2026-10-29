@@ -4,13 +4,14 @@
   // the fragment tolerance) count; the candidate that explains the most, and the most intense, peaks wins.
   import Player from './Player.svelte'
 
-  // measured peaks (m/z, relative intensity); the true peptide explains the coloured ones
+  // measured peaks (m/z, relative intensity); the true peptide explains the coloured ones. The three candidates are
+  // permutations of one composition, so they have the same mass; their ion positions are illustrative
   const peaks = [
     [150, 0.35], [205, 0.2], [262, 0.7], [310, 0.15], [375, 0.55], [430, 0.3], [488, 0.9], [540, 0.12], [601, 0.6], [655, 0.25],
     [714, 0.8], [770, 0.18], [829, 0.45], [880, 0.1],
   ] as const
   const candidates = [
-    { name: 'LQEVTSAK', ions: [180, 262, 345, 430, 520, 655, 800] },
+    { name: 'PEPTIEDK', ions: [180, 262, 345, 430, 520, 655, 800] },
     { name: 'TEPIDEPK', ions: [150, 240, 375, 470, 560, 690, 829] },
     { name: 'PEPTIDEK', ions: [150, 262, 375, 488, 601, 714, 829] },
   ]
@@ -52,7 +53,7 @@
   </svg>
   <Player bind:step steps={candidates.length + 1} interval={2000} label="Matching" />
   <figcaption>
-    Schematic. ProSE takes every database peptide whose mass fits the precursor, predicts its fragment ions and counts
+    Schematic: the three candidates have the same mass; the ion positions are illustrative. ProSE takes every database peptide whose mass fits the precursor, predicts its fragment ions and counts
     those that line up with a measured peak. The best-scoring candidate becomes the spectrum's PSM, even when it is wrong,
     which is why the FDR is needed.
   </figcaption>

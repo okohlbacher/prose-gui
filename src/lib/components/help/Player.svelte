@@ -26,5 +26,6 @@
   <button type="button" class={btn} aria-pressed={playing} onclick={() => (playing = !playing)}>{playing ? 'Pause' : 'Play'}</button>
   <button type="button" class={btn} aria-label="Previous step" onclick={() => ((playing = false), (step = (step + steps - 1) % steps))}>‹</button>
   <button type="button" class={btn} aria-label="Next step" onclick={() => ((playing = false), (step = (step + 1) % steps))}>›</button>
-  <span class="text-xs text-muted-foreground tabular-nums" aria-live="polite">Step {step + 1} of {steps}</span>
+  <!-- announced only while paused: a playing animation would announce every step without end -->
+  <span class="text-xs text-muted-foreground tabular-nums" aria-live={playing ? 'off' : 'polite'}>Step {step + 1} of {steps}</span>
 </div>

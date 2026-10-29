@@ -35,6 +35,8 @@ export const CONTAMINANT_SHARE = 0.3
  * dataset note, for the user's own runs too (it was the example's only).
  */
 export const SMALL_RUN_PSMS = 300
+/** Percolator's warning when it scored the PSMs by its best single feature (ProSEAlgorithm: usedDefaultDirection). */
+export const SINGLE_FEATURE = /single feature|that feature alone/i
 /** At most this many causes are listed. */
 export const MAX_CAUSES = 3
 
@@ -148,12 +150,14 @@ export function diagnose(
   }
   const window = tolerance.find((t) => t.id === 'tolerance-offset' || t.id === 'tolerance-edge')
   if (window) out.push({ id: window.id, weight: 0.7, message: window.message, reruns: window.reruns })
-  const fallback = files.filter((f) => f.percolator && (!f.percolator.applied || f.percolator.warning))
+  // skipped, or rescored with the best single feature (Percolator's sanity check rejected its model); a file rescored
+  // with the model shared by the files of the search (its warning says so) was rescored, not a fallback
+  const fallback = files.filter((f) => f.percolator && (!f.percolator.applied || SINGLE_FEATURE.test(f.percolator.warning ?? '')))
   if (fallback.length > 0) {
     out.push({
       id: 'percolator',
       weight: 0.5,
-      message: `Percolator could not train its model for ${fallback.length === files.length ? 'the search' : `${fallback.length} of ${files.length} files`} (Overview › Files says why; usually too few confident PSMs), so the PSMs were scored by a single feature, which passes fewer of them.`,
+      message: `Percolator was skipped or fell back to a single score for ${fallback.length === files.length ? 'the search' : `${fallback.length} of ${files.length} files`} (Overview › Files says why; usually too few confident PSMs), which passes fewer PSMs.`,
       reruns: [],
       help: { label: 'Percolator and small searches', id: 'faq-percolator-small-run' },
     })

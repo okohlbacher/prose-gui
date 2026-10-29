@@ -59,7 +59,7 @@
   </svg>
   <Player bind:step steps={ions.length} label="Fragmentation" />
   <figcaption>
-    Each break gives a b ion (blue, the start of the peptide) and a y ion (orange, the end). Their m/z values are what the
+    Each break gives a b ion (blue, the start of the peptide) and a y ion (orange, the end), shown here singly charged. Their m/z values are what the
     MS2 spectrum shows; the masses of b and y of one break add up to the peptide's mass plus two protons.
   </figcaption>
 </figure>

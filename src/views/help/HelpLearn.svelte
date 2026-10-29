@@ -50,10 +50,11 @@
 <section id="learn-next" aria-labelledby="learn-next-h">
   <h2 id="learn-next-h">Where identification ends</h2>
   <p>
-    ProSE identifies peptides and proteins from DDA spectra. The next steps, and other kinds of data, need other tools: for DIA
-    data a DIA search engine such as DIA-NN or OpenSWATH; for label-free quantification OpenMS ProteomicsLFQ or quantms; for TMT
-    and iTRAQ reporter ions OpenMS IsobaricAnalyzer; for the statistics of a comparison MSstats; for converting vendor files
-    ProteoWizard msconvert; for targeted (SRM, PRM) data Skyline. prose-gui passes them a correct identification, design and
-    label setting.
+    ProSE identifies peptides and proteins from DDA (data-dependent acquisition) spectra. Other kinds of data go directly to
+    their own tools: DIA (data-independent) data to a DIA search engine such as DIA-NN or OpenSWATH, targeted (SRM, PRM) data to
+    Skyline, vendor files that the app cannot read to ProteoWizard msconvert first. After the identification come other tools:
+    for label-free quantification OpenMS ProteomicsLFQ or quantms, for TMT and iTRAQ reporter ions OpenMS IsobaricAnalyzer, for
+    the statistics of a comparison MSstats. Results › Export saves what they need from prose-gui: the identifications (idXML),
+    the design (design.tsv) and an SDRF with the search’s settings. Check the sample and label assignments in the tool you use.
   </p>
 </section>

@@ -29,8 +29,9 @@
       <text x="40" y="182" class="sub">low score</text><text x="620" y="182" text-anchor="end" class="sub">high score</text>
     </svg>
     <figcaption>
-      FDR above the cutoff ≈ decoy matches ÷ target matches above it (ProSE adds one to the decoys, so a short list cannot reach a
-      low FDR). ProSE chooses the cutoff that gives the FDR you set (e.g. 1 %).
+      FDR above the cutoff ≈ decoy matches ÷ target matches above it. With Percolator (the default) the estimate adds one to the
+      decoys, so a short list cannot reach a low FDR; without rescoring ProSE uses decoys ÷ targets, and 1 ÷ targets where no
+      PSM matched a decoy. ProSE chooses the cutoff that gives the FDR you set (e.g. 1 %).
     </figcaption>
   </figure>
 
@@ -42,7 +43,7 @@
       The <b>PSM FDR</b> controls the matches: at 1 %, about one in a hundred reported PSMs is expected to be wrong. It is an
       estimate for the list of each file, not a property of a single PSM.
     </li>
-    <li>Each PSM has a <b>q-value</b>: the lowest FDR at which it would still be reported.</li>
+    <li>Each PSM has a <b>q-value</b>: the lowest FDR at which it would still be reported, that is the lowest estimate among all the cutoffs that keep it.</li>
     <li>
       The <b>protein FDR</b> is estimated separately (picked-protein FDR). Wrong PSMs scatter over many proteins, so a protein list
       filtered at 1 % PSM FDR can contain far more than 1 % wrong proteins. Keep the protein FDR on for protein lists. When it is
@@ -61,17 +62,20 @@
 
   <h3 id="fdr-scope">What the FDR is computed over</h3>
   <p>
-    ProSE estimates the PSM FDR per input file, separately for the PSMs scored with different numbers of fragment charges
-    (FDR:PSM_groups), and the protein FDR once over all files of the search. The line under the design table of New search says
+    ProSE estimates the PSM FDR per input file: with Percolator from its q-values, without it separately for the PSMs scored
+    with different numbers of fragment charges (FDR:PSM_groups). It estimates the protein FDR once over all files of the
+    search. The line under the design table of New search says
     this for your search. So search the files of one experiment (its fractions and replicates) together: separate searches each
     control only their own protein list, and putting their lists together does not keep the 1 %. Fractions are parts of one
-    sample, not replicates; a design with one replicate per condition gives a comparison of the conditions nothing to rest on.
+    sample, not replicates; a design with one replicate per condition provides no biological replication for comparing the
+    conditions.
   </p>
 
   <h3 id="fdr-none">When there is no FDR</h3>
   <p>
-    A search with Decoys set to “None (no FDR)” has no FDR at all, and a file in which no PSM matched a decoy has its PSM FDR not
-    applied (“no FDR” in Overview › Files). Their PSMs are not FDR-controlled: do not report them as such. With very few PSMs (a
-    few hundred) the estimate is coarse, because each decoy weighs much.
+    A search with Decoys set to “None (no FDR)” has no FDR at all. A file marked “no FDR” in Overview › Files had its PSM FDR not
+    applied (a result of an earlier ProSE can show this for a file in which no PSM matched a decoy; the current ProSE applies a
+    conservative estimate there). Such PSMs are not FDR-controlled: do not report them as such. With very few PSMs (a few
+    hundred) the estimate is coarse, because each additional decoy changes it substantially.
   </p>
 </section>

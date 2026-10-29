@@ -16,9 +16,9 @@
 // `database-counting` (Start waits while files are added or the database is counted) have no entry.
 //
 // What the entries must not claim (the reviews found these overclaims in drafts):
-// - The checks before Start read mzML (.mzML, .mzML.gz) files only, by their flags, from the first 200 MS2
-//   spectra: a file flagged centroid is "flagged", not verified; Thermo .raw, Bruker .d and mzPeak inputs get
-//   their spectra checks only after the search (Overview › Files, the diagnosis).
+// - The checks before Start read mzML (.mzML, .mzML.gz) files only, by their flags, from up to the first 200 MS2
+//   spectra (within the first 64 MiB): a file flagged centroid is "flagged", not verified. For Thermo .raw, Bruker
+//   .d and mzPeak inputs, only no MS2, profile spectra and charges outside the range are reported, after the search.
 // - Calibration (`calibration:enabled`) never widens a window: a first pass on the most intense spectra sets an
 //   asymmetric window from the errors of its confident PSMs, at most as wide as the one set, and it is skipped
 //   with too few of them (`calibration:min_psms`). It does not correct the masses in the file.
@@ -63,10 +63,11 @@ export const FAQ: FaqEntry[] = [
     group: 'few-ids',
     question: 'Why did I get so few identifications, or none?',
     symptoms:
-      'Overview shows “Why so few identifications?”: a file identifies fewer spectra per MS2 spectrum than a search of its kind usually does, or far fewer than the other files of the batch. Or the tables are nearly empty.',
+      'Overview shows “Why so few identifications?”: a file identifies a smaller share of its MS2 spectra than a search of its kind usually does, or far fewer than the other files of the batch. Or the tables are nearly empty.',
     causes: [
       'The spectra cannot be searched as they are: no MS2 spectra, profile (not centroided) MS2 spectra, DIA data, or precursor charges missing or outside the charge range.',
       'The search does not match the sample chemistry: a wrong or missing alkylation, a missing label (TMT, iTRAQ, SILAC), the wrong enzyme.',
+      'Too many variable modifications: each adds candidates, which can lower the identifications at a fixed FDR.',
       'The mass tolerances do not fit the data: errors off-centre or cut off by the window, or a ppm fragment tolerance for ion-trap spectra.',
       'The database does not hold the sample’s proteins (wrong organism, an incomplete proteome), so contaminants dominate.',
       'Too few matches for the statistics: a small test file, or Percolator could not train and fell back to a single score.',
@@ -75,7 +76,7 @@ export const FAQ: FaqEntry[] = [
     fixes: [
       'Read the causes the card lists, strongest first, and follow each one’s entry here; their re-run buttons open New search with the change marked.',
       'Look at Overview › Files (MS2 spectra, Target PSMs, Percolator, the marks under each file name), Mass accuracy, Sample chemistry and Checks of the search before you change anything.',
-      'Change one thing at a time and compare at the same FDR. Do not start by raising the FDR, widening every tolerance or adding modifications: each of these can lower the identifications at a fixed FDR.',
+      'Change one thing at a time and compare at the same FDR. Raising the FDR only admits more uncertain matches; widening every tolerance or adding modifications can lower the identifications at a fixed FDR, because more wrong candidates compete.',
       'When the card lists no cause, the search found nothing it can name. Check the sample preparation (alkylation, labels, enzyme) and the organism of the database against your protocol, then compare the run with a good run of the same instrument.',
     ],
     checks: ['low-id-rate'],
@@ -87,7 +88,7 @@ export const FAQ: FaqEntry[] = [
     group: 'few-ids',
     question: 'Does my search match how the sample was prepared?',
     symptoms:
-      'The SDRF lists modifications the search does not include, or Overview › Sample chemistry says few peptides have a cysteine, many have a missed cleavage or a non-tryptic end. Often there is no message at all, only fewer identifications than expected.',
+      'The SDRF (the table describing the experiment’s samples, see The settings) lists modifications the search does not include, or Overview › Sample chemistry says few peptides have a cysteine, many have a missed cleavage or a non-tryptic end. Often there is no message at all, only fewer identifications than expected.',
     causes: [
       'The fixed modification on cysteine does not match the alkylation: the presets assume iodoacetamide (Carbamidomethyl (C)); acrylamide gives Propionamide (C), N-ethylmaleimide gives Nethylmaleimide (C), and a sample that was not alkylated needs none.',
       'A modification the sample carries is missing: a label, a chemical modification of the protocol, or the phosphorylation of an enriched sample.',
@@ -99,7 +100,7 @@ export const FAQ: FaqEntry[] = [
       'Make chemistry that every residue of a kind carries fixed (alkylation, a complete label); make variable only what may or may not be there (oxidation, phosphorylation).',
       'If the SDRF is right, add exactly the modifications it lists, fixed or variable as its MT= field says; otherwise correct the SDRF.',
       'After the search, compare Sample chemistry: the share of peptides with a cysteine against the share expected from the proteins, and the missed cleavages and non-tryptic ends.',
-      'To find an unexpected mass shift (e.g. +57 Da on cysteine where none was set), search one file with the “Open search · ±500 Da” preset, then add the modification that explains the main shift and search again normally.',
+      'To find an unexpected mass shift, search one file with the “Open search · ±500 Da” preset. The preset sets its own chemistry (a tryptic digest, Carbamidomethyl (C) fixed): restore the enzyme and labels of your sample after choosing it, and read each shift relative to the fixed modifications set. To test the alkylation, remove the fixed cysteine modification: alkylated cysteines then show as +57 Da (iodoacetamide). Add the modification that explains the main shift and search again normally.',
     ],
     checks: ['sdrf-modifications', 'chemistry-cysteine', 'chemistry-missed-cleavages', 'chemistry-non-specific'],
   },
@@ -120,7 +121,7 @@ export const FAQ: FaqEntry[] = [
       'For TMT or iTRAQ, add the reagent’s label as a fixed modification on K and on N-term (e.g. TMT6plex (K) and TMT6plex (N-term)).',
       'Make a label variable only to measure incomplete labelling, deliberately.',
       'For SILAC, add the heavy forms as variable modifications, each on its own residue, and keep the light form unmodified.',
-      'After the search, check “Label on K” in Sample chemistry: well-labelled samples are close to 100 %.',
+      'To measure how completely the samples are labelled, search once with the label as a variable modification: Sample chemistry then shows “Label on K” (the share of K-containing peptides found labelled; close to 100 % for good labelling). With the label fixed it shows no such figure, and it does not judge the N-terminus or SILAC labels.',
     ],
     checks: ['sdrf-label', 'chemistry-label'],
     outside:
@@ -139,10 +140,10 @@ export const FAQ: FaqEntry[] = [
       'The unit is wrong: ppm where Da was meant, or the other way round.',
     ],
     fixes: [
-      'Use the offered wider re-run first (“Re-run with ±50 ppm”, or “Re-run with … ppm fragments”): matches whose errors lay outside the old window can only come back with a wider one.',
+      'Use the offered wider re-run first (e.g. “Re-run with ±50 ppm”, a doubled Da window, or “Re-run with … ppm fragments”): matches whose errors lay outside the old window can only come back with a wider one. If the window is already wider than that, widen it by hand under “Advanced settings” until the errors fit inside it.',
       'Then look at Overview › Mass accuracy of the new search: the errors should form one complete peak inside the window. Compare the identifications at the same FDR.',
       'Never narrow the window while an offset or a pile-up at the edge is reported: that loses more matches.',
-      '“Re-run with calibration” runs a quick first pass on the most intense spectra and sets the main search’s windows from the errors of its confident PSMs, off-centre if the errors are. It can only make the window narrower than the one you set, never wider, and it is skipped when the first pass finds too few confident PSMs. Use it after the window is wide enough, not instead of widening.',
+      '“Re-run with calibration” (offered for an offset while nothing is cut off) can only make the windows narrower than the ones you set, never wider: use it after the window is wide enough, not instead of widening (see Calibration under The settings).',
       'When the errors drift a lot within or between runs, fix the calibration at the instrument or in the conversion rather than searching with a very wide window for good.',
     ],
     checks: ['tolerance-offset', 'tolerance-edge'],
@@ -158,7 +159,7 @@ export const FAQ: FaqEntry[] = [
       'An open search, whose ±500 Da precursor window is wide on purpose (its preset does not show this finding).',
     ],
     fixes: [
-      'Use the offered “Re-run with ±… ppm” (or “… ppm fragments”). A wider window lets more wrong candidates compete, including decoys, so targets and decoys separate less well and fewer matches pass at the same FDR.',
+      'Use the offered “Re-run with ±… ppm” (or “… ppm fragments”). A wider window lets more wrong candidates compete, including decoys, which can make targets and decoys separate less well and lower the identifications at the same FDR.',
       'The recommendation comes from the passing PSMs of this search, inside its window: it says what these data need, not a property of the instrument for every run. Check it again after the re-run.',
       'This finding is only given when the errors are centred and nothing piles up at the edge; if either is reported, widen first (see the entry on off-centre errors).',
     ],
@@ -170,12 +171,12 @@ export const FAQ: FaqEntry[] = [
     question: 'Why does New search warn about ion-trap MS2 and a ppm fragment tolerance?',
     symptoms: 'A warning that files were measured with ion-trap MS2 (low-resolution fragments) while the fragment tolerance is in ppm, with the button “Use 0.5 Da”.',
     causes: [
-      'The fragments were measured in the ion trap (about 0.5 Da accuracy), but the tolerance is a high-resolution one of a few ppm, so almost no fragment matches.',
+      'The fragments were measured in the ion trap, which is searched with a fragment tolerance of about 0.5 Da, but the tolerance is a high-resolution one of a few ppm, so almost no fragment matches.',
       'A hybrid instrument (LTQ Orbitrap, Orbitrap Fusion) chosen by its name: it can record MS2 in the ion trap or in the Orbitrap; the analyzer of the MS2 scans decides.',
     ],
     fixes: [
       'Click “Use 0.5 Da”, or choose the preset “Ion trap CID · tryptic”, which also expects a lower identification rate.',
-      'Keep the precursor tolerance as it is when MS1 was measured in the Orbitrap (about 10 ppm).',
+      'Keep the precursor tolerance as it is when MS1 was measured in the Orbitrap (about 10 ppm). For a stand-alone ion trap (LTQ, Velos without Orbitrap), MS1 is low-resolution too: set the precursor tolerance in Da, as wide as the acquisition needs (often 1 to 2 Da).',
       'Do not use the open-search preset on ion-trap MS2: its fragment tolerance is a high-resolution one.',
       'The check reads the analyzer from mzML files; for .raw and .d inputs check the method yourself.',
     ],
@@ -215,7 +216,7 @@ export const FAQ: FaqEntry[] = [
       'Read the full reason in Overview › Files › Percolator.',
       'Fix the cause of the few matches first (spectra, chemistry, tolerances, database); a skipped Percolator is a consequence, not an installation problem: Percolator is part of ProSE.',
       'Search related files (the fractions or replicates of one experiment) together: in a search of several files, ProSE trains one shared model for the files too small for their own.',
-      'With few PSMs the target-decoy FDR is coarse: with Percolator a q-value is (decoys + 1) / targets, so 80 PSMs cannot reach 1 %. Do not raise the FDR to get more training data, and do not report a small search’s list as if it had the precision of a large one.',
+      'With few PSMs the target-decoy FDR is coarse: Percolator estimates the FDR at a cutoff as (decoys + 1) / targets, so 80 PSMs cannot reach 1 %. Do not raise the FDR to get more training data, and do not report a small search’s list as if it had the precision of a large one.',
     ],
     checks: ['percolator', 'small-run'],
   },
@@ -237,7 +238,7 @@ export const FAQ: FaqEntry[] = [
       'Choose the modification from the list, with the right site: “N-term” is the peptide N-terminus, “Protein N-term” the protein’s.',
     ],
     checks: ['range-inverted', 'range-outside', 'psm-fdr', 'unknown-modification'],
-    outside: 'A modification that is not in the list (a custom chemical, a crosslinker) cannot be set in prose-gui; it needs ProSE or OpenMS from the command line with a custom modification definition.',
+    outside: 'A modification that is not in the list (a custom chemical) cannot be set in prose-gui; it needs ProSE or OpenMS from the command line with a custom modification definition. Crosslinks join two peptides and need a crosslink search engine (e.g. OpenPepXL); a modification cannot describe them.',
   },
   {
     id: 'faq-sdrf-design',
@@ -274,7 +275,7 @@ export const FAQ: FaqEntry[] = [
     fixes: [
       'Add an mzML, mzPeak, Thermo .raw or Bruker timsTOF .d. For a .d, choose the folder (or its analysis.tdf) and keep the whole folder together.',
       'Copy or download the file again to a local folder, or convert it again, then add it again.',
-      'Remove a file that cannot be searched to start with the others, and note that the experiment then has one file less.',
+      'Remove a file that cannot be searched to start with the others, and note that the experiment then has one fewer file.',
     ],
     checks: ['no-files', 'file-problem'],
     outside: 'Other vendor formats (SCIEX .wiff, Waters .raw, Agilent .d) need conversion to mzML first, e.g. with ProteoWizard msconvert, whose vendor readers run on Windows.',
@@ -292,7 +293,7 @@ export const FAQ: FaqEntry[] = [
     ],
     fixes: [
       'Convert again from the vendor file with peak picking as the first filter for all MS levels: msconvert input.raw --mzML --filter "peakPicking vendor msLevel=1-"',
-      'For an mzML that is already converted, vendor peak picking is no longer possible: centroid it with OpenMS PeakPickerHiRes, or convert again from the raw file.',
+      'For an mzML that is already converted, vendor peak picking is no longer possible: convert again from the raw file with vendor peak picking where you can. For high-resolution (Orbitrap, TOF) profile mzML, OpenMS PeakPickerHiRes is an option; low-resolution or ion-mobility data need a workflow made for them.',
       'If the original Thermo .raw or Bruker timsTOF .d is at hand, add it instead and compare.',
       'Add the new file and check that New search no longer flags it. “Search anyway” does not centroid anything: it searches the profile spectra as they are, and is remembered for that file on this computer.',
     ],
@@ -323,8 +324,8 @@ export const FAQ: FaqEntry[] = [
     question: 'Can I search DIA, SWATH, MSe or diaPASEF data here?',
     symptoms: 'New search warns that the MS2 spectra repeat a few isolation windows, as DIA does (or PRM). A DIA file searched anyway gives odd q-values and few, unreliable identifications.',
     causes: [
-      'The data are DIA (SWATH, diaPASEF, wide-window DIA, MSe): each MS2 spectrum holds the fragments of many peptides, which a DDA search scores as if they came from one.',
-      'A targeted PRM run: it repeats its isolation windows too, and is fine to search.',
+      'The data are DIA (data-independent acquisition: SWATH, diaPASEF, wide-window DIA, MSe): each MS2 spectrum holds the fragments of many peptides, which a DDA (data-dependent acquisition) search scores as if they came from one.',
+      'A targeted PRM (parallel reaction monitoring) run: it repeats its isolation windows too, and is fine to search.',
     ],
     fixes: [
       'Check the acquisition method. ProSE searches DDA spectra, one precursor at a time.',
@@ -339,7 +340,7 @@ export const FAQ: FaqEntry[] = [
     id: 'faq-conversion',
     group: 'inputs',
     question: 'The app reads .raw and .d directly: when do I still convert, and how do I convert well?',
-    symptoms: 'A converted file identifies far less than the original, its activation (HCD, CID, ETD) looks wrong in the design table’s Spectra column, or several of the checks of this group fire for it.',
+    symptoms: 'A converted file identifies far fewer spectra than the original, its activation (HCD, CID, ETD) looks wrong in the design table’s Spectra column, or several of the checks of this group fire for it.',
     causes: [
       'Peak picking missing or not first in the filter chain (profile spectra).',
       'Precursor information lost: no charges (timsTOF converted without PASEF precursors), precursor m/z on the wrong isotope or rounded.',
@@ -347,7 +348,7 @@ export const FAQ: FaqEntry[] = [
       'Calibration not applied (Waters lockmass), or retention times in the wrong unit.',
     ],
     fixes: [
-      'Prefer the original Thermo .raw or Bruker timsTOF .d where you have it: no conversion step can then lose anything. Do not convert timsTOF .d files to mzML for a DDA search.',
+      'Prefer the original Thermo .raw or Bruker timsTOF .d where you have it: that avoids what an extra conversion step can lose. Do not convert timsTOF .d files to mzML for a DDA search.',
       'For other vendors convert with a current msconvert, peakPicking first: msconvert input --mzML --filter "peakPicking vendor msLevel=1-". Keep 64-bit m/z precision.',
       'Compare the design table’s Spectra column (centroid or profile, activation, analyzer) with the acquisition method.',
       'For verified ETD-type data without activation information, set ions:add_c_ions and ions:add_zp1_ions in the “All parameters” dialog.',
@@ -421,20 +422,20 @@ export const FAQ: FaqEntry[] = [
     group: 'fdr',
     question: 'Why does the app warn about the decoys, or say all q-values are 0?',
     symptoms:
-      'Before the search: the database has decoys of its own while Decoys is set to Generate. After it: the search reports no decoy proteins, or all PSMs of a file have q-value 0, or a file is marked “no FDR”.',
+      'Before the search: the database has decoys of its own while Decoys is set to Generate. After it: the search reports no decoy proteins, all PSMs of a file have q-value 0 (a q-value is the lowest FDR at which a PSM would still be reported), or a file or the whole search is marked “no FDR”.',
     causes: [
       'Decoys switched off (“None (no FDR)”): the search then has no FDR at all.',
       'The database’s decoys carry a marker the search did not recognise, so they were treated as targets.',
       'A database with far fewer or far more decoys than targets: “Use the database’s, else generate” reuses a database’s decoys only at 0.5 to 2 per target and refuses others.',
-      'No PSM of a file matched a decoy, so its PSM FDR was not applied (“no FDR” in Overview › Files).',
+      'A file marked “no FDR” in Overview › Files: its PSM FDR was not applied, so its PSMs have no q-value. The current ProSE applies a conservative estimate (1 / T for T target PSMs) even when no PSM of a file matched a decoy; a result of an earlier ProSE can show “no FDR” for such a file.',
     ],
     fixes: [
       'Leave Decoys on “Use the database’s, else generate”: ProSE then reuses decoys it recognises (common markers such as rev_, DECOY_, as prefix or suffix) or makes its own.',
       'With Generate, ProSE removes the database’s recognised decoys and makes new ones from the targets: either way each target gets one decoy. “Use the database’s decoys” keeps the database’s own, e.g. when you must report how they were made.',
-      'When all q-values of a file are 0, treat its FDR as unverified: use a target-only FASTA and let ProSE generate the decoys, then search again.',
+      'When all q-values of a file are 0, check before you trust its FDR. Without Percolator a short list can give this legitimately (ProSE’s q-values are then decoys ÷ targets, 0 above the best decoy). Otherwise look at the decoy count of the database summary; if the decoys were not recognised, use a target-only FASTA and let ProSE generate the decoys, then search again.',
       'Never report the results of a search without decoys, or of a file marked “no FDR”, as FDR-controlled.',
     ],
-    checks: ['decoys-twice', 'no-decoys', 'all-q-zero'],
+    checks: ['decoys-twice', 'no-decoys', 'all-q-zero', 'psm-fdr-not-applied'],
   },
   {
     id: 'faq-fdr-levels',
@@ -444,7 +445,7 @@ export const FAQ: FaqEntry[] = [
     causes: [
       'The FDR is a property of a list, not of one match: at 1 % PSM FDR about one in a hundred reported PSMs is expected to be wrong, and you cannot tell which.',
       'The levels differ: ProSE controls PSMs (PSM FDR) and proteins (picked-protein FDR); peptide counts come from the PSMs and are not FDR-controlled at the peptide level.',
-      'A subset is not controlled separately: modified peptides, proteins with one peptide, or the PSMs of one file can have a much higher share of wrong matches than the whole list.',
+      'A subset is not controlled separately: modified peptides or proteins with one peptide can have a much higher share of wrong matches than the whole list.',
       'A protein group is one result: proteins that share all their identified peptides cannot be told apart, so the group’s evidence is not evidence for each protein in it.',
       'Counts of different searches or tools differ in FDR level, cutoff, database and settings.',
     ],
@@ -464,7 +465,7 @@ export const FAQ: FaqEntry[] = [
     symptoms:
       'The line under the design table states the scope of the FDR, or notes that the files are fractions of one replicate per condition; protein counts change when the same files are split over several searches.',
     causes: [
-      'ProSE estimates the PSM FDR per file (and per fragment-charge group, FDR:PSM_groups) and the protein FDR once over all files of the search.',
+      'ProSE estimates the PSM FDR per file (with Percolator from its q-values; without it also per fragment-charge group, FDR:PSM_groups) and the protein FDR once over all files of the search.',
       'Separate searches each control their own protein list; putting their lists together does not keep the 1 %.',
       'Fractions are parts of one sample, not replicates: a design with one replicate per condition has none to compare the conditions on.',
     ],
@@ -503,7 +504,7 @@ export const FAQ: FaqEntry[] = [
     id: 'faq-isotope-share',
     group: 'results',
     question: 'Why do so many matches use an isotope peak instead of the monoisotopic one?',
-    symptoms: 'Checks of the search says a large share (above a quarter) of the passing PSMs match an isotope peak, not the monoisotopic one.',
+    symptoms: 'Checks of the search says a large share (above a quarter) of the passing PSMs match an isotope peak, not the monoisotopic one. (The check needs at least 100 passing PSMs.)',
     causes: [
       'The instrument or the converter picked a 13C isotope peak as the precursor instead of the monoisotopic one.',
       'The precursor m/z was rounded or taken from the wrong scan in conversion.',
@@ -526,7 +527,7 @@ export const FAQ: FaqEntry[] = [
     ],
     fixes: [
       'Compare with the length of the gradient you ran.',
-      'Convert again so the file states the right unit, then search again. Rescaling the exported times alone leaves the spectra and the PeptDeep retention-time feature of the search wrong.',
+      'Convert again so the file states the right unit, then search again. Rescaling the exported times alone leaves the spectra and the retention-time feature (PeptDeep’s prediction) of the search wrong.',
     ],
     checks: ['rt-unit'],
   },
@@ -602,7 +603,7 @@ export const FAQ: FaqEntry[] = [
       'Start from the search itself: History › Settings opens its files, design, database and settings in New search, History › Re-run starts it again. A preset holds only settings (and a database), not the Percolator and PeptDeep switches.',
       'Keep with the results: the version and the methods text (Overview), the command line (“Copy command line”), the FASTA, and the input files.',
       'Compare two searches only at the same version, settings, database and FDR; if they differ when everything matches, report both records.',
-      'A .prose project (Export) holds the results and the search record for colleagues to view, but not the spectra, the FASTA or the log: to repeat the search they need those too.',
+      'A .prose project (Export) holds the results and the search record for colleagues to view, but not the spectra, the full searched FASTA or the log (it keeps only the sequences of the proteins in the results): to repeat the search they need those too.',
       'When reporting a problem, give the app and ProSE versions, the command line, the log, and, if you can, a small input that shows it.',
     ],
     checks: [],

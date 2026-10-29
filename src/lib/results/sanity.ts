@@ -11,8 +11,9 @@ import { qpxParameters } from './summary'
 import type { ProSEMultiSummary } from './types'
 
 /**
- * All q-values 0 in a file with at least this many PSMs: decoys were not told from targets (a decoy marker the
- * search did not recognise), so every PSM looks certain. Fewer PSMs can all be 0 legitimately.
+ * All q-values 0 in a file with at least this many PSMs: decoys were probably not told from targets (a decoy marker
+ * the search did not recognise), so every PSM looks certain. Without Percolator, ProSE's target-decoy q-values (D/T)
+ * of PSMs that score above every decoy are 0 too, so the finding says to check, not that the FDR is wrong.
  */
 export const ALL_Q_ZERO_MIN_PSMS = 50
 /**
@@ -84,7 +85,7 @@ export function sanityFindings(s: SanityInput): SanityFinding[] {
     if (e.n >= ALL_Q_ZERO_MIN_PSMS && e.nonzero === 0) {
       out.push({
         id: 'all-q-zero',
-        message: `${baseName(m.tables.files[file])}: all ${e.n} PSMs have q-value 0. Decoys were probably not recognised (a decoy marker the search did not expect), so the FDR cannot be trusted until the decoys are fixed.`,
+        message: `${baseName(m.tables.files[file])}: all ${e.n} PSMs have q-value 0. Without rescoring a short list can give this (no decoy scores among its best PSMs); otherwise the decoys were probably not recognised. Check the rescoring and the decoys before you trust the FDR.`,
       })
     }
   }

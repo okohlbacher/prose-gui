@@ -16,3 +16,9 @@ test('fractions of a single replicate per condition are noted; with replicates t
   expect(fractionsWithoutReplicates(resolveDesign([row('a', 'x', 1, 1), row('b', 'x', 1, 2), row('c', 'x', 2, 1), row('d', 'x', 2, 2)]))).toBeNull()
   expect(fractionsWithoutReplicates(resolveDesign([row('a', 'x', 1, 1), row('b', 'y', 1, 1)]))).toBeNull()
 })
+
+test('with Percolator the PSM FDR is its q-values per file', () => {
+  expect(scopeLine(2, { 'FDR:PSM_groups': 'scored_charges', 'FDR:protein': 0.01 }, false, true)).toBe(
+    "2 files, 1 search: PSM FDR per file (Percolator's q-values), protein FDR across all files",
+  )
+})

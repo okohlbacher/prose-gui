@@ -55,7 +55,7 @@ export const HELP = {
   },
   precursorTolerance: {
     title: 'Precursor tolerance',
-    text: 'How far the measured mass of a peptide (from the MS1 scan) may be from its calculated mass. Common starting windows: about 10 ppm for Orbitrap MS1 (also on the Astral), about 20 ppm for timsTOF. The window must cover the mass errors in your data.',
+    text: 'How far the measured mass of a peptide (from the MS1 scan) may be from its calculated mass. Common starting windows: about 10 ppm for Orbitrap MS1 (also on the Astral), about 20 ppm for timsTOF. The window must cover the mass errors in your data. Da is an absolute mass difference; ppm (parts per million) is relative, so the window grows with the mass: 10 ppm is 0.01 Da at 1,000 Da. Changing the unit without changing the number changes the window completely.',
     tip: 'After a search, Overview › Mass accuracy recommends a window for these data. It is estimated from the matches inside the window, so it can only narrow it; when the window was too narrow or off-centre, Overview says so separately.',
   },
   fragmentTolerance: {
@@ -73,7 +73,7 @@ export const HELP = {
   },
   calibration: {
     title: 'Calibration',
-    text: 'Off by default (calibration:enabled in “All parameters”, or “Re-run with calibration” in Overview). ProSE first searches the most intense tenth of the spectra, then sets the precursor and fragment windows of the main search from the errors of its confident matches: an asymmetric window when the errors are off-centre. The window can only become narrower than the one you set, never wider, and the masses in the file are not changed. With fewer than 50 confident matches (calibration:min_psms) the pass is skipped and your windows are used.',
+    text: 'Off by default (calibration:enabled in “All parameters”, or “Re-run with calibration” in Overview). ProSE first searches the most intense tenth of the spectra, then sets the windows of the main search from the errors of its confident matches: the precursor window can become asymmetric when the errors are off-centre, the fragment window stays symmetric about zero. The windows can only become narrower than the ones you set, never wider, and the masses in the file are not changed. With fewer than 50 confident matches (calibration:min_psms) the pass is skipped and your windows are used.',
     tip: 'When Overview says the errors are off-centre or cut off by the window, search with a wider window first; calibration can then narrow it around the errors.',
   },
 } as const satisfies Record<string, { title: string; text: string; tip?: string }>

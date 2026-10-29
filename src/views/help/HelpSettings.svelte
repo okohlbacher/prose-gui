@@ -26,7 +26,7 @@
   const USE: Record<string, string> = {
     'orbitrap-hcd-tryptic': 'Q Exactive, Exploris, Fusion, Lumos or Eclipse, with HCD fragments measured in the Orbitrap.',
     'astral-tryptic': 'Orbitrap Astral, fragments measured in the Astral analyzer.',
-    'iontrap-cid-tryptic': 'Fragments measured in an ion trap (LTQ, Velos, or a hybrid recording MS2 in its ion trap); a lower identification rate is expected.',
+    'iontrap-cid-tryptic': 'High-resolution MS1 with fragments measured in an ion trap (a hybrid recording MS2 in its ion trap); a lower identification rate is expected. For a stand-alone ion trap (LTQ, Velos), set the precursor tolerance in Da as well.',
     'timstof-tryptic': 'Bruker timsTOF, ddaPASEF.',
     'open-search': 'To discover unexpected mass shifts on one file, with high-resolution MS2; not for routine searches.',
   }

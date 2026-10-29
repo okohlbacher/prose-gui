@@ -39,6 +39,12 @@ describe('tolerance feedback', () => {
     expect(f[0].reruns.map((r) => r.label)).toEqual([`Re-run with ±${WIDE_PROBE_PPM} ppm`])
   })
 
+  test('a Da window is widened in Da, never "widened" to a narrower ppm window', () => {
+    const f = toleranceFindings(summary([file(9)]), { 'precursor:mass_tolerance_lower': 0.5, 'precursor:mass_tolerance_upper': 0.5, 'precursor:mass_tolerance_unit': 'Da' }, sample(0, 10))
+    expect(f.flatMap((x) => x.reruns).map((r) => r.label)).not.toContain(`Re-run with ±${WIDE_PROBE_PPM} ppm`)
+    expect(f.find((x) => x.id === 'tolerance-edge')?.reruns[0].changes).toEqual({ 'precursor:mass_tolerance_lower': 1, 'precursor:mass_tolerance_upper': 1, 'precursor:mass_tolerance_unit': 'Da' })
+  })
+
   test('a clean spread whose recommendation is under half the window: re-run with the recommendation', () => {
     const f = toleranceFindings(summary([file(3.2)]), {}, sample(0.3, 2))
     expect(ids(f)).toEqual(['precursor:tolerance-too-wide'])

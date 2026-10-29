@@ -294,7 +294,7 @@
       </p>
     {/if}
 
-    <p class="text-xs text-muted-foreground" data-testid="fdr-scope">{scopeLine(form.files.length, form.values, searchPlan.fdrBlocked)}</p>
+    <p class="text-xs text-muted-foreground" data-testid="fdr-scope">{scopeLine(form.files.length, form.values, searchPlan.fdrBlocked, form.rescore)}</p>
     {#if problems.length > 0}
       <!-- what ProSE cannot search: the search does not start until these files are removed -->
       <ul class="flex flex-col gap-1 text-[12.5px] text-destructive" data-testid="file-problems">

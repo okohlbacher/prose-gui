@@ -119,8 +119,11 @@ export function toleranceFindings(summary: ProSEMultiSummary, parameters: Record
   const out: ToleranceFinding[] = []
   const wider: ToleranceFinding['reruns'] = []
   const widest = Math.max(w.precursor.lower, w.precursor.upper)
-  if (w.precursor.unit === 'Da' || widest < WIDE_PROBE_PPM) wider.push({ label: `Re-run with ±${WIDE_PROBE_PPM} ppm`, changes: precursorWindow(WIDE_PROBE_PPM) })
-  if (!calibrated) wider.push(CALIBRATE)
+  // a Da window is widened in Da (±50 ppm would narrow a ±0.5 Da window: about ±500 ppm at 1,000 Da)
+  if (w.precursor.unit === 'Da') {
+    const da = Number((2 * widest).toPrecision(3))
+    wider.push({ label: `Re-run with ±${da} Da`, changes: { 'precursor:mass_tolerance_lower': da, 'precursor:mass_tolerance_upper': da, 'precursor:mass_tolerance_unit': 'Da' } })
+  } else if (widest < WIDE_PROBE_PPM) wider.push({ label: `Re-run with ±${WIDE_PROBE_PPM} ppm`, changes: precursorWindow(WIDE_PROBE_PPM) })
 
   // the precursor: from the passing PSMs themselves
   let precursorClean = false
@@ -129,6 +132,9 @@ export function toleranceFindings(summary: ProSEMultiSummary, parameters: Record
     const position = median(sample.position)
     const offset = Math.abs(position) > OFFSET_SHARE && Math.abs(mid) >= MIN_OFFSET_PPM
     const edge = sample.position.filter((p) => Math.abs(p) > 1 - EDGE_ZONE).length / sample.position.length
+    // calibration only narrows the window (ProSE clamps it to the one set): it follows an offset but cannot bring back
+    // PSMs the window cut off, so it is offered only while nothing piles up at the edge
+    const clipped = edge > EDGE_SHARE
     if (offset) {
       out.push({
         id: 'tolerance-offset',
@@ -137,18 +143,17 @@ export function toleranceFindings(summary: ProSEMultiSummary, parameters: Record
           `The precursor errors are off-centre: their median is ${mid > 0 ? '+' : ''}${ppmLabel(mid)}, more than a third of the ` +
           'window on that side. PSMs with larger errors may have fallen outside it. Search again with a wider window (calibration can then narrow it ' +
           'around the offset); a narrower window would lose more.',
-        reruns: wider,
+        reruns: clipped || calibrated ? wider : [...wider, CALIBRATE],
       })
     }
-    if (edge > EDGE_SHARE) {
+    if (clipped) {
       out.push({
         id: 'tolerance-edge',
         target: 'precursor',
         message:
           `${(edge * 100).toFixed(1)} % of the passing PSMs lie in the outer tenth of the precursor window: the window cuts the ` +
           'error distribution. Search again with a wider window.',
-        // calibration only narrows the window (ProSE clamps it to the one set): it cannot bring back clipped PSMs
-        reruns: wider.filter((r) => r !== CALIBRATE),
+        reruns: wider,
       })
     }
     precursorClean = !offset && edge <= EDGE_SHARE
@@ -191,7 +196,7 @@ export function toleranceFindings(summary: ProSEMultiSummary, parameters: Record
           `The fragment errors are off-centre in ${off.length === files.length ? 'every file' : `${off.length} of ${files.length} files`} ` +
           `(median up to ${ppmLabel(Math.max(...off.map((f) => Math.abs(f.fragmentError!.median))))} of a ${tol} ppm window). ` +
           'Search again with calibration or a wider fragment window.',
-        reruns: fragmentWider,
+        reruns: full.length > 0 ? fragmentWider.filter((r) => r !== CALIBRATE) : fragmentWider,
       })
     }
     if (full.length > 0) {

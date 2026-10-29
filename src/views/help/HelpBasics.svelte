@@ -16,7 +16,8 @@
     peptide's mass), then breaks it apart and measures the m/z of the pieces (the <em>fragments</em>, in the MS2 spectrum). In
     the usual CID/HCD fragmentation a peptide breaks mostly along its backbone, so its fragments form two ladders:
     <b style:color={b}>b ions</b> carry the start (N-terminus) of the sequence, <b style:color={y}>y ions</b> the end
-    (C-terminus). Neighbouring rungs of one ladder differ by the mass of one amino-acid residue (with any modification on it).
+    (C-terminus). For singly charged fragments, neighbouring rungs of one ladder differ by the mass of one amino-acid residue (with any
+    modification on it); for fragments of charge z, the m/z spacing is that mass divided by z.
     Not every rung is observed in a real spectrum.
   </p>
 
@@ -27,8 +28,8 @@
     enzyme did, and computes the fragment masses of every peptide. For each measured spectrum it takes the peptides whose
     mass fits the precursor (within the <em>precursor tolerance</em>), counts how many of their predicted fragments are
     found among the measured peaks (within the <em>fragment tolerance</em>), and scores the agreement. The best-scoring
-    peptide is the spectrum's <em>peptide-spectrum match</em> (PSM). It is a candidate: it is reported only if it passes the
-    FDR (see Decoys and the FDR).
+    peptide is the spectrum's <em>peptide-spectrum match</em> (PSM). It is a candidate: with FDR control on, it is reported only if it
+    passes the FDR cutoff (see Decoys and the FDR).
   </p>
 
   <figure>
