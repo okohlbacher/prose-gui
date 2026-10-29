@@ -3,9 +3,10 @@
   // chosen in the system's dialog (their paths; nothing is copied).
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
-  import { openDesign } from '$lib/design/sdrf-session.svelte'
-  import { chooseFiles, isDesktop } from '$lib/desktop'
+  import { addAnyFiles } from '$lib/design/sdrf-session.svelte'
+  import { chooseFiles } from '$lib/desktop'
   import { searchForm as form } from '$lib/search/form.svelte'
+  import { openHelp } from '$lib/help-link.svelte'
   import NoticeList from './NoticeList.svelte'
   import SdrfPanel from './SdrfPanel.svelte'
 
@@ -13,7 +14,7 @@
 
   async function add() {
     const paths = await chooseFiles('spectra')
-    if (paths.length > 0) await form.addFiles(paths)
+    if (paths.length > 0) await addAnyFiles(paths)
   }
 </script>
 
@@ -29,13 +30,13 @@
       <div class="min-w-0 flex-1">
         <p class="font-medium">Drop spectrum files here, or add them</p>
         <p class="text-xs text-muted-foreground">
-          mzML, mzPeak, Thermo .raw or Bruker .d (drop the folder, or choose its analysis.tdf). One file, or a whole
-          experiment with conditions, replicates and fractions. A FASTA file dropped here becomes the database.
+          Spectra (mzML, mzPeak, Thermo .raw, Bruker .d: drop the folder, or choose its analysis.tdf), and if you have them a
+          FASTA database and an SDRF or design.tsv with the experimental design, all in one go. An SDRF adds the files it
+          names. <button type="button" class="underline underline-offset-2" onclick={() => openHelp('formats')}>Which files?</button>
         </p>
       </div>
       <div class="flex items-center gap-2">
         <Button size="sm" disabled={form.adding > 0} onclick={add}>Add files</Button>
-        {#if isDesktop()}<Button variant="outline" size="sm" disabled={form.busy} onclick={() => openDesign()}>Load SDRF…</Button>{/if}
         <Button variant="outline" size="sm" disabled={form.busy} onclick={() => form.loadExample()}>
           {form.exampleLoading ? 'Loading the example…' : 'Try the example'}
         </Button>

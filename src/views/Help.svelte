@@ -11,6 +11,7 @@
   import { revealSection } from './help/reveal'
   import HelpBasics from './help/HelpBasics.svelte'
   import HelpFdr from './help/HelpFdr.svelte'
+  import HelpFormats from './help/HelpFormats.svelte'
   import HelpLearn from './help/HelpLearn.svelte'
   import HelpResults from './help/HelpResults.svelte'
   import HelpSettings from './help/HelpSettings.svelte'
@@ -21,6 +22,7 @@
     results: 'Reading the results',
     fdr: 'Decoys and the FDR',
     settings: 'The settings',
+    formats: 'File formats',
     basics: 'How a search works',
     learn: 'Videos and links',
   }
@@ -93,6 +95,8 @@
       <HelpFdr />
     {:else if page === 'settings'}
       <HelpSettings />
+    {:else if page === 'formats'}
+      <HelpFormats />
     {:else if page === 'basics'}
       <HelpBasics />
     {:else}
@@ -119,6 +123,27 @@
     .help .page-link.current {
       background: var(--color-muted);
     }
+  }
+  .help :global(table.formats) {
+    margin: 0.5rem 0;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  .help :global(table.formats th),
+  .help :global(table.formats td) {
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  .help :global(table.formats th) {
+    font-weight: 600;
+    color: var(--color-muted-foreground);
+  }
+  .help :global(code) {
+    font-family: var(--font-mono, ui-monospace);
+    font-size: 0.92em;
   }
   .help :global(h2) {
     margin-bottom: 0.5rem;

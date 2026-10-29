@@ -10,6 +10,7 @@
   import SearchFooter from '$lib/components/search/SearchFooter.svelte'
   import SettingsCard from '$lib/components/search/SettingsCard.svelte'
   import { Button } from '$lib/components/ui/button'
+  import { addAnyFiles } from '$lib/design/sdrf-session.svelte'
   import { onFileDrop } from '$lib/desktop'
   import { searchForm as form } from '$lib/search/form.svelte'
 
@@ -33,7 +34,7 @@
     let gone = false
     void onFileDrop({
       over: (on) => (dragging = on),
-      drop: (paths) => void form.addFiles(paths),
+      drop: (paths) => void addAnyFiles(paths),
     }).then((unlisten) => (gone ? unlisten() : (stop = unlisten)))
     return () => {
       gone = true

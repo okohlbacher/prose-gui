@@ -11,9 +11,11 @@
   import { download } from '$lib/download'
   import { formatBytes } from '$lib/format/bytes'
   import SdrfEditor from './SdrfEditor.svelte'
+  import SdrfMetadata from './SdrfMetadata.svelte'
 
   let saveError = $state<string | null>(null)
   let editing = $state(false)
+  let metadata = $state(false)
   const found = $derived(sdrf.files.length - sdrf.unresolved.length)
   const errors = $derived(sdrf.issues.filter((i) => i.level === 'error'))
   const warnings = $derived(sdrf.issues.filter((i) => i.level === 'warning'))
@@ -42,6 +44,7 @@
           sdrf.commitDesign()
           editing = true
         }}>Edit metadata…</Button>
+      <Button variant="outline" size="sm" class="h-6 px-2 text-xs" onclick={() => (metadata = true)} data-testid="sdrf-metadata-button">Metadata…</Button>
       <Button variant="outline" size="sm" class="h-6 px-2 text-xs" onclick={save}>Save SDRF…</Button>
       <Button variant="ghost" size="icon-xs" class="text-muted-foreground" aria-label="Forget the SDRF" title="Forget the SDRF (its files stay)" onclick={() => sdrf.clear()}><XIcon /></Button>
     </div>
@@ -106,4 +109,7 @@
     {#if saveError}<p class="text-destructive">{saveError}</p>{/if}
   </div>
 {/if}
+
+<SdrfMetadata bind:open={metadata} />
+
 <SdrfEditor bind:open={editing} />

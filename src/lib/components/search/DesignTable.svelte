@@ -14,7 +14,7 @@
   import type { Notice as DesignNotice } from '$lib/design/model'
   import { applyDesign } from '$lib/design/paste'
   import { parseSdrf } from '$lib/design/sdrf'
-  import { sdrfSession, openDesign } from '$lib/design/sdrf-session.svelte'
+  import { sdrfSession, addAnyFiles } from '$lib/design/sdrf-session.svelte'
   import { chooseFiles, isDesktop } from '$lib/desktop'
   import { download } from '$lib/download'
   import { cn } from '$lib/utils'
@@ -39,7 +39,7 @@
 
   async function add() {
     const paths = await chooseFiles('spectra')
-    if (paths.length > 0) await form.addFiles(paths)
+    if (paths.length > 0) await addAnyFiles(paths)
   }
 
   /** The folder of a path (shown beside the name: two files of one name stay apart). */
@@ -141,8 +141,10 @@
           <Button variant="outline" size="sm" class={headerButton} onclick={saveDesign}>Save design.tsv</Button>
         {/if}
       {/if}
-      <Button variant="outline" size="sm" class={headerButton} onclick={() => (isDesktop() ? openDesign() : designInput?.click())}
-        >Load design (SDRF, design.tsv)</Button>
+      <!-- (in the app, Add files takes an SDRF or design.tsv too) -->
+      {#if !isDesktop()}
+        <Button variant="outline" size="sm" class={headerButton} onclick={() => designInput?.click()}>Load design (SDRF, design.tsv)</Button>
+      {/if}
       {#if !sdrfSession.path}
         <Button variant="ghost" size="sm" class={headerButton + ' text-muted-foreground'} title="An SDRF of these files, to annotate and save" onclick={() => sdrfSession.create()}
           >Create SDRF…</Button>

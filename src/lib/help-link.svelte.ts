@@ -14,6 +14,7 @@ export const helpTarget = $state<{ id: string | null }>({ id: null })
 export function helpPageOf(id: string): HelpPage {
   if ((HELP_PAGES as readonly string[]).includes(id)) return id as HelpPage
   if (id.startsWith('faq-')) return 'troubleshooting'
+  if (id.startsWith('formats-')) return 'formats'
   if (id === 'help-groups' || id.startsWith('results-')) return 'results'
   if (id.startsWith('help-')) return 'settings'
   if (id.startsWith('fdr')) return 'fdr'

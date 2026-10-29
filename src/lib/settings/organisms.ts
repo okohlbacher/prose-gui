@@ -15,3 +15,13 @@ export const ORGANISMS: { id: string; name: string }[] = [
   { id: 'UP000009136', name: 'Cattle (Bos taurus)' },
   { id: 'UP000008227', name: 'Pig (Sus scrofa)' },
 ]
+
+/**
+ * The organism of a downloaded proteome by its file name ("UP000005640_reviewed.fasta" → "Human (Homo sapiens),
+ * reviewed"); null for another file, or a proteome not in the list.
+ */
+export function proteomeLabel(fileName: string): string | null {
+  const m = /^(UP\d{9})(_reviewed)?\.fasta$/i.exec(fileName)
+  const o = m ? ORGANISMS.find((x) => x.id === m[1].toUpperCase()) : undefined
+  return o ? `${o.name}${m![2] ? ', reviewed' : ''}` : null
+}

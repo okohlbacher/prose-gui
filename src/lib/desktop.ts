@@ -247,8 +247,11 @@ export function chooseFiles(kind: 'spectra' | 'database'): Promise<string[]> {
       kind === 'spectra'
         ? {
             multiple: true,
-            title: 'Add spectrum files (for a Bruker .d folder, choose its analysis.tdf)',
-            filters: [{ name: 'Spectra (mzML, mzPeak, Thermo .raw, Bruker analysis.tdf)', extensions: ['mzML', 'mzml', 'gz', 'mzpeak', 'raw', 'tdf'] }],
+            title: 'Add files: spectra, a FASTA database, an SDRF or design.tsv (for a Bruker .d folder, choose its analysis.tdf)',
+            filters: [
+              { name: 'Spectra, FASTA, SDRF', extensions: ['mzML', 'mzml', 'gz', 'mzpeak', 'raw', 'tdf', 'fasta', 'fa', 'faa', 'tsv', 'txt', 'sdrf'] },
+              { name: 'Spectra (mzML, mzPeak, Thermo .raw, Bruker analysis.tdf)', extensions: ['mzML', 'mzml', 'gz', 'mzpeak', 'raw', 'tdf'] },
+            ],
           }
         : { multiple: false, title: 'Choose a FASTA database', filters: [{ name: 'FASTA', extensions: ['fasta', 'fa', 'faa'] }] },
     )
@@ -280,6 +283,11 @@ export async function onFileDrop(handlers: { over: (on: boolean) => void; drop: 
  */
 export function saveText(name: string, contents: string): Promise<string | null> {
   return oneDialog(null, () => invoke<string | null>('save_text', { name, contents }))
+}
+
+/** The file names of the proteomes downloaded before (the app's databases folder). */
+export function downloadedProteomes(): Promise<string[]> {
+  return invoke<string[]>('downloaded_proteomes')
 }
 
 /** Opens an https link in the system's browser (the Help page). */
@@ -397,6 +405,11 @@ export function answerClose(close: boolean): Promise<void> {
 export { errorText }
 
 /** An SDRF or design.tsv chosen in the system's open dialog: its path and text; null if cancelled. */
+/** The text of an SDRF or design.tsv the user gave by path (Add files, drop). */
+export function readDesignFile(path: string): Promise<string> {
+  return invoke<string>('read_design_file', { path })
+}
+
 export function openDesignFile(): Promise<{ path: string; text: string } | null> {
   return oneDialog(null, () => invoke<{ path: string; text: string } | null>('open_design_file'))
 }

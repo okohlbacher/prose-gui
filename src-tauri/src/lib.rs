@@ -14,6 +14,7 @@
 //! - `cpu_count()` -> the cores the search's threads may use
 //! - `example_files()` -> `{ spectra: [path, path], database }`
 //! - `open_design_file()` -> `{ path, text }` of an SDRF or design.tsv chosen (null if cancelled);
+//!   `read_design_file(path)` -> the text of one given by path (Add files, drop);
 //!   `locate_data_files(sdrf, names, folder?)` -> `[{ exact?, mzml? }]` (`locate`)
 //! - `ols_search(query, ontologies, online)` -> `[{ label, accession }]` (the cache only unless `online`); `validate_sdrf(text, template?)` ->
 //!   `{ available, ok, output }` (`sdrf_tools`)
@@ -192,6 +193,21 @@ fn searches_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("searches"))
+}
+
+/// The proteomes downloaded into the app's `databases/` folder: their file names (`UP…[_reviewed].fasta`).
+#[tauri::command]
+fn downloaded_proteomes(app: AppHandle) -> Result<Vec<String>, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("databases");
+    let Ok(entries) = std::fs::read_dir(&dir) else { return Ok(Vec::new()) };
+    let mut names: Vec<String> = entries
+        .flatten()
+        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| n.starts_with("UP") && n.ends_with(".fasta"))
+        .collect();
+    names.sort();
+    Ok(names)
 }
 
 /// Opens `url` (https only: the Help page's links) in the system's browser.
@@ -565,6 +581,26 @@ async fn open_design_file(app: AppHandle) -> Result<Option<serde_json::Value>, S
     .map_err(|e| e.to_string())?
 }
 
+/// The text of a design file the user gave by path (Add files, or dropped): an SDRF or design.tsv only (`.tsv`,
+/// `.txt`, `.sdrf`), at most 50 MB, as `open_design_file` reads the one it asks for.
+#[tauri::command]
+async fn read_design_file(path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let p = Path::new(&path);
+        let name = p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+        if !p.is_absolute() || ![".tsv", ".txt", ".sdrf"].iter().any(|s| name.ends_with(s)) {
+            return Err(format!("{path} is not an SDRF or design.tsv file."));
+        }
+        let meta = std::fs::metadata(p).map_err(|e| format!("{path} cannot be read ({e})."))?;
+        if !meta.is_file() || meta.len() > 50 * 1024 * 1024 {
+            return Err(format!("{path} is not a design file of at most 50 MB."));
+        }
+        std::fs::read_to_string(p).map_err(|e| format!("{path} cannot be read ({e})."))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// The data files an SDRF names (`locate`): beside the SDRF at `sdrf`, then below `folder` if given.
 #[tauri::command]
 async fn locate_data_files(sdrf: String, names: Vec<String>, folder: Option<String>) -> Result<Vec<locate::Located>, String> {
@@ -857,6 +893,7 @@ pub fn run() {
             example_files,
             save_text,
             download_proteome,
+            downloaded_proteomes,
             open_url,
             save_bytes,
             save_search_file,
@@ -870,6 +907,7 @@ pub fn run() {
             open_project_file,
             open_qpx_folder,
             open_design_file,
+            read_design_file,
             locate_data_files,
             ols_search,
             validate_sdrf,

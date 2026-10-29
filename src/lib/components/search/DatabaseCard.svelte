@@ -4,8 +4,9 @@
   // ProSE cannot search the file (the search does not start), and what ProSE may mishandle in it (notices).
   import * as Card from '$lib/components/ui/card'
   import { Label } from '$lib/components/ui/label'
-  import { chooseFiles, downloadProteome } from '$lib/desktop'
-  import { ORGANISMS } from '$lib/settings/organisms'
+  import { chooseFiles, downloadedProteomes, downloadProteome, isDesktop } from '$lib/desktop'
+  import { ORGANISMS, proteomeLabel } from '$lib/settings/organisms'
+  import { onMount } from 'svelte'
   import Help from './Help.svelte'
   import { CRAP_PROTEINS, searchForm as form } from '$lib/search/form.svelte'
   import { choiceLabel } from '$lib/settings/labels'
@@ -32,7 +33,18 @@
   let reviewed = $state(true)
   let downloading = $state(false)
   let downloadError = $state<string | null>(null)
-  const organismOptions = [...ORGANISMS.map((o) => ({ value: o.id, label: `${o.name} · ${o.id}` })), { value: 'other', label: 'Other proteome (UniProt id)…' }]
+  // the proteomes downloaded before are marked: choosing one takes the file at once
+  let downloaded = $state<string[]>([])
+  onMount(() => {
+    if (isDesktop()) void downloadedProteomes().then((names) => (downloaded = names)).catch(() => {})
+  })
+  const has = (id: string) => downloaded.some((n) => n.toUpperCase().startsWith(id))
+  const organismOptions = $derived([
+    ...ORGANISMS.map((o) => ({ value: o.id, label: `${o.name} · ${o.id}${has(o.id) ? ' · downloaded' : ''}` })),
+    { value: 'other', label: 'Other proteome (UniProt id)…' },
+  ])
+  // the organism of a downloaded proteome, beside its file name (which names only the UniProt proteome)
+  const organismOfFile = $derived(form.database ? proteomeLabel(form.database.file.name) : null)
   async function download() {
     downloadError = null
     downloading = true
@@ -42,6 +54,7 @@
       const path = await downloadProteome(id, reviewed)
       // (a FASTA chosen while it downloaded stays chosen)
       if (form.database === before) await form.setDatabase(path)
+      downloaded = await downloadedProteomes().catch(() => downloaded)
     } catch (e) {
       downloadError = String((e as Error)?.message ?? e)
     } finally {
@@ -65,7 +78,9 @@
         title={form.database?.file.path}
         onclick={choose}>
         {#if form.database}
-          <span id="fasta-chosen" class="min-w-0 truncate font-mono text-[12.5px]">{form.database.file.name}</span>
+          <span id="fasta-chosen" class="min-w-0 truncate"
+            >{#if organismOfFile}<span class="text-[13px]">{organismOfFile}</span><span class="ml-2 font-mono text-[11.5px] text-muted-foreground">{form.database.file.name}</span
+              >{:else}<span class="font-mono text-[12.5px]">{form.database.file.name}</span>{/if}</span>
           {#if form.database.error}
             <span class="ml-auto shrink-0 text-xs text-destructive" data-testid="fasta-proteins" title={form.database.error}>cannot be read</span>
           {:else if form.database.problem}

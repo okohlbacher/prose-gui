@@ -13,9 +13,10 @@ import {
   locateDataFiles,
   openDesignFile,
   prideFiles,
+  readDesignFile,
   type DownloadProgress,
 } from '../desktop'
-import { brukerFolder, isSpectrum } from '../search/files'
+import { brukerFolder, isDesign, isSpectrum } from '../search/files'
 import { fileName, searchForm as form } from '../search/form.svelte'
 import { parseDesignTsv } from './design-tsv'
 import type { DesignInput } from './model'
@@ -377,7 +378,30 @@ export const sdrfSession = new SdrfSession()
  */
 export async function openDesign() {
   const chosen = await openDesignFile()
-  if (!chosen) return
+  if (chosen) await loadDesign(chosen.path, chosen.text)
+}
+
+/**
+ * Files of any kind, from the one "Add files" dialog or dropped on the window: an SDRF or design.tsv is loaded as the
+ * design (the first one; the SDRF then adds its own files), everything else goes to the form (spectra, a FASTA).
+ */
+export async function addAnyFiles(paths: string[]) {
+  const designs = paths.filter((p) => isDesign(fileName(p)))
+  const rest = paths.filter((p) => !isDesign(fileName(p)))
+  if (rest.length > 0) await form.addFiles(rest)
+  if (designs.length > 1) form.notices.push(`Only one design is loaded at a time: ${fileName(designs[0])}; ${designs.slice(1).map(fileName).join(', ')} left out.`)
+  if (designs.length > 0) {
+    try {
+      await loadDesign(designs[0], await readDesignFile(designs[0]))
+    } catch (e) {
+      form.notices.push(`${fileName(designs[0])}: ${String((e as Error)?.message ?? e)}`)
+    }
+  }
+}
+
+/** An SDRF (by its header) or a design.tsv, read from `path`. */
+async function loadDesign(path: string, text: string) {
+  const chosen = { path, text }
   const header = chosen.text.replace(/^﻿/, '').split(/\r\n|\n|\r/, 1)[0].toLowerCase()
   if (header.includes('comment[data file]') || header.includes('source name')) {
     await sdrfSession.load(chosen.path, chosen.text)

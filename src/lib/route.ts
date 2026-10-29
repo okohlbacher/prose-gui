@@ -11,7 +11,7 @@ export type Route =
 export const views: readonly View[] = ['search', 'results', 'history', 'help']
 
 /** The pages of Help, in the order of its navigation. */
-export const HELP_PAGES = ['troubleshooting', 'results', 'fdr', 'settings', 'basics', 'learn'] as const
+export const HELP_PAGES = ['troubleshooting', 'results', 'fdr', 'settings', 'formats', 'basics', 'learn'] as const
 export type HelpPage = (typeof HELP_PAGES)[number]
 
 /** The route of a location hash; anything unknown or malformed is the search view. */

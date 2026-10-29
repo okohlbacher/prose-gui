@@ -142,3 +142,13 @@ describe('presets', () => {
     expect(presetNamed(loadPresets(storage), 'other')).toBeNull()
   })
 })
+
+describe('downloaded proteomes', () => {
+  it('names the organism of a proteome file', async () => {
+    const { proteomeLabel } = await import('./organisms')
+    expect(proteomeLabel('UP000005640_reviewed.fasta')).toBe('Human (Homo sapiens), reviewed')
+    expect(proteomeLabel('UP000002311.fasta')).toBe('Yeast (Saccharomyces cerevisiae S288C)')
+    expect(proteomeLabel('UP999999999.fasta')).toBeNull()
+    expect(proteomeLabel('human.fasta')).toBeNull()
+  })
+})

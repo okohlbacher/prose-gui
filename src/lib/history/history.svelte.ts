@@ -326,7 +326,7 @@ export async function reopenInNewSearch(id: string, start: boolean, changes: Rec
   })
   // the red flags searched anyway then are not asked again (they are recorded per file: `checks.ts`)
   if (record.accepted) searchPlan.accepted = new Set([...searchPlan.accepted, ...acceptedKeys(record.accepted)])
-  if (record.sdrf) searchForm.notices.push(`“${record.name}” was searched with the SDRF ${record.sdrf.name}. Load it again (Load SDRF…) to search with its metadata.`)
+  if (record.sdrf) searchForm.notices.push(`“${record.name}” was searched with the SDRF ${record.sdrf.name}. Add it again (Add files…) to search with its metadata.`)
   if (!start) return false
   // Re-run starts only the same search: every file and the database found, no SDRF to load again
   if (!complete || record.sdrf) {
