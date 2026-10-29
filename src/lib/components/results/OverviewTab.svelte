@@ -10,6 +10,7 @@
   import { fileRows, formatSeconds, psmFdrFact, totalsOf, type EngineNote } from '$lib/results/overview'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { toolState } from '$lib/search/tool.svelte'
+  import { openHelp } from '$lib/help-link.svelte'
   import { methodsText } from '$lib/results/methods'
   import DeltaMassPanel from './DeltaMassPanel.svelte'
 
@@ -92,6 +93,7 @@
     <div role="note" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" data-testid="no-protein-fdr">
       <span class="font-medium">No protein-level FDR.</span> The protein groups and their counts come from the PSMs at the PSM FDR and are not
       FDR-controlled themselves. Peptide counts are not FDR-controlled at peptide level either.
+      <button type="button" class="ml-1 underline underline-offset-2" onclick={() => openHelp('fdr')}>What this means ›</button>
     </div>
   {/if}
   <section aria-labelledby="overview-search">

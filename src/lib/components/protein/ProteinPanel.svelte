@@ -10,6 +10,7 @@
   import * as Tabs from '$lib/components/ui/tabs'
   import { displaySettings } from '$lib/format/settings.svelte'
   import { formatCount, parseAccession, parseDescription } from '$lib/results/display'
+  import { openHelp } from '$lib/help-link.svelte'
   import { groupMates, proteinDetail } from '$lib/results/protein'
   import type { ResultsView } from '$lib/results/view.svelte'
   import XIcon from '@lucide/svelte/icons/x'
@@ -88,6 +89,7 @@
         <p class="mt-0.5 text-xs text-muted-foreground" data-testid="panel-group" title={mates.map((q) => pr.accession[q]).join('\n')}>
           Indistinguishable from {mateNames.slice(0, 4).join(', ')}{#if mates.length > 4}
             and {mates.length - 4} more{/if}
+          <button type="button" class="ml-1 underline underline-offset-2" onclick={() => openHelp('help-groups')}>Protein groups ›</button>
         </p>
       {/if}
     </div>

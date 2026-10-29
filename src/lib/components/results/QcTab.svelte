@@ -12,6 +12,7 @@
   import { signedNumber } from '$lib/format/number'
   import { COLORS } from '$lib/psm/psm'
   import { formatCount } from '$lib/results/display'
+  import { openHelp } from '$lib/help-link.svelte'
   import { precursorErrors, psmsPerFile, scoreDistribution } from '$lib/results/qc'
   import type { ResultsView } from '$lib/results/view.svelte'
 
@@ -50,6 +51,9 @@
 <div class="grid grid-cols-1 items-start gap-4 pb-6 xl:grid-cols-2" data-testid="qc-content">
   <!-- the cards are h3: the tab's own heading comes first, for the outline of the page -->
   <h2 class="sr-only">Quality control</h2>
+  <p class="text-xs text-muted-foreground xl:col-span-2">
+    How targets, decoys and the FDR relate: <button type="button" class="underline underline-offset-2" onclick={() => openHelp('fdr')}>Help › Decoys and the FDR</button>
+  </p>
   <!-- targets against decoys -->
   {#if score}
     <ChartCard

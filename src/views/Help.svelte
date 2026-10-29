@@ -2,7 +2,17 @@
   // Help: how a database search works (with drawings), what the main settings mean, how to read the results,
   // and where to learn more (videos, the ProSE web app and code). Links open in the system's browser.
   import { openUrl } from '$lib/desktop'
+  import { helpTarget } from '$lib/help-link.svelte'
+  import { tick } from 'svelte'
   import { HELP, type HelpKey } from '$lib/settings/help'
+
+  // opened at a section from elsewhere in the app (a "More in Help" link)
+  $effect(() => {
+    const id = helpTarget.id
+    if (id === null) return
+    helpTarget.id = null
+    void tick().then(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }))
+  })
 
   const link = (url: string) => (e: MouseEvent) => {
     e.preventDefault()
@@ -199,7 +209,7 @@
     </p>
     <dl class="settings">
       {#each settings as key (key)}
-        <div>
+        <div id="help-{key}">
           <dt>{HELP[key].title}</dt>
           <dd>{HELP[key].text}{#if 'tip' in HELP[key]}<span class="tip"> {HELP[key].tip}</span>{/if}</dd>
         </div>
@@ -211,7 +221,7 @@
     <h2 id="results-h">Reading the results</h2>
     <ul>
       <li><b>Overview:</b> what was searched, the files, and the observed precursor and fragment mass errors with recommended tolerances for the next search. Its methods text can be copied into a paper.</li>
-      <li><b>Protein groups:</b> a peptide can occur in several proteins. Proteins that share all their identified peptides cannot be told apart and form one group; the evidence for a group is not unique evidence for each protein or isoform in it.</li>
+      <li id="help-groups"><b>Protein groups:</b> a peptide can occur in several proteins. Proteins that share all their identified peptides cannot be told apart and form one group; the evidence for a group is not unique evidence for each protein or isoform in it.</li>
       <li><b>Proteins, Peptides, PSMs:</b> click a row to go deeper: a protein opens its coverage and peptides, a peptide its PSMs, a PSM its spectrum. Accessions are links to their protein.</li>
       <li><b>Spectrum:</b> measured peaks above, predicted (PeptDeep) or theoretical ions below. Drag across it to zoom, double-click to zoom out. Hovering an ion in the table marks its peak.</li>
       <li><b>QC:</b> the scores, mass errors and PSMs per file. The score chart shows only PSMs that passed the FDR, so it is not a full target-decoy separation plot.</li>

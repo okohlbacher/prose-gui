@@ -2,6 +2,7 @@
   // A "?" beside a field's label that opens its explanation (click, keyboard or touch, not only hover).
   import CircleHelp from '@lucide/svelte/icons/circle-help'
   import * as Popover from '$lib/components/ui/popover'
+  import { openHelp } from '$lib/help-link.svelte'
   import { HELP, type HelpKey } from '$lib/settings/help'
 
   let { topic }: { topic: HelpKey } = $props()
@@ -18,5 +19,6 @@
     <p class="mb-1 font-semibold">{help.title}</p>
     <p>{help.text}</p>
     {#if help.tip}<p class="mt-1.5 text-muted-foreground">{help.tip}</p>{/if}
+    <button type="button" class="mt-2 text-primary underline underline-offset-2" onclick={() => openHelp(`help-${topic}`)}>More in Help ›</button>
   </Popover.Content>
 </Popover.Root>
