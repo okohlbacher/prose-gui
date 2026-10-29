@@ -2,7 +2,7 @@
 // where the user chooses (the system's save dialog).
 
 import { writeDesignTsv } from '../design/design-tsv'
-import { saveSearchFile } from '../desktop'
+import { saveBytes, saveSearchFile } from '../desktop'
 import { download } from '../download'
 import type { OpenResult } from '../search/session.svelte'
 import { resultName } from './display'
@@ -27,6 +27,20 @@ export async function exportCsv(view: ResultsView): Promise<boolean> {
   try {
     await painted()
     await download(`${exportName(view.result)}-${level.level}.csv`, level.csv(), 'text/csv;charset=utf-8')
+    return true
+  } finally {
+    view.exporting = false
+  }
+}
+
+/** The table view (proteins or peptides; PSMs too) as `<name>-<level>.xlsx`, the rows and columns of the CSV. */
+export async function exportXlsx(view: ResultsView): Promise<boolean> {
+  const level = view.level
+  if (!level || view.exporting) return false
+  view.exporting = true
+  try {
+    await painted()
+    await saveBytes(`${exportName(view.result)}-${level.level}.xlsx`, level.xlsx())
     return true
   } finally {
     view.exporting = false

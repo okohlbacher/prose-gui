@@ -1,5 +1,6 @@
 // CSV export of a table view: the rows given (the filtered, sorted view), the columns given.
 
+import { strToU8, zipSync } from 'fflate'
 import { columnDef, expandColumns } from './columns'
 import type { FilterState } from './filters'
 import { peptideCounts, type Level, type ResultModel } from './model'
@@ -47,4 +48,68 @@ export function toCsv(m: ResultModel, level: Level, rows: Uint32Array, columns: 
       .join(',')
   }
   return '\uFEFF' + lines.join('\n') + '\n'
+}
+
+/** XML text: the five characters XML escapes, and the control characters a worksheet may not hold. */
+const xml = (t: string) =>
+  t.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+
+/** A column letter of a 0-based index (A, …, Z, AA, …). */
+function columnName(i: number): string {
+  let name = ''
+  for (i += 1; i > 0; i = Math.floor((i - 1) / 26)) name = String.fromCharCode(65 + ((i - 1) % 26)) + name
+  return name
+}
+
+/**
+ * The rows of `level` as an Excel workbook (.xlsx, one sheet `sheet`), with the columns and rows of `toCsv`:
+ * numbers as numbers, text as inline strings (never formulas, so no injection), the header row frozen.
+ * Written by hand as the smallest OOXML package (fflate zips it), not with a spreadsheet library.
+ */
+export function toXlsx(m: ResultModel, level: Level, rows: Uint32Array, columns: string[], filters: FilterState, sheet: string): Uint8Array {
+  const defs = expandColumns(m, level, columns).map((id) => columnDef(m, level, id)!)
+  const counts = peptideCounts(m, level === 'peptides' ? filters.maxQ : NaN)
+  const text = (ref: string, t: string) => `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xml(t)}</t></is></c>`
+  const out: string[] = [`<row r="1">${defs.map((d, j) => text(`${columnName(j)}1`, d.header)).join('')}</row>`]
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const r = i + 2
+    const cells = defs.map((d, j) => {
+      const ref = `${columnName(j)}${r}`
+      if (d.number && !d.csv) {
+        const x = d.number(m, row, counts)
+        return Number.isFinite(x) ? `<c r="${ref}"><v>${x}</v></c>` : ''
+      }
+      const t = d.csv ? d.csv(m, row, counts) : d.text!(m, row, counts)
+      return t === '' ? '' : text(ref, t)
+    })
+    out.push(`<row r="${r}">${cells.join('')}</row>`)
+  }
+  const worksheet =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
+    `<sheetData>${out.join('')}</sheetData></worksheet>`
+  const ns = 'http://schemas.openxmlformats.org'
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${ns}/package/2006/content-types">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+    ),
+    '_rels/.rels': strToU8(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${ns}/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="${ns}/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    ),
+    'xl/workbook.xml': strToU8(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="${ns}/spreadsheetml/2006/main" xmlns:r="${ns}/officeDocument/2006/relationships">` +
+        `<sheets><sheet name="${xml(sheet.slice(0, 31))}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    ),
+    'xl/_rels/workbook.xml.rels': strToU8(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${ns}/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="${ns}/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
+    ),
+    'xl/worksheets/sheet1.xml': strToU8(worksheet),
+  })
 }

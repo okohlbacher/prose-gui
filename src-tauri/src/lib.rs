@@ -298,6 +298,50 @@ async fn save_text(
     .map_err(|e| e.to_string())?
 }
 
+/// A binary export (.xlsx): the raw body of the call, the suggested name in the `x-file-name` header
+/// (URI-encoded); the user chooses where, in the system's dialog.
+#[tauri::command]
+async fn save_bytes(app: AppHandle, request: tauri::ipc::Request<'_>) -> Result<Option<String>, String> {
+    let tauri::ipc::InvokeBody::Raw(body) = request.body() else {
+        return Err("The file's contents are missing.".to_string());
+    };
+    let body = body.clone();
+    let name = request
+        .headers()
+        .get("x-file-name")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| percent_decode(v))
+        .unwrap_or_else(|| "export.xlsx".to_string());
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(path) = ask_save_path(&app, &name)? else {
+            return Ok(None);
+        };
+        std::fs::write(&path, body).map_err(|e| format!("{} cannot be written ({e}).", path.display()))?;
+        Ok(Some(path.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// `%XX` escapes of a URI component decoded (the file name of `save_bytes`).
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(b) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(b);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 /// A file of a search (e.g. the merged idXML) copied to where the user chooses.
 #[tauri::command]
 async fn save_search_file(
@@ -634,6 +678,7 @@ pub fn run() {
             cpu_count,
             example_files,
             save_text,
+            save_bytes,
             save_search_file,
             history_list,
             history_save_record,

@@ -231,6 +231,11 @@ export function saveText(name: string, contents: string): Promise<string | null>
   return oneDialog(null, () => invoke<string | null>('save_text', { name, contents }))
 }
 
+/** Binary contents (an .xlsx) written where the user chooses, suggesting `name`; the path, or null if cancelled. */
+export function saveBytes(name: string, contents: Uint8Array): Promise<string | null> {
+  return oneDialog(null, () => invoke<string | null>('save_bytes', contents, { headers: { 'x-file-name': encodeURIComponent(name) } }))
+}
+
 /** Copies a file of a search (e.g. `merged.idXML`) to where the user chooses, suggesting `suggested`. */
 export function saveSearchFile(searchId: string, name: string, suggested: string): Promise<string | null> {
   return oneDialog(null, () => invoke<string | null>('save_search_file', { searchId, name, suggested }))

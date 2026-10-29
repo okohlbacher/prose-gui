@@ -8,7 +8,7 @@ import { psmFdrOff } from './overview'
 import type { PsmOptionState } from '../psm/psm'
 import type { OpenResult } from '../search/session.svelte'
 import { columnDef } from './columns'
-import { toCsv } from './csv'
+import { toCsv, toXlsx } from './csv'
 import { levelTotal } from './figures'
 import { applyFilters, initialFilters, sortRows, type FilterState } from './filters'
 import { buildModel, peptideCounts, type Level, type ResultModel } from './model'
@@ -117,6 +117,11 @@ export class LevelState {
   /** The CSV of the view: the visible columns, the filtered and sorted rows (peptides in ProForma). */
   csv(): string {
     return toCsv(this.#view.model, this.level, this.rows, csvColumns(this.visible), this.filters)
+  }
+
+  /** The view as an Excel workbook: the columns and rows of `csv`. */
+  xlsx(): Uint8Array {
+    return toXlsx(this.#view.model, this.level, this.rows, csvColumns(this.visible), this.filters, this.level)
   }
 }
 

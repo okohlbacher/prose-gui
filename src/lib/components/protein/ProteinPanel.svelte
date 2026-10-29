@@ -114,7 +114,9 @@
   <Tabs.Root bind:value={view.panelTab} class="mt-2.5 flex min-h-0 flex-1 flex-col gap-2.5">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <Tabs.List>
-        <Tabs.Trigger value="coverage" class="px-3 text-[13px]">Coverage</Tabs.Trigger>
+        <Tabs.Trigger value="coverage" class="px-3 text-[13px]"
+          >Coverage{#if detail.length > 0}<span class="ml-1 text-xs font-normal text-muted-foreground tabular-nums">{(detail.coverage * 100).toFixed(0)} %</span>{/if}</Tabs.Trigger
+        >
         <Tabs.Trigger value="peptides" class="px-3 text-[13px]"
           >Peptides<span class="ml-1 text-xs font-normal text-muted-foreground tabular-nums">{formatCount(detail.peptides.length)}</span></Tabs.Trigger>
         <Tabs.Trigger value="psms" class="px-3 text-[13px]"
@@ -129,6 +131,12 @@
         {#if detail.length === 0}
           <p class="py-8 text-center text-muted-foreground">This protein has no sequence in the result, so there is no coverage map.</p>
         {:else}
+          {@const coveredResidues = detail.covered.reduce((n, c) => n + c, 0)}
+          <p class="pb-2 text-xs text-muted-foreground tabular-nums" data-testid="coverage-summary">
+            <span class="text-[15px] font-semibold text-foreground">{(detail.coverage * 100).toFixed(1)} %</span> sequence coverage ·
+            {formatCount(coveredResidues)} of {formatCount(detail.length)} residues · {formatCount(detail.sequences)}
+            {detail.sequences === 1 ? 'peptide' : 'peptides'} with PSMs at the PSM FDR
+          </p>
           <CoverageMap {detail} sequence={pr.sequence[protein]} />
         {/if}
       {/if}
