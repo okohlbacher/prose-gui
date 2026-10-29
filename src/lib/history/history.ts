@@ -76,6 +76,8 @@ export type SearchRecord = {
   seconds: number
   /** The SDRF of the search (New search's, with its edits); absent without one. */
   sdrf?: { name: string; text: string }
+  /** The instrument of each searched mzML, by file name. */
+  instruments?: Record<string, string>
   /** Set (by the Rust side) on a search made of a project file: it reads only the files of its folder. */
   imported?: boolean
 }
@@ -200,6 +202,7 @@ export function endedRecordOf(search: EndedSearch, name: string, toolVersion: st
     proteinFdr: search.proteinFdr,
     seconds: search.seconds,
     ...(search.sdrf ? { sdrf: search.sdrf } : {}),
+    ...(search.instruments ? { instruments: search.instruments } : {}),
   }
 }
 
@@ -259,6 +262,7 @@ export function resultFromRecord(record: SearchRecord, outcome: OpenResult['outc
     outcome,
     design: record.design,
     ...(record.sdrf ? { sdrf: record.sdrf } : {}),
+    ...(record.instruments ? { instruments: record.instruments } : {}),
     psmFdr: record.psmFdr,
     proteinFdr: record.proteinFdr,
     settings: {

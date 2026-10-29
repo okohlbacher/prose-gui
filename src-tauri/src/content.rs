@@ -141,6 +141,68 @@ fn head_and_tail(mut reader: impl Read) -> io::Result<(Vec<u8>, Vec<u8>, u64)> {
     Ok((head, tail, total))
 }
 
+/// An mzML's instrument model (PSI-MS), as SDRF's comment[instrument] takes it.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct Instrument {
+    pub name: String,
+    pub accession: String,
+}
+
+/// The cvParams (accession, name) of the first `tag` element of `text`, up to `stop`.
+fn cv_params<'a>(text: &'a str, start: usize, stop: &str) -> Vec<(&'a str, &'a str)> {
+    let rest = &text[start..];
+    let block = &rest[..rest.find(stop).unwrap_or(rest.len())];
+    let attr = |tag: &'a str, key: &str| {
+        let at = tag.find(&format!("{key}=\""))? + key.len() + 2;
+        Some(&tag[at..at + tag[at..].find('"')?])
+    };
+    block
+        .split("<cvParam")
+        .skip(1)
+        .filter_map(|tag| Some((attr(tag, "accession")?, attr(tag, "name")?)))
+        .collect()
+}
+
+/// The instrument model of the first `<instrumentConfiguration>` in an mzML's head (its own cvParams, then those of
+/// a `<referenceableParamGroupRef>`): the first PSI-MS term that is not a serial number; a vendor's generic
+/// "... instrument model" only if nothing more specific is there.
+pub fn instrument_of(head: &str) -> Option<Instrument> {
+    let ic = head.find("<instrumentConfiguration ")?;
+    let mut params = cv_params(head, ic, "<componentList");
+    let block = &head[ic..];
+    let block = &block[..block.find("<componentList").or_else(|| block.find("</instrumentConfiguration")).unwrap_or(block.len())];
+    if let Some(at) = block.find("<referenceableParamGroupRef") {
+        let tag = &block[at..];
+        if let Some(r) = tag.find("ref=\"").map(|i| &tag[i + 5..]).and_then(|t| t.find('"').map(|e| &t[..e])) {
+            if let Some(group) = head.find(&format!("<referenceableParamGroup id=\"{r}\"")) {
+                params.extend(cv_params(head, group, "</referenceableParamGroup"));
+            }
+        }
+    }
+    let models: Vec<_> = params
+        .into_iter()
+        .filter(|(acc, name)| acc.starts_with("MS:") && *acc != "MS:1000529" && !name.contains("serial number"))
+        .collect();
+    let (acc, name) = models
+        .iter()
+        .find(|(_, name)| !name.ends_with("instrument model"))
+        .or_else(|| models.first())?;
+    Some(Instrument { name: name.to_string(), accession: acc.to_string() })
+}
+
+/// The instrument of the mzML at `path` (`.mzML` or `.mzML.gz`), from its first MiB.
+pub fn mzml_instrument(path: &Path) -> Option<Instrument> {
+    let file = fs::File::open(path).ok()?;
+    let gz = path.to_string_lossy().to_lowercase().ends_with(".gz");
+    let mut head = Vec::new();
+    if gz {
+        flate2::read::MultiGzDecoder::new(file).take(MZML_HEAD as u64).read_to_end(&mut head).ok()?;
+    } else {
+        file.take(MZML_HEAD as u64).read_to_end(&mut head).ok()?;
+    }
+    instrument_of(&String::from_utf8_lossy(&head))
+}
+
 /// The facts of a plain mzML: its head and its tail, nothing in between.
 pub fn mzml(path: &Path, name: &str) -> io::Result<MzmlFacts> {
     use io::{Seek, SeekFrom};
@@ -693,5 +755,27 @@ mod tests {
             (head.as_slice(), tail.as_slice()),
             (&b"short"[..], &b"short"[..])
         );
+    }
+
+    #[test]
+    fn reads_the_instrument_model() {
+        let direct = r#"<instrumentConfigurationList count="1"><instrumentConfiguration id="ic_0">
+            <cvParam cvRef="MS" accession="MS:1000556" name="LTQ Orbitrap XL" />
+            <cvParam cvRef="MS" accession="MS:1000529" name="instrument serial number" value="01579B"/>
+            <componentList count="3"><analyzer order="2"><cvParam cvRef="MS" accession="MS:1000484" name="orbitrap" />"#;
+        assert_eq!(instrument_of(direct), Some(Instrument { name: "LTQ Orbitrap XL".into(), accession: "MS:1000556".into() }));
+        let grouped = r#"<referenceableParamGroupList><referenceableParamGroup id="CommonInstrumentParams">
+            <cvParam cvRef="MS" accession="MS:1000483" name="Thermo Fisher Scientific instrument model"/>
+            <cvParam cvRef="MS" accession="MS:1002523" name="Q Exactive HF"/>
+            <cvParam cvRef="MS" accession="MS:1000529" name="instrument serial number" value="x"/>
+            </referenceableParamGroup></referenceableParamGroupList>
+            <instrumentConfigurationList><instrumentConfiguration id="IC1">
+            <referenceableParamGroupRef ref="CommonInstrumentParams"/><componentList count="4">"#;
+        assert_eq!(instrument_of(grouped).unwrap().accession, "MS:1002523");
+        assert_eq!(instrument_of("<mzML><run>"), None);
+        let ecoli = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/example/Ecoli_MS2_small.mzML");
+        if ecoli.is_file() {
+            assert_eq!(mzml_instrument(&ecoli).unwrap().name, "LTQ Orbitrap XL");
+        }
     }
 }

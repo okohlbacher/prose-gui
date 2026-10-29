@@ -11,7 +11,9 @@ import {
   column,
   columns,
   dataRows,
+  noValue,
   parseSdrfTable,
+  runStem,
   setCell,
   writeSdrfTable,
   type SdrfTable,
@@ -99,6 +101,8 @@ export type ExportSettings = {
   /** ProSE's parameters: its defaults with the search's own on top. */
   values: Record<string, unknown>
   appVersion: string
+  /** The instrument of each searched file (NT=..;AC=..), by file name, from the mzML headers. */
+  instruments?: Record<string, string>
 }
 
 /** The SDRF of a finished search (`sdrf`: the one it was started with, as text). */
@@ -106,9 +110,10 @@ export function exportSdrf(sdrf: string | null, design: DesignResolution, s: Exp
   const t = sdrf ? parseSdrfTable(sdrf) : sdrfFromDesign(design)
   const rows = dataRows(t)
   const fileCol = column(t, 'comment[data file]')
+  // (by stem: the SDRF may name the vendor file of a searched mzML)
   const designOf = (r: number) => {
-    const name = cell(t, r, fileCol)
-    return design.rows.find((d) => d.fileName === name)
+    const stem = runStem(cell(t, r, fileCol))
+    return design.rows.find((d) => runStem(d.fileName) === stem)
   }
 
   /** Fills the empty cells of the column `name` (added where it is missing); `value` '' leaves a cell. */
@@ -122,7 +127,13 @@ export function exportSdrf(sdrf: string | null, design: DesignResolution, s: Exp
   fill('comment[technical replicate]', (r) => String(designOf(r)?.techReplicate ?? 1))
   fill('comment[label]', () => 'label free sample')
   fill('technology type', () => 'proteomic profiling by mass spectrometry')
-  fill('comment[instrument]', () => 'not available')
+  // the instrument of the file's mzML header where the SDRF has none (empty or not available)
+  const instrumentCol = column(t, 'comment[instrument]') >= 0 ? column(t, 'comment[instrument]') : addColumn(t, 'comment[instrument]')
+  for (const r of rows) {
+    const now = cell(t, r, instrumentCol)
+    const read = s.instruments?.[designOf(r)?.fileName ?? '']
+    if (now === '' || (noValue(now) && read)) setCell(t, r, instrumentCol, read ?? 'not available')
+  }
   fill('comment[cleavage agent details]', () => cleavageAgent(String(v['enzyme'] ?? 'Trypsin')))
 
   const mods = [

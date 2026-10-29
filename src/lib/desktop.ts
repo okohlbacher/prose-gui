@@ -41,6 +41,8 @@ export type FileFacts = InputFile & {
   problem: string | null
   /** What ProSE treats specially (a FASTA's entries listed twice, which it searches once): sentences, not blocking. */
   warnings: string[]
+  /** An mzML's instrument model from its header (PSI-MS). */
+  instrument?: { name: string; accession: string } | null
 }
 
 /** The search request of the shim (src-tauri/src/args.rs `SearchRequest`, camelCase). */

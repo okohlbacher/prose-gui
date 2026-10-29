@@ -65,4 +65,22 @@ describe('exportSdrf', () => {
     for (const c of ['characteristics[organism]', 'characteristics[organism part]', 'characteristics[disease]', 'characteristics[cell type]'])
       expect(cell(t, 0, column(t, c))).toBe('not available')
   })
+
+  it('fills the instrument of the mzML header where the SDRF has none, matched by stem', () => {
+    const design = resolveDesign([
+      { id: 'a', fileName: 'Ecoli_1.mzML', fileSize: 0 },
+      { id: 'b', fileName: 'Ecoli_2.mzML', fileSize: 0 },
+    ])
+    const instruments = { 'Ecoli_1.mzML': 'NT=LTQ Orbitrap XL;AC=MS:1000556', 'Ecoli_2.mzML': 'NT=LTQ Orbitrap XL;AC=MS:1000556' }
+    const sdrf = fixture('ecoli.sdrf.tsv').replace('comment[technical replicate]\t', 'comment[technical replicate]\tcomment[instrument]\t')
+      .replace('Ecoli_1.mzML\t1\t1\t', 'Ecoli_1.mzML\t1\t1\tNT=Q Exactive;AC=MS:1001911\t')
+      .replace('Ecoli_2.raw\t1\t1\t', 'Ecoli_2.raw\t1\t1\tnot available\t')
+      .replace('Ecoli_3.mzML\t1\t1\t', 'Ecoli_3.mzML\t1\t1\t\t')
+    const t = parseSdrfTable(exportSdrf(sdrf, design, { ...settings, instruments }))
+    expect(dataRows(t).map((r) => cell(t, r, column(t, 'comment[instrument]')))).toEqual([
+      'NT=Q Exactive;AC=MS:1001911', // the SDRF's own value stays
+      'NT=LTQ Orbitrap XL;AC=MS:1000556', // Ecoli_2.raw is the searched Ecoli_2.mzML
+      'not available', // not searched
+    ])
+  })
 })

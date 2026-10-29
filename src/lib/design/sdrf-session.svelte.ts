@@ -172,7 +172,8 @@ class SdrfSession {
    * of the settings), opened as if loaded; its sample columns are to be filled in.
    */
   create() {
-    const text = exportSdrf(null, form.design, { values: $state.snapshot(form.values) as Record<string, unknown>, appVersion: APP_VERSION })
+    const instruments = Object.fromEntries(form.files.filter((r) => r.instrument).map((r) => [r.file.name, r.instrument!]))
+    const text = exportSdrf(null, form.design, { values: $state.snapshot(form.values) as Record<string, unknown>, appVersion: APP_VERSION, instruments })
     const table = parseSdrfTable(text)
     this.path = 'experiment.sdrf.tsv'
     this.table = table

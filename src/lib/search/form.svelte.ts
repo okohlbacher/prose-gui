@@ -20,6 +20,8 @@ export type FileRow = DesignFields & {
   spectra: number | null
   /** Why ProSE cannot search the file (cut off, not mzML, no spectra: `FileFacts.problem`); the search cannot start. */
   problem: string | null
+  /** The instrument model of an mzML's header, as SDRF writes it (NT=..;AC=..). */
+  instrument?: string
 }
 
 /**
@@ -328,7 +330,8 @@ class SearchForm {
   #addRow(facts: FileFacts, fields: DesignFields) {
     const id = `f${++nextId}`
     const file: InputFile = { path: facts.path, name: facts.name, size: facts.size }
-    this.files.push({ id, file, spectra: facts.spectra, problem: facts.problem ?? null, ...fields })
+    const instrument = facts.instrument ? `NT=${facts.instrument.name};AC=${facts.instrument.accession}` : undefined
+    this.files.push({ id, file, spectra: facts.spectra, problem: facts.problem ?? null, instrument, ...fields })
   }
 
   removeFile(id: string) {

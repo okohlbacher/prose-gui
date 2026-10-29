@@ -59,7 +59,7 @@ export async function exportDesign(result: OpenResult): Promise<void> {
 /** The SDRF of the search (`sdrf-export`): the one it was started with, else one of its design, with the search's settings. */
 export async function exportSdrf(result: OpenResult): Promise<void> {
   const values = { ...defaultsOf(PROSE_PARAMETERS), ...result.settings.parameters }
-  const text = sdrfOf(result.sdrf?.text ?? null, result.design, { values, appVersion: APP_VERSION })
+  const text = sdrfOf(result.sdrf?.text ?? null, result.design, { values, appVersion: APP_VERSION, instruments: result.instruments })
   await download(result.sdrf?.name ?? `${exportName(result)}.sdrf.tsv`, text, 'text/tab-separated-values')
 }
 

@@ -287,6 +287,8 @@ pub struct FileFacts {
     pub problem: Option<String>,
     /// What ProSE may mishandle (a FASTA's byte-order mark, lowercase residues): shown, not blocking.
     pub warnings: Vec<String>,
+    /// An mzML's instrument model (for an SDRF's comment[instrument]).
+    pub instrument: Option<content::Instrument>,
 }
 
 /// The facts of the file at `path` (an absolute path). Never fails: what goes wrong is in `error`.
@@ -305,6 +307,7 @@ pub fn inspect(path: &str) -> FileFacts {
         error: None,
         problem: None,
         warnings: Vec::new(),
+        instrument: None,
     };
     if !Path::new(path).is_absolute() {
         facts.error = Some(format!("{path} is not an absolute path."));
@@ -347,6 +350,7 @@ pub fn inspect(path: &str) -> FileFacts {
         } else {
             content::mzml(file, &name)
         };
+        facts.instrument = content::mzml_instrument(file);
         mzml.map(|m| {
             facts.spectra = m.spectra;
             facts.problem = m.problem;

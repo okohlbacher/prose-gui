@@ -36,6 +36,8 @@ export type OpenResult = {
   proteinFdr: number
   /** The SDRF loaded in New search, with the design table's edits (`SdrfSession.text`). */
   sdrf?: { name: string; text: string }
+  /** The instrument of each searched mzML (NT=..;AC=..), by file name, for the SDRF export. */
+  instruments?: Record<string, string>
   /** Set for a result opened from History or a project file: its name there and who made it. */
   stored?: { name: string; appVersion: string; moduleVersion: string }
   settings: {
