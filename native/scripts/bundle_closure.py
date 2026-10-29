@@ -94,7 +94,8 @@ def macho_load_commands(path):
         if words[0] == "cmd":
             current = words[1]
         elif current == "LC_RPATH" and words[0] == "path":
-            rpaths.append(words[1])
+            # "path <p> (offset n)": <p> may hold spaces
+            rpaths.append(line.strip()[len("path ") :].rsplit(" (offset", 1)[0])
         elif current == "LC_BUILD_VERSION" and words[0] == "minos":
             minos = words[1]
         elif current == "LC_VERSION_MIN_MACOSX" and words[0] == "version":
