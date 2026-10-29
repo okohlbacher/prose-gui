@@ -15,6 +15,7 @@
   import DeltaMassPanel from './DeltaMassPanel.svelte'
   import GuidanceNotices from './GuidanceNotices.svelte'
   import DiagnosisCard from './DiagnosisCard.svelte'
+  import SanitySection from './SanitySection.svelte'
   import { precursorSample, searchedWindows, toleranceFindings } from '$lib/results/tolerance'
 
   let { view }: { view: ResultsView } = $props()
@@ -216,6 +217,8 @@
       </div>
     </section>
   {/if}
+
+  <SanitySection {view} />
 
   <section aria-labelledby="overview-methods" data-testid="methods">
     <div class="mb-1 flex items-center gap-2">

@@ -86,6 +86,8 @@ export type SearchRecord = {
   instruments?: Record<string, string>
   /** Set (by the Rust side) on a search made of a project file: it reads only the files of its folder. */
   imported?: boolean
+  /** The spectra of each mzML's header at the start, by file name (schema 2 on); absent: unknown. */
+  spectra?: Record<string, number>
   /** The red flags of New search the user searched anyway (schema 2 on); absent: none. */
   accepted?: AcceptedCheck[]
 }
@@ -213,6 +215,7 @@ export function endedRecordOf(search: EndedSearch, name: string, toolVersion: st
     ...(search.sdrf ? { sdrf: { name: search.sdrf.name, text: withoutLocalPaths(search.sdrf.text) } } : {}),
     ...(search.instruments ? { instruments: search.instruments } : {}),
     ...(search.accepted ? { accepted: search.accepted } : {}),
+    ...(search.spectra ? { spectra: search.spectra } : {}),
   }
 }
 
@@ -278,6 +281,7 @@ export function resultFromRecord(record: SearchRecord, outcome: OpenResult['outc
     ...(record.sdrf ? { sdrf: record.sdrf } : {}),
     ...(record.instruments ? { instruments: record.instruments } : {}),
     ...(record.accepted ? { accepted: record.accepted } : {}),
+    ...(record.spectra ? { spectra: record.spectra } : {}),
     psmFdr: record.psmFdr,
     proteinFdr: record.proteinFdr,
     settings: {

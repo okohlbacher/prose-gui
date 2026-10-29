@@ -39,6 +39,8 @@ export type OpenResult = {
   sdrf?: { name: string; text: string }
   /** The instrument of each searched mzML (NT=..;AC=..), by file name, for the SDRF export. */
   instruments?: Record<string, string>
+  /** The spectra of each mzML's header when the search started, by file name (guidance G11: spectra searched). */
+  spectra?: Record<string, number>
   /** The red flags of New search the user searched anyway (profile spectra, ...): `checks.ts`. */
   accepted?: AcceptedCheck[]
   /** Set for a result opened from History or a project file: its name there and who made it. */

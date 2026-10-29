@@ -253,6 +253,34 @@ export function targetPsmsOf(runs: RunRow[]): number {
   return runs.reduce((n, r) => n + (Number.isFinite(r.identified_spectra_count) ? r.identified_spectra_count : 0), 0)
 }
 
+/** ProSE's parameters as its provenance view records them (peptide_search), by the names of the app's settings. */
+export const QPX_PARAMETERS: [string, string, 'number' | 'text' | 'list'][] = [
+  ['enzyme', 'enzyme', 'text'],
+  ['enzyme_specificity', 'peptide:enzyme_specificity', 'text'],
+  ['missed_cleavages', 'peptide:missed_cleavages', 'number'],
+  ['peptide_min_length', 'peptide:min_size', 'number'],
+  ['peptide_max_length', 'peptide:max_size', 'number'],
+  ['precursor_mass_tolerance_lower', 'precursor:mass_tolerance_lower', 'number'],
+  ['precursor_mass_tolerance_upper', 'precursor:mass_tolerance_upper', 'number'],
+  ['precursor_mass_tolerance_unit', 'precursor:mass_tolerance_unit', 'text'],
+  ['fragment_mass_tolerance', 'fragment:mass_tolerance', 'number'],
+  ['fragment_mass_tolerance_unit', 'fragment:mass_tolerance_unit', 'text'],
+  ['min_charge', 'precursor:min_charge', 'number'],
+  ['max_charge', 'precursor:max_charge', 'number'],
+  ['fixed_modifications', 'modifications:fixed', 'list'],
+  ['variable_modifications', 'modifications:variable', 'list'],
+]
+
+export function qpxParameters(search: Map<string, string>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, name, kind] of QPX_PARAMETERS) {
+    const v = search.get(key)
+    if (v === undefined || v === '') continue
+    out[name] = kind === 'number' ? Number(v) : kind === 'list' ? v.split(/,\s*/).filter(Boolean) : v
+  }
+  return out
+}
+
 //------------------------------------------------------------------------------
 // The modification analysis
 

@@ -193,6 +193,7 @@ export async function startSearch(): Promise<void> {
     design: $state.snapshot(form.design),
     ...(sdrfSession.table ? { sdrf: { name: sdrfSession.name, text: sdrfSession.text() } } : {}),
     ...(searchPlan.acceptedChecks.length > 0 ? { accepted: $state.snapshot(searchPlan.acceptedChecks) } : {}),
+    spectra: Object.fromEntries(form.files.filter((r) => r.spectra !== null).map((r) => [r.file.name, r.spectra!])),
     instruments: Object.fromEntries(form.files.filter((r) => r.instrument).map((r) => [r.file.name, r.instrument!])),
     // no FDR (a search without decoys; the protein FDR off, 0): no cutoff, every PSM or protein counts (the results'
     // cutoffs are q-values above 0)
