@@ -61,14 +61,8 @@ pub fn ols_search(cache_dir: &Path, query: &str, ontologies: &[String], online: 
         encode(query),
         encode(&ontologies.join(","))
     );
-    let out = Command::new("curl")
-        .args(["-fsS", "--max-time", "10", &url])
-        .output()
-        .map_err(|e| format!("curl cannot be started ({e})."))?;
-    if !out.status.success() {
-        return Err("OLS cannot be reached: offline? Type the term, or choose from the list.".to_string());
-    }
-    let body = String::from_utf8_lossy(&out.stdout).into_owned();
+    let body = crate::net::get_text(&url, 10, "OLS")
+        .map_err(|_| "OLS cannot be reached: offline? Type the term, or choose from the list.".to_string())?;
     let terms = parse_ols(&body)?;
     let _ = std::fs::create_dir_all(cache_dir).and_then(|_| std::fs::write(&cached, &body));
     Ok(terms)

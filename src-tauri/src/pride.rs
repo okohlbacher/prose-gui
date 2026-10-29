@@ -5,12 +5,11 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+pub use crate::net::{allowed_url, fetch, remote_size, CANCEL};
+use crate::net::len;
+use std::sync::atomic::Ordering;
+#[cfg(test)]
 use std::time::Duration;
-
-/// Set by `cancel`: the running download stops after killing curl.
-pub static CANCEL: AtomicBool = AtomicBool::new(false);
 
 /// The folder the user chose in the system's dialog for downloads (`choose_download_folder`): the only one
 /// `download_data_files` writes into; the page never names it.
@@ -19,14 +18,6 @@ pub static FOLDER: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(Non
 /// The folder of the last `choose_download_folder`; an error if none was chosen.
 pub fn chosen_folder() -> Result<PathBuf, String> {
     FOLDER.lock().map_err(|e| e.to_string())?.clone().ok_or_else(|| "Choose the folder for the download first.".to_string())
-}
-
-/// The protocols curl may use, also after a redirect: HTTPS only (the unit tests' local server speaks HTTP).
-const PROTO: &str = if cfg!(test) { "=http,https" } else { "=https" };
-
-/// An address the app downloads from: HTTPS (PRIDE's FTP addresses are made HTTPS by `https_of`).
-pub fn allowed_url(url: &str) -> bool {
-    url.starts_with("https://") || (cfg!(test) && url.starts_with("http://127.0.0.1:"))
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -72,17 +63,6 @@ pub fn parse_files(body: &str) -> Result<(Vec<RemoteFile>, usize), String> {
 const PAGE_SIZE: usize = 500;
 const MAX_PAGES: usize = 100;
 
-fn curl_text(url: &str) -> Result<String, String> {
-    let out = Command::new("curl")
-        .args(["-fsSL", "--proto", PROTO, "--proto-redir", PROTO, "--max-time", "60", url])
-        .output()
-        .map_err(|e| format!("curl cannot be started ({e})."))?;
-    if !out.status.success() {
-        return Err(format!("PRIDE cannot be reached ({}).", String::from_utf8_lossy(&out.stderr).trim()));
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-}
-
 /// All files of the project `pxd`.
 pub fn project_files(pxd: &str) -> Result<Vec<RemoteFile>, String> {
     if !valid_accession(pxd) {
@@ -91,7 +71,7 @@ pub fn project_files(pxd: &str) -> Result<Vec<RemoteFile>, String> {
     let mut all = Vec::new();
     for page in 0..MAX_PAGES {
         let url = format!("https://www.ebi.ac.uk/pride/ws/archive/v3/projects/{pxd}/files?pageSize={PAGE_SIZE}&page={page}");
-        let (files, entries) = parse_files(&curl_text(&url)?)?;
+        let (files, entries) = parse_files(&crate::net::get_text(&url, 60, "PRIDE")?)?;
         all.extend(files);
         if entries < PAGE_SIZE {
             return Ok(all);
@@ -155,107 +135,6 @@ pub fn download(folder: &Path, files: &[RemoteFile], progress: impl Fn(Progress)
         done.push(path);
     }
     Ok(done)
-}
-
-/// The size the server gives for `url` (the Content-Length of a HEAD request, after redirects); None if it says none.
-pub fn remote_size(url: &str) -> Option<u64> {
-    let out = Command::new("curl")
-        .args(["-sIL", "--proto", PROTO, "--proto-redir", PROTO, "--connect-timeout", "30", "--max-time", "60", url])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let head = String::from_utf8_lossy(&out.stdout);
-    // (the last response's: a redirect has its own)
-    let last = head.rsplit("\r\n\r\n").find(|block| !block.trim().is_empty())?;
-    last.lines()
-        .filter_map(|l| l.split_once(':'))
-        .find(|(k, _)| k.trim().eq_ignore_ascii_case("content-length"))
-        .and_then(|(_, v)| v.trim().parse().ok())
-        .filter(|&n: &u64| n > 0)
-}
-
-/// Attempts at one file; each resumes from the size the partial file actually has.
-const ATTEMPTS: usize = 5;
-
-fn len(p: &Path) -> u64 {
-    std::fs::metadata(p).map(|m| m.len()).unwrap_or(0)
-}
-
-/// Fetches `url` into `partial` until it has `size` bytes (0: unknown size, until curl succeeds). Resumes from
-/// the bytes already there with an explicit offset (never curl's --retry, whose retries resume from the offset
-/// the first attempt started at and so append data twice); a server that ignores the range (curl 33), or a file
-/// that grows past `size`, starts again from 0. The final size must be `size`.
-pub fn fetch(url: &str, partial: &Path, size: u64, progress: impl Fn(u64)) -> Result<(), String> {
-    let mut last = String::new();
-    for _ in 0..ATTEMPTS {
-        let mut offset = len(partial);
-        if size > 0 && offset > size {
-            let _ = std::fs::remove_file(partial);
-            offset = 0;
-        }
-        if size > 0 && offset == size {
-            return Ok(());
-        }
-        let mut cmd = Command::new("curl");
-        cmd.args(["-fsSL", "--proto", PROTO, "--proto-redir", PROTO, "--connect-timeout", "30"]);
-        if offset > 0 {
-            cmd.args(["-C", &offset.to_string()]);
-        }
-        let mut child = cmd
-            .arg("-o")
-            .arg(partial)
-            .arg(url)
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("curl cannot be started ({e})."))?;
-        let mut overrun = false;
-        let status = loop {
-            if CANCEL.load(Ordering::SeqCst) {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err("download cancelled. Starting it again resumes it.".to_string());
-            }
-            let received = len(partial);
-            if size > 0 && received > size {
-                let _ = child.kill();
-                overrun = true;
-                break child.wait().map_err(|e| e.to_string())?;
-            }
-            progress(received);
-            if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
-                break status;
-            }
-            std::thread::sleep(Duration::from_millis(500));
-        };
-        let received = len(partial);
-        if overrun || (size > 0 && received > size) {
-            // (more bytes than the file has: never keep them)
-            let _ = std::fs::remove_file(partial);
-            last = format!("the server sent more than the {size} bytes it gives as the file's size");
-            continue;
-        }
-        if status.success() {
-            if size == 0 || received == size {
-                progress(received);
-                return Ok(());
-            }
-            last = format!("{received} bytes downloaded, the server gives {size}");
-            continue;
-        }
-        let mut err = String::new();
-        if let Some(mut s) = child.stderr.take() {
-            let _ = std::io::Read::read_to_string(&mut s, &mut err);
-        }
-        last = err.trim().to_string();
-        if status.code() == Some(33) || status.code() == Some(36) {
-            // the server cannot resume: start again from 0
-            let _ = std::fs::remove_file(partial);
-        }
-    }
-    Err(format!("could not be downloaded ({last})."))
 }
 
 #[cfg(test)]

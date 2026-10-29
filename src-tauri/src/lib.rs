@@ -44,6 +44,7 @@ pub mod decoys;
 pub mod files;
 pub mod history;
 pub mod locate;
+pub mod net;
 pub mod pride;
 pub mod sdrf_tools;
 pub mod progress;
@@ -229,18 +230,13 @@ async fn download_proteome(app: AppHandle, proteome: String, reviewed: bool) -> 
         let query = format!("%28proteome%3A{proteome}%29{}", if reviewed { "%20AND%20%28reviewed%3Atrue%29" } else { "" });
         let url = format!("https://rest.uniprot.org/uniprotkb/stream?compressed=false&format=fasta&query={query}");
         let partial = path.with_extension("fasta.partial");
-        let out = std::process::Command::new("curl")
-            .args(["-fsSL", "--retry", "2", "--connect-timeout", "20", "-o"])
-            .arg(&partial)
-            .arg(&url)
-            .output()
-            .map_err(|e| format!("curl cannot be started ({e}); download the FASTA from https://www.uniprot.org/proteomes/{proteome} instead."))?;
-        let size = std::fs::metadata(&partial).map(|m| m.len()).unwrap_or(0);
-        if !out.status.success() || size == 0 {
+        // (a stream of unknown size: `net::fetch` with size 0, HTTPS only)
+        let _ = std::fs::remove_file(&partial);
+        let fetched = net::fetch(&url, &partial, 0, |_| {});
+        if let Err(e) = fetched.and_then(|_| if net::len(&partial) == 0 { Err("no data".to_string()) } else { Ok(()) }) {
             let _ = std::fs::remove_file(&partial);
             return Err(format!(
-                "The download from UniProt failed ({}). Check the internet connection, or download the FASTA from https://www.uniprot.org/proteomes/{proteome}.",
-                String::from_utf8_lossy(&out.stderr).trim()
+                "The download from UniProt failed ({e}). Check the internet connection, or download the FASTA from https://www.uniprot.org/proteomes/{proteome}."
             ));
         }
         std::fs::rename(&partial, &path).map_err(|e| e.to_string())?;
