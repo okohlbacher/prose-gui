@@ -135,6 +135,10 @@
       {/if}
       <Button variant="outline" size="sm" class={headerButton} onclick={() => (isDesktop() ? openDesign() : designInput?.click())}
         >Load design (SDRF, design.tsv)</Button>
+      {#if !sdrfSession.path}
+        <Button variant="ghost" size="sm" class={headerButton + ' text-muted-foreground'} title="An SDRF of these files, to annotate and save" onclick={() => sdrfSession.create()}
+          >Create SDRF…</Button>
+      {/if}
       <Button variant="ghost" size="sm" class={headerButton + ' text-muted-foreground'} disabled={form.busy} onclick={() => form.removeAllFiles()}
         >Remove all</Button>
       <Button variant="outline" size="sm" class={headerButton} disabled={form.adding > 0} onclick={() => add()}>Add files</Button>

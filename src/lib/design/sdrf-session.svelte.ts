@@ -10,6 +10,8 @@ import { parseDesignTsv } from './design-tsv'
 import type { DesignInput } from './model'
 import { applyDesign } from './paste'
 import { parseSdrf } from './sdrf'
+import { exportSdrf, SAMPLE_COLUMNS } from './sdrf-export'
+import { APP_VERSION } from '../history/history'
 import {
   cell,
   column,
@@ -79,6 +81,8 @@ class SdrfSession {
   busy = $state(false)
   /** The user chose to search without the files that are not found. */
   skipMissing = $state(false)
+  /** Columns still to fill in (a created SDRF's sample columns, "not available" until then). */
+  toFill = $state<string[]>([])
   /** The design fields of each data file as loaded, by its name. */
   #loaded = new Map<string, Partial<DesignInput>>()
 
@@ -108,6 +112,7 @@ class SdrfSession {
     this.table = table
     this.issues = validateSdrf(table)
     this.skipMissing = false
+    this.toFill = []
     this.#loaded = new Map(parseSdrf(text).inputs.map((i) => [i.fileName!, i]))
     const seen = new Set<string>()
     this.files = []
@@ -121,6 +126,23 @@ class SdrfSession {
     form.notices.push(...notices)
     this.folder = rememberedFolder(path)
     await this.#resolve()
+  }
+
+  /**
+   * "Create SDRF…": an SDRF of the files in the table (`exportSdrf` of the design, with the technical columns
+   * of the settings), opened as if loaded; its sample columns are to be filled in.
+   */
+  create() {
+    const text = exportSdrf(null, form.design, { values: $state.snapshot(form.values) as Record<string, unknown>, appVersion: APP_VERSION })
+    const table = parseSdrfTable(text)
+    this.path = 'experiment.sdrf.tsv'
+    this.table = table
+    this.issues = validateSdrf(table)
+    this.skipMissing = false
+    this.folder = null
+    this.toFill = [...SAMPLE_COLUMNS]
+    this.#loaded = new Map(parseSdrf(text).inputs.map((i) => [i.fileName!, i]))
+    this.files = form.files.map((r) => ({ name: r.file.name, status: 'found', path: r.file.path, uri: '' }))
   }
 
   /** "Locate folder…": looks for the data files below a folder the user chooses. */
@@ -149,6 +171,7 @@ class SdrfSession {
     this.table = null
     this.issues = []
     this.files = []
+    this.toFill = []
     this.#loaded = new Map()
   }
 

@@ -62,11 +62,19 @@ export function modificationParameter(mod: string, type: 'Fixed' | 'Variable'): 
   return parts.join(';')
 }
 
+/** The sample columns every SDRF needs, which the design table does not know: "not available" until filled in. */
+export const SAMPLE_COLUMNS = [
+  'characteristics[organism]',
+  'characteristics[organism part]',
+  'characteristics[disease]',
+  'characteristics[cell type]',
+]
+
 /** An SDRF of the design table, for a search started without one. */
 export function sdrfFromDesign(design: DesignResolution): SdrfTable {
   const headers = [
     'source name',
-    'characteristics[organism]',
+    ...SAMPLE_COLUMNS,
     'characteristics[biological replicate]',
     'assay name',
     'comment[data file]',
@@ -76,7 +84,7 @@ export function sdrfFromDesign(design: DesignResolution): SdrfTable {
   ]
   const rows = design.rows.map((r, i) => [
     design.samples[r.sample]?.label ?? `sample ${r.sample + 1}`,
-    'not available',
+    ...SAMPLE_COLUMNS.map(() => 'not available'),
     String(r.replicate),
     `run ${i + 1}`,
     r.fileName,

@@ -37,6 +37,11 @@
       <Button variant="outline" size="sm" class="h-6 px-2 text-xs" onclick={save}>Save SDRF…</Button>
       <Button variant="ghost" size="icon-xs" class="text-muted-foreground" aria-label="Forget the SDRF" title="Forget the SDRF (its files stay)" onclick={() => sdrf.clear()}><XIcon /></Button>
     </div>
+    {#if sdrf.toFill.length > 0}
+      <p class="text-amber-700 dark:text-amber-400" data-testid="sdrf-to-fill">
+        To fill in before sharing: {sdrf.toFill.join(', ')} (now “not available”).
+      </p>
+    {/if}
     {#if errors.length + warnings.length > 0}
       <details>
         <summary class="cursor-pointer text-muted-foreground">

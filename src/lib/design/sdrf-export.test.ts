@@ -57,4 +57,12 @@ describe('exportSdrf', () => {
     expect(dataRows(t).map((r) => cell(t, r, column(t, 'source name')))).toEqual(['EGF 1', 'EGF 1'])
     expect(validateSdrf(t)).toEqual([])
   })
+
+  it('names a Bruker .d folder as the data file and adds the sample columns as not available', () => {
+    const design = resolveDesign([{ id: 'a', fileName: 'run1.d', fileSize: 0 }])
+    const t = parseSdrfTable(exportSdrf(null, design, settings))
+    expect(cell(t, 0, column(t, 'comment[data file]'))).toBe('run1.d')
+    for (const c of ['characteristics[organism]', 'characteristics[organism part]', 'characteristics[disease]', 'characteristics[cell type]'])
+      expect(cell(t, 0, column(t, c))).toBe('not available')
+  })
 })
