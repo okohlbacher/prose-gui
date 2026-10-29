@@ -7,7 +7,9 @@
   import XIcon from '@lucide/svelte/icons/x'
   import { Button } from '$lib/components/ui/button'
   import { sdrfSession as sdrf, STATUS_TEXT } from '$lib/design/sdrf-session.svelte'
+  import { convertCommand } from '$lib/design/sdrf-download'
   import { download } from '$lib/download'
+  import { formatBytes } from '$lib/format/bytes'
   import SdrfEditor from './SdrfEditor.svelte'
 
   let saveError = $state<string | null>(null)
@@ -72,6 +74,28 @@
           </li>
         {/each}
       </ul>
+      {#each sdrf.unresolved.filter((f) => f.status === 'vendor' && f.path) as file (file.name)}
+        {@const command = convertCommand(file.path!)}
+        <p class="flex flex-wrap items-center gap-2 text-muted-foreground" data-testid="sdrf-convert">
+          ProSE cannot read {file.name}. Convert it to mzML, then Locate folder…:
+          <code class="rounded bg-muted px-1 font-mono">{command}</code>
+          <Button variant="ghost" size="sm" class="h-5 px-1.5 text-xs" onclick={() => navigator.clipboard?.writeText(command)}>Copy</Button>
+        </p>
+      {/each}
+      {#if sdrf.unresolved.some((f) => f.status !== 'vendor')}
+        <div class="flex flex-wrap items-center gap-2" data-testid="sdrf-download">
+          <label for="sdrf-pxd" class="text-muted-foreground">PRIDE project</label>
+          <input id="sdrf-pxd" class="h-6 w-28 rounded border bg-background px-1.5 font-mono" placeholder="PXD…" bind:value={sdrf.pxd} />
+          {#if sdrf.download}
+            {@const d = sdrf.download}
+            <span>Downloading {d.name} ({d.file + 1} of {d.files}): {formatBytes(d.received)}{d.size ? ` of ${formatBytes(d.size)}` : ''}</span>
+            <Button variant="ghost" size="sm" class="h-6 px-2 text-xs" onclick={() => sdrf.cancelDownload()}>Cancel</Button>
+          {:else}
+            <Button variant="outline" size="sm" class="h-6 px-2 text-xs" onclick={() => sdrf.downloadMissing()}>Download missing…</Button>
+          {/if}
+        </div>
+      {/if}
+      {#if sdrf.downloadError}<p class="text-destructive">{sdrf.downloadError}</p>{/if}
       <label class="flex items-center gap-1.5 text-muted-foreground">
         <input type="checkbox" bind:checked={sdrf.skipMissing} /> Search without them
       </label>

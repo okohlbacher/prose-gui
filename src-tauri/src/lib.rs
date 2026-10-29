@@ -16,6 +16,8 @@
 //!   `locate_data_files(sdrf, names, folder?)` -> `[{ exact?, mzml? }]` (`locate`)
 //! - `ols_search(query, ontologies)` -> `[{ label, accession }]`; `validate_sdrf(text, template?)` ->
 //!   `{ available, ok, output }` (`sdrf_tools`)
+//! - `pride_files(pxd)` -> `[{ name, size, url }]`; `download_data_files(files, folder)` -> paths, events
+//!   `download://progress` `{ file, files, name, received, size }`; `cancel_download()` (`pride`)
 //! - `save_text(name, contents)` and `save_search_file(searchId, name, suggested)`: a save dialog of
 //!   the system, then the file written where the user chose (-> the path, or null if cancelled)
 //! - History (`history`): `history_list()` -> entries (a folder with a broken record, or none, has
@@ -41,6 +43,7 @@ pub mod decoys;
 pub mod files;
 pub mod history;
 pub mod locate;
+pub mod pride;
 pub mod sdrf_tools;
 pub mod progress;
 pub mod project;
@@ -583,6 +586,32 @@ async fn validate_sdrf(app: AppHandle, text: String, template: Option<String>) -
         .map_err(|e| e.to_string())?
 }
 
+/// The files of a ProteomeXchange project in PRIDE (`pride::project_files`).
+#[tauri::command]
+async fn pride_files(pxd: String) -> Result<Vec<pride::RemoteFile>, String> {
+    tauri::async_runtime::spawn_blocking(move || pride::project_files(&pxd))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Downloads `files` into `folder` (`pride::download`); events `download://progress`. -> the paths.
+#[tauri::command]
+async fn download_data_files(app: AppHandle, files: Vec<pride::RemoteFile>, folder: String) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let paths = pride::download(Path::new(&folder), &files, |p| {
+            let _ = app.emit("download://progress", p);
+        })?;
+        Ok(paths.iter().map(|p| p.to_string_lossy().into_owned()).collect())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn cancel_download() {
+    pride::CANCEL.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 /// A QPX results folder (ProSE run by hand or on a cluster): the folder dialog, then its runs' stems
 /// (`history::qpx_stems`) -> `{ folder, stems }`, or null if cancelled.
 #[tauri::command]
@@ -814,6 +843,9 @@ pub fn run() {
             locate_data_files,
             ols_search,
             validate_sdrf,
+            pride_files,
+            download_data_files,
+            cancel_download,
             history_import_qpx,
             save_project_file,
             answer_close

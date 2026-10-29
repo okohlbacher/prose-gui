@@ -382,3 +382,28 @@ export function olsSearch(query: string, ontologies: string[]): Promise<{ label:
 export function validateSdrf(text: string, template: string | null): Promise<{ available: boolean; ok: boolean; output: string }> {
   return invoke('validate_sdrf', { text, template })
 }
+
+/** The files of a ProteomeXchange project in PRIDE. */
+export function prideFiles(pxd: string): Promise<{ name: string; size: number; url: string }[]> {
+  return invoke('pride_files', { pxd })
+}
+
+export type DownloadProgress = { file: number; files: number; name: string; received: number; size: number }
+
+/** Downloads `files` into `folder` (resumed, checked against their sizes); `onProgress` while it runs. -> the paths. */
+export async function downloadDataFiles(
+  files: { name: string; size: number; url: string }[],
+  folder: string,
+  onProgress: (p: DownloadProgress) => void,
+): Promise<string[]> {
+  const unlisten = await listen<DownloadProgress>('download://progress', (e) => onProgress(e.payload))
+  try {
+    return await invoke<string[]>('download_data_files', { files, folder })
+  } finally {
+    unlisten()
+  }
+}
+
+export function cancelDownload(): Promise<void> {
+  return invoke('cancel_download')
+}

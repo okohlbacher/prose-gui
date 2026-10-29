@@ -3,13 +3,24 @@
 // is looked for beside the SDRF, then below a folder the user chose ("Locate folder…", remembered per SDRF),
 // or picked by hand ("Locate…"). Found files join the table as if added; the search waits for the others.
 
-import { chooseFile, chooseFolder, errorText, locateDataFiles, openDesignFile } from '../desktop'
+import {
+  cancelDownload,
+  chooseFile,
+  chooseFolder,
+  downloadDataFiles,
+  errorText,
+  locateDataFiles,
+  openDesignFile,
+  prideFiles,
+  type DownloadProgress,
+} from '../desktop'
 import { isSpectrum } from '../search/files'
 import { fileName, searchForm as form } from '../search/form.svelte'
 import { parseDesignTsv } from './design-tsv'
 import type { DesignInput } from './model'
 import { applyDesign } from './paste'
 import { parseSdrf } from './sdrf'
+import { accessionOf, downloadPlan } from './sdrf-download'
 import { exportSdrf, SAMPLE_COLUMNS } from './sdrf-export'
 import { APP_VERSION } from '../history/history'
 import {
@@ -81,6 +92,11 @@ class SdrfSession {
   busy = $state(false)
   /** The user chose to search without the files that are not found. */
   skipMissing = $state(false)
+  /** The ProteomeXchange accession the missing files are looked up under (from the SDRF, or typed). */
+  pxd = $state('')
+  /** The running download; its error. */
+  download = $state<DownloadProgress | null>(null)
+  downloadError = $state<string | null>(null)
   /** Columns still to fill in (a created SDRF's sample columns, "not available" until then). */
   toFill = $state<string[]>([])
   /** The design fields of each data file as loaded, by its name. */
@@ -129,6 +145,8 @@ class SdrfSession {
     const notices = parseSdrf(text).notices.map((n) => `${this.name}: ${n.message}`)
     form.notices.push(...notices)
     this.folder = rememberedFolder(path)
+    this.pxd = accessionOf(table, fileName(path))
+    this.downloadError = null
     await this.#resolve()
   }
 
@@ -156,6 +174,41 @@ class SdrfSession {
     change(table)
     this.table = table
     this.issues = validateSdrf(table)
+  }
+
+  /**
+   * "Download missing": the data files that are not here (and their associated files), from their file URIs or the
+   * project's files in PRIDE, into a folder the user chooses; then the files are looked for again.
+   */
+  async downloadMissing() {
+    if (!this.table || !this.path || this.download) return
+    this.downloadError = null
+    const names = this.unresolved.filter((f) => f.status !== 'vendor').map((f) => f.name)
+    try {
+      const pride = /^(PXD|MSV)\d+$/.test(this.pxd.trim()) ? await prideFiles(this.pxd.trim()) : []
+      const plan = downloadPlan(this.table, names, pride)
+      if (plan.files.length === 0) {
+        this.downloadError = `No download address for ${plan.notFound.join(', ')}. ${this.pxd ? `PRIDE's ${this.pxd} does not list them.` : 'Enter the ProteomeXchange accession (PXD…).'}`
+        return
+      }
+      const folder = await chooseFolder(`Download ${plan.files.length} ${plan.files.length === 1 ? 'file' : 'files'} into…`)
+      if (!folder) return
+      this.download = { file: 0, files: plan.files.length, name: plan.files[0].name, received: 0, size: plan.files[0].size }
+      await downloadDataFiles(plan.files, folder, (p) => (this.download = p))
+      if (plan.notFound.length > 0) this.downloadError = `Not found anywhere: ${plan.notFound.join(', ')}.`
+      this.folder = folder
+      rememberFolder(this.path, folder)
+      this.download = null
+      await this.#resolve()
+    } catch (e) {
+      this.downloadError = errorText(e)
+    } finally {
+      this.download = null
+    }
+  }
+
+  cancelDownload() {
+    void cancelDownload()
   }
 
   /** "Locate folder…": looks for the data files below a folder the user chooses. */
