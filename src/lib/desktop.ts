@@ -285,6 +285,14 @@ export function saveText(name: string, contents: string): Promise<string | null>
   return oneDialog(null, () => invoke<string | null>('save_text', { name, contents }))
 }
 
+/** A UniProt proteome of an organism NCBI Taxonomy found by name. */
+export type ProteomeHit = { upid: string; organism: string; taxid: number; rank: string; proteins: number; reference: boolean; strain: string }
+
+/** The UniProt proteomes of the organisms NCBI Taxonomy finds for `name` (reference proteomes first). */
+export function findProteomes(name: string): Promise<ProteomeHit[]> {
+  return invoke<ProteomeHit[]>('find_proteomes', { name })
+}
+
 /** The file names of the proteomes downloaded before (the app's databases folder). */
 export function downloadedProteomes(): Promise<string[]> {
   return invoke<string[]>('downloaded_proteomes')

@@ -5,7 +5,7 @@ native `ProSE` command-line tool as the only native code, and the screens of the
 shadcn-svelte components and colours). Design and plan: `docs/superpowers/`.
 
 The packages come from CI (`.github/workflows/desktop.yml`); they bundle ProSE with its libraries and the PeptDeep
-models (`native/README.md`). Everything runs on the computer: the app makes no network connection except when you ask for one: a proteome download from UniProt (New search › Protein database), a data-file download from PRIDE and ontology lookups at EBI OLS (SDRF), and links you open from Help (ProSE's
+models (`native/README.md`). Everything runs on the computer: the app makes no network connection except when you ask for one: a proteome download from UniProt, with an organism-name search at NCBI Taxonomy (New search › Protein database), a data-file download from PRIDE and ontology lookups at EBI OLS (SDRF), and links you open from Help (ProSE's
 update check is off, `native/README.md`).
 
 ## Install

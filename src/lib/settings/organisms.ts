@@ -22,6 +22,24 @@ export const ORGANISMS: { id: string; name: string }[] = [
  */
 export function proteomeLabel(fileName: string): string | null {
   const m = /^(UP\d{9})(_reviewed)?\.fasta$/i.exec(fileName)
-  const o = m ? ORGANISMS.find((x) => x.id === m[1].toUpperCase()) : undefined
-  return o ? `${o.name}${m![2] ? ', reviewed' : ''}` : null
+  if (!m) return null
+  const name = ORGANISMS.find((x) => x.id === m[1].toUpperCase())?.name ?? remembered()[m[1].toUpperCase()]
+  return name ? `${name}${m[2] ? ', reviewed' : ''}` : null
+}
+
+/** The organisms of proteomes found by name and downloaded (kept on this computer: the file names only the id). */
+const REMEMBERED = 'prose.proteomes'
+function remembered(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(REMEMBERED) ?? '{}') as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+export function rememberProteome(upid: string, organism: string): void {
+  try {
+    localStorage.setItem(REMEMBERED, JSON.stringify({ ...remembered(), [upid]: organism }))
+  } catch {
+    // (blocked storage: the file name stays its label)
+  }
 }

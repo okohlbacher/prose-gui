@@ -50,6 +50,7 @@ pub mod net;
 pub mod pride;
 pub mod sdrf_tools;
 pub mod spectra;
+pub mod taxonomy;
 pub mod progress;
 pub mod project;
 pub mod run;
@@ -193,6 +194,12 @@ fn searches_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("searches"))
+}
+
+/// UniProt proteomes of the organisms NCBI Taxonomy finds for `name` (`taxonomy`): only on the user's request.
+#[tauri::command]
+async fn find_proteomes(name: String) -> Result<Vec<taxonomy::ProteomeHit>, String> {
+    tauri::async_runtime::spawn_blocking(move || taxonomy::find_proteomes(&name)).await.map_err(|e| e.to_string())?
 }
 
 /// The proteomes downloaded into the app's `databases/` folder: their file names (`UP…[_reviewed].fasta`).
@@ -894,6 +901,7 @@ pub fn run() {
             save_text,
             download_proteome,
             downloaded_proteomes,
+            find_proteomes,
             open_url,
             save_bytes,
             save_search_file,

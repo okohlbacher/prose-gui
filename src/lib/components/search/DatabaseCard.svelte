@@ -4,8 +4,8 @@
   // ProSE cannot search the file (the search does not start), and what ProSE may mishandle in it (notices).
   import * as Card from '$lib/components/ui/card'
   import { Label } from '$lib/components/ui/label'
-  import { chooseFiles, downloadedProteomes, downloadProteome, isDesktop } from '$lib/desktop'
-  import { ORGANISMS, proteomeLabel } from '$lib/settings/organisms'
+  import { chooseFiles, downloadedProteomes, downloadProteome, findProteomes, isDesktop, type ProteomeHit } from '$lib/desktop'
+  import { ORGANISMS, proteomeLabel, rememberProteome } from '$lib/settings/organisms'
   import { onMount } from 'svelte'
   import Help from './Help.svelte'
   import { CRAP_PROTEINS, searchForm as form } from '$lib/search/form.svelte'
@@ -41,8 +41,33 @@
   const has = (id: string) => downloaded.some((n) => n.toUpperCase().startsWith(id))
   const organismOptions = $derived([
     ...ORGANISMS.map((o) => ({ value: o.id, label: `${o.name} · ${o.id}${has(o.id) ? ' · downloaded' : ''}` })),
-    { value: 'other', label: 'Other proteome (UniProt id)…' },
+    { value: 'other', label: 'Other organism: search by name (or a UniProt id)…' },
   ])
+
+  // another organism: its name looked up in NCBI Taxonomy, the UniProt proteomes of what it finds to choose from
+  let query = $state('')
+  let searching = $state(false)
+  let hits = $state<ProteomeHit[] | null>(null)
+  async function search() {
+    downloadError = null
+    const q = query.trim()
+    if (/^UP\d{9}$/i.test(q)) {
+      otherId = q.toUpperCase()
+      hits = null
+      return
+    }
+    searching = true
+    try {
+      hits = await findProteomes(q)
+      otherId = hits[0]?.upid ?? ''
+    } catch (e) {
+      downloadError = String((e as Error)?.message ?? e)
+    } finally {
+      searching = false
+    }
+  }
+  const hitLabel = (h: ProteomeHit) =>
+    `${h.organism}${h.strain ? ` (${h.strain})` : ''} · ${h.upid} · ${h.proteins.toLocaleString('en')} proteins${h.reference ? ' · reference' : ''}`
   // the organism of a downloaded proteome, beside its file name (which names only the UniProt proteome)
   const organismOfFile = $derived(form.database ? proteomeLabel(form.database.file.name) : null)
   async function download() {
@@ -50,6 +75,8 @@
     downloading = true
     try {
       const id = organism === 'other' ? otherId.trim().toUpperCase() : organism
+      const hit = hits?.find((h) => h.upid === id)
+      if (hit) rememberProteome(id, `${hit.organism}${hit.strain ? ` (${hit.strain})` : ''}`)
       const before = form.database
       const path = await downloadProteome(id, reviewed)
       // (a FASTA chosen while it downloaded stays chosen)
@@ -123,11 +150,15 @@
       <span class="text-muted-foreground">{form.database ? 'Or download' : 'No FASTA? Download'} the reference proteome from UniProt:</span>
       <div class="w-72"><ChoiceSelect id="organism" value={organism} options={organismOptions} onChange={(v) => (organism = v)} /></div>
       {#if organism === 'other'}
-        <input
-          class="h-8 w-36 rounded-md border border-input bg-background px-2 font-mono text-[12.5px]"
-          placeholder="UP000005640"
-          aria-label="UniProt proteome id"
-          bind:value={otherId} />
+        <form class="flex items-center gap-1.5" onsubmit={(e) => (e.preventDefault(), search())}>
+          <input
+            class="h-8 w-56 rounded-md border border-input bg-background px-2 text-[12.5px]"
+            placeholder="Organism name, e.g. Chlamydomonas"
+            aria-label="Organism name (NCBI Taxonomy), or a UniProt proteome id"
+            bind:value={query} />
+          <button type="submit" class="h-8 rounded-md border px-3 hover:bg-muted disabled:opacity-50" disabled={searching || query.trim().length < 3}
+            >{searching ? 'Searching…' : 'Search'}</button>
+        </form>
       {/if}
       <label class="flex items-center gap-1.5" title="Swiss-Prot: manually reviewed entries only. Smaller and faster; leave it off for organisms with few reviewed proteins.">
         <input type="checkbox" bind:checked={reviewed} /> Reviewed entries only
@@ -137,6 +168,23 @@
         class="h-8 rounded-md border px-3 hover:bg-muted disabled:opacity-50"
         disabled={downloading || (organism === 'other' && !/^UP\d{9}$/i.test(otherId.trim()))}
         onclick={download}>{downloading ? 'Downloading…' : 'Download'}</button>
+      {#if organism === 'other' && hits}
+        <div class="w-full" data-testid="proteome-hits">
+          {#if hits.length === 0}
+            <p class="text-muted-foreground">NCBI Taxonomy knows no organism of that name with a UniProt proteome. Try the Latin name, or the genus alone.</p>
+          {:else}
+            <p class="mb-1 text-muted-foreground">Proteomes of the organisms NCBI Taxonomy finds (reference proteomes first); choose one, then Download:</p>
+            <div class="grid gap-0.5" role="radiogroup" aria-label="Proteomes found">
+              {#each hits as h (h.upid)}
+                <label class="flex items-center gap-2">
+                  <input type="radio" name="proteome-hit" value={h.upid} bind:group={otherId} />
+                  <span>{hitLabel(h)}{has(h.upid) ? ' · downloaded' : ''}</span>
+                </label>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
       {#if downloadError}<p class="w-full text-destructive" role="alert">{downloadError}</p>{/if}
     </div>
     {#if form.database?.problem || (form.database?.warnings.length ?? 0) > 0}

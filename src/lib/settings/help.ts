@@ -11,7 +11,7 @@ export const HELP = {
   database: {
     title: 'Protein database (FASTA)',
     text: 'The protein sequences the spectra are matched against: usually the reference proteome of the organism the sample came from. Only peptides of these proteins can be identified.',
-    tip: 'No FASTA at hand? Download the organism’s reference proteome from UniProt here. Reviewed (Swiss-Prot) entries only gives a smaller, faster search and is a good default for well-studied organisms (human, mouse, yeast, E. coli). For other organisms it can miss many proteins: a protein that is not in the database cannot be found. Not finding a protein does not show that it is absent from the sample.',
+    tip: 'No FASTA at hand? Download the organism’s reference proteome from UniProt here; for an organism that is not in the list, search it by name (NCBI Taxonomy finds it, also by its common name). Reviewed (Swiss-Prot) entries only gives a smaller, faster search and is a good default for well-studied organisms (human, mouse, yeast, E. coli). For other organisms it can miss many proteins: a protein that is not in the database cannot be found. Not finding a protein does not show that it is absent from the sample.',
   },
   decoys: {
     title: 'Decoys',
