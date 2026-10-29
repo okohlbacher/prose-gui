@@ -9,6 +9,7 @@ import {
   dataRows,
   lastSegment,
   parseSdrfTable,
+  sdrfAnnotations,
   syncDesign,
   validateSdrf,
   writeSdrfTable,
@@ -114,5 +115,22 @@ describe('syncDesign', () => {
       { fileName: 'x.mzML', before: { condition: 'p/q' }, after: { condition: 'r/s' }, resolved: { replicate: 1, fraction: 1, techReplicate: 1 } },
     ])
     expect(t.rows[0]).toEqual(['s', 'x.mzML', 'r', 's', '1'])
+  })
+})
+
+describe('sdrfAnnotations', () => {
+  it('joins on the file stem, one row per label', () => {
+    const t = parseSdrfTable(fixture('tmt.sdrf.tsv'))
+    const a = sdrfAnnotations(t, [
+      { fileName: 'tmt_run1.mzML', sample: 'S1' },
+      { fileName: 'other.mzML.gz', sample: 'S2' },
+    ])
+    expect(a.headers).toEqual(['characteristics[organism]', 'characteristics[biological replicate]', 'factor value[treatment]'])
+    expect(a.label).toBe(true)
+    expect(a.rows.map((r) => [r.fileName, r.label, r.values.join('|')])).toEqual([
+      ['tmt_run1.mzML', 'TMT126', 'Homo sapiens|1|control'],
+      ['tmt_run1.mzML', 'TMT127N', 'Homo sapiens|1|EGF'],
+      ['other.mzML.gz', '', '||'],
+    ])
   })
 })

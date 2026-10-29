@@ -241,3 +241,35 @@ export function syncDesign(t: SdrfTable, design: SdrfDesignRow[]) {
     }
   }
 }
+
+/** The stem a QPX run_file_name has: the file name without folders and without its extension (`.mzML.gz` whole). */
+export function runStem(name: string): string {
+  const base = name.slice(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1).replace(/\.gz$/i, '')
+  const dot = base.lastIndexOf('.')
+  return (dot > 0 ? base.slice(0, dot) : base).toLowerCase()
+}
+
+/**
+ * The SDRF's characteristics[...] and factor value[...] per searched file, joined on the file stem (a search of
+ * run.mzML takes the rows of run.raw): one row per SDRF row of the file (a multiplexed file: one per label).
+ * Files the SDRF does not name have empty values.
+ */
+export function sdrfAnnotations(
+  t: SdrfTable,
+  files: { fileName: string; sample: string }[],
+): { headers: string[]; label: boolean; rows: { fileName: string; sample: string; label: string; values: string[] }[] } {
+  const cols = [...columnsWith(t, 'characteristics['), ...columnsWith(t, 'factor value[')]
+  const fileCol = column(t, 'comment[data file]')
+  const labelCol = column(t, 'comment[label]')
+  const byStem = new Map<string, number[]>()
+  for (const r of dataRows(t)) {
+    const stem = runStem(cell(t, r, fileCol))
+    byStem.set(stem, [...(byStem.get(stem) ?? []), r])
+  }
+  const rows = files.flatMap((f) => {
+    const sdrfRows = byStem.get(runStem(f.fileName)) ?? []
+    if (sdrfRows.length === 0) return [{ ...f, label: '', values: cols.map(() => '') }]
+    return sdrfRows.map((r) => ({ ...f, label: cell(t, r, labelCol), values: cols.map((c) => cell(t, r, c)) }))
+  })
+  return { headers: cols.map((c) => t.headers[c].trim()), label: new Set(rows.map((r) => r.label)).size > 1, rows }
+}

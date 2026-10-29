@@ -149,6 +149,7 @@ export async function startSearch(): Promise<void> {
   const values = $state.snapshot(form.values) as Record<string, unknown>
   const id = await runSearch(request, {
     design: $state.snapshot(form.design),
+    ...(sdrfSession.table ? { sdrf: { name: sdrfSession.name, text: sdrfSession.text() } } : {}),
     // no FDR (a search without decoys; the protein FDR off, 0): no cutoff, every PSM or protein counts (the results'
     // cutoffs are q-values above 0)
     psmFdr: searchPlan.fdrBlocked ? 1 : Number(values['FDR:PSM']),

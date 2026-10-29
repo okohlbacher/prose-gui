@@ -74,6 +74,8 @@ export type SearchRecord = {
   proteinFdr: number
   /** The time of the search proper, in seconds. */
   seconds: number
+  /** The SDRF of the search (New search's, with its edits); absent without one. */
+  sdrf?: { name: string; text: string }
   /** Set (by the Rust side) on a search made of a project file: it reads only the files of its folder. */
   imported?: boolean
 }
@@ -197,6 +199,7 @@ export function endedRecordOf(search: EndedSearch, name: string, toolVersion: st
     psmFdr: search.psmFdr,
     proteinFdr: search.proteinFdr,
     seconds: search.seconds,
+    ...(search.sdrf ? { sdrf: search.sdrf } : {}),
   }
 }
 
@@ -243,6 +246,8 @@ export function parseRecord(text: string, kind: 'project' | 'search' = 'search')
   }
   const settings = value.settings
   if (!isObject(settings) || !isObject(settings.parameters) || !Array.isArray(settings.fixedMods)) throw bad('settings is missing')
+  const sdrf = value.sdrf
+  if (sdrf !== undefined && (!isObject(sdrf) || typeof sdrf.name !== 'string' || typeof sdrf.text !== 'string')) throw bad('sdrf is broken')
   return value as unknown as SearchRecord
 }
 
@@ -253,6 +258,7 @@ export function resultFromRecord(record: SearchRecord, outcome: OpenResult['outc
     stored: { name: record.name, appVersion: record.appVersion, moduleVersion: record.toolVersion },
     outcome,
     design: record.design,
+    ...(record.sdrf ? { sdrf: record.sdrf } : {}),
     psmFdr: record.psmFdr,
     proteinFdr: record.proteinFdr,
     settings: {

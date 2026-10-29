@@ -8,6 +8,7 @@
   import { formatCount } from '$lib/results/display'
   import { sampleTable, type SampleCounts } from '$lib/results/samples'
   import type { ResultsView } from '$lib/results/view.svelte'
+  import SdrfSamples from './SdrfSamples.svelte'
 
   let { view }: { view: ResultsView } = $props()
 
@@ -98,4 +99,5 @@
       </Table.Footer>
     </Table.Root>
   </div>
+  {#if view.result.sdrf}<SdrfSamples sdrf={view.result.sdrf} design={view.result.design} />{/if}
 </div>

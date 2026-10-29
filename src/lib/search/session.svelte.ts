@@ -34,6 +34,8 @@ export type OpenResult = {
   /** The search's cutoffs (q-values). */
   psmFdr: number
   proteinFdr: number
+  /** The SDRF loaded in New search, with the design table's edits (`SdrfSession.text`). */
+  sdrf?: { name: string; text: string }
   /** Set for a result opened from History or a project file: its name there and who made it. */
   stored?: { name: string; appVersion: string; moduleVersion: string }
   settings: {
