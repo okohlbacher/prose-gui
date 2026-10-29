@@ -25,7 +25,7 @@ import {
   type OpenResult,
 } from '../search/session.svelte'
 import { searchForm } from '../search/form.svelte'
-import { searchPlan, startSearch } from '../search/plan.svelte'
+import { canSearchAgain, searchAgain, searchPlan, startSearch } from '../search/plan.svelte'
 import { acceptedKeys } from '../search/checks'
 import { toolState } from '../search/tool.svelte'
 import {
@@ -295,7 +295,7 @@ export async function openProjectFile(): Promise<boolean> {
  * (its path in database.json, else none: it was copied with the contaminants) and the settings; then, with `start`,
  * the search starts once the form can (Re-run). Resolves with whether it started.
  */
-export async function reopenInNewSearch(id: string, start: boolean): Promise<boolean> {
+export async function reopenInNewSearch(id: string, start: boolean, changes: Record<string, unknown> = {}): Promise<boolean> {
   const record = parseRecord(new TextDecoder().decode(await backend.read(id, RECORD_FILE)))
   const inputs = JSON.parse(new TextDecoder().decode(await backend.read(id, 'inputs.json'))) as { path: string; name: string; index: number }[]
   // the user's FASTA: database.json (searched as it is), database-source.json (searched with contaminants)
@@ -319,7 +319,7 @@ export async function reopenInNewSearch(id: string, start: boolean): Promise<boo
     }),
     database,
     databaseName: record.database,
-    settings: record.settings,
+    settings: { ...record.settings, parameters: { ...record.settings.parameters, ...changes } },
   })
   // the red flags searched anyway then are not asked again (they are recorded per file: `checks.ts`)
   if (record.accepted) searchPlan.accepted = new Set([...searchPlan.accepted, ...acceptedKeys(record.accepted)])
@@ -329,6 +329,17 @@ export async function reopenInNewSearch(id: string, start: boolean): Promise<boo
   if (!searchPlan.canStart) return false
   await startSearch()
   return true
+}
+
+/**
+ * A guidance re-run (tolerance feedback, the diagnosis card): New search with the inputs and settings of `result`,
+ * changed by `changes`, the changed values marked there (`SearchForm.guided`). The inputs stay if New search still
+ * holds them; else the search is opened there from History. The user starts it.
+ */
+export async function rerunWith(result: OpenResult, changes: Record<string, unknown>): Promise<void> {
+  if (canSearchAgain(result)) searchAgain(result, changes)
+  else await reopenInNewSearch(result.id, false, changes)
+  searchForm.markGuided(nameOf(result), result.settings.parameters, changes)
 }
 
 /**

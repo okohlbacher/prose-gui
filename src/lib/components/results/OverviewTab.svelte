@@ -13,6 +13,8 @@
   import { openHelp } from '$lib/help-link.svelte'
   import { methodsText } from '$lib/results/methods'
   import DeltaMassPanel from './DeltaMassPanel.svelte'
+  import GuidanceNotices from './GuidanceNotices.svelte'
+  import { precursorSample, searchedWindows, toleranceFindings } from '$lib/results/tolerance'
 
   let { view }: { view: ResultsView } = $props()
 
@@ -60,6 +62,10 @@
 
   // the mass accuracy that ProSE measured per file, and the tolerances it recommends from it (advisory)
   const accuracy = $derived(summary.files.filter((f) => f.precursorError || f.fragmentError))
+  // what the errors say about the windows (guidance G3), with re-runs that cannot make them worse
+  const findings = $derived(
+    toleranceFindings(summary, settings.parameters, precursorSample(view.model, searchedWindows(settings.parameters).precursor, summary.openSearch)),
+  )
   const ppm = (e: { median: number; mad: number } | null) => (e ? `${e.median.toFixed(2)} ± ${e.mad.toFixed(2)}` : '–')
 
   const methods = $derived(methodsText({ summary, settings, version: result.stored?.moduleVersion ?? toolState.info?.version ?? '', accepted: result.accepted }))
@@ -181,6 +187,7 @@
         Measured by ProSE on the PSMs that passed the FDR (median ± MAD, ppm). The recommended tolerances are advisory: they rest on
         passing PSMs only.
       </p>
+      <div class="mb-2"><GuidanceNotices {result} items={findings} testid="tolerance-findings" /></div>
       <div class="rounded-lg border bg-background">
         <Table.Root class="text-xs tabular-nums" aria-label="Mass accuracy per file">
           <Table.Header>

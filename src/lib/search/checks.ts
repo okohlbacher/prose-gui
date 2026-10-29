@@ -159,3 +159,39 @@ export function accept(check: Check, accepted: ReadonlySet<string>, storage: Acc
 export function acceptedKeys(list: AcceptedCheck[]): string[] {
   return list.flatMap((a) => (a.files.length > 0 ? a.files : ['']).map((p) => keyOf(a.id, p)))
 }
+
+/**
+ * Instrument models (PSI-MS names of an mzML's header) that record MS2 in an ion trap only: their fragments are
+ * low-resolution (about 0.5 Da), so a ppm fragment tolerance misses most of them. Hybrids (LTQ Orbitrap, Orbitrap
+ * Fusion) can record MS2 either way: for them the analyzer of the MS2 scans decides (`ms2Analyzer`, from the
+ * spectrum inspector).
+ */
+export const ION_TRAP_MODELS = /^(LCQ\b.*|LXQ|LTQ|LTQ XL|LTQ Velos|Velos Pro|amaZon\b.*|HCT\b.*|esquire\b.*|Bruker amaZon.*)$/i
+
+/** The fragment tolerance the ion-trap check offers (the ion-trap preset's, `presets.ts`). */
+export const ION_TRAP_FRAGMENT_DA = 0.5
+
+/**
+ * The advice for files measured in an ion trap with a ppm fragment tolerance (guidance G3): ProSE then matches
+ * almost no fragments. `instrument` is the header's model name, `ms2Analyzer` the inspector's (e.g. 'ion trap').
+ */
+export function ionTrapPpm(
+  files: { path: string; name: string; instrument?: string | null; ms2Analyzer?: string | null }[],
+  fragmentUnit: string,
+  setDa: () => void,
+): Check | null {
+  if (fragmentUnit !== 'ppm') return null
+  const trap = files.filter((f) => (f.ms2Analyzer ? /ion trap/i.test(f.ms2Analyzer) : ION_TRAP_MODELS.test(f.instrument ?? '')))
+  if (trap.length === 0) return null
+  const which = trap.length === files.length ? (files.length === 1 ? trap[0].name : 'All files') : `${trap.length} of ${files.length} files`
+  return {
+    id: 'iontrap-ppm',
+    level: 'warn',
+    source: 'settings',
+    files: trap.map((f) => f.path),
+    message:
+      `${which} ${trap.length === 1 && files.length === 1 ? 'was' : 'were'} measured with ion-trap MS2 (low-resolution fragments), but the fragment ` +
+      `tolerance is in ppm: ProSE would match few fragments. Ion-trap fragments need about ${ION_TRAP_FRAGMENT_DA} Da.`,
+    action: { label: `Use ${ION_TRAP_FRAGMENT_DA} Da`, run: setDa },
+  }
+}

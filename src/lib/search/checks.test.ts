@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { accept, acceptedKeys, acceptedOf, firstBlock, isAccepted, loadAccepted, startChecks, withoutExpected, type Check, type StartState } from './checks'
+import { accept, acceptedKeys, acceptedOf, firstBlock, ionTrapPpm, isAccepted, loadAccepted, startChecks, withoutExpected, type Check, type StartState } from './checks'
 
 // The check registry of New search: the start checks in their order, red flags that can be searched anyway (once
 // per file, kept on this computer), and checks a preset expects.
@@ -76,5 +76,23 @@ describe('the start checks', () => {
     const block: Check = { id: 'no-database', level: 'block', source: 'database', message: 'b' }
     expect(withoutExpected([warn, block, profile], ['iontrap-ppm', 'no-database', 'profile-ms2'])).toEqual([block])
     expect(withoutExpected([warn], undefined)).toEqual([warn])
+  })
+})
+
+describe('ion-trap fragments in ppm', () => {
+  const f = (instrument: string | null, ms2Analyzer: string | null = null) => ({ path: `/r/${instrument}`, name: `${instrument}.mzML`, instrument, ms2Analyzer })
+  test('an ion-trap model with a ppm fragment tolerance is warned, with the fix', () => {
+    let set = false
+    const c = ionTrapPpm([f('LTQ')], 'ppm', () => (set = true))
+    expect(c).toMatchObject({ id: 'iontrap-ppm', level: 'warn', files: ['/r/LTQ'] })
+    expect(c!.message).toMatch(/^LTQ\.mzML was measured with ion-trap MS2/)
+    c!.action!.run()
+    expect(set).toBe(true)
+    expect(ionTrapPpm([f('LTQ')], 'Da', () => {})).toBeNull()
+  })
+  test('a hybrid counts only when its MS2 analyzer is the ion trap', () => {
+    expect(ionTrapPpm([f('LTQ Orbitrap XL')], 'ppm', () => {})).toBeNull()
+    expect(ionTrapPpm([f('LTQ Orbitrap XL', 'radial ejection linear ion trap'), f('Q Exactive')], 'ppm', () => {})!.message).toMatch(/^1 of 2 files were/)
+    expect(ionTrapPpm([f('Orbitrap Fusion Lumos', 'orbitrap')], 'ppm', () => {})).toBeNull()
   })
 })

@@ -14,7 +14,7 @@ import { sdrfSession } from '../design/sdrf-session.svelte'
 import { CRAP_PROTEINS, searchForm as form } from './form.svelte'
 import { runSearch, searchRun } from './session.svelte'
 import { toolState } from './tool.svelte'
-import { accept, acceptedOf, firstBlock, loadAccepted, startChecks, withoutExpected, type Check } from './checks'
+import { accept, acceptedOf, firstBlock, ION_TRAP_FRAGMENT_DA, ionTrapPpm, loadAccepted, startChecks, withoutExpected, type Check } from './checks'
 
 /** The FDR parameters, which a search without decoys does not send (src-tauri/src/args.rs `FDR_PARAMETERS`). */
 export const FDR_PARAMETERS = ['FDR:PSM', 'FDR:protein', 'FDR:protein_inference_PSM'] as const
@@ -29,12 +29,19 @@ function unknownMessage(names: string[]): string {
   )
 }
 
-/**
- * The red flags and advice of the form (warn and info checks): none yet beyond the start checks; the inspector
- * of the spectra (G1) and the tolerance checks (G3) add theirs here.
- */
+/** The red flags and advice of the form (warn and info checks, and red flags that block): `checks.ts`. */
 function adviceChecks(): Check[] {
-  return []
+  const out: (Check | null)[] = [
+    ionTrapPpm(
+      form.files.map((r) => ({ path: r.file.path, name: r.file.name, instrument: /NT=([^;]*)/.exec(r.instrument ?? '')?.[1] ?? null })),
+      String(form.value('fragment:mass_tolerance_unit')),
+      () => {
+        form.setParam('fragment:mass_tolerance', ION_TRAP_FRAGMENT_DA)
+        form.setParam('fragment:mass_tolerance_unit', 'Da')
+      },
+    ),
+  ]
+  return out.filter((c): c is Check => c !== null)
 }
 
 class SearchPlan {

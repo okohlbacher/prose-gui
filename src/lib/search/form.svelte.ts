@@ -160,6 +160,21 @@ class SearchForm {
     return Object.entries(parameters).every(([name, value]) => sameValue(this.values[name], value))
   }
 
+  /**
+   * The values a guidance re-run changed (tolerance feedback, the diagnosis card: `rerunWith`), marked in the
+   * settings until the form is cleared or another search is opened: from which search, which parameters, as lines.
+   */
+  guided = $state<{ from: string; names: string[]; lines: string[] } | null>(null)
+
+  /** Marks `changes` of the search `from` (whose parameters were `before`) as the guidance's (`guided`). */
+  markGuided(from: string, before: Record<string, unknown>, changes: Record<string, unknown>) {
+    const old = { ...this.defaults, ...before }
+    const show = (v: unknown) => (Array.isArray(v) ? v.join(', ') : String(v))
+    const names = Object.keys(changes).filter((n) => !sameValue(old[n], changes[n]))
+    this.guided = { from, names, lines: names.map((n) => `${n}: ${show(old[n])} → ${show(changes[n])}`) }
+    this.showSettings = true
+  }
+
   /** Threads of the search (Advanced); null: all cores. */
   threads = $state<number | null>(null)
   /** The Advanced area of the settings is open. */
@@ -370,6 +385,7 @@ class SearchForm {
       replacedWith: { ...left.replacedWith, ...earlier?.replacedWith },
     }
     if (removed.files.length > 0 || removed.database) this.removed = removed
+    this.guided = null
     this.files = []
     this.notices = []
     if (database) this.database = null
@@ -507,6 +523,7 @@ class SearchForm {
     settings: { parameters: Record<string, unknown>; rescore: boolean; peptdeep: boolean; contaminants: boolean; presetId?: string }
   }) {
     this.#leaveExample()
+    this.guided = null
     this.files = []
     this.notices = []
     this.removed = null

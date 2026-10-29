@@ -49,6 +49,8 @@
     return [...common, ...rest].map((e) => ({ value: e, label: e }))
   })
 
+  // a guidance re-run's changed values are ringed (`form.guided`)
+  const guided = (...names: string[]) => (names.some((n) => form.guided?.names.includes(n)) ? 'rounded-md ring-2 ring-amber-400 ring-offset-2 ring-offset-card' : '')
   const lower = $derived(form.value<number>('precursor:mass_tolerance_lower'))
   const upper = $derived(form.value<number>('precursor:mass_tolerance_upper'))
 
@@ -90,6 +92,12 @@
   </Card.Header>
 
   <Card.Content class="grid grid-cols-2 gap-x-4 gap-y-3.5 md:grid-cols-4">
+    {#if form.guided && form.guided.lines.length > 0}
+      <p class="col-span-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[12.5px] text-amber-900 md:col-span-4 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-200" data-testid="guided-changes">
+        Changed from “{form.guided.from}”: {form.guided.lines.join('; ')}. Start the search when the rest is as you want it.
+        <button type="button" class="ml-1 underline underline-offset-2" onclick={() => (form.guided = null)}>Dismiss</button>
+      </p>
+    {/if}
     <div class="col-span-2 grid min-w-0 gap-1">
       <span id="variable-mods-label" class="text-xs font-medium">Variable modifications <Help topic="variableMods" /></span>
       <ModificationsField
@@ -161,7 +169,7 @@
         value={form.value<number>('peptide:missed_cleavages')}
         onChange={(v) => form.setParam('peptide:missed_cleavages', v)} />
     </div>
-    <div class="grid min-w-0 gap-1">
+    <div class="grid min-w-0 gap-1 {guided('precursor:mass_tolerance_lower', 'precursor:mass_tolerance_upper', 'precursor:mass_tolerance_unit')}">
       <Label for="precursor-tolerance" class="text-xs">Precursor tolerance <Help topic="precursorTolerance" /></Label>
       <ToleranceField
         id="precursor-tolerance"
@@ -174,7 +182,7 @@
         <p class="text-xs text-muted-foreground">The tolerance is asymmetric (−{lower} / +{upper}). Typing a value sets both sides.</p>
       {/if}
     </div>
-    <div class="grid min-w-0 gap-1">
+    <div class="grid min-w-0 gap-1 {guided('fragment:mass_tolerance', 'fragment:mass_tolerance_unit')}">
       <Label for="fragment-tolerance" class="text-xs">Fragment tolerance <Help topic="fragmentTolerance" /></Label>
       <ToleranceField
         id="fragment-tolerance"
