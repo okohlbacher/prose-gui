@@ -58,7 +58,7 @@ export function sdrfChemistryChecks(table: SdrfTable | null, fixed: string[], va
       id: 'sdrf-modifications',
       level: 'warn',
       source: 'sdrf',
-      message: `The SDRF lists ${missing.length === 1 ? 'a modification' : 'modifications'} the search does not include: ${missing.join(', ')}. Add ${missing.length === 1 ? 'it' : 'them'} under Search settings, or correct the SDRF.`,
+      message: `The SDRF lists ${missing.length === 1 ? 'a modification' : 'modifications'} the search does not include: ${missing.join(', ')}. Add ${missing.length === 1 ? 'it' : 'them'} under Search settings (variable modifications; fixed ones under Advanced settings), or correct the SDRF.`,
     })
   }
   const isobaric = labels.filter((l) => /^(TMT|iTRAQ)/i.test(l))

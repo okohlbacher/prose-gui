@@ -29,6 +29,6 @@ describe("the SDRF's modifications and labels", () => {
     )
     expect(sdrfChemistryChecks(table, ['TMT6plex (K)', 'Carbamidomethyl (C)'], [])).toEqual([])
     const [c] = sdrfChemistryChecks(table, ['Carbamidomethyl (C)'], [])
-    expect(c.message).toBe('The SDRF lists a modification the search does not include: TMT6plex (K) (fixed). Add it under Search settings, or correct the SDRF.')
+    expect(c.message).toBe('The SDRF lists a modification the search does not include: TMT6plex (K) (fixed). Add it under Search settings (variable modifications; fixed ones under Advanced settings), or correct the SDRF.')
   })
 })
