@@ -11,6 +11,8 @@
   let { open = $bindable(false) }: { open?: boolean } = $props()
 
   let name = $state('')
+  // a setup can keep the database too (an organism's FASTA), so that choosing it sets both
+  let withDatabase = $state(false)
   const existing = $derived(presetNamed(form.presets, name))
   const builtinName = $derived(existing?.builtin === true)
   const replaces = $derived(existing !== null && !existing.builtin)
@@ -22,7 +24,7 @@
 
   function save() {
     if (name.trim() === '' || builtinName) return
-    form.saveAsPreset(name)
+    form.saveAsPreset(name, withDatabase)
     open = false
   }
 </script>
@@ -30,7 +32,7 @@
 <Dialog.Root bind:open>
   <Dialog.Content class="gap-4 sm:max-w-sm">
     <Dialog.Header>
-      <Dialog.Title>Save as preset</Dialog.Title>
+      <Dialog.Title>Save as setup</Dialog.Title>
       <Dialog.Description>
         The app saves the settings that differ from ProSE's defaults on this computer. Percolator and PeptDeep are not
         part of a preset.
@@ -44,6 +46,12 @@
       }}>
       <Label for="preset-name" class="text-xs">Name</Label>
       <Input id="preset-name" class="h-8 text-[13px] md:text-[13px]" bind:value={name} autocomplete="off" />
+      {#if form.database}
+        <label class="mt-2 flex items-center gap-2 text-xs">
+          <input type="checkbox" bind:checked={withDatabase} data-testid="preset-database" />
+          Also keep the database ({form.database.file.name}{form.contaminants ? ' + contaminants' : ''}), e.g. for a setup per organism
+        </label>
+      {/if}
       {#if builtinName}
         <p class="text-xs text-destructive">A built-in preset has this name.</p>
       {:else if replaces}

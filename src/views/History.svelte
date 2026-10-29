@@ -13,7 +13,7 @@
   import * as Table from '$lib/components/ui/table'
   import { formatBytes } from '$lib/format/bytes'
   import { formatCount } from '$lib/results/display'
-  import { history, openFromHistory, openProjectFile, refreshHistory, removeFromHistory, rename } from '$lib/history/history.svelte'
+  import { history, openFromHistory, openProjectFile, openQpxFolderFile, refreshHistory, removeFromHistory, rename } from '$lib/history/history.svelte'
   import type { HistoryEntry } from '$lib/history/history'
   import { distinguishing, entryFacts } from '$lib/history/details'
   import { searchForm } from '$lib/search/form.svelte'
@@ -77,6 +77,18 @@
     }
   }
 
+  async function openQpx() {
+    problem = null
+    busy = 'qpx'
+    try {
+      await openQpxFolderFile()
+    } catch (e) {
+      problem = { title: 'Could not open', text: `The QPX folder could not be opened: ${message(e)}` }
+    } finally {
+      busy = null
+    }
+  }
+
   function startRename(entry: HistoryEntry) {
     renaming = entry.id
     draft = entry.name ?? entry.id
@@ -122,7 +134,16 @@
         stay where they are.
       </p>
     </div>
-    <div>
+    <div class="flex gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={busy !== null}
+        onclick={openQpx}
+        title="Open the QPX output of a ProSE run outside the app (-out_qpx <folder> -qpx_extended -keep_decoys), e.g. from a cluster"
+        data-testid="open-qpx">
+        {busy === 'qpx' ? 'Opening folder…' : 'Open QPX folder…'}
+      </Button>
       <Button variant="outline" size="sm" disabled={busy !== null} onclick={openFile} data-testid="open-project">
         {busy === 'project' ? 'Opening project…' : 'Open project…'}
       </Button>

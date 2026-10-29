@@ -11,7 +11,7 @@ import { BUILTIN_PRESETS, DEFAULT_PRESET_ID, deletePreset, loadPresets, renamePr
 import { PROSE_PARAMETERS } from '../settings/prose'
 import { formatBytes } from '../format/bytes'
 import { formatPercent } from '../format/fdr'
-import { isFasta, isMzML } from './files'
+import { isFasta, isSpectrum } from './files'
 
 export type FileRow = DesignFields & {
   id: string
@@ -162,6 +162,8 @@ class SearchForm {
   threads = $state<number | null>(null)
   /** The Advanced area of the settings is open. */
   advancedSettings = $state(false)
+  /** The parameters show (New search opens with the setup and a one-line summary of it only). */
+  showSettings = $state(false)
 
   /** ProSE's parameters by name (generated from the pinned tool). */
   entries = new Map(PROSE_PARAMETERS.map((e) => [e.name, e]))
@@ -220,15 +222,21 @@ class SearchForm {
     this.#exampleSettings = false
     this.presetId = id
     this.overrides = copyValues(preset.parameters)
+    // a setup of an organism brings its database
+    if (preset.database) {
+      void this.setDatabase(preset.database)
+      if (preset.contaminants !== undefined) this.contaminants = preset.contaminants
+    }
     const notice = noFdrNotice(preset)
     if (notice) this.notices.push(notice)
   }
 
   /** Saves the settings that differ from ProSE's defaults as a user preset and selects it. */
-  saveAsPreset(name: string): Preset {
+  saveAsPreset(name: string, withDatabase = false): Preset {
     // (the settings become the user's own: the example's no longer go back when its files go)
     this.#exampleSettings = false
-    const preset = savePreset(name, changedParameters($state.snapshot(this.values), this.defaults))
+    const database = withDatabase && this.database ? { path: this.database.file.path, contaminants: this.contaminants } : undefined
+    const preset = savePreset(name, changedParameters($state.snapshot(this.values), this.defaults), undefined, database)
     this.presets = loadPresets()
     this.presetId = preset.id
     this.overrides = copyValues(preset.parameters)
@@ -270,12 +278,12 @@ class SearchForm {
    */
   async addFiles(paths: Iterable<string>) {
     const list = [...paths]
-    const skipped = list.filter((p) => !isMzML(fileName(p)) && !isFasta(fileName(p))).map(fileName)
+    const skipped = list.filter((p) => !isSpectrum(fileName(p)) && !isFasta(fileName(p))).map(fileName)
     const database = list.filter((p) => isFasta(fileName(p))).pop()
     const listed = new Set([...this.files.map((r) => r.file.path), ...this.#pending])
     const spectra: string[] = []
     const again: string[] = []
-    for (const p of list.filter((p) => isMzML(fileName(p)))) {
+    for (const p of list.filter((p) => isSpectrum(fileName(p)))) {
       if (listed.has(p)) again.push(fileName(p))
       else {
         listed.add(p)
@@ -284,7 +292,7 @@ class SearchForm {
     }
     if (skipped.length > 0) {
       this.notices.push(
-        `Not an mzML file: ${skipped.join(', ')}. Convert vendor files to mzML first, e.g. with ProteoWizard msconvert.`,
+        `Not a spectrum file ProSE reads (mzML, mzPeak, Thermo .raw, Bruker .d): ${skipped.join(', ')}.`,
       )
     }
     if (again.length > 0) {

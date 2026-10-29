@@ -367,7 +367,7 @@ describe('the footer', () => {
     await form.loadExample()
     await settle()
     // a vendor file only, or an mzML that cannot be read: no row joins, the example's settings stay
-    await form.addFiles(['/r/run.raw'])
+    await form.addFiles(['/r/run.wiff'])
     expect(form.value('fragment:mass_tolerance')).toBe(0.5)
     const facts = vi.mocked((await import('../desktop')).inspectFiles)
     facts.mockImplementationOnce(async (paths: string[]) =>
@@ -430,8 +430,8 @@ describe('the footer', () => {
   })
 
   test('files that are neither mzML nor FASTA are reported, not added', async () => {
-    await form.addFiles(['/r/run.raw', '/r/run.mzML'])
+    await form.addFiles(['/r/run.wiff', '/r/run.mzML'])
     expect(form.files.map((r) => r.file.name)).toEqual(['run.mzML'])
-    expect(form.notices[0]).toMatch(/^Not an mzML file: run\.raw\./)
+    expect(form.notices[0]).toMatch(/^Not a spectrum file ProSE reads \(mzML, mzPeak, Thermo \.raw, Bruker \.d\): run\.wiff\./)
   })
 })

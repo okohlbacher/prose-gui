@@ -118,8 +118,9 @@ It uses Ninja, a Release build, the vcpkg toolchain of the OpenMS checkout
 `/scratch/sachsenb/vcpkg-bincache-native`, so a rebuild in a fresh directory does not rebuild
 the dependencies. `JOBS` (default 100) sets the parallelism. Notes on the configuration:
 
-- `WITH_THERMO_RAW=OFF`: the Thermo bridge needs dotnet. `WITH_OPENTIMS=OFF`, `WITH_GUI=OFF`,
-  `ENABLE_DOCS=OFF` and `PYOPENMS=OFF` leave out what the app does not use.
+- `WITH_THERMO_RAW=ON` and `WITH_OPENTIMS=ON`: the app searches Thermo `.raw` files and Bruker `.d` folders (the
+  Thermo bridge needs the dotnet SDK at build time). mzPeak needs an OpenMS with `OPENMS_ENABLE_MZPEAK` (the ProSE PR
+  branch has it). `WITH_GUI=OFF`, `ENABLE_DOCS=OFF` and `PYOPENMS=OFF` leave out what the app does not use.
 - `ENABLE_UPDATE_CHECK=OFF`: an OpenMS tool otherwise contacts `openms-update.cs.uni-tuebingen.de` once a day
   (and waits up to 5 s for it when offline), and the app makes no network contact. The app also runs every
   ProSE with `OPENMS_DISABLE_UPDATE_CHECK=ON` (`src-tauri/src/tool.rs`), for a tool from `PROSE_BIN` or the PATH.

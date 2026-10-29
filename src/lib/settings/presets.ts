@@ -3,7 +3,18 @@
 
 import { copyValues, SWITCH_PARAMETERS } from './parameters'
 
-export type Preset = { id: string; name: string; parameters: Record<string, unknown>; builtin: boolean }
+/**
+ * A preset ("setup"): the parameters it sets and, for a user's setup of an organism, the database it searches
+ * (a FASTA by path, and whether contaminants are added).
+ */
+export type Preset = {
+  id: string
+  name: string
+  parameters: Record<string, unknown>
+  builtin: boolean
+  database?: string
+  contaminants?: boolean
+}
 
 /** Where the user presets are kept. */
 export const PRESETS_KEY = 'prose.presets'
@@ -39,6 +50,37 @@ export const BUILTIN_PRESETS: Preset[] = [
       'fragment:mass_tolerance': 20,
       'fragment:mass_tolerance_unit': 'ppm',
       'peptdeep:instrument': 'QE',
+    },
+  },
+  {
+    // Orbitrap Astral: Orbitrap MS1, Astral MS2 (HCD); ProSE estimates about 4 ppm precursor and 8 ppm fragment
+    // error on a 15 min LFQ run, the tolerances leave room for other runs
+    id: 'astral-tryptic',
+    name: 'Orbitrap Astral · tryptic',
+    builtin: true,
+    parameters: {
+      ...tryptic,
+      'precursor:mass_tolerance_lower': 10,
+      'precursor:mass_tolerance_upper': 10,
+      'precursor:mass_tolerance_unit': 'ppm',
+      'fragment:mass_tolerance': 15,
+      'fragment:mass_tolerance_unit': 'ppm',
+      'peptdeep:instrument': 'ThermoTOF',
+    },
+  },
+  {
+    // ion trap MS2 (CID): low-resolution fragments
+    id: 'iontrap-cid-tryptic',
+    name: 'Ion trap CID · tryptic',
+    builtin: true,
+    parameters: {
+      ...tryptic,
+      'precursor:mass_tolerance_lower': 10,
+      'precursor:mass_tolerance_upper': 10,
+      'precursor:mass_tolerance_unit': 'ppm',
+      'fragment:mass_tolerance': 0.5,
+      'fragment:mass_tolerance_unit': 'Da',
+      'peptdeep:instrument': 'Lumos',
     },
   },
   {
@@ -124,6 +166,7 @@ export function savePreset(
   name: string,
   parameters: Record<string, unknown>,
   storage: PresetStorage | null = appStorage(),
+  database?: { path: string; contaminants: boolean },
 ): Preset {
   const values = copyValues(parameters)
   for (const s of SWITCH_PARAMETERS) delete values[s]
@@ -134,6 +177,7 @@ export function savePreset(
     name: name.trim(),
     parameters: values,
     builtin: false,
+    ...(database ? { database: database.path, contaminants: database.contaminants } : {}),
   }
   const next = existing ? users.map((p) => (p.id === preset.id ? preset : p)) : [...users, preset]
   writeUserPresets(next, storage)

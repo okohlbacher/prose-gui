@@ -43,7 +43,8 @@ BINCACHE=$(native "$(cd "$BINCACHE" && pwd -P)")
 export VCPKG_BINARY_SOURCES="clear;files,$BINCACHE,readwrite"
 export VCPKG_MAX_CONCURRENCY=${VCPKG_MAX_CONCURRENCY:-32}
 
-# Thermo RAW is off because its bridge needs dotnet; OpenTIMS is off because the app does not read .d files.
+# The app searches Thermo .raw (the Thermo bridge: needs the dotnet SDK at build time) and Bruker .d (OpenTIMS);
+# mzPeak comes with the OpenMS checkout when it has it (OPENMS_ENABLE_MZPEAK, on by default where it exists).
 # The update check is off: OpenMS tools otherwise contact openms-update.cs.uni-tuebingen.de once a day (the app has no
 # network access at run time; the app also sets OPENMS_DISABLE_UPDATE_CHECK for the tool, src-tauri/src/tool.rs).
 # shellcheck disable=SC2086 # OPENMS_CMAKE_ARGS: options, split at spaces
@@ -55,8 +56,8 @@ cmake -G Ninja -S "$SRC" -B "$BUILD" \
   -DVCPKG_MANIFEST_FEATURES=onnxruntime \
   -DWITH_ONNX=ON \
   -DWITH_GUI=OFF \
-  -DWITH_THERMO_RAW=OFF \
-  -DWITH_OPENTIMS=OFF \
+  -DWITH_THERMO_RAW=ON \
+  -DWITH_OPENTIMS=ON \
   -DENABLE_DOCS=OFF \
   -DENABLE_UPDATE_CHECK=OFF \
   -DPYOPENMS=OFF \

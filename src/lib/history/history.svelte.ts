@@ -5,7 +5,10 @@
 // results are read. Saving never breaks the results view, it only reports. A search that finished while it
 // was being cancelled has its folder removed at once.
 
-import { desktopBackend, errorText } from '../desktop'
+import { desktopBackend, errorText, importQpxFolder, openQpxFolder } from '../desktop'
+import { resolveDesign } from '../design/model'
+import { baseName } from '../results/model'
+import { parameterNumber, readMeta, targetPsmsOf } from '../results/summary'
 import { resultName } from '../results/display'
 import { forgetResult, navigate, router } from '../route.svelte'
 import {
@@ -23,6 +26,8 @@ import {
 } from '../search/session.svelte'
 import { toolState } from '../search/tool.svelte'
 import {
+  APP_VERSION,
+  SCHEMA_VERSION,
   endedRecordOf,
   exportProject,
   importProject,
@@ -275,6 +280,47 @@ export async function openProjectFile(): Promise<boolean> {
     throw new ProjectError(errorText(e))
   }
   if (id === null) return false
+  await refreshHistory()
+  await show(id)
+  return true
+}
+
+/**
+ * "Open QPX folder…": the QPX output of a ProSE run outside the app (`-out_qpx <dir> -qpx_extended -keep_decoys`,
+ * e.g. on a cluster) as a search in History, then opened in Results (survey F36). The record is made from the
+ * run and provenance views: the inputs by their stems, the cutoffs and database as ProSE recorded them.
+ * Resolves with false if the user cancelled.
+ */
+export async function openQpxFolderFile(): Promise<boolean> {
+  let id: string
+  try {
+    const chosen = await openQpxFolder()
+    if (chosen === null) return false
+    const meta = await readMeta(chosen.run, chosen.provenance)
+    const names = chosen.stems.map((s) => `${s.replace(/^\d+__/, '')}`)
+    const inputs = chosen.stems.map((stem, index) => ({ id: `f${index + 1}`, index, link: stem, stem, name: names[index], path: names[index] }))
+    const database = baseName(meta.search.get('database_file') ?? 'database')
+    const record = {
+      schema: SCHEMA_VERSION,
+      id: 'qpx',
+      name: baseName(chosen.folder),
+      createdAt: new Date().toISOString(),
+      appVersion: APP_VERSION,
+      toolVersion: '',
+      files: names,
+      database,
+      design: resolveDesign(names.map((fileName, k) => ({ id: `f${k + 1}`, fileName, fileSize: 0 }))),
+      settings: { parameters: {}, fixedMods: (meta.search.get('fixed_modifications') ?? '').split(/[,;]\s*/).filter(Boolean), rescore: false, peptdeep: false, contaminants: false },
+      psms: targetPsmsOf(meta.runs),
+      psmFdr: parameterNumber(meta.fdr, 'psm_fdr'),
+      proteinFdr: parameterNumber(meta.fdr, 'protein_fdr'),
+      seconds: parameterNumber(meta.search, 'seconds_total'),
+    }
+    id = await importQpxFolder(chosen.folder, JSON.stringify(record), JSON.stringify(inputs))
+  } catch (e) {
+    if (e instanceof ProjectError) throw e
+    throw new ProjectError(errorText(e))
+  }
   await refreshHistory()
   await show(id)
   return true

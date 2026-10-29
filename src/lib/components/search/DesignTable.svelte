@@ -134,7 +134,7 @@
       {/if}
       <Button variant="ghost" size="sm" class={headerButton + ' text-muted-foreground'} disabled={form.busy} onclick={() => form.removeAllFiles()}
         >Remove all</Button>
-      <Button variant="outline" size="sm" class={headerButton} disabled={form.adding > 0} onclick={add}>Add files</Button>
+      <Button variant="outline" size="sm" class={headerButton} disabled={form.adding > 0} onclick={() => add()}>Add files</Button>
     </div>
     <input bind:this={designInput} type="file" accept=".tsv,.txt" hidden onchange={(e) => loadDesign(e.currentTarget)} />
   </Card.Header>

@@ -62,6 +62,16 @@
   const chargesInverted = $derived(searchPlan.inverted.some((r) => r.min === 'precursor:min_charge'))
   const lengthInverted = $derived(searchPlan.inverted.some((r) => r.min === 'peptide:min_size'))
 
+  // the one line New search shows of the settings until they are opened: what a setup decides
+  const summary = $derived(
+    [
+      String(form.value('enzyme')),
+      `${upper} ${form.value('precursor:mass_tolerance_unit')} precursor`,
+      `${form.value('fragment:mass_tolerance')} ${form.value('fragment:mass_tolerance_unit')} fragment`,
+      (form.value<string[]>('modifications:variable') ?? []).join(', ') || 'no variable modifications',
+      `PSM FDR ${Number(form.value('FDR:PSM')) * 100} %`,
+    ].join(' · '),
+  )
   const modOptions = $derived(form.entry('modifications:variable')?.validStrings)
   const fixedOptions = $derived(form.entry('modifications:fixed')?.validStrings)
 </script>
@@ -75,6 +85,17 @@
       variant="ghost"
       size="sm"
       class="h-7 px-2 text-xs text-muted-foreground"
+      aria-expanded={form.showSettings}
+      aria-controls="search-settings-grid"
+      data-testid="show-settings"
+      onclick={() => (form.showSettings = !form.showSettings)}>
+      {form.showSettings ? 'Hide settings' : 'Show settings'}<ChevronRightIcon class="size-3.5 transition-transform {form.showSettings ? 'rotate-90' : ''}" />
+    </Button>
+    {#if form.showSettings}
+    <Button
+      variant="ghost"
+      size="sm"
+      class="h-7 px-2 text-xs text-muted-foreground"
       aria-expanded={form.advancedSettings}
       aria-controls="advanced-settings"
       onclick={() => (form.advancedSettings = !form.advancedSettings)}>
@@ -83,9 +104,17 @@
     <Button variant="ghost" size="sm" class="h-7 px-2 text-xs text-muted-foreground" onclick={() => (dialogOpen = true)}>
       All {count} parameters<ChevronRightIcon class="size-3.5" />
     </Button>
+    {/if}
   </Card.Header>
 
-  <Card.Content class="grid grid-cols-2 gap-x-4 gap-y-3.5 md:grid-cols-4">
+  {#if !form.showSettings}
+    <Card.Content>
+      <p class="truncate text-xs text-muted-foreground" title={summary} data-testid="settings-summary">
+        {summary}{form.modified ? ' · changed from the setup' : ''}
+      </p>
+    </Card.Content>
+  {:else}
+  <Card.Content id="search-settings-grid" class="grid grid-cols-2 gap-x-4 gap-y-3.5 md:grid-cols-4">
     <div class="grid min-w-0 gap-1">
       <Label for="enzyme" class="text-xs">Enzyme</Label>
       <ChoiceSelect id="enzyme" value={String(form.value('enzyme'))} options={enzymeOptions} onChange={(v) => form.setParam('enzyme', v)} />
@@ -251,6 +280,7 @@
       </div>
     {/if}
   </Card.Content>
+  {/if}
 </Card.Root>
 
 <AllParametersDialog bind:open={dialogOpen} />

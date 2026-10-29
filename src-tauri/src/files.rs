@@ -14,7 +14,7 @@
 //!   the disk is asked.
 //! - [`example_files`]: the bundled example, as the two named runs the web app searches.
 
-use crate::args::{is_fasta_file, is_input_link, is_spectrum_file, suffix_start, DATABASE_RECORD};
+use crate::args::{is_bruker_d, is_fasta_file, is_input_link, is_spectrum_file, suffix_start, DATABASE_RECORD};
 use crate::content;
 use serde::Serialize;
 use std::fs;
@@ -314,12 +314,12 @@ pub fn inspect(path: &str) -> FileFacts {
     // are not even looked up, so the page learns nothing of them
     if !is_spectrum_file(&name) && !is_fasta_file(&name) {
         facts.error = Some(format!(
-            "{path} is not an mzML file (.mzML, .mzML.gz) or a FASTA file (.fasta, .fa, .faa)."
+            "{path} is not a spectrum file (.mzML, .mzML.gz, .mzpeak, .raw, a Bruker .d folder) or a FASTA file (.fasta, .fa, .faa)."
         ));
         return facts;
     }
     let meta = match fs::metadata(path) {
-        Ok(meta) if meta.is_file() => meta,
+        Ok(meta) if meta.is_file() || (meta.is_dir() && is_bruker_d(&name)) => meta,
         Ok(_) => {
             facts.error = Some(format!("{path} is not a file."));
             return facts;
@@ -338,6 +338,9 @@ pub fn inspect(path: &str) -> FileFacts {
             facts.problem = (!f.problems.is_empty()).then(|| f.problems.join(" "));
             facts.warnings = f.warnings;
         })
+    } else if suffix_start(&name, ".mzml").is_none() && suffix_start(&name, ".mzml.gz").is_none() {
+        // ponytail: mzPeak and vendor files are not looked into here; ProSE says what it cannot read
+        Ok(())
     } else {
         let mzml = if suffix_start(&name, ".gz").is_some() {
             content::mzml_gz(file, &name)

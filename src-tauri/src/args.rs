@@ -210,8 +210,17 @@ fn has_suffix(name: &str, suffixes: &[&str]) -> bool {
     suffixes.iter().any(|s| suffix_start(name, s).is_some())
 }
 
+/// The inputs ProSE reads: mzML (also gzipped), mzPeak, Thermo .raw and Bruker .d (a folder), as the
+/// ProSE of the app is built (`native/scripts/build-openms.sh`: mzPeak, Thermo RAW and OpenTIMS on).
+pub const SPECTRUM_SUFFIXES: &[&str] = &[".mzml", ".mzml.gz", ".mzpeak", ".raw", ".d"];
+
 pub fn is_spectrum_file(name: &str) -> bool {
-    has_suffix(name, &[".mzml", ".mzml.gz"])
+    has_suffix(name, SPECTRUM_SUFFIXES)
+}
+
+/// A Bruker .d input: a folder, not a file.
+pub fn is_bruker_d(name: &str) -> bool {
+    has_suffix(name, &[".d"])
 }
 
 pub fn is_fasta_file(name: &str) -> bool {
@@ -408,8 +417,11 @@ pub fn input_stem(link: &str) -> String {
     if let Some(end) = suffix_start(stem, ".gz") {
         stem = &stem[..end];
     }
-    if let Some(end) = suffix_start(stem, ".mzml") {
-        stem = &stem[..end];
+    for suffix in [".mzml", ".mzpeak", ".raw", ".d"] {
+        if let Some(end) = suffix_start(stem, suffix) {
+            stem = &stem[..end];
+            break;
+        }
     }
     stem.to_string()
 }
@@ -430,7 +442,7 @@ fn check_file(
     }
     let meta =
         fs::metadata(path).map_err(|e| format!("The {kind} {path} cannot be read ({e})."))?;
-    if !meta.is_file() {
+    if !meta.is_file() && !(meta.is_dir() && is_bruker_d(&file_name(path))) {
         return Err(format!("The {kind} {path} is not a file."));
     }
     if !accepted(&file_name(path)) {
@@ -561,7 +573,7 @@ pub fn build_args_with(
             "input file",
             &file.path,
             is_spectrum_file,
-            "an mzML file (.mzML or .mzML.gz)",
+            "a spectrum file ProSE reads (.mzML, .mzML.gz, .mzpeak, .raw, or a Bruker .d folder)",
         )?;
     }
     check_file(

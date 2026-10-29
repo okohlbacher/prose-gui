@@ -507,7 +507,7 @@ fn input_paths_are_validated() {
     let out = i.dir.path().join("o");
     let missing = i.dir.path().join("data/missing.mzML");
     let folder = i.dir.path().join("data");
-    let raw = i.dir.write("data/a.raw", "x");
+    let raw = i.dir.write("data/a.wiff", "x");
     let text = i.dir.write("data/db.txt", ">a\nMK\n");
     assert!(
         build_args(&request(&[&missing], &i.fasta, false, json!({})), &out)
@@ -521,8 +521,14 @@ fn input_paths_are_validated() {
     assert!(
         build_args(&request(&[&raw], &i.fasta, false, json!({})), &out)
             .unwrap_err()
-            .contains("a.raw")
+            .contains("a.wiff")
     );
+    // Thermo .raw and mzPeak files and Bruker .d folders are inputs ProSE reads
+    let thermo = i.dir.write("data/b.raw", "x");
+    assert!(build_args(&request(&[&thermo], &i.fasta, false, json!({})), &out).is_ok());
+    let bruker = i.dir.path().join("data/c.d");
+    std::fs::create_dir_all(&bruker).unwrap();
+    assert!(build_args(&request(&[&bruker], &i.fasta, false, json!({})), &out).is_ok());
     assert!(
         build_args(&request(&[&i.mzml], &text, false, json!({})), &out)
             .unwrap_err()

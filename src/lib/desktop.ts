@@ -188,13 +188,18 @@ export function exampleFiles(): Promise<{ spectra: string[]; database: string }>
   return invoke('example_files')
 }
 
-/** The system's open dialog for spectra (several) or a database; the chosen paths ([] if cancelled). */
-export function chooseFiles(kind: 'spectra' | 'database'): Promise<string[]> {
+/**
+ * The system's open dialog for spectra (several files: mzML, mzPeak, Thermo .raw), Bruker .d folders (several) or a
+ * database; the chosen paths ([] if cancelled).
+ */
+export function chooseFiles(kind: 'spectra' | 'bruker' | 'database'): Promise<string[]> {
   return oneDialog<string[]>([], async () => {
     const chosen = await open(
       kind === 'spectra'
-        ? { multiple: true, title: 'Add mzML files', filters: [{ name: 'mzML', extensions: ['mzML', 'mzml', 'gz'] }] }
-        : { multiple: false, title: 'Choose a FASTA database', filters: [{ name: 'FASTA', extensions: ['fasta', 'fa', 'faa'] }] },
+        ? { multiple: true, title: 'Add spectrum files', filters: [{ name: 'Spectra (mzML, mzPeak, Thermo RAW)', extensions: ['mzML', 'mzml', 'gz', 'mzpeak', 'raw'] }] }
+        : kind === 'bruker'
+          ? { multiple: true, directory: true, title: 'Add Bruker .d folders' }
+          : { multiple: false, title: 'Choose a FASTA database', filters: [{ name: 'FASTA', extensions: ['fasta', 'fa', 'faa'] }] },
     )
     if (chosen === null) return []
     return Array.isArray(chosen) ? chosen : [chosen]
@@ -229,6 +234,19 @@ export function saveText(name: string, contents: string): Promise<string | null>
 /** Copies a file of a search (e.g. `merged.idXML`) to where the user chooses, suggesting `suggested`. */
 export function saveSearchFile(searchId: string, name: string, suggested: string): Promise<string | null> {
   return oneDialog(null, () => invoke<string | null>('save_search_file', { searchId, name, suggested }))
+}
+
+/** A QPX results folder the user chose (ProSE run by hand): its runs' stems and its run and provenance views; null if cancelled. */
+export function openQpxFolder(): Promise<{ folder: string; stems: string[]; run: Uint8Array; provenance: Uint8Array } | null> {
+  return oneDialog(null, async () => {
+    const r = await invoke<{ folder: string; stems: string[]; run: number[]; provenance: number[] } | null>('open_qpx_folder')
+    return r && { ...r, run: Uint8Array.from(r.run), provenance: Uint8Array.from(r.provenance) }
+  })
+}
+
+/** The QPX folder as a new search in History, with its record and inputs.json: the new id. */
+export function importQpxFolder(folder: string, record: string, inputs: string): Promise<string> {
+  return invoke<string>('history_import_qpx', { folder, record, inputs })
 }
 
 /**

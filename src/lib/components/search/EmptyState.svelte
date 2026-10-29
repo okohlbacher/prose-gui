@@ -9,8 +9,8 @@
 
   let { dragging = false }: { dragging?: boolean } = $props()
 
-  async function add() {
-    const paths = await chooseFiles('spectra')
+  async function add(kind: 'spectra' | 'bruker' = 'spectra') {
+    const paths = await chooseFiles(kind)
     if (paths.length > 0) await form.addFiles(paths)
   }
 </script>
@@ -25,14 +25,15 @@
         ? 'border-foreground/40 bg-muted/60'
         : 'border-border bg-muted/30'}">
       <div class="min-w-0 flex-1">
-        <p class="font-medium">Drop mzML files here, or add them</p>
+        <p class="font-medium">Drop spectrum files here (mzML, mzPeak, Thermo .raw, Bruker .d), or add them</p>
         <p class="text-xs text-muted-foreground">
           One file, or a whole experiment with conditions, replicates and fractions. A FASTA file dropped here becomes the
           database.
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <Button size="sm" disabled={form.adding > 0} onclick={add}>Add files</Button>
+        <Button size="sm" disabled={form.adding > 0} onclick={() => add()}>Add files</Button>
+        <Button variant="outline" size="sm" disabled={form.adding > 0} onclick={() => add('bruker')}>Add .d folders</Button>
         <Button variant="outline" size="sm" disabled={form.busy} onclick={() => form.loadExample()}>
           {form.exampleLoading ? 'Loading the example…' : 'Try the example'}
         </Button>

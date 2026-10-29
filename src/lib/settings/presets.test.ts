@@ -41,8 +41,8 @@ const defaults: Record<string, unknown> = {
 }
 
 describe('presets', () => {
-  it('has the three built-in presets, Orbitrap HCD first', () => {
-    expect(BUILTIN_PRESETS.map((p) => p.id)).toEqual(['orbitrap-hcd-tryptic', 'timstof-tryptic', 'open-search'])
+  it('has the built-in presets, Orbitrap HCD first', () => {
+    expect(BUILTIN_PRESETS.map((p) => p.id)).toEqual(['orbitrap-hcd-tryptic', 'astral-tryptic', 'iontrap-cid-tryptic', 'timstof-tryptic', 'open-search'])
     expect(DEFAULT_PRESET_ID).toBe('orbitrap-hcd-tryptic')
     for (const p of BUILTIN_PRESETS) expect(p.builtin).toBe(true)
   })
