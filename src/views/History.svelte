@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CommandLine from '$lib/components/results/CommandLine.svelte'
   // History: the searches kept on this computer, each a folder of the app's data (the tool's outputs and a
   // record of the settings and the design; the mzML files stay where they are). Open, rename and delete;
   // "Open project…" unpacks a .prose file into History. It stays usable while a search runs, and reads the
@@ -274,6 +275,7 @@
                     title="Search the same files again with the same settings"
                     aria-label="Re-run {entry.name ?? entry.id}"
                     onclick={() => reopen(entry, true)}>Re-run</Button>
+                  {#if entry.error === null}<CommandLine id={entry.id} compact />{/if}
                   <!-- (not while it opens) -->
                   <Button variant="outline" size="xs" disabled={busy === entry.id || entry.error !== null} aria-label="Rename {entry.name ?? entry.id}" onclick={() => startRename(entry)}
                     >Rename</Button>

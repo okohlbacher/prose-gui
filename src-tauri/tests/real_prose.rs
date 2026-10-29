@@ -165,9 +165,17 @@ fn the_example_is_searched_through_start_search() {
     for gone in ["oms", "spectra", "summary.yaml"] {
         assert!(!folder.join(gone).exists(), "{gone}");
     }
-    for file in ["merged.idXML", "inputs.json", "prose.log", "database.fasta"] {
+    for file in ["merged.idXML", "inputs.json", "prose.log", "database.fasta", "prose.ini", "command.txt"] {
         assert!(folder.join(file).is_file(), "{file}");
     }
+    // the parameters went in through the INI (guidance G8), not on the command line: ProSE took the example's
+    // fragment tolerance from it
+    let log = fs::read_to_string(folder.join("prose.log")).unwrap();
+    assert!(log.contains("Fragment tolerance 0.5 Da"), "{log}");
+    assert!(fs::read_to_string(folder.join("prose.ini")).unwrap().contains("<ITEM name=\"mass_tolerance\" value=\"0.5\" type=\"double\""));
+    let command = fs::read_to_string(folder.join("command.txt")).unwrap();
+    assert!(command.starts_with("ProSE -in <input 1> <input 2> -database <database> -out_qpx <search folder>/qpx"), "{command}");
+    assert!(command.contains("-ini <search folder>/prose.ini"), "{command}");
     assert!(fs::read_to_string(folder.join("database.fasta"))
         .unwrap()
         .contains(">CON__sp|ALBU_BOVIN|"));

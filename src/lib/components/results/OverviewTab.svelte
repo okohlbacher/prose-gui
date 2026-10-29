@@ -16,6 +16,7 @@
   import GuidanceNotices from './GuidanceNotices.svelte'
   import DiagnosisCard from './DiagnosisCard.svelte'
   import SanitySection from './SanitySection.svelte'
+  import CommandLine from './CommandLine.svelte'
   import { precursorSample, searchedWindows, toleranceFindings } from '$lib/results/tolerance'
 
   let { view }: { view: ResultsView } = $props()
@@ -224,6 +225,7 @@
     <div class="mb-1 flex items-center gap-2">
       <h2 id="overview-methods" class="text-[13px] font-semibold">Methods text</h2>
       <button type="button" class="rounded border px-2 py-0.5 text-xs hover:bg-muted" onclick={copyMethods}>{copied ? 'Copied' : 'Copy'}</button>
+      <CommandLine id={result.id} />
     </div>
     <p class="max-w-[60rem] rounded-lg border bg-background px-3 py-2 text-xs leading-relaxed select-text">{methods}</p>
   </section>

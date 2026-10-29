@@ -442,3 +442,39 @@ export async function rename(id: string, name: string): Promise<void> {
 export function dismissSaveStatus(): void {
   status = null
 }
+
+/**
+ * The ProSE command line of search `id` (its `command.txt`, written by the shim; guidance G8), the parameters in
+ * its `prose.ini`. The paths are placeholders (`<input 1>`, `<database>`, `<search folder>`); `withPaths` puts in
+ * the inputs' paths (inputs.json: names only for a project) and the user's database. Null for a search made
+ * before the app wrote it.
+ */
+export async function commandLineOf(id: string, withPaths: boolean): Promise<string | null> {
+  const text = async (name: string) => new TextDecoder().decode(await backend.read(id, name))
+  let line: string
+  try {
+    line = (await text('command.txt')).trim()
+  } catch {
+    return null
+  }
+  if (!withPaths) return line
+  const quote = (p: string) => (/\s/.test(p) ? `"${p}"` : p)
+  try {
+    const inputs = JSON.parse(await text('inputs.json')) as { path: string; index: number }[]
+    for (const i of inputs) line = line.replaceAll(`<input ${i.index + 1}>`, quote(i.path))
+  } catch {
+    // (no inputs.json: the placeholders stay)
+  }
+  for (const name of ['database.json', 'database-source.json']) {
+    try {
+      const path = (JSON.parse(await text(name)) as { path?: string }).path
+      if (path) {
+        line = line.replaceAll('<database>', quote(path))
+        break
+      }
+    } catch {
+      // (not there)
+    }
+  }
+  return line
+}
