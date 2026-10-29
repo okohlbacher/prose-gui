@@ -1,0 +1,1683 @@
+{
+ "source": "sdrf-pipelines 0.1.4 sdrf-templates (https://github.com/bigbio/sdrf-templates); regenerate with scripts/sdrf-templates.py",
+ "templates": [
+  {
+   "name": "ms-proteomics",
+   "version": "1.1.0",
+   "description": "Base SDRF template for mass spectrometry-based proteomics",
+   "layer": "technology",
+   "columns": [
+    {
+     "name": "source name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "assay name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "technology type",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[technical replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[data file]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf version]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf template]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf annotation tool]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf validation hash]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[organism]",
+     "requirement": "required",
+     "ontologies": [
+      "ncbitaxon"
+     ]
+    },
+    {
+     "name": "characteristics[organism part]",
+     "requirement": "required",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[tissue supergroup]",
+     "requirement": "optional",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[cell type]",
+     "requirement": "recommended",
+     "ontologies": [
+      "cl",
+      "bto",
+      "clo"
+     ]
+    },
+    {
+     "name": "characteristics[biological replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[pooled sample]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sample type]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "characteristics[disease]",
+     "requirement": "recommended",
+     "ontologies": [
+      "mondo",
+      "efo",
+      "doid",
+      "ncit",
+      "pato"
+     ]
+    },
+    {
+     "name": "characteristics[material type]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[tissue mass]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[biosample accession number]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sampling time]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[treatment]",
+     "requirement": "optional",
+     "ontologies": [
+      "ncit",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[synthetic peptide]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[spiked compound]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[enrichment process]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride",
+      "efo"
+     ]
+    },
+    {
+     "name": "comment[proteomics data acquisition method]",
+     "requirement": "required",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "comment[instrument]",
+     "requirement": "required",
+     "ontologies": [
+      "ms",
+      "pride"
+     ]
+    },
+    {
+     "name": "comment[cleavage agent details]",
+     "requirement": "required",
+     "ontologies": [
+      "ms"
+     ]
+    },
+    {
+     "name": "comment[label]",
+     "requirement": "required",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "comment[fraction identifier]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[dissociation method]",
+     "requirement": "recommended",
+     "ontologies": [
+      "ms",
+      "pride"
+     ]
+    },
+    {
+     "name": "comment[fractionation method]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "comment[collision energy]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[precursor mass tolerance]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[fragment mass tolerance]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[reduction reagent]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride",
+      "ms"
+     ]
+    },
+    {
+     "name": "comment[alkylation reagent]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride",
+      "ms"
+     ]
+    },
+    {
+     "name": "characteristics[depletion]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[modification parameters]",
+     "requirement": "recommended",
+     "ontologies": [
+      "unimod",
+      "mod"
+     ]
+    },
+    {
+     "name": "comment[ms2 mass analyzer]",
+     "requirement": "optional",
+     "ontologies": [
+      "ms"
+     ]
+    },
+    {
+     "name": "comment[sample preparation batch]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[lc batch]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[acquisition date]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms min mz]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms max mz]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms min charge]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms max charge]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms min rt]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms max rt]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms min im]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms max im]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms2 min mz]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms2 max mz]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms3 min mz]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms3 max mz]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms1 scan range]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms2 scan range]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms3 scan range]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[elution conditions]",
+     "requirement": "optional",
+     "ontologies": []
+    }
+   ]
+  },
+  {
+   "name": "dia-acquisition",
+   "version": "1.1.0",
+   "description": "SDRF template for Data-independent acquisition (DIA) experiments",
+   "layer": "experiment",
+   "columns": [
+    {
+     "name": "source name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "assay name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "technology type",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[technical replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[data file]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf version]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf template]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf annotation tool]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf validation hash]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[organism]",
+     "requirement": "required",
+     "ontologies": [
+      "ncbitaxon"
+     ]
+    },
+    {
+     "name": "characteristics[organism part]",
+     "requirement": "required",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[tissue supergroup]",
+     "requirement": "optional",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[cell type]",
+     "requirement": "recommended",
+     "ontologies": [
+      "cl",
+      "bto",
+      "clo"
+     ]
+    },
+    {
+     "name": "characteristics[biological replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[pooled sample]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sample type]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "characteristics[disease]",
+     "requirement": "recommended",
+     "ontologies": [
+      "mondo",
+      "efo",
+      "doid",
+      "ncit",
+      "pato"
+     ]
+    },
+    {
+     "name": "characteristics[material type]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[tissue mass]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[biosample accession number]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sampling time]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[treatment]",
+     "requirement": "optional",
+     "ontologies": [
+      "ncit",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[synthetic peptide]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[spiked compound]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[enrichment process]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride",
+      "efo"
+     ]
+    },
+    {
+     "name": "comment[proteomics data acquisition method]",
+     "requirement": "required",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "comment[instrument]",
+     "requirement": "required",
+     "ontologies": [
+      "ms",
+      "pride"
+     ]
+    },
+    {
+     "name": "comment[cleavage agent details]",
+     "requirement": "required",
+     "ontologies": [
+      "ms"
+     ]
+    },
+    {
+     "name": "comment[label]",
+     "requirement": "required",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "comment[fraction identifier]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[dissociation method]",
+     "requirement": "recommended",
+     "ontologies": [
+      "ms",
+      "pride"
+     ]
+    },
+    {
+     "name": "comment[fractionation method]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "comment[collision energy]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[precursor mass tolerance]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[fragment mass tolerance]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[reduction reagent]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride",
+      "ms"
+     ]
+    },
+    {
+     "name": "comment[alkylation reagent]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride",
+      "ms"
+     ]
+    },
+    {
+     "name": "characteristics[depletion]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[modification parameters]",
+     "requirement": "recommended",
+     "ontologies": [
+      "unimod",
+      "mod"
+     ]
+    },
+    {
+     "name": "comment[ms2 mass analyzer]",
+     "requirement": "optional",
+     "ontologies": [
+      "ms"
+     ]
+    },
+    {
+     "name": "comment[sample preparation batch]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[lc batch]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[acquisition date]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms min mz]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms max mz]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms min charge]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms max charge]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms min rt]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms max rt]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms min im]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms max im]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms2 min mz]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms2 max mz]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms3 min mz]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms3 max mz]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms1 scan range]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms2 scan range]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[ms3 scan range]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[elution conditions]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[scan window lower limit]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[scan window upper limit]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[isolation window width]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[dia method]",
+     "requirement": "recommended",
+     "ontologies": [
+      "pride"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "human",
+   "version": "1.1.0",
+   "description": "Human SDRF template with human-specific sample metadata fields",
+   "layer": "sample",
+   "columns": [
+    {
+     "name": "source name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "assay name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "technology type",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[technical replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[data file]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf version]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf template]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf annotation tool]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf validation hash]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[organism]",
+     "requirement": "required",
+     "ontologies": [
+      "ncbitaxon"
+     ]
+    },
+    {
+     "name": "characteristics[organism part]",
+     "requirement": "required",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[tissue supergroup]",
+     "requirement": "optional",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[cell type]",
+     "requirement": "recommended",
+     "ontologies": [
+      "cl",
+      "bto",
+      "clo"
+     ]
+    },
+    {
+     "name": "characteristics[biological replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[pooled sample]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sample type]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "characteristics[disease]",
+     "requirement": "required",
+     "ontologies": [
+      "mondo",
+      "efo",
+      "doid",
+      "ncit",
+      "pato"
+     ]
+    },
+    {
+     "name": "characteristics[material type]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[tissue mass]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[biosample accession number]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sampling time]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[treatment]",
+     "requirement": "optional",
+     "ontologies": [
+      "ncit",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[synthetic peptide]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[spiked compound]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[enrichment process]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[ancestry category]",
+     "requirement": "recommended",
+     "ontologies": [
+      "hancestro"
+     ]
+    },
+    {
+     "name": "characteristics[age]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sex]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[developmental stage]",
+     "requirement": "optional",
+     "ontologies": [
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[individual]",
+     "requirement": "recommended",
+     "ontologies": []
+    }
+   ]
+  },
+  {
+   "name": "vertebrates",
+   "version": "1.1.0",
+   "description": "SDRF template for non-human vertebrate samples (mammals, birds, fish, reptiles, amphibians)",
+   "layer": "sample",
+   "columns": [
+    {
+     "name": "source name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "assay name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "technology type",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[technical replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[data file]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf version]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf template]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf annotation tool]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf validation hash]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[organism]",
+     "requirement": "required",
+     "ontologies": [
+      "ncbitaxon"
+     ]
+    },
+    {
+     "name": "characteristics[organism part]",
+     "requirement": "required",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[tissue supergroup]",
+     "requirement": "optional",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[cell type]",
+     "requirement": "recommended",
+     "ontologies": [
+      "cl",
+      "bto",
+      "clo"
+     ]
+    },
+    {
+     "name": "characteristics[biological replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[pooled sample]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sample type]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "characteristics[disease]",
+     "requirement": "required",
+     "ontologies": [
+      "mondo",
+      "efo",
+      "doid",
+      "ncit",
+      "pato"
+     ]
+    },
+    {
+     "name": "characteristics[material type]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[tissue mass]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[biosample accession number]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sampling time]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[treatment]",
+     "requirement": "optional",
+     "ontologies": [
+      "ncit",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[synthetic peptide]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[spiked compound]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[enrichment process]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[developmental stage]",
+     "requirement": "required",
+     "ontologies": [
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[strain or breed]",
+     "requirement": "recommended",
+     "ontologies": [
+      "ncbitaxon"
+     ]
+    },
+    {
+     "name": "characteristics[sex]",
+     "requirement": "recommended",
+     "ontologies": []
+    }
+   ]
+  },
+  {
+   "name": "invertebrates",
+   "version": "1.1.0",
+   "description": "SDRF template for invertebrate samples (Drosophila, C",
+   "layer": "sample",
+   "columns": [
+    {
+     "name": "source name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "assay name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "technology type",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[technical replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[data file]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf version]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf template]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf annotation tool]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf validation hash]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[organism]",
+     "requirement": "required",
+     "ontologies": [
+      "ncbitaxon"
+     ]
+    },
+    {
+     "name": "characteristics[organism part]",
+     "requirement": "required",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[tissue supergroup]",
+     "requirement": "optional",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[cell type]",
+     "requirement": "recommended",
+     "ontologies": [
+      "cl",
+      "bto",
+      "clo"
+     ]
+    },
+    {
+     "name": "characteristics[biological replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[pooled sample]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sample type]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "characteristics[disease]",
+     "requirement": "required",
+     "ontologies": [
+      "mondo",
+      "efo",
+      "doid",
+      "ncit",
+      "pato"
+     ]
+    },
+    {
+     "name": "characteristics[material type]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[tissue mass]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[biosample accession number]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sampling time]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[treatment]",
+     "requirement": "optional",
+     "ontologies": [
+      "ncit",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[synthetic peptide]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[spiked compound]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[enrichment process]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[developmental stage]",
+     "requirement": "required",
+     "ontologies": [
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[strain or breed]",
+     "requirement": "required",
+     "ontologies": [
+      "ncbitaxon"
+     ]
+    },
+    {
+     "name": "characteristics[genotype]",
+     "requirement": "optional",
+     "ontologies": []
+    }
+   ]
+  },
+  {
+   "name": "plants",
+   "version": "1.1.0",
+   "description": "SDRF template for plant samples (Arabidopsis, crops, etc.)",
+   "layer": "sample",
+   "columns": [
+    {
+     "name": "source name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "assay name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "technology type",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[technical replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[data file]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf version]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf template]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf annotation tool]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf validation hash]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[organism]",
+     "requirement": "required",
+     "ontologies": [
+      "ncbitaxon"
+     ]
+    },
+    {
+     "name": "characteristics[organism part]",
+     "requirement": "required",
+     "ontologies": [
+      "uberon",
+      "bto",
+      "po"
+     ]
+    },
+    {
+     "name": "characteristics[tissue supergroup]",
+     "requirement": "optional",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[cell type]",
+     "requirement": "recommended",
+     "ontologies": [
+      "cl",
+      "bto",
+      "clo"
+     ]
+    },
+    {
+     "name": "characteristics[biological replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[pooled sample]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sample type]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "characteristics[disease]",
+     "requirement": "required",
+     "ontologies": [
+      "mondo",
+      "efo",
+      "doid",
+      "ncit",
+      "pato"
+     ]
+    },
+    {
+     "name": "characteristics[material type]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[tissue mass]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[biosample accession number]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sampling time]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[treatment]",
+     "requirement": "recommended",
+     "ontologies": [
+      "ncit",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[synthetic peptide]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[spiked compound]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[enrichment process]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[developmental stage]",
+     "requirement": "required",
+     "ontologies": [
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[strain or breed]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[growth condition]",
+     "requirement": "recommended",
+     "ontologies": []
+    }
+   ]
+  },
+  {
+   "name": "cell-lines",
+   "version": "1.1.0",
+   "description": "SDRF template for cell line samples with Cellosaurus-based annotation",
+   "layer": "experiment",
+   "columns": [
+    {
+     "name": "source name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "assay name",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "technology type",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[technical replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[data file]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf version]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf template]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf annotation tool]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "comment[sdrf validation hash]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[organism]",
+     "requirement": "required",
+     "ontologies": [
+      "ncbitaxon"
+     ]
+    },
+    {
+     "name": "characteristics[organism part]",
+     "requirement": "required",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[tissue supergroup]",
+     "requirement": "optional",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[cell type]",
+     "requirement": "recommended",
+     "ontologies": [
+      "cl",
+      "bto",
+      "clo"
+     ]
+    },
+    {
+     "name": "characteristics[biological replicate]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[pooled sample]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sample type]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride"
+     ]
+    },
+    {
+     "name": "characteristics[disease]",
+     "requirement": "required",
+     "ontologies": [
+      "mondo",
+      "efo",
+      "doid",
+      "ncit",
+      "pato"
+     ]
+    },
+    {
+     "name": "characteristics[material type]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[tissue mass]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[biosample accession number]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sampling time]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[treatment]",
+     "requirement": "optional",
+     "ontologies": [
+      "ncit",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[synthetic peptide]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[spiked compound]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[enrichment process]",
+     "requirement": "optional",
+     "ontologies": [
+      "pride",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[cell line]",
+     "requirement": "required",
+     "ontologies": [
+      "clo",
+      "bto",
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[cellosaurus accession]",
+     "requirement": "required",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[cellosaurus name]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[sampling site]",
+     "requirement": "optional",
+     "ontologies": [
+      "uberon",
+      "bto"
+     ]
+    },
+    {
+     "name": "characteristics[passage number]",
+     "requirement": "recommended",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[biorepository]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[cell line authentication]",
+     "requirement": "optional",
+     "ontologies": []
+    },
+    {
+     "name": "characteristics[culture medium]",
+     "requirement": "recommended",
+     "ontologies": [
+      "ncit"
+     ]
+    },
+    {
+     "name": "characteristics[developmental stage]",
+     "requirement": "optional",
+     "ontologies": [
+      "efo"
+     ]
+    },
+    {
+     "name": "characteristics[ancestry category]",
+     "requirement": "optional",
+     "ontologies": [
+      "hancestro"
+     ]
+    },
+    {
+     "name": "characteristics[sample storage temperature]",
+     "requirement": "recommended",
+     "ontologies": []
+    }
+   ]
+  }
+ ]
+}

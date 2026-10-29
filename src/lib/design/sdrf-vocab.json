@@ -1,0 +1,332 @@
+{
+ "comment[instrument]": [
+  {
+   "label": "Q Exactive",
+   "accession": "MS:1001911"
+  },
+  {
+   "label": "Q Exactive Plus",
+   "accession": "MS:1002634"
+  },
+  {
+   "label": "Q Exactive HF",
+   "accession": "MS:1002523"
+  },
+  {
+   "label": "Q Exactive HF-X",
+   "accession": "MS:1002877"
+  },
+  {
+   "label": "Orbitrap Fusion",
+   "accession": "MS:1002416"
+  },
+  {
+   "label": "Orbitrap Fusion Lumos",
+   "accession": "MS:1002732"
+  },
+  {
+   "label": "Orbitrap Eclipse",
+   "accession": "MS:1003029"
+  },
+  {
+   "label": "Orbitrap Exploris 240",
+   "accession": "MS:1003094"
+  },
+  {
+   "label": "Orbitrap Exploris 480",
+   "accession": "MS:1003028"
+  },
+  {
+   "label": "Orbitrap Astral",
+   "accession": "MS:1003378"
+  },
+  {
+   "label": "LTQ Orbitrap XL",
+   "accession": "MS:1000556"
+  },
+  {
+   "label": "LTQ Orbitrap Velos",
+   "accession": "MS:1001742"
+  },
+  {
+   "label": "Orbitrap Elite",
+   "accession": "MS:1001910"
+  },
+  {
+   "label": "timsTOF Pro",
+   "accession": "MS:1003005"
+  },
+  {
+   "label": "timsTOF Pro 2",
+   "accession": "MS:1003230"
+  },
+  {
+   "label": "timsTOF HT",
+   "accession": "MS:1003404"
+  },
+  {
+   "label": "TripleTOF 5600",
+   "accession": "MS:1000932"
+  },
+  {
+   "label": "TripleTOF 6600",
+   "accession": "MS:1002533"
+  },
+  {
+   "label": "ZenoTOF 7600",
+   "accession": "MS:1003293"
+  }
+ ],
+ "comment[cleavage agent details]": [
+  {
+   "label": "Trypsin",
+   "accession": "MS:1001251"
+  },
+  {
+   "label": "Trypsin/P",
+   "accession": "MS:1001313"
+  },
+  {
+   "label": "Lys-C",
+   "accession": "MS:1001309"
+  },
+  {
+   "label": "Lys-C/P",
+   "accession": "MS:1001310"
+  },
+  {
+   "label": "Arg-C",
+   "accession": "MS:1001303"
+  },
+  {
+   "label": "Asp-N",
+   "accession": "MS:1001304"
+  },
+  {
+   "label": "Chymotrypsin",
+   "accession": "MS:1001306"
+  },
+  {
+   "label": "glutamyl endopeptidase",
+   "accession": "MS:1001917"
+  },
+  {
+   "label": "Lys-N",
+   "accession": "MS:1003093"
+  },
+  {
+   "label": "unspecific cleavage",
+   "accession": "MS:1001956"
+  },
+  {
+   "label": "no cleavage",
+   "accession": "MS:1001955"
+  }
+ ],
+ "comment[dissociation method]": [
+  {
+   "label": "beam-type collision-induced dissociation",
+   "accession": "MS:1000422"
+  },
+  {
+   "label": "collision-induced dissociation",
+   "accession": "MS:1000133"
+  },
+  {
+   "label": "electron transfer dissociation",
+   "accession": "MS:1000598"
+  },
+  {
+   "label": "electron-transfer/higher-energy collision dissociation",
+   "accession": "MS:1002631"
+  }
+ ],
+ "comment[proteomics data acquisition method]": [
+  {
+   "label": "data-dependent acquisition",
+   "accession": "MS:1003221"
+  },
+  {
+   "label": "data-independent acquisition",
+   "accession": "MS:1003215"
+  }
+ ],
+ "comment[label]": [
+  {
+   "label": "label free sample",
+   "accession": "MS:1002038"
+  },
+  {
+   "label": "TMT126",
+   "accession": "PRIDE:0000516"
+  },
+  {
+   "label": "TMT127N",
+   "accession": "PRIDE:0000519"
+  },
+  {
+   "label": "TMT127C",
+   "accession": "PRIDE:0000518"
+  },
+  {
+   "label": "TMT128N",
+   "accession": "PRIDE:0000522"
+  },
+  {
+   "label": "TMT128C",
+   "accession": "PRIDE:0000521"
+  },
+  {
+   "label": "TMT129N",
+   "accession": "PRIDE:0000525"
+  },
+  {
+   "label": "TMT129C",
+   "accession": "PRIDE:0000524"
+  },
+  {
+   "label": "TMT130N",
+   "accession": "PRIDE:0000528"
+  },
+  {
+   "label": "TMT130C",
+   "accession": "PRIDE:0000527"
+  },
+  {
+   "label": "TMT131",
+   "accession": "PRIDE:0000529"
+  },
+  {
+   "label": "TMT131N",
+   "accession": "PRIDE:0000580"
+  },
+  {
+   "label": "TMT131C",
+   "accession": "PRIDE:0000581"
+  },
+  {
+   "label": "TMT132N",
+   "accession": "PRIDE:0000582"
+  },
+  {
+   "label": "TMT132C",
+   "accession": "PRIDE:0000583"
+  },
+  {
+   "label": "TMT133N",
+   "accession": "PRIDE:0000632"
+  },
+  {
+   "label": "TMT133C",
+   "accession": "PRIDE:0000633"
+  },
+  {
+   "label": "TMT134N",
+   "accession": "PRIDE:0000643"
+  },
+  {
+   "label": "TMT134C",
+   "accession": "PRIDE:0000642"
+  },
+  {
+   "label": "TMT135N",
+   "accession": "PRIDE:0000670"
+  },
+  {
+   "label": "SILAC light reagent",
+   "accession": "MS:1002614"
+  },
+  {
+   "label": "SILAC medium reagent",
+   "accession": "MS:1002613"
+  },
+  {
+   "label": "SILAC heavy reagent",
+   "accession": "MS:1002612"
+  }
+ ],
+ "characteristics[organism]": [
+  {
+   "label": "Homo sapiens",
+   "accession": "NCBITaxon:9606"
+  },
+  {
+   "label": "Mus musculus",
+   "accession": "NCBITaxon:10090"
+  },
+  {
+   "label": "Rattus norvegicus",
+   "accession": "NCBITaxon:10116"
+  },
+  {
+   "label": "Bos taurus",
+   "accession": "NCBITaxon:9913"
+  },
+  {
+   "label": "Sus scrofa",
+   "accession": "NCBITaxon:9823"
+  },
+  {
+   "label": "Gallus gallus",
+   "accession": "NCBITaxon:9031"
+  },
+  {
+   "label": "Danio rerio",
+   "accession": "NCBITaxon:7955"
+  },
+  {
+   "label": "Drosophila melanogaster",
+   "accession": "NCBITaxon:7227"
+  },
+  {
+   "label": "Caenorhabditis elegans",
+   "accession": "NCBITaxon:6239"
+  },
+  {
+   "label": "Saccharomyces cerevisiae",
+   "accession": "NCBITaxon:4932"
+  },
+  {
+   "label": "Schizosaccharomyces pombe",
+   "accession": "NCBITaxon:4896"
+  },
+  {
+   "label": "Escherichia coli",
+   "accession": "NCBITaxon:562"
+  },
+  {
+   "label": "Bacillus subtilis",
+   "accession": "NCBITaxon:1423"
+  },
+  {
+   "label": "Arabidopsis thaliana",
+   "accession": "NCBITaxon:3702"
+  },
+  {
+   "label": "Oryza sativa",
+   "accession": "NCBITaxon:4530"
+  },
+  {
+   "label": "Zea mays",
+   "accession": "NCBITaxon:4577"
+  },
+  {
+   "label": "Plasmodium falciparum",
+   "accession": "NCBITaxon:5833"
+  },
+  {
+   "label": "Mycobacterium tuberculosis",
+   "accession": "NCBITaxon:1773"
+  },
+  {
+   "label": "Severe acute respiratory syndrome coronavirus 2",
+   "accession": "NCBITaxon:2697049"
+  }
+ ],
+ "technology type": [
+  {
+   "label": "proteomic profiling by mass spectrometry",
+   "accession": ""
+  }
+ ]
+}

@@ -8,8 +8,10 @@
   import { Button } from '$lib/components/ui/button'
   import { sdrfSession as sdrf, STATUS_TEXT } from '$lib/design/sdrf-session.svelte'
   import { download } from '$lib/download'
+  import SdrfEditor from './SdrfEditor.svelte'
 
   let saveError = $state<string | null>(null)
+  let editing = $state(false)
   const found = $derived(sdrf.files.length - sdrf.unresolved.length)
   const errors = $derived(sdrf.issues.filter((i) => i.level === 'error'))
   const warnings = $derived(sdrf.issues.filter((i) => i.level === 'warning'))
@@ -34,12 +36,13 @@
       </span>
       <div class="flex-1"></div>
       <Button variant="outline" size="sm" class="h-6 px-2 text-xs" disabled={sdrf.busy} onclick={() => sdrf.locateFolder()}>Locate folder…</Button>
+      <Button variant="outline" size="sm" class="h-6 px-2 text-xs" onclick={() => (editing = true)}>Edit metadata…</Button>
       <Button variant="outline" size="sm" class="h-6 px-2 text-xs" onclick={save}>Save SDRF…</Button>
       <Button variant="ghost" size="icon-xs" class="text-muted-foreground" aria-label="Forget the SDRF" title="Forget the SDRF (its files stay)" onclick={() => sdrf.clear()}><XIcon /></Button>
     </div>
-    {#if sdrf.toFill.length > 0}
+    {#if sdrf.stillToFill.length > 0}
       <p class="text-amber-700 dark:text-amber-400" data-testid="sdrf-to-fill">
-        To fill in before sharing: {sdrf.toFill.join(', ')} (now “not available”).
+        To fill in before sharing (Edit metadata…): {sdrf.stillToFill.join(', ')} (now “not available”).
       </p>
     {/if}
     {#if errors.length + warnings.length > 0}
@@ -76,3 +79,4 @@
     {#if saveError}<p class="text-destructive">{saveError}</p>{/if}
   </div>
 {/if}
+<SdrfEditor bind:open={editing} />

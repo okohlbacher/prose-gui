@@ -87,6 +87,10 @@ class SdrfSession {
   #loaded = new Map<string, Partial<DesignInput>>()
 
   name = $derived(this.path ? fileName(this.path) : '')
+  /** The `toFill` columns that some row still has as "not available". */
+  stillToFill = $derived(
+    this.table ? this.toFill.filter((h) => dataRows(this.table!).some((r) => noValue(cell(this.table!, r, column(this.table!, h))))) : [],
+  )
   unresolved = $derived(this.files.filter((f) => f.status === 'vendor' || f.status === 'remote' || f.status === 'missing'))
 
   /** Why the search cannot start (the plan line): data files that are not found. */
@@ -143,6 +147,15 @@ class SdrfSession {
     this.toFill = [...SAMPLE_COLUMNS]
     this.#loaded = new Map(parseSdrf(text).inputs.map((i) => [i.fileName!, i]))
     this.files = form.files.map((r) => ({ name: r.file.name, status: 'found', path: r.file.path, uri: '' }))
+  }
+
+  /** Changes the SDRF (the metadata editor): `change` edits a copy, which is then checked again. */
+  update(change: (t: SdrfTable) => void) {
+    if (!this.table) return
+    const table = structuredClone(this.table)
+    change(table)
+    this.table = table
+    this.issues = validateSdrf(table)
   }
 
   /** "Locate folder…": looks for the data files below a folder the user chooses. */

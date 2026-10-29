@@ -372,3 +372,13 @@ export function chooseFile(title: string): Promise<string | null> {
     return typeof chosen === 'string' ? chosen : null
   })
 }
+
+/** Ontology terms from OLS4 for the SDRF editor (cached on disk by the shim; rejects offline without a cached answer). */
+export function olsSearch(query: string, ontologies: string[]): Promise<{ label: string; accession: string }[]> {
+  return invoke('ols_search', { query, ontologies })
+}
+
+/** sdrf-pipelines' validator on an SDRF's text (`available` false when parse_sdrf is not installed). */
+export function validateSdrf(text: string, template: string | null): Promise<{ available: boolean; ok: boolean; output: string }> {
+  return invoke('validate_sdrf', { text, template })
+}

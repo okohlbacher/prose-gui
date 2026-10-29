@@ -14,6 +14,8 @@
 //! - `example_files()` -> `{ spectra: [path, path], database }`
 //! - `open_design_file()` -> `{ path, text }` of an SDRF or design.tsv chosen (null if cancelled);
 //!   `locate_data_files(sdrf, names, folder?)` -> `[{ exact?, mzml? }]` (`locate`)
+//! - `ols_search(query, ontologies)` -> `[{ label, accession }]`; `validate_sdrf(text, template?)` ->
+//!   `{ available, ok, output }` (`sdrf_tools`)
 //! - `save_text(name, contents)` and `save_search_file(searchId, name, suggested)`: a save dialog of
 //!   the system, then the file written where the user chose (-> the path, or null if cancelled)
 //! - History (`history`): `history_list()` -> entries (a folder with a broken record, or none, has
@@ -39,6 +41,7 @@ pub mod decoys;
 pub mod files;
 pub mod history;
 pub mod locate;
+pub mod sdrf_tools;
 pub mod progress;
 pub mod project;
 pub mod run;
@@ -562,6 +565,24 @@ async fn locate_data_files(sdrf: String, names: Vec<String>, folder: Option<Stri
     .map_err(|e| e.to_string())
 }
 
+/// Ontology terms for the SDRF editor (`sdrf_tools::ols_search`), cached in the app's data folder.
+#[tauri::command]
+async fn ols_search(app: AppHandle, query: String, ontologies: Vec<String>) -> Result<Vec<sdrf_tools::Term>, String> {
+    let cache = app.path().app_data_dir().map_err(|e| e.to_string())?.join("ols-cache");
+    tauri::async_runtime::spawn_blocking(move || sdrf_tools::ols_search(&cache, &query, &ontologies))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// The SDRF `text` checked by sdrf-pipelines' `parse_sdrf validate-sdrf` (`available` false without it).
+#[tauri::command]
+async fn validate_sdrf(app: AppHandle, text: String, template: Option<String>) -> Result<sdrf_tools::Validation, String> {
+    let tmp = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || sdrf_tools::validate(&tmp, &text, template.as_deref()))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// A QPX results folder (ProSE run by hand or on a cluster): the folder dialog, then its runs' stems
 /// (`history::qpx_stems`) -> `{ folder, stems }`, or null if cancelled.
 #[tauri::command]
@@ -791,6 +812,8 @@ pub fn run() {
             open_qpx_folder,
             open_design_file,
             locate_data_files,
+            ols_search,
+            validate_sdrf,
             history_import_qpx,
             save_project_file,
             answer_close
