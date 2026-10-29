@@ -20,7 +20,8 @@ import type { ByteRange, SearchFiles } from './results/read'
 import { errorText } from './format/error'
 
 /** The ProSE tool the app runs: its version, where it is, and whether it has ONNX Runtime (PeptDeep). */
-export type ToolInfo = { version: string; path: string; onnx: boolean }
+/** `sdrf`: the tool has -sdrf (the QPX run and sample views from an SDRF). */
+export type ToolInfo = { version: string; path: string; onnx: boolean; sdrf?: boolean }
 
 /** A file the user chose, by path (never read by the page; the shim reads it where it is). */
 export type InputFile = { path: string; name: string; size: number }
@@ -58,6 +59,8 @@ export type SearchRequest = {
     /** `-threads`; 0: all cores. */
     threads: number
   }
+  /** The SDRF of the inputs, passed to a tool that has -sdrf (`ToolInfo.sdrf`). */
+  sdrf?: string
 }
 
 /** A step of a running search (`search://progress`). */

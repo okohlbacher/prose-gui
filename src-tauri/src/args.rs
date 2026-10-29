@@ -46,6 +46,40 @@ pub struct SearchRequest {
     /// Append the bundled cRAP to the database, with `CON__` accessions.
     pub contaminants: bool,
     pub settings: SearchSettings,
+    /// The SDRF of the inputs (its text), written into the search folder as [`SDRF_FILE`] and passed as
+    /// `-sdrf`: ProSE then takes the samples of the QPX run and sample views from it. Only for a tool that
+    /// has the option (`ToolInfo::sdrf`).
+    #[serde(default)]
+    pub sdrf: Option<String>,
+}
+
+/// The SDRF of a search in its folder.
+pub const SDRF_FILE: &str = "design.sdrf.tsv";
+
+/// The SDRF `text` for ProSE: each `comment[data file]` that names an input (by its stem, any case: the SDRF
+/// may name the vendor file of a searched mzML) names the link ProSE sees instead (`InputRecord::link`), so
+/// that ProSE, which matches rows by the input's stem, finds them. Everything else stays as it is.
+pub fn sdrf_for_inputs(text: &str, records: &[InputRecord]) -> String {
+    let eol = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut lines = text.split(eol);
+    let Some(header) = lines.next() else { return text.to_string() };
+    let col = header
+        .split('\t')
+        .position(|h| h.trim().to_lowercase().replace(' ', "") == "comment[datafile]");
+    let Some(col) = col else { return text.to_string() };
+    let base = |p: &str| p.rsplit(['/', '\\']).next().unwrap_or(p).to_string();
+    let mut out = vec![header.to_string()];
+    for line in lines {
+        let mut cells: Vec<String> = line.split('\t').map(str::to_string).collect();
+        if let Some(cell) = cells.get_mut(col) {
+            let stem = input_stem(&base(cell.trim())).to_lowercase();
+            if let Some(r) = records.iter().find(|r| input_stem(&r.name).to_lowercase() == stem) {
+                *cell = r.link.clone();
+            }
+        }
+        out.push(cells.join("\t"));
+    }
+    out.join(eol)
 }
 
 /// The type of a ProSE parameter, which decides how a JSON value becomes arguments.
@@ -680,6 +714,10 @@ pub fn build_args_with(
     args.push("-qpx_peak_top".into());
     args.push(PEAK_TOP.to_string().into());
     args.push("-keep_decoys".into());
+    if req.sdrf.is_some() {
+        args.push("-sdrf".into());
+        args.push(out_dir.join(SDRF_FILE).into_os_string());
+    }
     // the idXML of the Export menu: the merged one of several inputs, the one input's own
     if req.files.len() > 1 {
         args.push("-out_merged".into());

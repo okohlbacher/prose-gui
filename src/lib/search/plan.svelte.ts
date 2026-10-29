@@ -130,6 +130,7 @@ export function searchRequest(): SearchRequest | null {
   if (searchPlan.chimericBlocked) delete parameters['chimeric:enabled']
   if (searchPlan.fdrBlocked) for (const name of FDR_PARAMETERS) delete parameters[name]
   return {
+    ...(toolState.info?.sdrf && sdrfSession.table ? { sdrf: sdrfSession.text() } : {}),
     files: form.files.map((r) => ({ id: r.id, path: r.file.path })),
     database: form.database.file.path,
     contaminants: form.contaminants,

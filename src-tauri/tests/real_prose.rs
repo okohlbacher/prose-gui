@@ -383,3 +383,40 @@ fn processes_with(needle: &str) -> usize {
         })
         .count()
 }
+
+#[test]
+fn an_sdrf_annotates_the_qpx_views_of_a_tool_that_has_sdrf() {
+    let Some(real) = real() else { return };
+    if !tool::probe(&real.bin).unwrap().sdrf {
+        eprintln!("skipped: {} has no -sdrf", real.bin.display());
+        return;
+    }
+    let work = TempDir::new("real-sdrf");
+    let mut request = example_request_with(&real, &work, false, json!({ "FDR:PSM": 0.02, "FDR:protein": 0 }));
+    // two inputs of their own names; the SDRF names the vendor file of the first
+    for (i, f) in request.files.iter_mut().enumerate() {
+        let renamed = Path::new(&f.path).with_file_name(format!("rep_{}.mzML", i + 1));
+        fs::rename(&f.path, &renamed).unwrap();
+        f.path = renamed.to_string_lossy().into_owned();
+    }
+    request.sdrf = Some(
+        "source name\tcharacteristics[organism]\tcharacteristics[biological replicate]\tassay name\tcomment[label]\tcomment[data file]\tcomment[fraction identifier]\tcomment[technical replicate]\tfactor value[condition]\n\
+         first sample\tEscherichia coli\t1\trun 1\tlabel free sample\trep_1.raw\t1\t1\tA\n\
+         second sample\tEscherichia coli\t2\trun 2\tlabel free sample\trep_2.mzML\t1\t1\tB\n"
+            .into(),
+    );
+    let searches = Arc::new(Searches::default());
+    let (sink, rx) = channel_sink();
+    let crap = tool::bundled_crap(None).expect("resources/fasta/crap.fasta");
+    let searches_dir = work.path().join("searches");
+    searches.start(&real.bin, &searches_dir, Some(&crap), request, sink).unwrap();
+    let folder = match until_terminal(&rx, Duration::from_secs(300)).last() {
+        Some(SearchEvent::Done(d)) => PathBuf::from(&d.folder),
+        other => panic!("not done: {other:?}"),
+    };
+    let sdrf = fs::read_to_string(folder.join(prose_desktop_lib::args::SDRF_FILE)).unwrap();
+    assert!(sdrf.contains("\t1__rep_1.mzML\t") && sdrf.contains("\t2__rep_2.mzML\t"), "{sdrf}");
+    let log = fs::read_to_string(folder.join("prose.log")).unwrap();
+    assert!(log.contains("SDRF: sample metadata of 2 of 2 input(s)"), "{log}");
+    assert!(parquet(&folder.join("qpx/quantms.sample.parquet")));
+}

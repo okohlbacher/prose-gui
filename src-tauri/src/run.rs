@@ -1257,6 +1257,10 @@ fn prepare_folder(
     let json = serde_json::to_string_pretty(records).map_err(|e| e.to_string())?;
     fs::write(dir.join("inputs.json"), json)
         .map_err(|e| format!("inputs.json cannot be written ({e})."))?;
+    if let Some(sdrf) = &request.sdrf {
+        fs::write(dir.join(crate::args::SDRF_FILE), crate::args::sdrf_for_inputs(sdrf, records))
+            .map_err(|e| format!("{} cannot be written ({e}).", crate::args::SDRF_FILE))?;
+    }
     if request.contaminants {
         let crap =
             crap.ok_or("The contaminant database (cRAP) is not available in this installation.")?;

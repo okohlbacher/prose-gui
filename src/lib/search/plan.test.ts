@@ -132,6 +132,21 @@ describe('the search request', () => {
     for (const leaf of leaves(r)) expect(['string', 'number', 'boolean']).toContain(typeof leaf)
   })
 
+  test('the SDRF goes with the request only to a tool that has -sdrf', async () => {
+    const { sdrfSession } = await import('../design/sdrf-session.svelte')
+    await form.addFiles(['/r/a.mzML', '/r/b.mzML', '/db/db.fasta'])
+    await settle()
+    sdrfSession.create()
+    toolState.info = { version: '3.7', path: '/p', onnx: false, sdrf: false }
+    expect(searchRequest()!.sdrf).toBeUndefined()
+    toolState.info = { version: '3.7', path: '/p', onnx: false, sdrf: true }
+    expect(searchRequest()!.sdrf).toContain('comment[data file]')
+    expect(searchRequest()!.sdrf).toContain('b.mzML')
+    sdrfSession.clear()
+    expect(searchRequest()!.sdrf).toBeUndefined()
+    toolState.info = null
+  })
+
   test('every preset sends only names the shim lets through', async () => {
     await form.addFiles(['/r/run.mzML', '/db/db.fasta'])
     await settle()

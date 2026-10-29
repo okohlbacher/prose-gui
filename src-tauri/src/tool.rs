@@ -13,6 +13,8 @@ pub struct ToolInfo {
     pub path: String,
     /// Whether the tool was built with ONNX Runtime and has the PeptDeep models (see `has_onnx`).
     pub onnx: bool,
+    /// Whether the tool has `-sdrf` (its help lists it): New search then passes its SDRF.
+    pub sdrf: bool,
 }
 
 pub const EXE: &str = if cfg!(windows) { "ProSE.exe" } else { "ProSE" };
@@ -177,10 +179,11 @@ pub fn has_onnx(path: &Path) -> bool {
             .all(|m| inside(m) && root.join(m).is_file())
 }
 
-/// Runs `path --help` and reads the version; fails if the tool does not run or does not say.
+/// Runs `path --helphelp` (the help with the advanced options, where `-sdrf` is) and reads the version; fails if
+/// the tool does not run or does not say.
 pub fn probe(path: &Path) -> Result<ToolInfo, String> {
     let output = command(path)
-        .arg("--help")
+        .arg("--helphelp")
         .stdin(Stdio::null())
         .output()
         .map_err(|e| format!("The ProSE tool {} cannot be run ({e}).", path.display()))?;
@@ -200,5 +203,6 @@ pub fn probe(path: &Path) -> Result<ToolInfo, String> {
         version,
         path: path.to_string_lossy().into_owned(),
         onnx: has_onnx(path),
+        sdrf: help.contains("-sdrf <file>"),
     })
 }

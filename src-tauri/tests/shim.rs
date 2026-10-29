@@ -2459,3 +2459,42 @@ fn cancel_all_stops_every_running_search() {
     assert!(pids.iter().all(|p| !process_alive(*p)));
     assert!(run.listing().is_empty());
 }
+
+#[test]
+fn an_sdrf_is_passed_as_a_file_of_the_search_folder() {
+    let dir = std::env::temp_dir().join(format!("prose-sdrf-args-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mzml = dir.join("a.mzML");
+    let fasta = dir.join("db.fasta");
+    std::fs::write(&mzml, "").unwrap();
+    std::fs::write(&fasta, ">p\nPEPTIDEK\n").unwrap();
+    let mut req = request(&[&mzml], &fasta, false, json!({}));
+    let out = dir.join("out");
+    assert!(!args_of(&req, &out).iter().any(|a| a == "-sdrf"));
+    req.sdrf = Some("source name\tcomment[data file]\ns\ta.mzML\n".into());
+    let args = args_of(&req, &out);
+    let at = args.iter().position(|a| a == "-sdrf").expect("-sdrf");
+    assert_eq!(args[at + 1], out.join(prose_desktop_lib::args::SDRF_FILE).into_os_string());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_sdrf_names_the_links_prose_sees() {
+    use prose_desktop_lib::args::{sdrf_for_inputs, InputRecord};
+    let rec = |i: usize, name: &str| InputRecord {
+        id: format!("f{i}"),
+        index: i,
+        link: format!("{i}__{name}"),
+        stem: format!("{i}__{}", name.split('.').next().unwrap()),
+        name: name.into(),
+        path: format!("/d/{name}"),
+    };
+    let records = [rec(0, "Ecoli_1.mzML"), rec(1, "Ecoli_2.mzML")];
+    let text = "source name\tComment[Data File]\tfactor value[x]\r\na\tEcoli_1.mzML\tp\r\nb\tecoli_2.raw\tq\r\nc\tother.raw\tr\r\n";
+    assert_eq!(
+        sdrf_for_inputs(text, &records),
+        "source name\tComment[Data File]\tfactor value[x]\r\na\t0__Ecoli_1.mzML\tp\r\nb\t1__Ecoli_2.mzML\tq\r\nc\tother.raw\tr\r\n"
+    );
+    assert_eq!(sdrf_for_inputs("no data file\n", &records), "no data file\n");
+}
