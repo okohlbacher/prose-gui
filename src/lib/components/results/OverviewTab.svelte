@@ -14,6 +14,7 @@
   import { methodsText } from '$lib/results/methods'
   import DeltaMassPanel from './DeltaMassPanel.svelte'
   import GuidanceNotices from './GuidanceNotices.svelte'
+  import DiagnosisCard from './DiagnosisCard.svelte'
   import { precursorSample, searchedWindows, toleranceFindings } from '$lib/results/tolerance'
 
   let { view }: { view: ResultsView } = $props()
@@ -102,6 +103,7 @@
       <button type="button" class="ml-1 underline underline-offset-2" onclick={() => openHelp('fdr')}>What this means ›</button>
     </div>
   {/if}
+  <DiagnosisCard {view} />
   <section aria-labelledby="overview-search">
     <h2 id="overview-search" class="mb-2 text-[13px] font-semibold">Search</h2>
     <dl class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-x-6 gap-y-2 text-xs" data-testid="search-facts">
