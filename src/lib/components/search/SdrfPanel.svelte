@@ -38,7 +38,10 @@
       </span>
       <div class="flex-1"></div>
       <Button variant="outline" size="sm" class="h-6 px-2 text-xs" disabled={sdrf.busy} onclick={() => sdrf.locateFolder()}>Locate folder…</Button>
-      <Button variant="outline" size="sm" class="h-6 px-2 text-xs" onclick={() => (editing = true)}>Edit metadata…</Button>
+      <Button variant="outline" size="sm" class="h-6 px-2 text-xs" onclick={() => {
+          sdrf.commitDesign()
+          editing = true
+        }}>Edit metadata…</Button>
       <Button variant="outline" size="sm" class="h-6 px-2 text-xs" onclick={save}>Save SDRF…</Button>
       <Button variant="ghost" size="icon-xs" class="text-muted-foreground" aria-label="Forget the SDRF" title="Forget the SDRF (its files stay)" onclick={() => sdrf.clear()}><XIcon /></Button>
     </div>

@@ -61,6 +61,23 @@ export function fileStatus(name: string, located: { exact: string | null; mzml: 
   return { status: uri !== '' && !noValue(uri) ? 'remote' : 'missing', path: null }
 }
 
+const FIELDS = ['condition', 'replicate', 'fraction', 'techReplicate'] as const
+type Fields = Partial<Pick<DesignInput, (typeof FIELDS)[number]>>
+
+/**
+ * The design fields (`parseSdrf`: condition from the factor values, replicates, fraction) that differ between two
+ * versions of an SDRF, per data file; a field no longer given is `undefined`.
+ */
+export function designChanges(before: SdrfTable, after: SdrfTable): { fileName: string; fields: Fields }[] {
+  const old = new Map(parseSdrf(writeSdrfTable(before)).inputs.map((i) => [i.fileName!, i]))
+  return parseSdrf(writeSdrfTable(after)).inputs.flatMap((now) => {
+    const was = old.get(now.fileName!) ?? {}
+    const fields: Fields = {}
+    for (const f of FIELDS) if (now[f] !== was[f]) (fields as Record<string, unknown>)[f] = now[f]
+    return Object.keys(fields).length > 0 ? [{ fileName: now.fileName!, fields }] : []
+  })
+}
+
 const FOLDERS = 'prose.sdrf.folders'
 
 function rememberedFolder(sdrf: string): string | null {
@@ -172,6 +189,22 @@ class SdrfSession {
     if (!this.table) return
     const table = structuredClone(this.table)
     change(table)
+    // the design fields the edit changed go to the design table (the SDRF is the reference for both)
+    for (const { fileName: name, fields } of designChanges(this.table, table)) {
+      const row = form.files.find((r) => r.file.path === this.files.find((f) => f.name === name)?.path)
+      if (!row) continue
+      for (const [field, value] of Object.entries(fields)) form.setField(row.id, field as keyof typeof fields, value as never)
+    }
+    this.#loaded = new Map(parseSdrf(writeSdrfTable(table)).inputs.map((i) => [i.fileName!, i]))
+    this.table = table
+    this.issues = validateSdrf(table)
+  }
+
+  /** The design table's edits written into the SDRF itself (before the metadata editor shows it). */
+  commitDesign() {
+    if (!this.table) return
+    const table = parseSdrfTable(this.text())
+    this.#loaded = new Map(parseSdrf(writeSdrfTable(table)).inputs.map((i) => [i.fileName!, i]))
     this.table = table
     this.issues = validateSdrf(table)
   }
