@@ -4,6 +4,7 @@
 // is the web app's result of the same search with its WebAssembly module (scripts/results-fixture-web.mjs).
 // The cases are in scripts/results-example.mjs. Where the two legitimately differ, the test says why.
 
+import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, cpSync, readdirSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -20,7 +21,7 @@ import { psmFdrFact, psmFdrNotice } from './overview'
 import { bytesOfRange, FileNotFound, OldLayoutError, readSearch, ZSTD, type ByteRange } from './read'
 import type { ProSEMultiSummary, ResultTables, StoredSpectra } from './types'
 
-const fixtures = new URL('./fixtures/', import.meta.url).pathname
+const fixtures = fileURLToPath(new URL('./fixtures/', import.meta.url))
 
 /**
  * The files of a search folder, as the `files` contract has it (a missing file: FileNotFound; a byte range:

@@ -3,6 +3,7 @@
 // reader, as `suitability`, the web app's example, whose result has decoy proteins) and the result the session would
 // hold for it. Not part of the app.
 
+import { fileURLToPath } from 'node:url'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { input } from '../design/fixtures'
@@ -12,7 +13,7 @@ import type { OpenResult } from '../search/session.svelte'
 import { folderFiles } from './history'
 import { MemoryBackend } from './memory-backend'
 
-const fixtures = new URL('../results/fixtures/', import.meta.url).pathname
+const fixtures = fileURLToPath(new URL('../results/fixtures/', import.meta.url))
 
 /** The files of a directory by relative name. */
 export function readDir(dir: string, prefix = ''): Record<string, Uint8Array> {

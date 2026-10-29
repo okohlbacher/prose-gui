@@ -5,6 +5,7 @@
 // the file) and of edge cases, with the option sets of the PSM view and others. And against ProSE's own
 // fragment annotation of its scoring (QPX ion_type_array).
 
+import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { zstdDecompressSync } from 'node:zlib'
@@ -14,7 +15,7 @@ import { bytesOfRange, FileNotFound, readSearch, type ByteRange, type SearchResu
 import type { PeakAnnotationResult } from '../results/types'
 import { annotatePeaks, type AnnotationOptions } from './annotate'
 
-const results = new URL('../results/fixtures/', import.meta.url).pathname
+const results = fileURLToPath(new URL('../results/fixtures/', import.meta.url))
 
 /** The search folder of the reader's fixture `name`, as the `files` contract has it. */
 function folder(name: string) {
