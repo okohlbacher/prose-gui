@@ -1,0 +1,5 @@
+source name	characteristics[organism]	characteristics[biological replicate]	assay name	comment[label]	comment[data file]	comment[fraction identifier]	factor value[treatment]
+ctrl 1	Homo sapiens	1	run1	TMT126	tmt_run1.raw	1	control
+egf 1	Homo sapiens	1	run1	TMT127N	tmt_run1.raw	1	EGF
+ctrl 2	Homo sapiens	2	run2	TMT126	tmt_run2.raw	1	control
+egf 2	Homo sapiens	2	run2	TMT127N	tmt_run2.raw	1	EGF

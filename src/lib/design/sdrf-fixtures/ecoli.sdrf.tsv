@@ -1,0 +1,4 @@
+source name	characteristics[organism]	characteristics[biological replicate]	assay name	technology type	comment[label]	comment[data file]	comment[fraction identifier]	comment[technical replicate]	factor value[condition]
+Ecoli 1	Escherichia coli K-12	1	run 1	proteomic profiling by mass spectrometry	label free sample	Ecoli_1.mzML	1	1	wild type
+Ecoli 2	Escherichia coli K-12	2	run 2	proteomic profiling by mass spectrometry	label free sample	Ecoli_2.raw	1	1	wild type
+Ecoli 3	Escherichia coli K-12	3	run 3	proteomic profiling by mass spectrometry	label free sample	Ecoli_3.mzML	1	1	wild type

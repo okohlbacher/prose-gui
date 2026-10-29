@@ -10,6 +10,7 @@ import { DECOY_LABELS } from '../settings/labels'
 import { PROSE_PARAMETERS } from '../settings/prose'
 import { boundsMessage, invertedRanges, outOfBounds, rangeMessage } from '../settings/ranges'
 import { keepsOpenResult, showFinished } from './finished'
+import { sdrfSession } from '../design/sdrf-session.svelte'
 import { CRAP_PROTEINS, searchForm as form } from './form.svelte'
 import { runSearch, searchRun } from './session.svelte'
 import { toolState } from './tool.svelte'
@@ -88,6 +89,7 @@ class SearchPlan {
   problem = $derived.by(() => {
     if (form.files.length === 0) return 'Add mzML files to start.'
     if (form.adding > 0) return 'Adding files…'
+    if (sdrfSession.problem) return sdrfSession.problem
     const unsearchable = form.files.filter((r) => r.problem)
     if (unsearchable.length === 1) return `${unsearchable[0].problem} Remove it to start the search.`
     if (unsearchable.length > 1) return `${unsearchable.length} files cannot be searched (see Spectra). Remove them to start the search.`

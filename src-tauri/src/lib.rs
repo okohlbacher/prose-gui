@@ -12,6 +12,8 @@
 //! - `inspect_files(paths)` -> `[{ path, name, size, spectra?, proteins?, residues?, error?, problem?, warnings }]`
 //! - `cpu_count()` -> the cores the search's threads may use
 //! - `example_files()` -> `{ spectra: [path, path], database }`
+//! - `open_design_file()` -> `{ path, text }` of an SDRF or design.tsv chosen (null if cancelled);
+//!   `locate_data_files(sdrf, names, folder?)` -> `[{ exact?, mzml? }]` (`locate`)
 //! - `save_text(name, contents)` and `save_search_file(searchId, name, suggested)`: a save dialog of
 //!   the system, then the file written where the user chose (-> the path, or null if cancelled)
 //! - History (`history`): `history_list()` -> entries (a folder with a broken record, or none, has
@@ -36,6 +38,7 @@ pub mod content;
 pub mod decoys;
 pub mod files;
 pub mod history;
+pub mod locate;
 pub mod progress;
 pub mod project;
 pub mod run;
@@ -504,6 +507,42 @@ async fn open_project_file(app: AppHandle) -> Result<Response, String> {
     .map(Response::new)
 }
 
+/// An SDRF or design.tsv: the open dialog, then `{ path, text }` of the file chosen, or null if cancelled.
+#[tauri::command]
+async fn open_design_file(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let chosen = match test_dialog_path() {
+            Some(path) => Some(path),
+            None => match app
+                .dialog()
+                .file()
+                .set_title("Load a design (SDRF or design.tsv)")
+                .add_filter("SDRF, design.tsv", &["tsv", "txt", "sdrf"])
+                .blocking_pick_file()
+            {
+                None => None,
+                Some(p) => Some(p.into_path().map_err(|e| e.to_string())?),
+            },
+        };
+        let Some(path) = chosen else { return Ok(None) };
+        let text = std::fs::read_to_string(&path).map_err(|e| format!("{} cannot be read ({e}).", path.display()))?;
+        Ok(Some(serde_json::json!({ "path": path, "text": text })))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// The data files an SDRF names (`locate`): beside the SDRF at `sdrf`, then below `folder` if given.
+#[tauri::command]
+async fn locate_data_files(sdrf: String, names: Vec<String>, folder: Option<String>) -> Result<Vec<locate::Located>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let base = Path::new(&sdrf).parent().unwrap_or(Path::new("")).to_path_buf();
+        locate::locate(&base, &names, folder.as_deref().map(Path::new))
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// A QPX results folder (ProSE run by hand or on a cluster): the folder dialog, then its runs' stems
 /// (`history::qpx_stems`) -> `{ folder, stems }`, or null if cancelled.
 #[tauri::command]
@@ -730,6 +769,8 @@ pub fn run() {
             history_import,
             open_project_file,
             open_qpx_folder,
+            open_design_file,
+            locate_data_files,
             history_import_qpx,
             save_project_file,
             answer_close

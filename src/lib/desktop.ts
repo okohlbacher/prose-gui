@@ -5,7 +5,7 @@
 // Commands (src-tauri/src/lib.rs): tool_info, start_search, cancel_search, read_search_file,
 // inspect_files, cpu_count, example_files, save_text, save_search_file, history_list, history_save_record,
 // history_save_proteins, history_rename, history_delete, history_files, history_import, open_project_file,
-// save_project_file, answer_close. Events: search://progress, search://done, search://failed,
+// save_project_file, open_design_file, locate_data_files, answer_close. Events: search://progress, search://done, search://failed,
 // project://progress, app://close-requested. The system's dialogs open one at a time (`oneDialog`). The window's
 // theme (`windowTheme`, `onWindowThemeChanged`, `setWindowTheme`).
 
@@ -341,3 +341,29 @@ export function answerClose(close: boolean): Promise<void> {
 
 /** The text of a rejection of a command (a string, or an object with a message). */
 export { errorText }
+
+/** An SDRF or design.tsv chosen in the system's open dialog: its path and text; null if cancelled. */
+export function openDesignFile(): Promise<{ path: string; text: string } | null> {
+  return oneDialog(null, () => invoke<{ path: string; text: string } | null>('open_design_file'))
+}
+
+/** Where the data files an SDRF names are (src-tauri/src/locate.rs): beside the SDRF, then below `folder`. */
+export function locateDataFiles(sdrf: string, names: string[], folder: string | null): Promise<{ exact: string | null; mzml: string | null }[]> {
+  return invoke('locate_data_files', { sdrf, names, folder })
+}
+
+/** The system's folder dialog; the folder chosen, or null. */
+export function chooseFolder(title: string): Promise<string | null> {
+  return oneDialog(null, async () => {
+    const chosen = await open({ directory: true, multiple: false, title })
+    return typeof chosen === 'string' ? chosen : null
+  })
+}
+
+/** The system's open dialog for one file of any kind; its path, or null. */
+export function chooseFile(title: string): Promise<string | null> {
+  return oneDialog(null, async () => {
+    const chosen = await open({ multiple: false, title })
+    return typeof chosen === 'string' ? chosen : null
+  })
+}

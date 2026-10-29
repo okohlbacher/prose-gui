@@ -3,9 +3,11 @@
   // chosen in the system's dialog (their paths; nothing is copied).
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
-  import { chooseFiles } from '$lib/desktop'
+  import { openDesign } from '$lib/design/sdrf-session.svelte'
+  import { chooseFiles, isDesktop } from '$lib/desktop'
   import { searchForm as form } from '$lib/search/form.svelte'
   import NoticeList from './NoticeList.svelte'
+  import SdrfPanel from './SdrfPanel.svelte'
 
   let { dragging = false }: { dragging?: boolean } = $props()
 
@@ -33,11 +35,13 @@
       </div>
       <div class="flex items-center gap-2">
         <Button size="sm" disabled={form.adding > 0} onclick={add}>Add files</Button>
+        {#if isDesktop()}<Button variant="outline" size="sm" disabled={form.busy} onclick={() => openDesign()}>Load SDRF…</Button>{/if}
         <Button variant="outline" size="sm" disabled={form.busy} onclick={() => form.loadExample()}>
           {form.exampleLoading ? 'Loading the example…' : 'Try the example'}
         </Button>
       </div>
     </div>
+    <SdrfPanel />
     {#if form.removed}
       {@const n = form.removed.files.length}
       <p class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" role="status" data-testid="removed-note">
