@@ -17,6 +17,7 @@
   import DiagnosisCard from './DiagnosisCard.svelte'
   import SanitySection from './SanitySection.svelte'
   import CommandLine from './CommandLine.svelte'
+  import ChemistrySection from './ChemistrySection.svelte'
   import { precursorSample, searchedWindows, toleranceFindings } from '$lib/results/tolerance'
 
   let { view }: { view: ResultsView } = $props()
@@ -220,6 +221,7 @@
   {/if}
 
   <SanitySection {view} />
+  <ChemistrySection {view} />
 
   <section aria-labelledby="overview-methods" data-testid="methods">
     <div class="mb-1 flex items-center gap-2">
