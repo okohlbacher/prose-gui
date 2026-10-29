@@ -6,11 +6,12 @@
 		variants: {
 			variant: {
 				default: "bg-muted",
-				line: "gap-1 bg-transparent",
+				line: "gap-1 bg-transparent p-0",
 			},
 		},
 		defaultVariants: {
-			variant: "default",
+			// flat: an underlined tab row (in the accent), not a pill on a grey plate
+			variant: "line",
 		},
 	});
 
@@ -23,7 +24,7 @@
 
 	let {
 		ref = $bindable(null),
-		variant = "default",
+		variant = "line",
 		class: className,
 		...restProps
 	}: TabsPrimitive.ListProps & {

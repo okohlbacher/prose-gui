@@ -83,10 +83,11 @@
   ])
 </script>
 
-<div class="grid grid-cols-5 gap-2.5">
+<!-- one strip with dividers, not five cards -->
+<div class="grid grid-cols-5 divide-x rounded-lg border">
   {#each stats as s (s.testid)}
-    <div class="rounded-lg border bg-background px-3 py-2.5" title={s.title}>
-      <div class="text-xl font-semibold tracking-tight tabular-nums" data-testid={s.testid}>{s.value}</div>
+    <div class="min-w-0 px-3.5 py-2" title={s.title}>
+      <div class="text-lg leading-tight font-semibold tracking-tight tabular-nums" data-testid={s.testid}>{s.value}</div>
       <div class="truncate text-xs text-muted-foreground">{s.note}</div>
     </div>
   {/each}

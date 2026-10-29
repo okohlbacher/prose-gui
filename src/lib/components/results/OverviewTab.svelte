@@ -99,7 +99,7 @@
   {/if}
 {/snippet}
 
-<div class="flex flex-col gap-6 pb-6">
+<div class="flex flex-col gap-5 pb-6">
   {#if !summary.proteinFdrApplied}
     <div role="note" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" data-testid="no-protein-fdr">
       <span class="font-medium">No protein-level FDR.</span> The protein groups and their counts come from the PSMs at the PSM FDR and are not

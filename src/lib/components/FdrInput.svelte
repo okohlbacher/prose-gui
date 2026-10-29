@@ -110,7 +110,7 @@
         type="button"
         class={cn(
           'h-6 rounded-full border px-2.5 text-xs whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50',
-          active ? 'border-foreground text-foreground' : 'text-muted-foreground hover:text-foreground',
+          active ? 'border-primary/50 bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:text-foreground',
         )}
         aria-pressed={active}
         disabled={disabled || tooLarge(q)}

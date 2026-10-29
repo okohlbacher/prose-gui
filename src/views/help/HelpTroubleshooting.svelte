@@ -74,8 +74,8 @@
   </div>
 
   {#each groups as g (g.id)}
-    <h3 id="faq-group-{g.id}">{g.title}</h3>
-    <div class="flex flex-col gap-1.5">
+    <h3 id="faq-group-{g.id}" class="group-title">{g.title}</h3>
+    <div class="faq-list">
       {#each g.entries as e (e.id)}
         <details id={e.id} class="faq" open={opened === e.id || words.length > 0}>
           <summary>{e.question}</summary>
@@ -98,21 +98,34 @@
 </section>
 
 <style>
-  .faq {
-    border: 1px solid var(--color-border);
-    border-radius: 0.5rem;
-    padding: 0.4rem 0.75rem;
-    scroll-margin-top: 1rem;
+  /* flat: each group is one list with hairlines between the questions, not a box per question */
+  .group-title {
+    margin-top: 1.25rem;
+    font-size: 12px;
+    color: var(--color-muted-foreground);
   }
-  .faq[open] {
-    background: var(--color-background);
+  .faq-list {
+    border-top: 1px solid var(--color-border);
+  }
+  .faq {
+    border-bottom: 1px solid var(--color-border);
+    scroll-margin-top: 1rem;
   }
   .faq summary {
     cursor: pointer;
-    font-weight: 600;
+    font-weight: 500;
+    padding: 0.4rem 0.25rem;
+    border-radius: 0.25rem;
+  }
+  .faq summary:hover {
+    background: var(--color-muted);
+  }
+  .faq summary:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
   }
   .body {
-    margin-top: 0.4rem;
+    margin: 0 0 0.75rem 1rem;
     display: flex;
     flex-direction: column;
     gap: 0.35rem;

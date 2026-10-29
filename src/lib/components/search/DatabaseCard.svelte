@@ -1,4 +1,5 @@
 <script lang="ts">
+  import StepNumber from './StepNumber.svelte'
   import { fastaLine } from '$lib/search/database'
   // The protein database: the FASTA file, decoys (ProSE's `decoys`) and the cRAP contaminants. Under it, why
   // ProSE cannot search the file (the search does not start), and what ProSE may mishandle in it (notices).
@@ -90,8 +91,9 @@
   }
 </script>
 
-<Card.Root size="sm" class="gap-3 rounded-lg shadow-none">
-  <Card.Header class="flex items-center">
+<Card.Root size="sm" class="gap-3">
+  <Card.Header class="flex items-center gap-2">
+    <StepNumber n={2} />
     <Card.Title class="text-[14px] font-semibold">Protein database</Card.Title>
   </Card.Header>
   <Card.Content class="grid gap-x-4 gap-y-3.5 md:grid-cols-[2fr_1fr_1fr]">

@@ -369,7 +369,7 @@
   }
 
   const toggle =
-    'inline-flex h-[26px] min-w-[30px] cursor-pointer items-center justify-center rounded-md border bg-background px-2 text-xs text-muted-foreground select-none hover:text-foreground peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring/50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50'
+    'inline-flex h-[26px] min-w-[30px] cursor-pointer items-center justify-center rounded-md border bg-background px-2 text-xs text-muted-foreground select-none hover:text-foreground peer-checked:border-primary/50 peer-checked:bg-primary/10 peer-checked:font-medium peer-checked:text-primary peer-focus-visible:ring-2 peer-focus-visible:ring-ring/50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50'
   const crumb = 'rounded-sm hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none'
 </script>
 
@@ -478,7 +478,7 @@
     </p>
   {/if}
 
-  <div class="rounded-lg border bg-background px-3.5 pt-3 pb-2">
+  <div class="rounded-lg border px-3.5 pt-3 pb-2">
     <div class="mb-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
       <div class="flex items-center gap-1" role="group" aria-labelledby="{uid}-ions">
         <span id="{uid}-ions" class="mr-1 text-muted-foreground">Ions</span>
@@ -624,8 +624,9 @@
   </div>
 
   <!-- below the spectrum (and its mass errors): the ion table and the features side by side; what does not fit wraps -->
-  <div class="mt-3 flex flex-wrap items-start gap-3">
-    <div class="max-w-full min-w-0 flex-none rounded-lg border bg-background px-2 py-2">
+  <!-- (flat: the spectrum is the one box; the table and the features stand on the page) -->
+  <div class="mt-4 flex flex-wrap items-start gap-x-8 gap-y-4">
+    <div class="max-w-full min-w-0 flex-none">
       {#if table}
         <IonTable {table} {peptide} label={sequence} bind:hover={hoverMz} />
       {:else}
@@ -634,7 +635,7 @@
         </p>
       {/if}
     </div>
-    <div class="min-w-[260px] flex-[1_1_420px] rounded-lg border bg-background px-3.5 py-3">
+    <div class="min-w-[260px] flex-[1_1_420px] pt-1">
       <PsmFeatures model={m} {row} {fixedMods} matched={summary} />
     </div>
   </div>

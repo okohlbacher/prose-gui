@@ -2,6 +2,7 @@
   // Search settings: the preset (PresetPicker), the ten common parameters (in the mockup's order), "Advanced": the
   // threads (all cores by default), the database chunks and co-isolated precursors, and the web app's "All N parameters" dialog
   // (AllParametersDialog), made from the pinned ProSE's parameter list.
+  import StepNumber from './StepNumber.svelte'
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right'
   import FdrInput from '$lib/components/FdrInput.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -80,8 +81,9 @@
 
 <!-- Basic: the preset (instrument), what was done to the sample (variable modifications) and how strict the results are
 (FDR); everything the preset decides is under "Advanced settings", with a one-line summary while it is closed. -->
-<Card.Root size="sm" class="gap-3 rounded-lg shadow-none">
+<Card.Root size="sm" class="gap-3">
   <Card.Header class="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+    <StepNumber n={3} />
     <Card.Title class="text-[14px] font-semibold">Search settings</Card.Title>
     <PresetPicker />
     <Help topic="setup" />

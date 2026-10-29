@@ -63,7 +63,7 @@
   {#if form.files.length === 0}
     <EmptyState {dragging} />
   {:else}
-    <div class={dragging ? 'rounded-lg ring-2 ring-foreground/30 ring-offset-2 ring-offset-muted' : ''}>
+    <div class={dragging ? 'rounded-lg ring-2 ring-primary/40 ring-offset-2 ring-offset-background' : ''}>
       <DesignTable />
     </div>
   {/if}

@@ -17,7 +17,11 @@
     copied = withPaths ? 'with paths' : 'plain'
     setTimeout(() => (copied = null), 1500)
   }
-  const button = 'rounded border px-2 py-0.5 text-xs hover:bg-muted'
+  const button = $derived(
+    compact
+      ? 'h-6 rounded-md px-2 text-xs font-medium hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none'
+      : 'rounded-md border px-2 py-0.5 text-xs hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
+  )
 </script>
 
 <span class="inline-flex items-center gap-2" data-testid="command-line">

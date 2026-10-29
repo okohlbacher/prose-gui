@@ -195,7 +195,7 @@
       {/if}
 
       <Tabs.Root bind:value={view.tab} class="flex min-h-0 flex-1 flex-col gap-3">
-        <div class="flex flex-wrap items-center justify-between gap-2" class:hidden={psmOpen}>
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b" class:hidden={psmOpen}>
           <!-- scrolls sideways where the window is too narrow for all tabs -->
           <Tabs.List class="max-w-full overflow-x-auto" data-testid="results-tabs">
             {#each tabs as t (t.value)}

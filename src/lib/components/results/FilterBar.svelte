@@ -238,7 +238,7 @@
         <button
           type="button"
           aria-pressed={on}
-          class="h-7 min-w-7 rounded-full border px-2 text-xs tabular-nums {on ? 'border-foreground bg-foreground text-background' : 'bg-background text-muted-foreground hover:text-foreground'}"
+          class="h-7 min-w-7 rounded-full border px-2 text-xs tabular-nums {on ? 'border-primary/50 bg-primary/10 font-medium text-primary' : 'bg-background text-muted-foreground hover:text-foreground'}"
           onclick={() => toggleCharge(z)}>{z}+</button>
       {/each}
     </div>

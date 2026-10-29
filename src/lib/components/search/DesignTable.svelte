@@ -2,6 +2,7 @@
   // The Spectra card: the mzML files and, from two files on, the experimental design (File ·
   // Condition · Replicate · Fraction; Advanced: Tech. replicate, Fraction group, Sample). Assumed values
   // are greyed; notices go below the table, the summary above it.
+  import StepNumber from './StepNumber.svelte'
   import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert'
   import XIcon from '@lucide/svelte/icons/x'
   import { tick } from 'svelte'
@@ -112,8 +113,9 @@
   const minWidth = $derived(!multi ? '' : form.advanced ? 'min-w-[1000px]' : 'min-w-[720px]')
 </script>
 
-<Card.Root size="sm" class="gap-3 rounded-lg shadow-none">
+<Card.Root size="sm" class="gap-3">
   <Card.Header class="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+    <StepNumber n={1} />
     <Card.Title class="text-[14px] font-semibold">Spectra</Card.Title>
     <span class="text-muted-foreground">{form.filesLine}</span>
     <div class="flex-1"></div>

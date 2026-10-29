@@ -28,14 +28,14 @@
 <Tooltip.Provider delayDuration={300}>
   <!-- the results use the whole width and the height of the window below the top bar (which wraps on
        narrow windows), at least 440 px: main takes what is left, the results fill it (absolutely) -->
-  <div class={router.route.view === 'results' ? 'flex min-h-screen flex-col bg-muted/40' : 'min-h-screen bg-muted/40'}>
+  <div class={router.route.view === 'results' ? 'flex min-h-screen flex-col bg-background' : 'min-h-screen bg-background'}>
     <TopBar route={router.route} resultId={router.resultId} />
     {#if router.route.view === 'results'}
       <main class="relative min-h-[440px] flex-1">
         <Results id={router.route.id} />
       </main>
     {:else}
-      <main class="mx-auto max-w-[1120px] px-5 pt-6 pb-24">
+      <main class="mx-auto max-w-[1120px] px-5 pt-5 pb-24">
         {#if router.route.view === 'search'}
           <NewSearch />
         {:else if router.route.view === 'help'}

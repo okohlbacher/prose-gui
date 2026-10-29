@@ -65,7 +65,7 @@
   }
 </script>
 
-<article class="help mx-auto flex max-w-[1080px] flex-col gap-6 pb-10 text-[13.5px] leading-relaxed md:flex-row md:gap-8" data-testid="view-help">
+<article class="help mx-auto flex max-w-[1080px] flex-col gap-5 pb-10 text-[13px] leading-relaxed md:flex-row md:gap-8" data-testid="view-help">
   <nav class="shrink-0 md:sticky md:top-0 md:w-48 md:self-start" aria-label="Help pages">
     <h1 class="mb-2 text-xl font-semibold tracking-tight" id="help-top">Help</h1>
     <!-- (buttons, not #anchors: the hash is the app's route) -->
@@ -110,8 +110,12 @@
     color: var(--color-primary);
   }
   .help .page-link.current {
-    color: var(--color-foreground);
-    font-weight: 600;
+    color: var(--color-primary);
+    font-weight: 500;
+  }
+  .help .page-link:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 1px;
   }
   @media (min-width: 768px) {
     .help .page-link {
@@ -121,7 +125,8 @@
       background: var(--color-muted);
     }
     .help .page-link.current {
-      background: var(--color-muted);
+      background: color-mix(in oklch, var(--color-primary) 10%, transparent);
+      color: var(--color-primary);
     }
   }
   .help :global(table.formats) {

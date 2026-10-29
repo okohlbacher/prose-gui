@@ -1,6 +1,7 @@
 <script lang="ts">
   // Rescoring: Percolator (ProSE's `rescore`, through the search request) and PeptDeep's features
   // (`peptdeep:enable` with the models), which are Percolator features and so need Percolator.
+  import StepNumber from './StepNumber.svelte'
   import * as Card from '$lib/components/ui/card'
   import { Label } from '$lib/components/ui/label'
   import { Switch } from '$lib/components/ui/switch'
@@ -22,8 +23,9 @@
   const peptdeepOn = $derived(form.peptdeep && peptdeepBlocked === null)
 </script>
 
-<Card.Root size="sm" class="gap-1 rounded-lg shadow-none">
-  <Card.Header class="flex items-center">
+<Card.Root size="sm" class="gap-1">
+  <Card.Header class="flex items-center gap-2">
+    <StepNumber n={4} />
     <Card.Title class="text-[14px] font-semibold">Rescoring</Card.Title>
   </Card.Header>
   <Card.Content class="divide-y">

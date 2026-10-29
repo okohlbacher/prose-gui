@@ -1,6 +1,7 @@
 <script lang="ts">
   // The Spectra card before any file is added: add or drop mzML files, or try the example. Files are
   // chosen in the system's dialog (their paths; nothing is copied).
+  import StepNumber from './StepNumber.svelte'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
   import { addAnyFiles } from '$lib/design/sdrf-session.svelte'
@@ -18,15 +19,16 @@
   }
 </script>
 
-<Card.Root size="sm" class="gap-3 rounded-lg shadow-none">
+<Card.Root size="sm" class="gap-3">
   <Card.Header class="flex items-center gap-2.5">
+    <StepNumber n={1} />
     <Card.Title class="text-[14px] font-semibold">Spectra</Card.Title>
   </Card.Header>
   <Card.Content class="flex flex-col gap-3">
     <div
-      class="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-md border border-dashed px-5 py-6 transition-colors {dragging
-        ? 'border-foreground/40 bg-muted/60'
-        : 'border-border bg-muted/30'}">
+      class="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-md border border-dashed px-4 py-4 transition-colors {dragging
+        ? 'border-primary/60 bg-primary/5'
+        : 'border-border'}">
       <div class="min-w-0 flex-1">
         <p class="font-medium">Drop spectrum files here, or add them</p>
         <p class="text-xs text-muted-foreground">

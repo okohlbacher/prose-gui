@@ -206,7 +206,7 @@
             <Table.Head scope="col" class="{head} text-left max-lg:hidden">Files</Table.Head>
             <Table.Head scope="col" class="{head} w-[4.5rem] text-right" title="Target PSMs that pass the search's PSM FDR">PSMs</Table.Head>
             <Table.Head scope="col" class="{head} w-[4.5rem] text-right" title="Disk space the search takes on this computer">Size</Table.Head>
-            <Table.Head scope="col" class="{head} w-[13rem] text-right"><span class="sr-only">Actions</span></Table.Head>
+            <Table.Head scope="col" class="{head} w-[28rem] text-right"><span class="sr-only">Actions</span></Table.Head>
           </Table.Row>
         </Table.Header>
         <Table.Body>
@@ -257,19 +257,19 @@
               <Table.Cell class="{cell} text-right tabular-nums" data-column="psms">{entry.psms === null ? '' : formatCount(entry.psms)}</Table.Cell>
               <Table.Cell class="{cell} text-right whitespace-nowrap tabular-nums" data-column="size">{formatBytes(entry.bytes)}</Table.Cell>
               <Table.Cell class="{cell} text-right whitespace-nowrap">
-                <div class="flex justify-end gap-1.5">
+                <div class="flex justify-end gap-0.5">
                   <Button size="xs" disabled={busy !== null || entry.error !== null} aria-label="Open {entry.name ?? entry.id}" onclick={() => open(entry)}>
                     {busy === entry.id ? 'Opening…' : 'Open'}
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="xs"
                     disabled={busy !== null || entry.error !== null}
                     title="Its files, design, database and settings in New search, to change and start"
                     aria-label="Open the settings of {entry.name ?? entry.id} in New search"
                     onclick={() => reopen(entry, false)}>Settings</Button>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="xs"
                     disabled={busy !== null || entry.error !== null}
                     title="Search the same files again with the same settings"
@@ -277,9 +277,9 @@
                     onclick={() => reopen(entry, true)}>Re-run</Button>
                   {#if entry.error === null}<CommandLine id={entry.id} compact />{/if}
                   <!-- (not while it opens) -->
-                  <Button variant="outline" size="xs" disabled={busy === entry.id || entry.error !== null} aria-label="Rename {entry.name ?? entry.id}" onclick={() => startRename(entry)}
+                  <Button variant="ghost" size="xs" disabled={busy === entry.id || entry.error !== null} aria-label="Rename {entry.name ?? entry.id}" onclick={() => startRename(entry)}
                     >Rename</Button>
-                  <Button variant="outline" size="xs" disabled={busy === entry.id} aria-label="Delete {entry.name ?? entry.id}" onclick={() => askDelete(entry)}
+                  <Button variant="ghost" size="xs" disabled={busy === entry.id} aria-label="Delete {entry.name ?? entry.id}" onclick={() => askDelete(entry)}
                     >Delete</Button>
                 </div>
               </Table.Cell>
