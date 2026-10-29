@@ -146,6 +146,17 @@ native/scripts/smoke-appimage.sh src-tauri/target/release/bundle/appimage/ProSE_
   --hide-openms /scratch/sachsenb/openms-desktop/build
 ```
 
+The browser UI tests (`e2e-web/`, Playwright with Chromium; any OS, no Tauri, CI workflow `ui`) drive the page
+against the Vite dev server in its browser mode. In dev, `?fixture=<name>` (`src/lib/dev/fixture.ts`, not in the
+build) opens a result of `src/lib/results/fixtures` through an in-memory History, e.g.
+`http://localhost:1420/?fixture=example#/results`. The theme tests write full-page screenshots of the main
+screens, light and dark, to `e2e-web/screenshots/` (gitignored).
+
+```bash
+npx playwright install chromium   # once
+npm run test:ui                   # starts Vite on port 5179 itself
+```
+
 `e2e/run.sh` builds the debug binary first (`E2E_SKIP_BUILD=1` skips that) and enters `in-env.sh` itself if it
 is not in it.
 

@@ -6,3 +6,6 @@ src-tauri/gen/
 .superpowers/
 src-tauri/resources/prose/
 src-tauri/resources/notices/
+e2e-web/screenshots/
+e2e-web/test-results/
+e2e-web/report/

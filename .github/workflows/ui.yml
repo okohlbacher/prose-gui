@@ -1,0 +1,45 @@
+# The browser UI tests (e2e-web/, Playwright): the page in Chromium against the Vite dev server, in its browser
+# mode (no Tauri; a fixture result through an in-memory History). Quick, and independent of the OpenMS build of
+# desktop.yml. The screenshots of the main screens (light and dark) and the report are kept as an artifact.
+name: ui
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ui:
+    name: Browser UI tests (Playwright, Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() }}
+        with:
+          name: ui-tests
+          path: |
+            e2e-web/screenshots/
+            e2e-web/report/
+            e2e-web/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
