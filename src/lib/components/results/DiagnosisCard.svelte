@@ -1,9 +1,9 @@
 <script lang="ts">
   // "Why so few identifications?" (guidance G4): shown when a file's identification rate is unusual for the
   // setup, or far below the rest of the batch; at most three causes, each with its evidence and its fix.
+  import FaqLink from '$lib/components/help/FaqLink.svelte'
   import Notice from '$lib/components/search/Notice.svelte'
   import { rerunWith } from '$lib/history/history.svelte'
-  import { openHelp } from '$lib/help-link.svelte'
   import { contaminantShare, diagnose, EXPECTED_ID_RATE, idRates, setupKind } from '$lib/results/diagnosis'
   import { precursorSample, searchedWindows, toleranceFindings } from '$lib/results/tolerance'
   import type { ResultsView } from '$lib/results/view.svelte'
@@ -44,14 +44,15 @@
             {#each c.reruns as r (r.label)}
               <button type="button" class="ml-2 underline underline-offset-2 hover:no-underline" onclick={() => void rerunWith(result, r.changes)}>{r.label}</button>
             {/each}
-            {#if c.help}
-              <button type="button" class="ml-2 underline underline-offset-2 hover:no-underline" onclick={() => openHelp(c.help!.id)}>Help › {c.help.label}</button>
-            {/if}
+            <FaqLink check={c.id} faq={c.help?.id} />
           </Notice>
         {/each}
       </div>
     {:else}
-      <p class="text-xs text-muted-foreground">The search reports nothing that explains it. Check the sample, the organism of the database and the enzyme.</p>
+      <p class="text-xs text-muted-foreground">
+        The search reports nothing that explains it. Check the sample preparation (alkylation, labels, enzyme) and the organism of the
+        database against your protocol, and compare with a good run of the same instrument.<FaqLink check="low-id-rate" />
+      </p>
     {/if}
   </section>
 {/if}

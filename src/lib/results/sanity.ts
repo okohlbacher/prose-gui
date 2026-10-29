@@ -84,7 +84,7 @@ export function sanityFindings(s: SanityInput): SanityFinding[] {
     if (e.n >= ALL_Q_ZERO_MIN_PSMS && e.nonzero === 0) {
       out.push({
         id: 'all-q-zero',
-        message: `${baseName(m.tables.files[file])}: all ${e.n} PSMs have q-value 0. Decoys were probably not recognised (a decoy marker the search did not expect), so the FDR is not real.`,
+        message: `${baseName(m.tables.files[file])}: all ${e.n} PSMs have q-value 0. Decoys were probably not recognised (a decoy marker the search did not expect), so the FDR cannot be trusted until the decoys are fixed.`,
       })
     }
   }

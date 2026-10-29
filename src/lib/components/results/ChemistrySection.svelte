@@ -1,6 +1,7 @@
 <script lang="ts">
   // The sample chemistry of a result (guidance G2): cysteine peptides against the proteins, label occupancy,
   // missed and non-specific cleavages of the passing target peptides, and what looks off.
+  import FaqLink from '$lib/components/help/FaqLink.svelte'
   import Notice from '$lib/components/search/Notice.svelte'
   import { chemistryCard } from '$lib/results/chemistry'
   import type { ResultsView } from '$lib/results/view.svelte'
@@ -29,6 +30,6 @@
         <div><dt class="text-muted-foreground">{f.name}</dt><dd>{f.value}</dd></div>
       {/each}
     </dl>
-    <div class="flex flex-col gap-1.5">{#each card.notes as note, k (k)}<Notice>{note}</Notice>{/each}</div>
+    <div class="flex flex-col gap-1.5">{#each card.notes as note, k (k)}<Notice>{note}<FaqLink check={card.noteIds[k]} /></Notice>{/each}</div>
   </section>
 {/if}

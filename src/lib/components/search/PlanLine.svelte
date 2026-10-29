@@ -2,6 +2,7 @@
   // The footer's text: the one-line plan (in full as its title: the footer may cut it), and beneath it the
   // example's note (it wraps), why the search cannot start, or how the last search ended. A red flag that stops
   // the search (`checks.ts`) has "Search anyway" beside it: the user is asked once per file.
+  import FaqLink from '$lib/components/help/FaqLink.svelte'
   import { searchPlan as plan } from '$lib/search/plan.svelte'
   import { searchRun } from '$lib/search/session.svelte'
 </script>
@@ -22,6 +23,7 @@
           title="Start is allowed for these files from now on; the search records that you chose to search them anyway."
           onclick={() => plan.searchAnyway()}>Search anyway</button>
       {/if}
+      <span class="shrink-0"><FaqLink check={plan.blocking?.id} /></span>
     </p>
   {:else if searchRun.status === 'cancelled'}
     <p class="text-xs text-muted-foreground">The search was cancelled.</p>

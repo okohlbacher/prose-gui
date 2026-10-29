@@ -4,6 +4,7 @@
   // panel beside the Proteins table; a PSM opens the PSM view beside the PSM table, which then narrows
   // to the list that "Previous" and "Next" go through. The Overview (files, and the mass shifts of an
   // open search), Samples and QC tabs show the search as a whole; Proteins stays the first view.
+  import FaqLink from '$lib/components/help/FaqLink.svelte'
   import SaveNotice from '$lib/components/history/SaveNotice.svelte'
   import ColumnsMenu from '$lib/components/results/ColumnsMenu.svelte'
   import FilterBar from '$lib/components/results/FilterBar.svelte'
@@ -23,7 +24,7 @@
   import { formatCount } from '$lib/results/display'
   import { exportCsv } from '$lib/results/exports'
   import { keyFigures, levelTotal } from '$lib/results/figures'
-  import { inputNotices, psmFdrAppliedToNone, psmFdrNotice } from '$lib/results/overview'
+  import { inputNoticeItems, psmFdrAppliedToNone, psmFdrNotice } from '$lib/results/overview'
   import { restoreFromHistory } from '$lib/history/history.svelte'
   import { resultsViewFor, type Tab } from '$lib/results/view.svelte'
   import { openResult } from '$lib/search/session.svelte'
@@ -57,7 +58,7 @@
   // the PSM FDR was requested but not applied to some file (no decoy PSM): its PSMs are not FDR-controlled
   const fdrNotice = $derived(view ? psmFdrNotice(view.result.outcome.summary) : null)
   // what ProSE reported about the inputs' spectra (no MS2 spectra, profile spectra, charges outside the range)
-  const spectraNotices = $derived(view ? inputNotices(view.result.outcome.summary) : [])
+  const spectraNotices = $derived(view ? inputNoticeItems(view.result.outcome.summary) : [])
   const proteinTotal = $derived(view ? levelTotal(view.model, 'proteins', false) : 0)
 
   const tabs = $derived<{ value: Tab; label: string; count?: number }[]>([
@@ -181,8 +182,8 @@
       {/if}
       {#if spectraNotices.length > 0}
         <ul class="flex flex-col gap-0.5 text-xs text-amber-700 dark:text-amber-400" data-testid="input-notices">
-          {#each spectraNotices as notice (notice)}
-            <li>{notice}</li>
+          {#each spectraNotices as notice (notice.text)}
+            <li>{notice.text}<FaqLink check={notice.kind} /></li>
           {/each}
         </ul>
       {/if}

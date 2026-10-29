@@ -4,7 +4,7 @@
   import { searchPlan as plan } from '$lib/search/plan.svelte'
   import NoticeList from './NoticeList.svelte'
 
-  const items = $derived(plan.advice.filter((c) => c.level !== 'block').map((c) => ({ message: c.message, action: c.action })))
+  const items = $derived(plan.advice.filter((c) => c.level !== 'block').map((c) => ({ message: c.message, action: c.action, help: c.id })))
 </script>
 
 {#if items.length > 0}

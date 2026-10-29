@@ -8,6 +8,9 @@ describe('parseHash', () => {
     expect(parseHash('#/results/abc123')).toEqual({ view: 'results', id: 'abc123' })
     expect(parseHash('#/history')).toEqual({ view: 'history' })
     expect(parseHash('#/help')).toEqual({ view: 'help' })
+    expect(parseHash('#/help/troubleshooting')).toEqual({ view: 'help', page: 'troubleshooting' })
+    expect(parseHash('#/help/nonsense')).toEqual({ view: 'help' })
+    expect(formatHash({ view: 'help', page: 'fdr' })).toBe('#/help/fdr')
   })
 
   it('falls back to the search view for an empty, unknown or malformed hash', () => {

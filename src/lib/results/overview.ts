@@ -159,10 +159,15 @@ export const LISTED_INPUT_WARNINGS = 3
  * `LISTED_INPUT_WARNINGS`, one line says how many more there are. Empty: nothing to say.
  */
 export function inputNotices(summary: ProSEMultiSummary): string[] {
-  const all = summary.files.flatMap((f) => inputWarnings(f).map((w) => w.text))
+  return inputNoticeItems(summary).map((n) => n.text)
+}
+
+/** `inputNotices` with the kind of each (null: the "more notes" line), so that each can link to Help. */
+export function inputNoticeItems(summary: ProSEMultiSummary): { kind: InputWarning['kind'] | null; text: string }[] {
+  const all = summary.files.flatMap((f) => inputWarnings(f).map((w) => ({ kind: w.kind, text: w.text })))
   if (all.length <= LISTED_INPUT_WARNINGS) return all
   const more = all.length - LISTED_INPUT_WARNINGS + 1
-  return [...all.slice(0, LISTED_INPUT_WARNINGS - 1), `${more} more notes on the files' spectra: see the file list in Overview.`]
+  return [...all.slice(0, LISTED_INPUT_WARNINGS - 1), { kind: null, text: `${more} more notes on the files' spectra: see the file list in Overview.` }]
 }
 
 /** The files whose PSM FDR was requested but not applied (ProSE skips it for a file without decoy PSMs). */

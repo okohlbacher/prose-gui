@@ -21,7 +21,7 @@
   import { formatBytes } from '$lib/format/bytes'
   import { searchForm as form } from '$lib/search/form.svelte'
   import { batchStatus } from '$lib/search/spectra'
-  import { fractionsWithoutReplicates, scopeLine } from '$lib/search/scope'
+  import { FRACTIONS_NOTE_ID, fractionsWithoutReplicates, scopeLine } from '$lib/search/scope'
   import { searchPlan } from '$lib/search/plan.svelte'
   import DesignCell from './DesignCell.svelte'
   import NoticeList from './NoticeList.svelte'
@@ -93,7 +93,7 @@
           action: n.kind === 'techReplicate' ? { label: 'Change', run: () => change(n) } : undefined,
         }))
       : []),
-    ...(multi && fractionsWithoutReplicates(design) ? [{ message: fractionsWithoutReplicates(design)! }] : []),
+    ...(multi && fractionsWithoutReplicates(design) ? [{ message: fractionsWithoutReplicates(design)!, help: FRACTIONS_NOTE_ID }] : []),
     ...form.notices.map((message, k) => ({ message, onDismiss: () => form.notices.splice(k, 1) })),
     ...(saveError ? [{ message: saveError, onDismiss: () => (saveError = null) }] : []),
   ])

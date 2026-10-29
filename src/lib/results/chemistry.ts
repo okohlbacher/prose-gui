@@ -48,7 +48,11 @@ export type ChemistryCard = {
   nonSpecific: number | null
   /** What looks off, in sentences. */
   notes: string[]
+  /** The kind of each note, in the order of `notes` (for Help: `settings/faq.ts`). */
+  noteIds: ChemistryNoteId[]
 }
+
+export type ChemistryNoteId = 'chemistry-cysteine' | 'chemistry-missed-cleavages' | 'chemistry-non-specific' | 'chemistry-label'
 
 export function chemistryCard(m: ResultModel, parameters: Record<string, unknown>, fixedMods: string[]): ChemistryCard | null {
   const rows = levelRows(m, 'peptides', false)
@@ -61,6 +65,11 @@ export function chemistryCard(m: ResultModel, parameters: Record<string, unknown
   const variable = (parameters['modifications:variable'] as string[] | undefined) ?? []
   const pct = (x: number) => `${(x * 100).toFixed(0)} %`
   const notes: string[] = []
+  const noteIds: ChemistryNoteId[] = []
+  const note = (id: ChemistryNoteId, text: string) => {
+    noteIds.push(id)
+    notes.push(text)
+  }
 
   let withC = 0
   let missed = 0
@@ -113,7 +122,8 @@ export function chemistryCard(m: ResultModel, parameters: Record<string, unknown
     if (all > 0) {
       cysteine = { observed: withC / n, expected: c / all }
       if (cysteine.observed < CYS_RATIO_LOW * cysteine.expected) {
-        notes.push(
+        note(
+          'chemistry-cysteine',
           fixedMods.some((f) => /\(C\)/.test(f))
             ? `Only ${pct(cysteine.observed)} of the peptides have a cysteine, where about ${pct(cysteine.expected)} is expected from the proteins: the alkylation of the sample may not be the fixed ${fixedMods.find((f) => /\(C\)/.test(f))} of the search.`
             : `Only ${pct(cysteine.observed)} of the peptides have a cysteine, where about ${pct(cysteine.expected)} is expected: the search has no fixed modification on C. If the sample was alkylated, add it (e.g. Carbamidomethyl (C)).`,
@@ -123,15 +133,15 @@ export function chemistryCard(m: ResultModel, parameters: Record<string, unknown
   }
   const missedCleavages = tryptic ? missed / n : null
   if (missedCleavages !== null && missedCleavages > MISSED_CLEAVAGE_HIGH) {
-    notes.push(`${pct(missedCleavages)} of the peptides have a missed cleavage: the digestion was incomplete, or the sample was digested with another enzyme than ${enzyme}.`)
+    note('chemistry-missed-cleavages', `${pct(missedCleavages)} of the peptides have a missed cleavage: the digestion was incomplete, or the sample was digested with another enzyme than ${enzyme}.`)
   }
   const nonSpecificShare = tryptic && specificity !== 'full' ? nonSpecific / n : null
   if (nonSpecificShare !== null && nonSpecificShare > NONSPECIFIC_HIGH) {
-    notes.push(`${pct(nonSpecificShare)} of the peptides have a non-tryptic end: in-source fragments, or another enzyme.`)
+    note('chemistry-non-specific', `${pct(nonSpecificShare)} of the peptides have a non-tryptic end: in-source fragments, or another enzyme.`)
   }
   const labelOccupancy = labelName && kPeptides > 0 ? kLabelled / kPeptides : null
   if (labelOccupancy !== null && labelOccupancy < LABEL_OCCUPANCY_LOW) {
-    notes.push(`${labelName} is on K in ${pct(labelOccupancy)} of the peptides with a K: the labelling was incomplete, or the samples are not labelled with it.`)
+    note('chemistry-label', `${labelName} is on K in ${pct(labelOccupancy)} of the peptides with a K: the labelling was incomplete, or the samples are not labelled with it.`)
   }
-  return { peptides: n, cysteine, labelOccupancy, missedCleavages, nonSpecific: nonSpecificShare, notes }
+  return { peptides: n, cysteine, labelOccupancy, missedCleavages, nonSpecific: nonSpecificShare, notes, noteIds }
 }

@@ -60,7 +60,7 @@ export function startChecks(s: StartState): Check[] {
   const out: Check[] = []
   const block = (id: string, source: CheckSource, message: string, files?: string[]) =>
     out.push({ id, level: 'block', source, message, ...(files ? { files } : {}) })
-  if (s.files.length === 0) block('no-files', 'files', 'Add mzML files to start.')
+  if (s.files.length === 0) block('no-files', 'files', 'Add spectrum files (mzML, mzPeak, Thermo .raw, Bruker .d) to start.')
   if (s.adding) block('adding', 'files', 'Adding files…')
   if (s.sdrfProblem) block('sdrf', 'sdrf', s.sdrfProblem)
   const unsearchable = s.files.filter((f) => f.problem)

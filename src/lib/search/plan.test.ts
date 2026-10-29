@@ -257,7 +257,7 @@ describe('the footer', () => {
 
   test('says what is missing, and why the search cannot start', async () => {
     expect(searchPlan.line).toBe('No spectra yet')
-    expect(searchPlan.problem).toBe('Add mzML files to start.')
+    expect(searchPlan.problem).toBe('Add spectrum files (mzML, mzPeak, Thermo .raw, Bruker .d) to start.')
     await form.addFiles(['/r/run.mzML'])
     expect(searchPlan.line).toBe('1 file · no database yet')
     expect(searchPlan.problem).toBe('Choose a FASTA database to start.')

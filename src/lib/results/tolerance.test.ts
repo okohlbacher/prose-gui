@@ -35,6 +35,8 @@ describe('tolerance feedback', () => {
     const f = toleranceFindings(summary([file(9)]), {}, sample(0, 10))
     expect(ids(f)).toEqual(['precursor:tolerance-edge'])
     expect(narrower(f)).toBe(false)
+    // calibration only narrows (ProSE clamps it to the window set): it cannot bring back clipped PSMs
+    expect(f[0].reruns.map((r) => r.label)).toEqual([`Re-run with ±${WIDE_PROBE_PPM} ppm`])
   })
 
   test('a clean spread whose recommendation is under half the window: re-run with the recommendation', () => {

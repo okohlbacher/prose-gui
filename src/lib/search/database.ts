@@ -46,7 +46,7 @@ export function databaseChecks(s: FastaSummary | undefined, decoySetting: string
       id: 'decoys-twice',
       level: 'warn',
       source: 'database',
-      message: `The database has decoys of its own (${s.decoys.toLocaleString('en-US')}, marked ${s.decoyMarker}), and ProSE would generate more: the decoys of the database would count as targets.`,
+      message: `The database has decoys of its own (${s.decoys.toLocaleString('en-US')}, marked ${s.decoyMarker}), and the setting is Generate: ProSE would replace them with decoys of its own. Use the database’s decoys to keep them.`,
       action: { label: 'Use the database’s decoys', run: () => setDecoys('auto') },
     })
   }

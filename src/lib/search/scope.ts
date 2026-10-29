@@ -18,6 +18,9 @@ export function scopeLine(files: number, values: Record<string, unknown>, fdrBlo
   return `${head}: ${psm}, ${protein}`
 }
 
+/** The id of the fractions note (`settings/faq.ts` links it to Help). */
+export const FRACTIONS_NOTE_ID = 'fractions-no-replicates'
+
 /**
  * Fractions without biological replicates: every condition has one replicate, measured in fractions. Searchable,
  * but no comparison between conditions has a replicate to rest on (paper, issue 9).

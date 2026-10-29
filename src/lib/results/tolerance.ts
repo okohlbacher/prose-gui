@@ -2,7 +2,9 @@
 // errors of the passing PSMs say the window was off-centre, too narrow (PSMs pile up at its edge) or wider than
 // needed. Built so that it cannot make things worse: ProSE's recommendation is estimated from passing PSMs inside
 // the searched window, so it can only ever narrow it; while an offset or a pile-up at the edge is suspected, the
-// only re-runs offered are a wider window or calibration, never a narrower one.
+// only re-runs offered are a wider window or (for an offset) calibration, never a narrower one. Calibration sets
+// an asymmetric window from a first pass, at most as wide as the one set (ProSEAlgorithm, calibration pass), so it
+// follows an offset but cannot bring back PSMs a window cut off: it is not offered for a pile-up at the edge.
 
 import { defaultsOf } from '../settings/parameters'
 import { PROSE_PARAMETERS } from '../settings/prose'
@@ -133,8 +135,8 @@ export function toleranceFindings(summary: ProSEMultiSummary, parameters: Record
         target: 'precursor',
         message:
           `The precursor errors are off-centre: their median is ${mid > 0 ? '+' : ''}${ppmLabel(mid)}, more than a third of the ` +
-          'window on that side. PSMs with larger errors may have fallen outside it. Search again with a wider window or with calibration; ' +
-          'a narrower window would lose more.',
+          'window on that side. PSMs with larger errors may have fallen outside it. Search again with a wider window (calibration can then narrow it ' +
+          'around the offset); a narrower window would lose more.',
         reruns: wider,
       })
     }
@@ -145,7 +147,8 @@ export function toleranceFindings(summary: ProSEMultiSummary, parameters: Record
         message:
           `${(edge * 100).toFixed(1)} % of the passing PSMs lie in the outer tenth of the precursor window: the window cuts the ` +
           'error distribution. Search again with a wider window.',
-        reruns: wider,
+        // calibration only narrows the window (ProSE clamps it to the one set): it cannot bring back clipped PSMs
+        reruns: wider.filter((r) => r !== CALIBRATE),
       })
     }
     precursorClean = !offset && edge <= EDGE_SHARE
@@ -198,7 +201,7 @@ export function toleranceFindings(summary: ProSEMultiSummary, parameters: Record
         message:
           `The fragment errors fill the ${tol} ppm window in ${full.length === files.length ? 'every file' : `${full.length} of ${files.length} files`}: ` +
           'ProSE only sees peaks inside it, so the true spread may be wider. Search again with a wider fragment window.',
-        reruns: fragmentWider,
+        reruns: fragmentWider.filter((r) => r !== CALIBRATE),
       })
     }
     const fragmentRecommended = recommended('fragmentError')

@@ -153,9 +153,9 @@ export function diagnose(
     out.push({
       id: 'percolator',
       weight: 0.5,
-      message: `Percolator could not train its model for ${fallback.length === files.length ? 'the search' : `${fallback.length} of ${files.length} files`} (too few confident PSMs), so the PSMs were scored by a single feature, which passes fewer of them.`,
+      message: `Percolator could not train its model for ${fallback.length === files.length ? 'the search' : `${fallback.length} of ${files.length} files`} (Overview › Files says why; usually too few confident PSMs), so the PSMs were scored by a single feature, which passes fewer of them.`,
       reruns: [],
-      help: { label: 'Decoys and the FDR', id: 'fdr' },
+      help: { label: 'Percolator and small searches', id: 'faq-percolator-small-run' },
     })
   }
   if (contaminants > CONTAMINANT_SHARE) {
@@ -173,7 +173,7 @@ export function diagnose(
       weight: 0.3,
       message: `The search has only ${psms} passing PSMs: with so few, the target-decoy FDR is coarse (each decoy weighs much) and Percolator has little to learn from.`,
       reruns: [],
-      help: { label: 'Decoys and the FDR', id: 'fdr' },
+      help: { label: 'Percolator and small searches', id: 'faq-percolator-small-run' },
     })
   }
   return out.sort((a, b) => b.weight - a.weight).slice(0, MAX_CAUSES)
