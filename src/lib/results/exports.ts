@@ -65,7 +65,7 @@ export async function exportSdrf(result: OpenResult): Promise<void> {
 
 /**
  * The idXML of a search in its folder (src-tauri/src/args.rs): the merged one of several files
- * (`-out_merged`), the file's own of one (`-out_idxml`; a search of one file saved by an earlier build has
+ * (`-out_merged`), the file's own of one (`-out`; a search of one file saved by an earlier build has
  * none, and the export says so).
  */
 export function idXMLFile(result: OpenResult): { name: string; label: string } {

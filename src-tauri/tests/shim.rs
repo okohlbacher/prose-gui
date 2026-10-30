@@ -137,7 +137,7 @@ fn the_app_outputs_are_always_requested() {
     assert!(!has(&args, "-Search:peptdeep:enable"));
     // one input: its own idXML (the Export menu's), no pooled output; a closed search: no modification analysis
     assert_eq!(
-        values_of(&args, "-out_idxml"),
+        values_of(&args, "-out"),
         vec![out.join("search.idXML").into_os_string()]
     );
     assert!(!has(&args, "-out_merged"));
@@ -158,7 +158,7 @@ fn several_inputs_ask_for_the_merged_output_and_open_search_for_the_modification
         values_of(&args, "-out_merged"),
         vec![out.join("merged.idXML").into_os_string()]
     );
-    assert!(!has(&args, "-out_idxml"));
+    assert!(!has(&args, "-out"));
     assert_eq!(
         values_of(&args, "-out_mod_analysis_dir"),
         vec![out.join("mods").into_os_string()]

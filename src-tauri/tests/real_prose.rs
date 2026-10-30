@@ -450,7 +450,7 @@ fn searches_thermo_raw_and_bruker_d_inputs() {
             .arg(&input)
             .arg("-database")
             .arg(real.example.join(FASTA))
-            .arg("-out_idxml")
+            .arg("-out")
             .arg(&out)
             .args(["-threads", "4", "-Search:rescore", "false"])
             .env("OPENMS_DISABLE_UPDATE_CHECK", "ON")

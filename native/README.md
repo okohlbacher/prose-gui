@@ -140,7 +140,9 @@ ctest --test-dir /scratch/sachsenb/openms-pr10564/build/native-release \
 
 ## The OpenMS pin
 
-`OPENMS_COMMIT` holds the full hash of the OpenMS commit the app's ProSE is built from: a commit of `develop`, which
+`OPENMS_COMMIT` holds the full hash of the OpenMS commit the app's ProSE is built from, and `OPENMS_REPO` its repository
+(`owner/name`; `OpenMS/OpenMS` without the file). It is now `okohlbacher/OpenMS` `prose/integration` (ProSE of OpenMS
+#10740 with `-sdrf`, mzPeak input and PeptDeep rescoring, on `develop` 3.7), until that is merged; before, a commit of `develop`, which
 since #10676 (`-qpx_extended`, the optional columns and footer metadata of the QPX psm view the app reads: all scores,
 native ID, isotope error, protein mappings, the filtered peaks and PeptDeep's predictions, the run's statistics; the
 pooled and singleton protein groups, `-keep_decoys`; see `docs/parity.md`) has everything the app needs. Before, the pin

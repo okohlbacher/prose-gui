@@ -207,7 +207,7 @@ pub const QPX_DIR: &str = "qpx";
 pub const PEAK_WINDOW: f64 = 100.0;
 pub const PEAK_TOP: u32 = 100;
 
-/// The idXML of a search of several inputs (`-out_merged`), and of one input (`-out_idxml`), in the search
+/// The idXML of a search of several inputs (`-out_merged`), and of one input (`-out`; `-out_idxml` before OpenMS 3.7), in the search
 /// folder (the Export menu's idXML: `src/lib/results/exports.ts`).
 pub const MERGED_IDXML: &str = "merged.idXML";
 pub const SINGLE_IDXML: &str = "search.idXML";
@@ -729,7 +729,7 @@ pub fn build_args_with(
         args.push("-out_merged".into());
         args.push(out_dir.join(MERGED_IDXML).into_os_string());
     } else {
-        args.push("-out_idxml".into());
+        args.push("-out".into());
         args.push(out_dir.join(SINGLE_IDXML).into_os_string());
     }
     if is_open_search(&params) {
