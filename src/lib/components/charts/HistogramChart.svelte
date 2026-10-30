@@ -150,19 +150,21 @@
     ranges.map((r, k) => {
       const lo = Math.max(r.from, edges[0])
       const hi = Math.min(r.to, edges[nBins])
-      return { ...r, x1: x(lo), x2: x(hi), clipLo: r.from < edges[0], clipHi: r.to > edges[nBins], y: M.top - 4 + k * 9 }
+      return { ...r, x1: x(lo), x2: x(hi), clipLo: r.from < edges[0], clipHi: r.to > edges[nBins], y: M.top - 4 + k * 11 }
     }),
   )
 
   // The marker's label sits beside the line (to its right, else to its left); a long label that fits on
-  // neither side stands at the top of the plot, within its edges
+  // neither side stands at the top of the plot, within its edges. The windows' labels take the top of the
+  // plot: then the marker's label stands below them, inside the plot (its halo keeps it readable over the bars)
   const markerAt = $derived(marker ? x(marker.x) : 0)
   const markerLabel = $derived.by(() => {
+    const below = ranges.length ? M.top + 9 + ranges.length * 11 + 2 : null
     if (!marker) return { x: 0, anchor: 'start' as const, y: M.top + 1 }
     const w = textWidth(marker.label, 11)
-    if (markerAt + 4 + w <= width - M.right) return { x: markerAt + 4, anchor: 'start' as const, y: M.top + 1 }
-    if (markerAt - 4 - w >= M.left) return { x: markerAt - 4, anchor: 'end' as const, y: M.top + 1 }
-    return { x: Math.min(Math.max(markerAt - w / 2, M.left), Math.max(M.left, width - M.right - w)), anchor: 'start' as const, y: M.top - 8 }
+    if (markerAt + 4 + w <= width - M.right) return { x: markerAt + 4, anchor: 'start' as const, y: below ?? M.top + 1 }
+    if (markerAt - 4 - w >= M.left) return { x: markerAt - 4, anchor: 'end' as const, y: below ?? M.top + 1 }
+    return { x: Math.min(Math.max(markerAt - w / 2, M.left), Math.max(M.left, width - M.right - w)), anchor: 'start' as const, y: below ?? M.top - 8 }
   })
 </script>
 

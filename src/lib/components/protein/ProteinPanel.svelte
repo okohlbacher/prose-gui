@@ -116,12 +116,12 @@
   <Tabs.Root bind:value={view.panelTab} class="mt-2.5 flex min-h-0 flex-1 flex-col gap-2.5">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <Tabs.List class="w-full justify-start border-b">
-        <Tabs.Trigger value="coverage" class="px-3 text-[13px]"
+        <Tabs.Trigger value="coverage" class="flex-none px-3 text-[13px]"
           >Coverage{#if detail.length > 0}<span class="ml-1 text-xs font-normal text-muted-foreground tabular-nums">{(detail.coverage * 100).toFixed(0)} %</span>{/if}</Tabs.Trigger
         >
-        <Tabs.Trigger value="peptides" class="px-3 text-[13px]"
+        <Tabs.Trigger value="peptides" class="flex-none px-3 text-[13px]"
           >Peptides<span class="ml-1 text-xs font-normal text-muted-foreground tabular-nums">{formatCount(detail.peptides.length)}</span></Tabs.Trigger>
-        <Tabs.Trigger value="psms" class="px-3 text-[13px]"
+        <Tabs.Trigger value="psms" class="flex-none px-3 text-[13px]"
           >PSMs<span class="ml-1 text-xs font-normal text-muted-foreground tabular-nums">{formatCount(detail.psms)}</span></Tabs.Trigger>
       </Tabs.List>
       <Button variant="outline" size="sm" class="h-7 px-2.5 text-xs" onclick={() => onOpenPsmTable({ protein })}>Open in PSM table ›</Button>

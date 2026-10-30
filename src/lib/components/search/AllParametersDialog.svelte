@@ -59,7 +59,7 @@
 <Dialog.Root bind:open>
   <Dialog.Content class="flex max-h-[85vh] flex-col gap-0 p-0 sm:max-w-3xl">
     <Dialog.Header class="gap-1 border-b px-5 pt-5 pb-3">
-      <Dialog.Title class="text-[15px] font-semibold">All {entries.length} parameters</Dialog.Title>
+      <Dialog.Title>All {entries.length} parameters</Dialog.Title>
       <Dialog.Description class="text-xs">
         ProSE's parameters with their defaults and descriptions. Changes apply to this search right away. The common
         ones are also on the page. The switches for Percolator and PeptDeep, and PeptDeep's instrument, are in the

@@ -16,7 +16,56 @@ const screens: { name: string; open: (page: Page) => Promise<void> }[] = [
       await expect(p.getByTestId('advanced-settings')).toBeVisible()
     },
   },
-  { name: 'results-overview', open: async (p) => (await openFixture(p), await p.getByRole('tab', { name: 'Overview' }).click(), await expect(p.getByTestId('search-facts')).toBeVisible()) },
+  {
+    name: 'new-search-project',
+    open: async (p) => {
+      await p.goto('/#/search')
+      const chooser = p.waitForEvent('filechooser')
+      await p.getByTestId('open-setup').click()
+      const setup = {
+        format: 'prose-setup', schema: 1, name: 'exp',
+        inputs: [{ path: '/data/run_1.mzML', name: 'run_1.mzML', size: 1000, condition: 'a' }],
+        database: { path: '/db/ecoli.fasta', name: 'ecoli.fasta', size: 5000, proteome: null },
+        presetId: 'orbitrap-hcd-tryptic', parameters: {}, ui: { view: 'search', showSettings: false, advanced: false },
+      }
+      await (await chooser).setFiles({ name: 'exp.prose-setup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(setup)) })
+      await expect(p.getByTestId('project-name')).toHaveText('Project: exp')
+    },
+  },
+  {
+    // File › New Search with unsaved project changes (a desktop menu item: opened here through the module)
+    name: 'dialog-new-project',
+    open: async (p) => {
+      await p.goto('/#/search')
+      await expect(p.getByTestId('settings-summary')).toBeVisible()
+      await p.evaluate(async (path) => {
+        // (the dev server's module: the page's own instance)
+        const m = await import(/* @vite-ignore */ path)
+        m.project.name = 'exp'
+        m.project.confirmNew = true
+      }, '/src/lib/project/project.svelte.ts')
+      await expect(p.getByTestId('new-setup-guard')).toBeVisible()
+    },
+  },
+  {
+    name: 'dialog-all-parameters',
+    open: async (p) => {
+      await p.goto('/#/search')
+      await p.getByRole('button', { name: /^All \d+ parameters/ }).click()
+      await expect(p.getByRole('dialog')).toBeVisible()
+    },
+  },
+  {
+    name: 'dialog-shortcuts',
+    open: async (p) => {
+      await p.goto('/#/search')
+      await expect(p.getByTestId('settings-summary')).toBeVisible()
+      await p.keyboard.press('?')
+      await expect(p.getByRole('dialog')).toBeVisible()
+    },
+  },
+  // (Results scrolls inside the window: a taller window shows all of Overview and QC)
+  { name: 'results-overview', open: async (p) => (await p.setViewportSize({ width: 1400, height: 1500 }), await openFixture(p), await p.getByRole('tab', { name: 'Overview' }).click(), await expect(p.getByTestId('search-facts')).toBeVisible()) },
   { name: 'results-proteins', open: async (p) => (await openFixture(p), await p.getByRole('tab', { name: /^Proteins/ }).click()) },
   {
     name: 'results-protein-panel',
@@ -39,7 +88,7 @@ const screens: { name: string; open: (page: Page) => Promise<void> }[] = [
     },
   },
   { name: 'results-samples', open: async (p) => (await openFixture(p), await p.getByRole('tab', { name: 'Samples' }).click()) },
-  { name: 'results-qc', open: async (p) => (await openFixture(p), await p.getByRole('tab', { name: 'QC' }).click(), await expect(p.getByTestId('qc-content')).toBeVisible()) },
+  { name: 'results-qc', open: async (p) => (await p.setViewportSize({ width: 1400, height: 1300 }), await openFixture(p), await p.getByRole('tab', { name: 'QC' }).click(), await expect(p.getByTestId('qc-content')).toBeVisible()) },
   { name: 'history', open: async (p) => (await openFixture(p), await p.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'History' }).click(), await expect(p.getByTestId('history-row')).toBeVisible()) },
   { name: 'history-unavailable', open: async (p) => (await p.goto('/#/history'), await expect(p.getByTestId('history-unavailable')).toBeVisible()) },
   ...['troubleshooting', 'results', 'fdr', 'settings', 'formats', 'basics', 'learn'].map((page) => ({

@@ -61,7 +61,13 @@
 <section data-testid="view-search" class="flex flex-col gap-4">
   <div class="flex flex-wrap items-start gap-x-4 gap-y-2">
     <div class="flex-1">
-      <h1 class="mb-1 text-xl font-semibold tracking-tight">New search</h1>
+      <div class="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <h1 class="text-xl font-semibold tracking-tight">New search</h1>
+        <!-- the window's project, beside the title (the window's title names it too) -->
+        {#if project.name}
+          <span class="rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground" data-testid="project-name">Project: {project.name}</span>
+        {/if}
+      </div>
       <p class="text-muted-foreground">Spectra and database stay on this computer.</p>
     </div>
     <!-- a project: the setup of this search and of the views, as a .prose-setup.json (src/lib/project) -->
@@ -79,7 +85,8 @@
         disabled={project.busy}
         title="Saves this setup and the state of the views as a project (.prose-setup.json), to set up the same search again"
         data-testid="save-setup"
-        onclick={() => projectAction(() => saveProject(project.name === null), 'Save project')}>Save project…</Button>
+        onclick={() => projectAction(() => saveProject(project.name === null), 'Save project')}
+        >{project.name === null ? 'Save project…' : 'Save project'}</Button>
     </div>
     {#if form.files.length > 0 || form.database}
       <!-- the next search from scratch: no files, no database, the settings kept -->
@@ -94,9 +101,6 @@
 
   {#if projectError}
     <p class="text-sm text-destructive" role="alert" data-testid="project-error">{projectError}</p>
-  {/if}
-  {#if project.name}
-    <p class="-mt-2 text-xs text-muted-foreground" data-testid="project-name">Project: {project.name}</p>
   {/if}
   {#if form.files.length === 0}
     <EmptyState {dragging} />

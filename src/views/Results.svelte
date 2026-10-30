@@ -212,6 +212,9 @@
               <Button size="sm" class="h-7 px-2.5 text-xs" disabled={view.exporting} onclick={() => exportCsv(view)}>
                 {#if view.exporting}
                   Exporting…
+                {:else if panelOpen}
+                  <!-- beside the protein panel the tabs and these fit one row: the filter bar counts the rows -->
+                  Export CSV
                 {:else}
                   Export CSV · {formatCount(level.rows.length)}
                   {level.rows.length === 1 ? 'row' : 'rows'}
