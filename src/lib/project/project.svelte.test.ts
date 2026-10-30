@@ -122,6 +122,14 @@ describe('projects in New search', () => {
     expect(navigate).toHaveBeenLastCalledWith({ view: 'search' })
   })
 
+  test('a hand-written file without parameters keeps the preset’s, not ProSE’s raw defaults', async () => {
+    const setup = parseSetup(serializeSetup(captureSetup('exp')))
+    setup.parameters = {}
+    await restoreSetup(setup)
+    const preset = form.presets.find((p) => p.id === setup.presetId)!
+    for (const [name, value] of Object.entries(preset.parameters)) expect(form.values[name]).toEqual(value)
+  })
+
   test('files that are gone or changed size are named, and nothing starts', async () => {
     const setup = parseSetup(serializeSetup(captureSetup('exp')))
     disk.delete('/data/a.mzML')

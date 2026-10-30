@@ -17,6 +17,7 @@ import { navigate, router } from '../route.svelte'
 import { searchForm } from '../search/form.svelte'
 import { onSearchEnded, openResult } from '../search/session.svelte'
 import { toolState } from '../search/tool.svelte'
+import { DEFAULT_PRESET_ID } from '../settings/presets'
 import { formatBytes } from '../format/bytes'
 import {
   checkFiles,
@@ -199,7 +200,10 @@ export async function restoreSetup(setup: ProjectSetup, name = setup.name): Prom
   try {
     navigate({ view: 'search' })
     sdrfSession.clear()
-    const parameters = { ...setup.parameters, ...(setup.decoys ? { decoys: setup.decoys } : {}) }
+    // (on top of the preset's: a hand-written file may leave parameters out, which then keep the preset's values, not
+    // ProSE's raw defaults such as a PSM FDR of 0; a file the app saved has the preset's parameters among its own)
+    const preset = form.presets.find((p) => p.id === setup.presetId) ?? form.presets.find((p) => p.id === DEFAULT_PRESET_ID)
+    const parameters = { ...preset?.parameters, ...setup.parameters, ...(setup.decoys ? { decoys: setup.decoys } : {}) }
     const before = form.notices.length
     await form.restoreSearch({
       name,
