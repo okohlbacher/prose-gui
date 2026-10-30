@@ -1558,6 +1558,25 @@ fn the_tool_runs_with_one_blas_thread_unless_set() {
 }
 
 #[test]
+fn the_tool_runs_on_its_bundled_dotnet_if_it_has_one() {
+    let dir = TempDir::new("dotnet");
+    let tool_path = dir.write("prose/bin/ProSE", "");
+    let dotnet_root = |cmd: &std::process::Command| {
+        cmd.get_envs().find(|(k, _)| *k == "DOTNET_ROOT").map(|(_, v)| v.map(PathBuf::from))
+    };
+    // no bundled runtime: DOTNET_ROOT is left as it is (a system .NET is found by the Thermo bridge)
+    assert_eq!(tool::bundled_dotnet(&tool_path), None);
+    assert_eq!(dotnet_root(&tool::command_with(&tool_path, None)), None);
+    // a folder without host/fxr is no runtime
+    fs::create_dir_all(dir.path().join("prose/dotnet/shared")).unwrap();
+    assert_eq!(tool::bundled_dotnet(&tool_path), None);
+    fs::create_dir_all(dir.path().join("prose/dotnet/host/fxr/8.0.33")).unwrap();
+    let root = dir.path().join("prose/dotnet");
+    assert_eq!(tool::bundled_dotnet(&tool_path), Some(root.clone()));
+    assert_eq!(dotnet_root(&tool::command_with(&tool_path, None)), Some(Some(root)));
+}
+
+#[test]
 fn the_tool_never_runs_the_update_check_of_openms() {
     for openblas in [None, Some(OsString::from("4"))] {
         let cmd = tool::command_with(Path::new("/x/ProSE"), openblas);

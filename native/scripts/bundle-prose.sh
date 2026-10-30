@@ -20,6 +20,9 @@
 #   share/OpenMS/models/peptdeep_{ms2,rt}_dynamic.onnx    (builds with ONNX only), with AlphaPeptDeep's
 #                                     licence (Apache-2.0, native/licenses) and a NOTICE
 #   share/OpenMS/LICENSES/...         OpenMS, its vendored code, the vcpkg ports, the bundled system libraries
+#   bin/managed/                      the Thermo RAW reader's .NET assemblies (builds WITH_THERMO_RAW only)
+#   dotnet/                           Microsoft's .NET 8 runtime for them (Microsoft.NETCore.App; the app sets
+#                                     DOTNET_ROOT to it, tool.rs), downloaded once into PROSE_DOTNET_CACHE
 #   build.json                        the manifest the app reads (tool.rs): withOnnx, the OpenMS commit
 #
 # Runs on the host toolchain (outside in-env.sh; LD_LIBRARY_PATH is ignored for the closure). Needs
@@ -27,7 +30,8 @@
 # libraries); on macOS otool, install_name_tool, strip, codesign (Xcode's command line tools) and
 # Homebrew's libomp; on Windows Git Bash in a Visual Studio developer environment (VCToolsRedistDir, for
 # the Visual C++ runtime). The closure on macOS and Windows is bundle_closure.py's. Environment:
-# ALLOW_PIN_MISMATCH=1 bundles a build whose source is not at native/OPENMS_COMMIT.
+# ALLOW_PIN_MISMATCH=1 bundles a build whose source is not at native/OPENMS_COMMIT; PROSE_DOTNET_CACHE is
+# the folder the .NET runtime archive is kept in (curl downloads it the first time).
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then
@@ -194,6 +198,67 @@ closure_windows() {
   omp=(vcomp140.dll)
 }
 
+# --- The .NET runtime (for the Thermo RAW reader) -----------------------------------------------------
+# Microsoft's .NET runtime (Microsoft.NETCore.App only: no ASP.NET Core, no SDK), unpacked into <out>/dotnet
+# as Microsoft ships it (signed by Microsoft on macOS; nothing in it is rewritten). The bridge of OpenMS finds
+# hostfxr through DOTNET_ROOT (thermo_bridge.cpp: get_hostfxr_path with dotnet_root, then
+# hostfxr_initialize_for_runtime_config with the same root), which the app sets to this folder when it starts
+# ProSE (tool.rs, bundled_dotnet); without it ProSE falls back to a .NET 8+ of the system.
+# ThermoWrapperManaged.runtimeconfig.json asks for Microsoft.NETCore.App 8.0.0 (rollForward Major).
+# The archives come from Microsoft's dotnet builds server and are checked against the SHA-512 Microsoft
+# publishes (release-metadata/8.0/releases.json, the same in checksums/<version>-sha.txt), pinned here. They
+# are kept in PROSE_DOTNET_CACHE (default ~/.cache/prose-gui/dotnet), so a rebundle downloads nothing.
+DOTNET_VERSION=8.0.33
+dotnet_sha512() {
+  case $1 in
+    osx-arm64) echo 0be37b64ea1f49651bbaa3dd08e89476919ceb98bd6b39d28883439c16c1d9cbcccf5cf01f67c913095e9f23235dc621125a551a6e736be4ebddbf060eb82758 ;;
+    osx-x64) echo ba177c678fce742f991fc5e985b7e269faa231e44d35622be13800cb8b1c757ffdb83e6e10817cb3c48b64fba73a301c2d41b91ce7f6044e1f679f36a0ea3b4b ;;
+    linux-x64) echo b314039d337a8c5c4be6a6f99712a2618cbeb5e1ab7cac7a5c1cbf1c97bd355f5d116b9932a8cfc604ac7849f74638896eba0534892c6518311908aba29b4f7b ;;
+    linux-arm64) echo a9ba25eae72f98e25233ae202d6e4fb6663b2c8da23bcd9d797c89e8b1d01f51de90f1994dc7101a5fef56db401c05af184c5e251a9bce570adf044c4e3ae5a9 ;;
+    win-x64) echo ceb56fa91c15aa7c465db8cd42ee4e978589c58885cd1f164f8fcde7231ea15c3cfc0bcddb2e6b452238b3687a3e2bcb3683349b8b92a7172e03154ed280be67 ;;
+    *) return 1 ;;
+  esac
+}
+sha512_of() {
+  "$PY" -I -c 'import hashlib, sys
+h = hashlib.sha512()
+with open(sys.argv[1], "rb") as f:
+    for b in iter(lambda: f.read(1 << 20), b""):
+        h.update(b)
+print(h.hexdigest())' "$(native "$1")"
+}
+bundle_dotnet() {
+  local arch os rid ext file url sha cache archive
+  # the tool's architecture: the vcpkg triplet's, else the machine's
+  arch=${TRIPLET%%-*}
+  [ -n "$arch" ] || arch=$(uname -m)
+  case $arch in x86_64 | amd64 | x64) arch=x64 ;; aarch64 | arm64) arch=arm64 ;; esac
+  case $PLATFORM in linux) os=linux ext=tar.gz ;; macos) os=osx ext=tar.gz ;; windows) os=win ext=zip ;; esac
+  rid=$os-$arch
+  sha=$(dotnet_sha512 "$rid") || die "no .NET runtime for $rid"
+  file=dotnet-runtime-$DOTNET_VERSION-$rid.$ext
+  url=https://builds.dotnet.microsoft.com/dotnet/Runtime/$DOTNET_VERSION/$file
+  cache=${PROSE_DOTNET_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/prose-gui/dotnet}
+  mkdir -p "$cache"
+  archive=$cache/$file
+  if [ ! -f "$archive" ] || [ "$(sha512_of "$archive")" != "$sha" ]; then
+    echo "  downloading $url"
+    curl -fsSL --retry 3 -o "$archive.part" "$url" || die "could not download $url"
+    [ "$(sha512_of "$archive.part")" = "$sha" ] || { rm -f "$archive.part"; die "$file: SHA-512 mismatch"; }
+    mv "$archive.part" "$archive"
+  fi
+  mkdir -p "$OUT/dotnet"
+  if [ "$ext" = zip ]; then
+    "$PY" -I -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$(native "$archive")" "$OUT/dotnet"
+  else
+    tar --no-same-owner -xzf "$archive" -C "$OUT/dotnet"
+  fi
+  [ -d "$OUT/dotnet/host/fxr/$DOTNET_VERSION" ] && [ -d "$OUT/dotnet/shared/Microsoft.NETCore.App/$DOTNET_VERSION" ] \
+    || die "$file did not unpack to host/fxr/$DOTNET_VERSION and shared/Microsoft.NETCore.App/$DOTNET_VERSION"
+  dotnet_version=$DOTNET_VERSION
+  echo "  .NET runtime $DOTNET_VERSION ($rid) into dotnet/"
+}
+
 header=$BUILD/src/openms/include/OpenMS/openms_data_path.h
 [ -f "$header" ] || die "$header is missing"
 install_data_path=$(sed -n 's/^#define OPENMS_INSTALL_DATA_PATH "\(.*\)"$/\1/p' "$header")
@@ -239,9 +304,11 @@ fi
 # The Thermo RAW reader's managed half (WITH_THERMO_RAW): ThermoWrapperManaged.dll, its runtimeconfig and Thermo's
 # CommonCore assemblies, in bin/managed, where the bridge looks when OpenMS' share directory has no copy
 # (ThermoRawScanReader.cpp resolveManagedDirectory; on the build machine that directory is the source tree's, so
-# share/OpenMS of the bundle would not be asked). It runs on the .NET runtime (8 or later) of the computer.
+# share/OpenMS of the bundle would not be asked). It runs on .NET 8 or later: the one bundled below.
+dotnet_version=
 if [ -f "$BUILD/lib/managed/ThermoWrapperManaged.dll" ]; then
   cp -R "$BUILD/lib/managed" "$OUT/bin/managed"
+  bundle_dotnet
 fi
 
 # --- Licences -------------------------------------------------------------------------------------
@@ -282,6 +349,11 @@ elif [ "$PLATFORM" = windows ]; then
     echo "app-locally, as the Visual Studio licence terms allow for its Distributable Code."
   } > "$lic/system/msvc-runtime.txt"
 fi
+# - the .NET runtime (MIT, with Microsoft's third-party notices): its own files, also in dotnet/.
+if [ -n "$dotnet_version" ]; then
+  mkdir -p "$lic/system/dotnet-runtime"
+  cp "$OUT/dotnet/LICENSE.txt" "$OUT/dotnet/ThirdPartyNotices.txt" "$lic/system/dotnet-runtime/"
+fi
 # (${a[@]+"${a[@]}"}: an empty array under set -u in macOS's bash 3.2)
 debian_libs=()
 [ "$PLATFORM" = linux ] && debian_libs=(${system_libs[@]+"${system_libs[@]}"})
@@ -297,10 +369,12 @@ for path in ${debian_libs[@]+"${debian_libs[@]}"}; do
 done
 
 # --- The manifest -----------------------------------------------------------------------------------
-"$PY" -I - "$OUT/build.json" "$COMMIT" "$WITH_ONNX" "$TRIPLET" ${models[@]+"${models[@]}"} <<'PY'
+"$PY" -I - "$OUT/build.json" "$COMMIT" "$WITH_ONNX" "$TRIPLET" "$dotnet_version" ${models[@]+"${models[@]}"} <<'PY'
 import json, sys
-path, commit, onnx, triplet, *models = sys.argv[1:]
+path, commit, onnx, triplet, dotnet, *models = sys.argv[1:]
 manifest = {"tool": "ProSE", "openmsCommit": commit, "withOnnx": onnx == "true", "triplet": triplet, "models": models}
+if dotnet:
+    manifest["dotnetRuntime"] = dotnet
 with open(path, "w") as f:
     json.dump(manifest, f, indent=2)
     f.write("\n")
@@ -347,6 +421,14 @@ PY
     run_empty() { env -i SYSTEMROOT="$SYSTEMROOT" WINDIR="$WINDIR" PATH="/c/Windows/System32:/c/Windows" "$@"; }
     ;;
 esac
+if [ -n "$dotnet_version" ]; then
+  # the bundled runtime runs, with DOTNET_ROOT as the app sets it
+  muxer=$OUT/dotnet/dotnet
+  [ "$PLATFORM" = windows ] && muxer=$OUT/dotnet/dotnet.exe
+  runtimes=$(run_empty DOTNET_ROOT="$OUT/dotnet" "$muxer" --list-runtimes 2>&1) || true
+  grep -q "^Microsoft.NETCore.App $dotnet_version " <<<"$runtimes" \
+    || die "the bundled .NET runtime does not run: $(tail -n 3 <<<"$runtimes")"
+fi
 tool=$OUT/bin/$(basename "$EXE")
 version=$(run_empty "$tool" --help 2>&1 | sed -n 's/^ *Version: *\([^ ]*\).*/\1/p' | head -n 1)
 [ -n "$version" ] || die "the bundled ProSE does not run: $(run_empty "$tool" --help 2>&1 | tail -n 5)"
@@ -356,6 +438,6 @@ echo "bundled ProSE $version (OpenMS $COMMIT, ONNX: $WITH_ONNX) into $OUT"
 libs=$OUT/lib
 [ "$PLATFORM" = windows ] && libs=$OUT/bin
 echo "  libraries: $(find "$libs" -type f | wc -l | tr -d ' ') (of the system: ${system_libs[*]+${system_libs[*]##*/}}), OpenMP runtime: ${omp[*]}"
-for part in "" /bin /lib /share/OpenMS /share/OpenMS/models; do
+for part in "" /bin /lib /dotnet /share/OpenMS /share/OpenMS/models; do
   if [ -d "$OUT$part" ]; then echo "  $(du -sh "$OUT$part" | cut -f1)	${part:-total}"; fi
 done

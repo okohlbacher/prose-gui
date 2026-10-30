@@ -229,8 +229,19 @@ jobs:
           native/scripts/build-openms.sh openms openms/build
           df -h /
 
+      # bundle-prose.sh downloads Microsoft's .NET runtime (pinned and checked by SHA-512) into PROSE_DOTNET_CACHE
+      - name: Restore the .NET runtime download
+        if: steps.bundle.outputs.cache-hit != 'true'
+        uses: actions/cache@v6
+        with:
+          path: dotnet-download
+          key: dotnet-runtime-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/scripts/bundle-prose.sh') }}
+          restore-keys: dotnet-runtime-v1-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Bundle ProSE
         if: steps.bundle.outputs.cache-hit != 'true'
+        env:
+          PROSE_DOTNET_CACHE: ${{ github.workspace }}/dotnet-download
         run: native/scripts/bundle-prose.sh openms/build src-tauri/resources/prose
 
       - name: Save the bundled ProSE
@@ -261,7 +272,8 @@ jobs:
         run: |
           cat src-tauri/resources/prose/build.json
           src-tauri/resources/prose/bin/ProSE --help 2>&1 | grep -m1 'Version:'
-          du -sh src-tauri/resources/prose src-tauri/resources/prose/lib src-tauri/resources/prose/share
+          DOTNET_ROOT=src-tauri/resources/prose/dotnet src-tauri/resources/prose/dotnet/dotnet --list-runtimes
+          du -sh src-tauri/resources/prose src-tauri/resources/prose/lib src-tauri/resources/prose/dotnet src-tauri/resources/prose/share
 
       - name: Unit tests (svelte-check, vitest)
         run: |
@@ -280,6 +292,18 @@ jobs:
           # (the example as the app bundles it: src-tauri/resources/{example,fasta})
           OUT="$RUNNER_TEMP/qpx-example" node scripts/results-fixture-native.mjs example src-tauri/resources/prose/bin/ProSE
           "$RUNNER_TEMP/qpx/bin/python" -I scripts/qpx-validate.py src/lib/results/fixtures/*/qpx "$RUNNER_TEMP/qpx-example/qpx"
+
+      # A small public Thermo .raw file (MS1 only, 2.9 MB; the openms-thermo-bridge tests' sample, at a pinned commit):
+      # real_prose reads it with the bundled ProSE on the bundled .NET runtime (bundle-prose.sh, tool.rs
+      # bundled_dotnet) and checks with the .NET host's trace that the runner's own .NET was not the one used.
+      - name: A Thermo .raw file for the tests
+        shell: bash
+        run: |
+          raw="$RUNNER_TEMP/ginkgotoxin-ms-positive.raw"
+          curl -fsSL --retry 3 -o "$raw" https://raw.githubusercontent.com/HegemanLab/small-thermo-raw-file-examples/cfac6a25b44913273dd458d5f5db9b20b0c1107d/ginkgotoxin-ms-positive.raw
+          sum=a607a6cbac5c631473e0661c6fc74ef8185761858b4143a95052747b28c50b9a
+          echo "$sum  $raw" | { if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; }
+          echo "PROSE_RAW_FILE=$raw" >> "$GITHUB_ENV"
 
       - name: Unit tests (cargo test, with the bundled ProSE)
         working-directory: src-tauri
@@ -501,8 +525,19 @@ jobs:
           path: .ccache
           key: ${{ steps.ccache.outputs.cache-primary-key }}
 
+      # bundle-prose.sh downloads Microsoft's .NET runtime (pinned and checked by SHA-512) into PROSE_DOTNET_CACHE
+      - name: Restore the .NET runtime download
+        if: steps.bundle.outputs.cache-hit != 'true'
+        uses: actions/cache@v6
+        with:
+          path: dotnet-download
+          key: dotnet-runtime-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/scripts/bundle-prose.sh') }}
+          restore-keys: dotnet-runtime-v1-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Bundle ProSE
         if: steps.bundle.outputs.cache-hit != 'true'
+        env:
+          PROSE_DOTNET_CACHE: ${{ github.workspace }}/dotnet-download
         run: native/scripts/bundle-prose.sh openms/build src-tauri/resources/prose
 
       - name: Save the bundled ProSE
@@ -537,7 +572,20 @@ jobs:
         run: |
           cat src-tauri/resources/prose/build.json
           src-tauri/resources/prose/bin/ProSE --help 2>&1 | grep -m1 'Version:'
-          du -sh src-tauri/resources/prose src-tauri/resources/prose/lib src-tauri/resources/prose/share
+          DOTNET_ROOT=src-tauri/resources/prose/dotnet src-tauri/resources/prose/dotnet/dotnet --list-runtimes
+          du -sh src-tauri/resources/prose src-tauri/resources/prose/lib src-tauri/resources/prose/dotnet src-tauri/resources/prose/share
+
+      # A small public Thermo .raw file (MS1 only, 2.9 MB; the openms-thermo-bridge tests' sample, at a pinned commit):
+      # real_prose reads it with the bundled ProSE on the bundled .NET runtime (bundle-prose.sh, tool.rs
+      # bundled_dotnet) and checks with the .NET host's trace that the runner's own .NET was not the one used.
+      - name: A Thermo .raw file for the tests
+        shell: bash
+        run: |
+          raw="$RUNNER_TEMP/ginkgotoxin-ms-positive.raw"
+          curl -fsSL --retry 3 -o "$raw" https://raw.githubusercontent.com/HegemanLab/small-thermo-raw-file-examples/cfac6a25b44913273dd458d5f5db9b20b0c1107d/ginkgotoxin-ms-positive.raw
+          sum=a607a6cbac5c631473e0661c6fc74ef8185761858b4143a95052747b28c50b9a
+          echo "$sum  $raw" | { if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; }
+          echo "PROSE_RAW_FILE=$raw" >> "$GITHUB_ENV"
 
       - name: The shim with the bundled ProSE (real_prose)
         working-directory: src-tauri
@@ -730,8 +778,19 @@ jobs:
           path: .ccache
           key: ${{ steps.ccache.outputs.cache-primary-key }}
 
+      # bundle-prose.sh downloads Microsoft's .NET runtime (pinned and checked by SHA-512) into PROSE_DOTNET_CACHE
+      - name: Restore the .NET runtime download
+        if: steps.bundle.outputs.cache-hit != 'true'
+        uses: actions/cache@v6
+        with:
+          path: dotnet-download
+          key: dotnet-runtime-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/scripts/bundle-prose.sh') }}
+          restore-keys: dotnet-runtime-v1-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Bundle ProSE
         if: steps.bundle.outputs.cache-hit != 'true'
+        env:
+          PROSE_DOTNET_CACHE: ${{ github.workspace }}/dotnet-download
         run: native/scripts/bundle-prose.sh openms/build src-tauri/resources/prose
 
       - name: Save the bundled ProSE
@@ -764,8 +823,21 @@ jobs:
         run: |
           cat src-tauri/resources/prose/build.json
           src-tauri/resources/prose/bin/ProSE.exe --help 2>&1 | grep -m1 'Version:'
+          DOTNET_ROOT=src-tauri/resources/prose/dotnet src-tauri/resources/prose/dotnet/dotnet.exe --list-runtimes
           ls src-tauri/resources/prose/bin
-          du -sh src-tauri/resources/prose src-tauri/resources/prose/bin src-tauri/resources/prose/share
+          du -sh src-tauri/resources/prose src-tauri/resources/prose/bin src-tauri/resources/prose/dotnet src-tauri/resources/prose/share
+
+      # A small public Thermo .raw file (MS1 only, 2.9 MB; the openms-thermo-bridge tests' sample, at a pinned commit):
+      # real_prose reads it with the bundled ProSE on the bundled .NET runtime (bundle-prose.sh, tool.rs
+      # bundled_dotnet) and checks with the .NET host's trace that the runner's own .NET was not the one used.
+      - name: A Thermo .raw file for the tests
+        shell: bash
+        run: |
+          raw="$RUNNER_TEMP/ginkgotoxin-ms-positive.raw"
+          curl -fsSL --retry 3 -o "$raw" https://raw.githubusercontent.com/HegemanLab/small-thermo-raw-file-examples/cfac6a25b44913273dd458d5f5db9b20b0c1107d/ginkgotoxin-ms-positive.raw
+          sum=a607a6cbac5c631473e0661c6fc74ef8185761858b4143a95052747b28c50b9a
+          echo "$sum  $raw" | { if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; }
+          echo "PROSE_RAW_FILE=$raw" >> "$GITHUB_ENV"
 
       - name: The shim with the bundled ProSE (real_prose)
         working-directory: src-tauri

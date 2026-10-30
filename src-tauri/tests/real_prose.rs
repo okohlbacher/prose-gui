@@ -431,6 +431,8 @@ fn an_sdrf_annotates_the_qpx_views_of_a_tool_that_has_sdrf() {
 
 /// Vendor inputs ProSE reads without conversion: a Thermo .raw file (`PROSE_RAW_FILE`) and a Bruker timsTOF .d folder
 /// (`PROSE_D_FOLDER`, e.g. OpenTIMS' test.d), each searched against the example's FASTA with `PROSE_BIN`. Skipped without them.
+/// A tool with a bundled .NET runtime (`tool::bundled_dotnet`) has to read the .raw file on that runtime, not on a
+/// .NET of the system (the host's trace, `COREHOST_TRACE`, names the framework folder it chose).
 #[test]
 fn searches_thermo_raw_and_bruker_d_inputs() {
     let Some(real) = real() else { return };
@@ -445,7 +447,15 @@ fn searches_thermo_raw_and_bruker_d_inputs() {
     for input in inputs {
         let work = TempDir::new("vendor");
         let out = work.path().join("out.idXML");
-        let run = std::process::Command::new(&real.bin)
+        // (the app's command: DOTNET_ROOT is the bundled .NET runtime of the tool, if it has one)
+        let mut command = tool::command(&real.bin);
+        let trace = work.path().join("corehost-trace.txt");
+        let bundled = tool::bundled_dotnet(&real.bin)
+            .filter(|_| input.extension().is_some_and(|e| e.eq_ignore_ascii_case("raw")));
+        if bundled.is_some() {
+            command.env("COREHOST_TRACE", "1").env("COREHOST_TRACEFILE", &trace);
+        }
+        let run = command
             .arg("-in")
             .arg(&input)
             .arg("-database")
@@ -453,12 +463,19 @@ fn searches_thermo_raw_and_bruker_d_inputs() {
             .arg("-out")
             .arg(&out)
             .args(["-threads", "4", "-Search:rescore", "false"])
-            .env("OPENMS_DISABLE_UPDATE_CHECK", "ON")
             .output()
             .unwrap();
         let log = String::from_utf8_lossy(&run.stdout).into_owned() + &String::from_utf8_lossy(&run.stderr);
         assert!(run.status.success(), "{} was not searched:\n{log}", input.display());
         assert!(out.is_file(), "{}: no idXML written:\n{log}", input.display());
         assert!(log.contains("MS2 spectra"), "{}: ProSE read no spectra:\n{log}", input.display());
+        if let Some(root) = bundled {
+            // (Windows: either slash, any case of the drive letter)
+            let slashes = |s: &str| s.replace('\\', "/").to_lowercase();
+            let trace = slashes(&String::from_utf8_lossy(&fs::read(&trace).unwrap()));
+            let chosen = trace.lines().find(|l| l.starts_with("chose fx version [")).unwrap_or("(none)");
+            let want = slashes(&root.join("shared").join("Microsoft.NETCore.App").to_string_lossy());
+            assert!(chosen.contains(&want), "the .raw file was not read on the bundled .NET ({want}): {chosen}");
+        }
     }
 }
