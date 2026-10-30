@@ -118,7 +118,9 @@
     Opening a project fills New search with its files, design, database and settings (the SDRF is read again where it
     was), and, if History on this computer has its search, opens that in Results as it was. Nothing starts by itself: a
     file that is no longer there or has another size, a database that is gone, a preset or search this computer does not
-    have, is named in New search, so that you can add it again before you search. The paths are those of the computer
+    have, is named in New search, so that you can add it again before you search. A UniProt proteome that is no longer
+    on disk is downloaded again from UniProt and chosen (under Protein database, as its Download does); only if that
+    fails is it named too. The paths are those of the computer
     that saved it; on another computer, files in other places are reported as missing. A project of a newer app
     (a higher <code>schema</code>) is refused, with the version it needs.
   </p>

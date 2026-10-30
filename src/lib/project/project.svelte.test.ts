@@ -35,7 +35,15 @@ vi.mock('../desktop', () => ({
   }),
   openProjectSetup: vi.fn(async () => toOpen),
   forgetProjectSetup: vi.fn(async () => {}),
+  // (UniProt: the proteome lands in the app's databases folder, or fails when `uniprotDown`)
+  downloadProteome: vi.fn(async (id: string, reviewed: boolean) => {
+    if (uniprotDown) throw new Error('UniProt cannot be reached')
+    const path = `/app/databases/${id}${reviewed ? '_reviewed' : ''}.fasta`
+    disk.set(path, 5000)
+    return path
+  }),
 }))
+let uniprotDown = false
 const navigate = vi.fn()
 vi.mock('../route.svelte', () => ({ navigate: (r: unknown) => navigate(r), router: { route: { view: 'search' }, resultId: null } }))
 vi.mock('svelte-sonner', () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }))
@@ -161,6 +169,34 @@ describe('projects in New search', () => {
     expect(openFromHistory).toHaveBeenCalledWith('42-1')
     expect(notes).toEqual([])
     expect(project.searchId).toBe('42-1')
+  })
+
+  test('a UniProt proteome no longer on disk is downloaded again and chosen; if that fails, the note stays', async () => {
+    disk.set('/app/databases/UP000005640_reviewed.fasta', 5000)
+    await form.setDatabase('/app/databases/UP000005640_reviewed.fasta')
+    const setup = parseSetup(serializeSetup(captureSetup('exp')))
+    expect(setup.database?.proteome).toBe('UP000005640')
+    disk.delete('/app/databases/UP000005640_reviewed.fasta')
+    vi.mocked(desktop.downloadProteome).mockClear()
+    let notes = await restoreSetup(setup)
+    expect(desktop.downloadProteome).toHaveBeenCalledWith('UP000005640', true)
+    expect(form.database).toMatchObject({ file: { path: '/app/databases/UP000005640_reviewed.fasta' }, error: null })
+    expect(notes).toEqual([])
+    expect(form.notices).toEqual([])
+    expect(hasUnsavedChanges()).toBe(false)
+    // UniProt cannot be reached: no database, and the notes say so
+    disk.delete('/app/databases/UP000005640_reviewed.fasta')
+    uniprotDown = true
+    try {
+      notes = await restoreSetup(setup)
+    } finally {
+      uniprotDown = false
+    }
+    expect(form.database?.error).toBeTruthy()
+    expect(notes.some((n) => n.startsWith('Choose the database of “exp” again'))).toBe(true)
+    expect(notes).toContain('UP000005640_reviewed.fasta is UniProt proteome UP000005640: download it again under Protein database.')
+    const { proteomeDownload } = await import('../search/proteome-download.svelte')
+    expect(proteomeDownload).toEqual({ id: null, error: 'UniProt cannot be reached' })
   })
 
   test('New Search: a new, unsaved setup, cleared as Start over clears it; it asks first about unsaved changes', async () => {

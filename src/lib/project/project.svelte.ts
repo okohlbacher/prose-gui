@@ -3,7 +3,8 @@
 // files, design, database, settings and SDRF back (`SearchForm.restoreSearch`, the SDRF loader); if the search the
 // setup ran as is in History, Results opens it with its tab, filters, columns and selection. Whatever cannot be
 // brought back (a file moved or changed, the database gone, the search not in History) is said in New search's
-// notices, and in a message where the project opens elsewhere: nothing starts by itself.
+// notices, and in a message where the project opens elsewhere: nothing starts by itself (but the download of a UniProt
+// proteome that is no longer on disk).
 
 import { toast } from 'svelte-sonner'
 import { loadDesign, sdrfSession } from '../design/sdrf-session.svelte'
@@ -15,6 +16,7 @@ import type { Level } from '../results/model'
 import { currentResultsView, resultsViewFor, type ResultsView } from '../results/view.svelte'
 import { navigate, router } from '../route.svelte'
 import { searchForm } from '../search/form.svelte'
+import { fetchProteome } from '../search/proteome-download.svelte'
 import { onSearchEnded, openResult } from '../search/session.svelte'
 import { toolState } from '../search/tool.svelte'
 import { DEFAULT_PRESET_ID } from '../settings/presets'
@@ -221,8 +223,17 @@ export async function restoreSetup(setup: ProjectSetup, name = setup.name): Prom
     if (setup.presetId && !form.presets.some((p) => p.id === setup.presetId)) {
       notes.push(`The preset of “${name}” (${setup.presetId}) is not on this computer: its settings are shown against the default preset.`)
     }
+    // a UniProt proteome no longer on disk is downloaded again (as Protein database › Download does, its progress
+    // there); only if that fails is it left to the user
     if (setup.database?.proteome && (form.database === null || form.database.error)) {
-      notes.push(`${setup.database.name} is UniProt proteome ${setup.database.proteome}: download it again under Protein database.`)
+      const again = `Choose the database of “${name}” again:`
+      try {
+        await fetchProteome(setup.database.proteome, /_reviewed\.fasta$/i.test(setup.database.name))
+        if (form.database && !form.database.error) form.notices = form.notices.filter((n) => !n.startsWith(again))
+        else throw new Error('not readable')
+      } catch {
+        notes.push(`${setup.database.name} is UniProt proteome ${setup.database.proteome}: download it again under Protein database.`)
+      }
     }
     // the SDRF, read again where it was; then the design fields as the project has them (the SDRF's are its own)
     if (setup.sdrf) {

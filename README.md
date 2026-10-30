@@ -100,7 +100,9 @@ holds:
 
 Opening one fills New search (`SearchForm.restoreSearch`, the SDRF loaded again from its path) and, when History
 has its search, opens it in Results with that state. Files that are gone or have another size, a missing database or
-preset, and a search History does not have are named in New search's notices; nothing starts by itself. A newer schema
+preset, and a search History does not have are named in New search's notices; nothing starts by itself, but a
+UniProt proteome (`database.proteome`) that is no longer on disk is downloaded again and chosen (as Protein database
+› Download does, its progress there; if the download fails, the notices say to download it again). A newer schema
 is refused. A project is not a results archive: it holds paths and settings, no results.
 
 ## Results archives (`.prose`)

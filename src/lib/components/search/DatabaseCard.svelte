@@ -5,9 +5,9 @@
   // ProSE cannot search the file (the search does not start), and what ProSE may mishandle in it (notices).
   import * as Card from '$lib/components/ui/card'
   import { Label } from '$lib/components/ui/label'
-  import { chooseFiles, downloadedProteomes, downloadProteome, findProteomes, isDesktop, type ProteomeHit } from '$lib/desktop'
+  import { chooseFiles, downloadedProteomes, findProteomes, isDesktop, type ProteomeHit } from '$lib/desktop'
+  import { fetchProteome, proteomeDownload } from '$lib/search/proteome-download.svelte'
   import { ORGANISMS, proteomeLabel, rememberProteome } from '$lib/settings/organisms'
-  import { onMount } from 'svelte'
   import Help from './Help.svelte'
   import { CRAP_PROTEINS, searchForm as form } from '$lib/search/form.svelte'
   import { choiceLabel } from '$lib/settings/labels'
@@ -32,12 +32,18 @@
   let organism = $state(ORGANISMS[0].id)
   let otherId = $state('')
   let reviewed = $state(true)
-  let downloading = $state(false)
-  let downloadError = $state<string | null>(null)
-  // the proteomes downloaded before are marked: choosing one takes the file at once
+  // (shared: a project whose proteome is gone downloads it again through the same download)
+  const downloading = $derived(proteomeDownload.id !== null)
+  let searchError = $state<string | null>(null)
+  const downloadError = $derived(searchError ?? proteomeDownload.error)
+  // the proteomes downloaded before are marked: choosing one takes the file at once (listed again after a download)
   let downloaded = $state<string[]>([])
-  onMount(() => {
+  const listDownloaded = () => {
     if (isDesktop()) void downloadedProteomes().then((names) => (downloaded = names)).catch(() => {})
+  }
+  // (on mount, and when a download ended)
+  $effect(() => {
+    if (!downloading) listDownloaded()
   })
   const has = (id: string) => downloaded.some((n) => n.toUpperCase().startsWith(id))
   const organismOptions = $derived([
@@ -50,7 +56,7 @@
   let searching = $state(false)
   let hits = $state<ProteomeHit[] | null>(null)
   async function search() {
-    downloadError = null
+    searchError = null
     const q = query.trim()
     if (/^UP\d{9}$/i.test(q)) {
       otherId = q.toUpperCase()
@@ -62,7 +68,7 @@
       hits = await findProteomes(q)
       otherId = hits[0]?.upid ?? ''
     } catch (e) {
-      downloadError = String((e as Error)?.message ?? e)
+      searchError = String((e as Error)?.message ?? e)
     } finally {
       searching = false
     }
@@ -72,22 +78,12 @@
   // the organism of a downloaded proteome, beside its file name (which names only the UniProt proteome)
   const organismOfFile = $derived(form.database ? proteomeLabel(form.database.file.name) : null)
   async function download() {
-    downloadError = null
-    downloading = true
-    try {
-      const id = organism === 'other' ? otherId.trim().toUpperCase() : organism
-      const hit = hits?.find((h) => h.upid === id)
-      if (hit) rememberProteome(id, `${hit.organism}${hit.strain ? ` (${hit.strain})` : ''}`)
-      const before = form.database
-      const path = await downloadProteome(id, reviewed)
-      // (a FASTA chosen while it downloaded stays chosen)
-      if (form.database === before) await form.setDatabase(path)
-      downloaded = await downloadedProteomes().catch(() => downloaded)
-    } catch (e) {
-      downloadError = String((e as Error)?.message ?? e)
-    } finally {
-      downloading = false
-    }
+    searchError = null
+    const id = organism === 'other' ? otherId.trim().toUpperCase() : organism
+    const hit = hits?.find((h) => h.upid === id)
+    if (hit) rememberProteome(id, `${hit.organism}${hit.strain ? ` (${hit.strain})` : ''}`)
+    // (the error is shown under the card)
+    await fetchProteome(id, reviewed).catch(() => {})
   }
 </script>
 
@@ -169,7 +165,7 @@
         type="button"
         class="h-8 rounded-md border px-3 hover:bg-muted disabled:opacity-50"
         disabled={downloading || (organism === 'other' && !/^UP\d{9}$/i.test(otherId.trim()))}
-        onclick={download}>{downloading ? 'Downloading…' : 'Download'}</button>
+        onclick={download}>{downloading ? `Downloading${proteomeDownload.id && proteomeDownload.id !== (organism === 'other' ? otherId.trim().toUpperCase() : organism) ? ` ${proteomeDownload.id}` : ''}…` : 'Download'}</button>
       {#if organism === 'other' && hits}
         <div class="w-full" data-testid="proteome-hits">
           {#if hits.length === 0}
