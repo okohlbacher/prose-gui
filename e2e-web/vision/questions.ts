@@ -34,8 +34,8 @@ export const SPECTRUM: Question = {
     'This is an annotated MS/MS spectrum (a mirror plot: observed peaks above, a prediction below, and a fragment mass error strip). ' +
     'List every fragment ion label written on or above the peaks of the upper half exactly as written (for example "b4", "y6"), without the legend. ' +
     'Name the colour of the peaks the legend calls "b ions" and of those it calls "y ions". ' +
-    'Give the x-axis title and the y-axis title as written (null if there is none) and the tick labels of the upper y axis. ' +
-    'Say whether any text is clipped at an edge or overlaps other text so that it cannot be read, and list such text.',
+    'Give the x-axis title and the y-axis title as written (null if there is none; the x-axis title may stand at the right end of the axis, after the last tick) and the tick labels of the upper y axis. ' +
+    'Say whether any text is clipped at an edge or overlaps other text so that it cannot be read, and list such text. Two labels set one above the other for the same peak are deliberate and readable, not overlapping.',
   schema: object({
     peak_labels: list,
     b_ion_colour: colour,
