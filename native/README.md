@@ -148,7 +148,7 @@ native ID, isotope error, protein mappings, the filtered peaks and PeptDeep's pr
 pooled and singleton protein groups, `-keep_decoys`; see `docs/parity.md`) has everything the app needs. Before, the pin
 was the branch `claude/prose-desktop-pin` (develop with the pull requests not merged yet). The per-input QPX files are in
 `qpx/runs/`; the reader also reads the layout of app 0.1.x (per-input files next to `quantms.*`). CI checks the commit out
-of OpenMS/OpenMS; it never builds from local state. Build it with
+of `OPENMS_REPO` (OpenMS/OpenMS without the file); it never builds from local state. Build it with
 
 ```bash
 native/scripts/build-openms.sh <OpenMS checkout at the pin> <OpenMS checkout>/build
@@ -157,6 +157,20 @@ native/scripts/build-openms.sh <OpenMS checkout at the pin> <OpenMS checkout>/bu
 and check it with `ctest --test-dir <OpenMS checkout>/build -R "ProSE|PeptDeep|QPX|Percolator_test|ArrowIOHelpers_test|ArrowSchemaRegistry_test"`
 (with the default targets plus `ArrowSchemaRegistry_test` and `QPXDatasetExport_test`). Then make the parameter table
 (`scripts/prose-parameters.mjs`) and the reader's fixtures (`scripts/results-fixture-native.mjs`) with its ProSE again.
+
+### Moving the pin to OpenMS/OpenMS
+
+The pin stays on `okohlbacher/OpenMS` `prose/integration` until OpenMS pull request #10740 (ProSE) is merged into
+`develop` of OpenMS/OpenMS. Then:
+
+1. Take the merge commit (or a later commit of `develop` that has it) of OpenMS/OpenMS, its full 40-character hash
+   (`git ls-remote https://github.com/OpenMS/OpenMS refs/heads/develop`, or the hash GitHub shows for the merge).
+2. Write that hash into `native/OPENMS_COMMIT` (one line, nothing else).
+3. Write `OpenMS/OpenMS` into `native/OPENMS_REPO` (or delete the file: without it the workflows use OpenMS/OpenMS).
+4. Check that the commit has what `prose/integration` had (`-sdrf`, mzPeak input, PeptDeep rescoring, `-qpx_extended`):
+   build it (above), run the ctest line, and make the parameter table and the fixtures again; commit those changes
+   together with the two files.
+5. Push and let the `desktop` workflow build all platforms from the new pin.
 
 ## Bundling ProSE
 

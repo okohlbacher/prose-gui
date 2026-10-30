@@ -184,6 +184,13 @@ native/scripts/in-env.sh e2e/run.sh [e2e/smoke.spec.ts] # WebdriverIO via tauri-
 native/scripts/in-env.sh e2e/run.sh e2e/screens.shot.ts # screenshots into docs/screens
 ```
 
+The OpenMS the app's ProSE is built from is pinned in `native/OPENMS_COMMIT` (a full commit hash) and
+`native/OPENMS_REPO` (its repository, `owner/name`). The pin is now `okohlbacher/OpenMS` `prose/integration` (ProSE of
+OpenMS #10740 with what the app needs on top). Once OpenMS pull request #10740 is merged, move it to OpenMS/OpenMS:
+put the full hash of the merge commit (or a later `develop` commit) into `native/OPENMS_COMMIT`, write `OpenMS/OpenMS`
+into `native/OPENMS_REPO` (or delete the file, which means OpenMS/OpenMS), build and test it, and make the parameter
+table and the fixtures again (the steps: `native/README.md`, "Moving the pin to OpenMS/OpenMS").
+
 Packages and their smoke test (needs the OpenMS build of `native/scripts/build-openms.sh`):
 
 ```bash
