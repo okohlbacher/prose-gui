@@ -111,13 +111,13 @@
    * The lower half's label (and the similarity, on its own line when narrow): with the error strip right under the
    * lower half, else under the m/z labels.
    */
-  const bottomLabelY = $derived(errors ? plotBottom + 16 : plotBottom + 36)
+  const bottomLabelY = $derived(errors ? plotBottom + 16 : plotBottom + 36 + line)
   /** The error strip: its header (one line or more), then its plot (errorTop to errorBottom). */
   const errorTop = $derived.by(() => bottomLabelY + bottomExtra + 30 + (errorLines.length - 1) * line)
   const errorBottom = $derived(errorTop + 84)
-  /** The m/z labels sit below the lowest part: the lower half, or the error strip. */
+  /** The m/z labels sit below the lowest part: the lower half, or the error strip; the axis title a line under them. */
   const axisBase = $derived(errors ? errorBottom : plotBottom)
-  const H = $derived(errors ? axisBase + 24 : axisBase + 42 + bottomExtra)
+  const H = $derived(errors ? axisBase + 24 + line : axisBase + 42 + line + bottomExtra)
   let svg = $state<SVGSVGElement | null>(null)
 
   /** The SVG (for "Export spectrum (SVG)"). */
@@ -438,7 +438,8 @@
     {#each xTicks as t (t)}
       {#if x(t) < width - M.right - 30}<text x={px(x(t))} y={axisBase + 15} text-anchor="middle" font-size="11" fill={muted}>{t}</text>{/if}
     {/each}
-    <text x={width - M.right} y={axisBase + 15} text-anchor="end" font-size="11" fill={muted}>m/z</text>
+    <!-- (the axis title centred under the tick labels) -->
+    <text x={px((M.left + width - M.right) / 2)} y={axisBase + 15 + line} text-anchor="middle" font-size="11" fill={muted} data-testid="mz-axis-title">m/z</text>
 
     <!-- relative intensity, of each half's 100 % -->
     <g font-size="10" fill={muted} text-anchor="end">
