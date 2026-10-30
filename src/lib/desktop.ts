@@ -5,8 +5,8 @@
 // Commands (src-tauri/src/lib.rs): tool_info, start_search, cancel_search, read_search_file,
 // inspect_files, cpu_count, example_files, save_text, save_search_file, history_list, history_save_record,
 // history_save_proteins, history_rename, history_delete, history_files, history_import, open_project_file,
-// save_project_file, open_design_file, locate_data_files, answer_close. Events: search://progress, search://done, search://failed,
-// project://progress, app://close-requested. The system's dialogs open one at a time (`oneDialog`). The window's
+// save_project_file, open_design_file, locate_data_files, answer_close, save_project_setup, open_project_setup, menu_state. Events:
+// search://progress, search://done, search://failed, project://progress, app://close-requested, menu://action. The system's dialogs open one at a time (`oneDialog`). The window's
 // theme (`windowTheme`, `onWindowThemeChanged`, `setWindowTheme`).
 
 import { invoke } from '@tauri-apps/api/core'
@@ -507,4 +507,62 @@ export async function downloadDataFiles(files: { name: string; size: number; url
 
 export function cancelDownload(): Promise<void> {
   return invoke('cancel_download')
+}
+
+/**
+ * Saves a project file (`contents`, its JSON): to the project opened or saved last unless `ask` (Save As, or no
+ * project yet), else where the user chooses in the save dialog (suggesting `name`). The page's browser mode
+ * downloads it. -> `{ path, name }` of the file written, or null if cancelled.
+ */
+export function saveProjectSetup(name: string, contents: string, ask: boolean): Promise<{ path: string; name: string } | null> {
+  if (!isDesktop()) {
+    const saved = browserDownload(name, new Blob([contents], { type: 'application/json' }))
+    return Promise.resolve({ path: saved, name: saved })
+  }
+  return oneDialog(null, () => invoke<{ path: string; name: string } | null>('save_project_setup', { name, contents, ask }))
+}
+
+/**
+ * Opens a project file: the open dialog, or with `recent` the n-th of File › Open Recent (the shim keeps the list:
+ * the page never names a path). The page's browser mode asks with the browser's file picker. -> `{ path, text }`
+ * (in the browser `path` is the file's name), or null if cancelled.
+ */
+export function openProjectSetup(recent?: number): Promise<{ path: string; text: string } | null> {
+  if (!isDesktop()) return pickTextFile('.json,application/json')
+  return oneDialog(null, () => invoke<{ path: string; text: string } | null>('open_project_setup', { recent: recent ?? null }))
+}
+
+/** The browser's file picker for one text file (the page's browser mode): its name and text, or null if cancelled. */
+function pickTextFile(accept: string): Promise<{ path: string; text: string } | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = accept
+    input.style.display = 'none'
+    input.dataset.testid = 'project-file-input'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      input.remove()
+      if (!file) return resolve(null)
+      void file.text().then((text) => resolve({ path: file.name, text }), () => resolve(null))
+    })
+    input.addEventListener('cancel', () => {
+      input.remove()
+      resolve(null)
+    })
+    document.body.append(input)
+    input.click()
+  })
+}
+
+/** A click on a menu item of the page's (`menu://action`, src-tauri/src/menu.rs): its id. Returns the way to stop listening. */
+export async function onMenuAction(handler: (id: string) => void): Promise<() => void> {
+  if (!isDesktop()) return () => {}
+  return listen<string>('menu://action', (e) => handler(e.payload))
+}
+
+/** Which menu items apply: Export with an open result, its CSV and Excel with a table, the theme's check mark. */
+export function setMenuState(state: { result: boolean; table: boolean; theme: string }): Promise<void> {
+  if (!isDesktop()) return Promise.resolve()
+  return invoke<void>('menu_state', { state }).catch(() => undefined)
 }

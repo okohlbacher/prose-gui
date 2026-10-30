@@ -13,6 +13,21 @@
   import { addAnyFiles } from '$lib/design/sdrf-session.svelte'
   import { onFileDrop } from '$lib/desktop'
   import { searchForm as form } from '$lib/search/form.svelte'
+  import { openProject, project, saveProject } from '$lib/project/project.svelte'
+  import { errorText } from '$lib/desktop'
+
+  /** What went wrong with the last Open or Save of a project. */
+  let projectError = $state<string | null>(null)
+
+  /** Open Project… and Save Project… (also File › Open Project, Save Project in the desktop app). */
+  async function projectAction(action: () => Promise<unknown>, what: string) {
+    projectError = null
+    try {
+      await action()
+    } catch (e) {
+      projectError = `${what}: ${errorText(e)}`
+    }
+  }
 
   let dragging = $state(false)
 
@@ -49,6 +64,23 @@
       <h1 class="mb-1 text-xl font-semibold tracking-tight">New search</h1>
       <p class="text-muted-foreground">Spectra and database stay on this computer.</p>
     </div>
+    <!-- a project: the setup of this search and of the views, as a .prose-setup.json (src/lib/project) -->
+    <div class="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={project.busy}
+        title="Opens a project (.prose-setup.json): its files, design, database and settings here, and its search in Results if History has it"
+        data-testid="open-setup"
+        onclick={() => projectAction(() => openProject(), 'Open project')}>{project.busy ? 'Opening project…' : 'Open project…'}</Button>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={project.busy}
+        title="Saves this setup and the state of the views as a project (.prose-setup.json), to set up the same search again"
+        data-testid="save-setup"
+        onclick={() => projectAction(() => saveProject(project.name === null), 'Save project')}>Save project…</Button>
+    </div>
     {#if form.files.length > 0 || form.database}
       <!-- the next search from scratch: no files, no database, the settings kept -->
       <Button
@@ -60,6 +92,12 @@
     {/if}
   </div>
 
+  {#if projectError}
+    <p class="text-sm text-destructive" role="alert" data-testid="project-error">{projectError}</p>
+  {/if}
+  {#if project.name}
+    <p class="-mt-2 text-xs text-muted-foreground" data-testid="project-name">Project: {project.name}</p>
+  {/if}
   {#if form.files.length === 0}
     <EmptyState {dragging} />
   {:else}

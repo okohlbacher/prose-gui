@@ -2,13 +2,17 @@
   // The app's keyboard shortcuts (survey P0, F13) and their overlay ("?", or Help › Keyboard shortcuts).
   // ⌘/Ctrl+⇧+1–4 switch the views, ⌘/Ctrl+1–6 the tabs of Results, ⌘/Ctrl+F (or "/") goes to the table's filter.
   // The single-character keys ("/", "?") can be turned off (WCAG 2.1.4); they never act while typing in a field.
+  // In the desktop app ⌘/Ctrl+⇧1–4 are the View menu's accelerators (src/lib/menu.svelte.ts): the menu owns them there,
+  // and this handler only in the browser, so that a key is not handled twice.
   import * as Dialog from '$lib/components/ui/dialog'
+  import { isDesktop } from '$lib/desktop'
   import { navigate, router } from '$lib/route.svelte'
   import { shortcuts } from '$lib/shortcuts.svelte'
 
   const mac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform)
   const mod = mac ? '⌘' : 'Ctrl'
   const views = ['search', 'results', 'history', 'help'] as const
+  const desktop = isDesktop()
 
   const typing = (t: EventTarget | null) =>
     t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))
@@ -25,6 +29,7 @@
     const cmd = mac ? e.metaKey : e.ctrlKey
     const digit = /^Digit([1-9])$/.exec(e.code)?.[1]
     if (cmd && e.shiftKey && !e.altKey && digit && Number(digit) <= views.length) {
+      if (desktop) return
       e.preventDefault()
       const view = views[Number(digit) - 1]
       navigate(view === 'results' ? { view, id: router.resultId } : { view })
@@ -58,6 +63,14 @@
     ['Esc', 'Close the protein panel or the spectrum view'],
     ['Drag, double-click', 'Spectrum: zoom into an m/z range, zoom out'],
     [`${mod} Enter`, 'New search: start the search'],
+    ...(desktop
+      ? ([
+          [`${mod} O`, 'Open a project (.prose-setup.json)'],
+          [`${mod} S  ·  ${mod} ⇧ S`, 'Save the project · Save it as'],
+          [`${mod} N`, 'New search'],
+          [`${mod} /`, 'This list'],
+        ] as [string, string][])
+      : []),
     ['?', 'This list'],
   ]
 </script>

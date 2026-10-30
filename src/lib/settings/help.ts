@@ -6,7 +6,7 @@ export const HELP = {
   setup: {
     title: 'Preset',
     text: 'A preset fills in the settings that depend on the instrument: how exact its precursor (MS1) and fragment (MS2) masses are, and which model predicts its spectra. Choose the instrument that recorded the spectra. The built-in presets assume a tryptic digest and alkylated cysteines (Carbamidomethyl); check the enzyme and the modifications against your sample preparation.',
-    tip: 'Save your own preset (with its database, e.g. one per organism) with “Save as preset”. A preset keeps the settings and a database, not the Percolator and PeptDeep switches; to repeat a search, open it from History.',
+    tip: 'Save your own preset (with its database, e.g. one per organism) with “Save as preset”. A preset keeps the settings and a database, not the Percolator and PeptDeep switches; to repeat a search, open it from History, or save the whole setup as a project (File › Save Project).',
   },
   database: {
     title: 'Protein database (FASTA)',

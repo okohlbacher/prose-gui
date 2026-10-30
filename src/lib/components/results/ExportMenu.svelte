@@ -49,7 +49,7 @@
     try {
       await saveProjectFile(view.result, (fraction) => (written = fraction))
     } catch (e) {
-      error = `Project: ${String((e as Error)?.message ?? e)}`
+      error = `Results archive: ${String((e as Error)?.message ?? e)}`
     } finally {
       busy = false
       projecting = false
@@ -75,7 +75,7 @@
 {/if}
 <DropdownMenu.Root {open} onOpenChange={openChange}>
   <DropdownMenu.Trigger class={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 gap-1 px-2.5 text-xs')} disabled={busy}>
-    {#if projecting}Saving project…{#if written !== null}<span class="tabular-nums">{Math.floor(written * 100)} %</span>{/if}{:else if busy || view.exporting}Exporting…{:else}Export{/if}<ChevronDown class="size-3.5" aria-hidden="true" />
+    {#if projecting}Saving archive…{#if written !== null}<span class="tabular-nums">{Math.floor(written * 100)} %</span>{/if}{:else if busy || view.exporting}Exporting…{:else}Export{/if}<ChevronDown class="size-3.5" aria-hidden="true" />
   </DropdownMenu.Trigger>
   <DropdownMenu.Content class="w-auto min-w-52" align="end">
     <DropdownMenu.Item disabled={view.level === null || view.exporting} onSelect={() => guard(() => exportCsv(view))}
@@ -91,8 +91,8 @@
       onSelect={() => guard(() => view.spectrumExporter?.())}>Spectrum (SVG)</DropdownMenu.Item>
     <DropdownMenu.Item
       disabled={view.exporting}
-      title="Saves the search's results as one file that you can open in ProSE elsewhere. It contains ProSE's outputs, which name folders on this computer, such as those of the database and the search. The mzML files and the log are not included."
-      onSelect={project}>Project (.prose)</DropdownMenu.Item>
+      title="Saves the search's results as one archive file that you can import in ProSE elsewhere (History › Import results archive). Not a project (File › Save Project, the setup). It contains ProSE's outputs, which name folders on this computer, such as those of the database and the search. The mzML files and the log are not included."
+      onSelect={project}>Results archive (.prose)</DropdownMenu.Item>
     <DropdownMenu.Separator />
     <DropdownMenu.Item onSelect={idXML}>{idXMLFile(view.result).label}</DropdownMenu.Item>
   </DropdownMenu.Content>

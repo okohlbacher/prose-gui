@@ -92,7 +92,7 @@ describe('the example with PeptDeep', () => {
     const file = join(dataHome(), 'chosen.prose')
     rmSync(file, { force: true })
     await $('header').$('button*=Export').click()
-    await $('[role="menuitem"]*=Project (.prose)').click()
+    await $('[role="menuitem"]*=Results archive (.prose)').click()
     await browser.waitUntil(() => {
       try {
         return readFileSync(file).length > 0

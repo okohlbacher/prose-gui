@@ -34,6 +34,12 @@
 //!   cancelled) and `history_import(body)` (the entries of a project in a fresh folder -> the new id). At
 //!   startup the partial folders of interrupted searches are swept (`history::sweep`).
 //!
+//! - Projects (`setup_file`): `save_project_setup(name, contents, ask)` (the save dialog unless `ask` is false and a
+//!   project was opened or saved before: then that file again) -> `{ path, name }` or null;
+//!   `open_project_setup(recent?)` (the open dialog, or the `recent`-th entry of File › Open Recent) -> `{ path,
+//!   text }` or null; both refuse other files than `.prose-setup.json` and more than 4 MB, and put the file first in
+//!   the recent projects. `menu_state({ result, table, theme })`: which menu items apply (`menu`); a click on one
+//!   of the page's items is the event `menu://action` with its id.
 //! - closing the window while a search runs: the window stays and `app://close-requested` asks the page,
 //!   which answers with `answer_close(close)` ([`close_requested`])
 //!
@@ -46,6 +52,7 @@ pub mod decoys;
 pub mod files;
 pub mod history;
 pub mod locate;
+pub mod menu;
 pub mod net;
 pub mod pride;
 pub mod sdrf_tools;
@@ -54,6 +61,7 @@ pub mod taxonomy;
 pub mod progress;
 pub mod project;
 pub mod run;
+pub mod setup_file;
 pub mod tool;
 #[cfg(unix)]
 pub mod watchdog;
@@ -71,6 +79,8 @@ use tauri_plugin_dialog::DialogExt;
 struct AppState {
     searches: Arc<Searches>,
     closing: std::sync::Mutex<Closing>,
+    /// The project file opened or saved last (`<name>.prose-setup.json`): Save writes there again.
+    setup_path: std::sync::Mutex<Option<PathBuf>>,
 }
 
 impl Default for AppState {
@@ -86,6 +96,7 @@ impl Default for AppState {
         AppState {
             searches: Arc::new(searches),
             closing: Default::default(),
+            setup_path: Default::default(),
         }
     }
 }
@@ -783,6 +794,127 @@ async fn save_project_file(
     .map_err(|e| e.to_string())?
 }
 
+/// The app's data folder (the recent projects' list), if there is one.
+fn data_dir<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
+    app.path().app_data_dir().ok()
+}
+
+/// The project file `path` is the current one: Save writes there again, it is first under Open Recent, and the
+/// window's title names it.
+fn use_setup_path(app: &AppHandle, state: &AppState, path: &Path) {
+    *state.setup_path.lock().unwrap() = Some(path.to_path_buf());
+    if let Some(dir) = data_dir(app) {
+        let list = setup_file::remember(&dir, path);
+        if let Some(handles) = app.try_state::<menu::MenuHandles<tauri::Wry>>() {
+            let _ = handles.set_recent(app, list);
+        }
+    }
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = name.strip_suffix(setup_file::SETUP_EXTENSION).unwrap_or(&name).to_string();
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_title(&format!("{name} — ProSE"));
+    }
+}
+
+/// Saves a project (`contents`, the page's JSON): to the current project file when `ask` is false and there is
+/// one, else where the user chooses in the save dialog (suggesting `name`). -> `{ path, name }`, or null if
+/// cancelled.
+#[tauri::command]
+async fn save_project_setup(
+    app: AppHandle,
+    name: String,
+    contents: String,
+    ask: bool,
+) -> Result<Option<serde_json::Value>, String> {
+    let handle = app.clone();
+    let written = tauri::async_runtime::spawn_blocking(move || {
+        let state = handle.state::<AppState>();
+        let current = if ask { None } else { state.setup_path.lock().unwrap().clone() };
+        let target = match current {
+            Some(path) => path,
+            None => {
+                let suggested = Path::new(&name)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let suggested = setup_file::with_setup_extension(Path::new(&suggested));
+                let suggested = suggested.to_string_lossy().into_owned();
+                let chosen = match test_dialog_path() {
+                    Some(path) => Some(path),
+                    None => match handle
+                        .dialog()
+                        .file()
+                        .set_title("Save the project: the setup of the search and of the views")
+                        .set_file_name(&suggested)
+                        .add_filter("ProSE project", &["json"])
+                        .blocking_save_file()
+                    {
+                        None => None,
+                        Some(p) => Some(p.into_path().map_err(|e| e.to_string())?),
+                    },
+                };
+                let Some(path) = chosen else { return Ok(None) };
+                path
+            }
+        };
+        setup_file::write_setup(&target, &contents).map(Some)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let Some(path) = written else { return Ok(None) };
+    use_setup_path(&app, &app.state::<AppState>(), &path);
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    Ok(Some(serde_json::json!({ "path": path, "name": name })))
+}
+
+/// Opens a project file: the open dialog, or with `recent` the `recent`-th entry of File › Open Recent (the page
+/// never names a path). -> `{ path, text }`, or null if cancelled.
+#[tauri::command]
+async fn open_project_setup(app: AppHandle, recent: Option<usize>) -> Result<Option<serde_json::Value>, String> {
+    let from_recent = match recent {
+        None => None,
+        Some(n) => {
+            let handles = app.try_state::<menu::MenuHandles<tauri::Wry>>();
+            let listed = handles.and_then(|h| h.recent_paths.lock().unwrap().get(n).cloned());
+            let listed = listed.or_else(|| data_dir(&app).and_then(|d| setup_file::recent(&d).get(n).cloned()));
+            Some(listed.ok_or("That recent project is no longer listed.")?)
+        }
+    };
+    let handle = app.clone();
+    let read = tauri::async_runtime::spawn_blocking(move || {
+        let chosen = match from_recent.or_else(test_dialog_path) {
+            Some(path) => Some(path),
+            None => match handle
+                .dialog()
+                .file()
+                .set_title("Open a project (.prose-setup.json)")
+                .add_filter("ProSE project", &["json"])
+                .blocking_pick_file()
+            {
+                None => None,
+                Some(p) => Some(p.into_path().map_err(|e| e.to_string())?),
+            },
+        };
+        let Some(path) = chosen else { return Ok(None) };
+        let text = setup_file::read_setup(&path)?;
+        Ok::<_, String>(Some((path, text)))
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let Some((path, text)) = read else { return Ok(None) };
+    use_setup_path(&app, &app.state::<AppState>(), &path);
+    Ok(Some(serde_json::json!({ "path": path, "text": text })))
+}
+
+/// Which menu items apply (`menu`): Export with an open result, its CSV and Excel with a table, the theme's mark.
+#[tauri::command]
+fn menu_state(app: AppHandle, state: menu::MenuState) -> Result<(), String> {
+    match app.try_state::<menu::MenuHandles<tauri::Wry>>() {
+        Some(handles) => handles.apply(&state).map_err(|e| e.to_string()),
+        None => Ok(()),
+    }
+}
+
 /// The page's answer to `app://close-requested`: close (the running search ends, as with any close), or
 /// keep the window.
 #[tauri::command]
@@ -843,6 +975,15 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        // the menu bar (macOS) or the window's menus (Windows, Linux): `menu`
+        .menu(|handle| {
+            let (bar, handles) = menu::build(handle)?;
+            let recent = data_dir(handle).map(|d| setup_file::recent(&d)).unwrap_or_default();
+            let _ = handles.set_recent(handle, recent);
+            handle.manage(handles);
+            Ok(bar)
+        })
+        .on_menu_event(|handle, event| menu::on_event(handle, event, data_dir(handle)))
         // closing the window during a search: the page asks first (CloseGuard.svelte, `answer_close`)
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -925,6 +1066,9 @@ pub fn run() {
             cancel_download,
             history_import_qpx,
             save_project_file,
+            save_project_setup,
+            open_project_setup,
+            menu_state,
             answer_close
         ])
         .build(tauri::generate_context!())

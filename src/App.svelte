@@ -5,6 +5,8 @@
   import { Toaster } from '$lib/components/ui/sonner'
   import * as Tooltip from '$lib/components/ui/tooltip'
   import { initHistory } from '$lib/history/history.svelte'
+  import { initMenu } from '$lib/menu.svelte'
+  import { initProject } from '$lib/project/project.svelte'
   import { readHash, router } from '$lib/route.svelte'
   import { loadTool } from '$lib/search/tool.svelte'
   import { initTheme } from '$lib/theme/theme.svelte'
@@ -20,6 +22,10 @@
   void loadTool()
   // finished searches are saved to History; the list is read
   initHistory()
+  // the project of the window (File › Save Project) learns the id of the search started here
+  initProject()
+  // the application menus (desktop only): their clicks, and which items apply
+  initMenu()
 </script>
 
 <svelte:window onhashchange={readHash} />

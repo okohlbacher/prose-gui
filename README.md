@@ -59,20 +59,59 @@ libglvnd-gles` (Fedora).
 - The log of the last search that failed: `logs/last-failure.log` there (the error names it).
 - Proteomes downloaded from UniProt (New search › Protein database): `databases/UP…fasta` there.
 - Presets: the app's webview keeps them, on this computer.
+- The recent projects (File › Open Recent): `recent-projects.json` there (paths only).
 - The spectrum files (mzML, mzPeak, Thermo .raw, Bruker .d) and the FASTA are read where they are: never copied, and
   nothing is written beside them. Deleting a
   search in History removes its folder; uninstalling leaves the data folder, which can be deleted by hand.
 
-## Project files
+## Menus
 
-Export › Project (`.prose`) writes a search as one zip, which Open project (History) opens on another computer.
+The desktop app has native menus (Tauri's menu API, `src-tauri/src/menu.rs`): on macOS the menu bar with the app menu
+(About ProSE, Services, Hide, Hide Others, Show All, Quit); on Windows and Linux the same menus on the window, with Ctrl
+for ⌘, About under Help and Exit under File. **File**: New Search ⌘N, Open Project… ⌘O, Open Recent (the last ten
+projects, kept in `recent-projects.json` of the app's data folder), Save Project ⌘S, Save Project As… ⇧⌘S, Open QPX
+Folder…, Import Results Archive (.prose)…, Export ▸ (CSV, Excel, idXML, Results archive; only with a result open,
+CSV and Excel only on a table), Close Window ⌘W. **Edit**: the system's Undo, Redo, Cut, Copy, Paste, Select All.
+**View**: New Search, Results, History, Help (⇧⌘1–4), Theme ▸ System/Light/Dark, full screen. **Window**: Minimize,
+Zoom. **Help**: ProSE Help, Troubleshooting, Keyboard Shortcuts (⌘/), ProSE Web App, Report an Issue (links open in
+the browser). A click on an item is the event `menu://action` to the page (`src/lib/menu.svelte.ts`), which does what
+its own buttons do; the page's ⇧⌘1–4 handler leaves those keys to the menu in the desktop app and keeps them in the
+browser. Close Window and Exit close as the window's close button does (a running search asks first).
+
+## Projects (`.prose-setup.json`)
+
+A project is the setup of a search and the state of the views as one JSON file (format and fields:
+`src/lib/project/setup.ts`; schema 1). File › Save Project (or Save project… in New search) writes it where you
+choose (the save dialog is the Rust side's, `src-tauri/src/setup_file.rs`; Save writes the same file again, Save As
+asks); Open Project, Open Recent or Open project… in New search reads it (only `.prose-setup.json`, at most 4 MB). It
+holds:
+
+- `format` `"prose-setup"`, `schema` `1`, `savedAt`, `appVersion`, `proseVersion`, `name`
+- `inputs`: each spectrum file's absolute `path`, `name` and `size` (bytes), and its design fields (`condition`,
+  `replicate`, `fraction`, `techReplicate`) as entered
+- `database` (`path`, `name`, `size`, `proteome`: the UniProt proteome id of a downloaded FASTA), `contaminants`,
+  `decoys`
+- `presetId` and `parameters` (every ProSE `Search:` parameter the form sets), `rescore`, `peptdeep`, `threads`
+- `sdrf` (`path`), and `search` (`id`, `name`: the History search it ran as, once it has run)
+- `ui`: the view, the Help page, the settings' toggles, and for Results the tab and per table (proteins, peptides,
+  PSMs) the filters, sort, hidden columns and selected row, the open protein and PSM
+
+Opening one fills New search (`SearchForm.restoreSearch`, the SDRF loaded again from its path) and, when History
+has its search, opens it in Results with that state. Files that are gone or have another size, a missing database or
+preset, and a search History does not have are named in New search's notices; nothing starts by itself. A newer schema
+is refused. A project is not a results archive: it holds paths and settings, no results.
+
+## Results archives (`.prose`)
+
+Export › Results archive (`.prose`) writes a search as one zip, which History › Import results archive opens on
+another computer (in the code and the file's checks it is still the "project file" of `history.ts` and `project.rs`).
 It holds the search's folder as the app keeps it: ProSE's outputs (the QPX Parquet files, the idXML, the
 open-search tables), `search.json`, `proteins.fasta`, and `inputs.json` with the files' names only. Left out are
 ProSE's log, the database copy with the contaminants, `database.json` (the path of a database searched without
 them) and `database-source.json` (the path of one searched with them, for Re-run). **ProSE's outputs name folders of the computer that searched** (e.g. the database's path and all of ProSE's
 parameters in the QPX provenance view, the input and database paths in the idXML), and the project carries them as they are: share it
 where that is fine. A search saved by an earlier version of the app (with `summary.yaml` and OpenMS' own Parquet
-files, or without the QPX run and provenance views) does not open in this one: History and Open project say so. A project file holds at
+files, or without the QPX run and provenance views) does not open in this one: History and Import results archive say so. A results archive holds at
 most 3 GB (larger searches are refused with a message; they stay in History).
 
 ## Known limitations
@@ -101,7 +140,7 @@ most 3 GB (larger searches are refused with a message; they stay in History).
   2.8 MB (not read at open).
   On Windows the webview (WebView2) runs Chromium's JavaScript engine, whose arrays are smaller (an earlier
   measurement in Node.js, the same engine, read 4 million synthetic PSMs but not 8 million), so there the limit may
-  be lower; macOS' webview is WebKit, as on Linux. Project files are written to disk entry by entry (after the save
+  be lower; macOS' webview is WebKit, as on Linux. Results archives are written to disk entry by entry (after the save
   dialog), but read in memory when opened, and hold at most 3 GB (no zip64 is written or read; a larger search is
   refused with a message). Later, not now: reading the project zip entry by entry (with zip64).
 - macOS: Apple silicon only; not signed with a Developer ID (see Install).

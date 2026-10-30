@@ -369,6 +369,11 @@ export class ResultsView {
  * after the component that first asked for it unmounts (the state survives a visit to New search). */
 let cached: { view: ResultsView; destroy: () => void } | null = null
 
+/** The view state of the result open last, if there is one (a project saves it: `project/project.svelte.ts`). */
+export function currentResultsView(): ResultsView | null {
+  return cached?.view ?? null
+}
+
 /** Releases the view of the open result (its model and caches), e.g. when another result opens. */
 export function releaseResultsView(): void {
   cached?.destroy()

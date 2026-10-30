@@ -59,4 +59,16 @@
     learn from, Percolator falls back to a single score; Overview › Files › Percolator says so, and why. From the peptides ProSE
     infers the proteins, and finally it estimates how many of the results are wrong.
   </p>
+  <h3 id="basics-menus">The app's menus</h3>
+  <p>
+    The desktop app has the usual menus: in the menu bar on macOS, at the top of the window on Windows and Linux (with
+    Ctrl in place of ⌘; About is under Help, Exit under File there).
+  </p>
+  <ul>
+    <li><b>File</b>: New Search (⌘N); Open Project (⌘O), Open Recent, Save Project (⌘S), Save Project As (⇧⌘S); Open QPX Folder; Import Results Archive (.prose); Export (CSV, Excel, idXML, Results archive) with a result open; Close Window (⌘W).</li>
+    <li><b>Edit</b>: Undo, Redo, Cut, Copy, Paste and Select All, for the text fields.</li>
+    <li><b>View</b>: New Search, Results, History and Help (⇧⌘1 to ⇧⌘4); Theme (System, Light, Dark); full screen.</li>
+    <li><b>Window</b>: Minimize and Zoom. <b>Help</b>: this Help, Troubleshooting, Keyboard Shortcuts (⌘/), the ProSE web app, and Report an Issue (GitHub, in your browser).</li>
+  </ul>
+  <p>Closing the window while a search runs asks first, from the menu as from the window's close button.</p>
 </section>

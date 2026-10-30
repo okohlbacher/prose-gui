@@ -94,8 +94,32 @@
     <li><b>Spectrum (SVG)</b>: the annotated spectrum as a vector drawing.</li>
     <li><b>idXML</b>: the identifications for OpenMS.</li>
     <li>
-      <b>Project (.prose)</b>: a search as one zip, to open in ProSE on another computer. It holds the results and the
-      record, not the spectra, the database copy or the log, and it names folders of the computer that searched.
+      <b>Results archive (.prose)</b>: a finished search as one zip, to import in ProSE on another computer (History ›
+      Import results archive). It holds the results and the record, not the spectra, the database copy or the log, and it
+      names folders of the computer that searched. It is not a project (below).
     </li>
   </ul>
+
+  <h3 id="formats-project">Projects (.prose-setup.json)</h3>
+  <p>
+    A <b>project</b> is the setup of a search, kept as a small JSON file, so that the same search can be set up again and
+    the app shows what it showed: <b>File › Save Project</b> (⌘/Ctrl S; Save Project As, ⌘/Ctrl ⇧ S, for another file) or
+    <b>Save project…</b> in New search writes it; <b>File › Open Project</b> (⌘/Ctrl O), <b>File › Open Recent</b> or
+    <b>Open project…</b> in New search opens it. It holds no results and no data, only:
+  </p>
+  <ul>
+    <li>the spectrum files by their full paths, with their names and sizes, and the design table's fields;</li>
+    <li>the database (its path, or the UniProt proteome a downloaded one is), contaminants and decoys;</li>
+    <li>the preset and every setting, the Percolator and PeptDeep switches, the threads, and the SDRF's path;</li>
+    <li>the views: the view shown, the Results tab, the filters, sort and columns of each table, the open protein and PSM, the Help page;</li>
+    <li>the ProSE and app versions, and the History search it ran as, if it has run.</li>
+  </ul>
+  <p>
+    Opening a project fills New search with its files, design, database and settings (the SDRF is read again where it
+    was), and, if History on this computer has its search, opens that in Results as it was. Nothing starts by itself: a
+    file that is no longer there or has another size, a database that is gone, a preset or search this computer does not
+    have, is named in New search, so that you can add it again before you search. The paths are those of the computer
+    that saved it; on another computer, files in other places are reported as missing. A project of a newer app
+    (a higher <code>schema</code>) is refused, with the version it needs.
+  </p>
 </section>
