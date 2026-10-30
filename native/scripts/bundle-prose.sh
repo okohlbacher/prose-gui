@@ -21,7 +21,7 @@
 #                                     licence (Apache-2.0, native/licenses) and a NOTICE
 #   share/OpenMS/LICENSES/...         OpenMS, its vendored code, the vcpkg ports, the bundled system libraries
 #   bin/managed/                      the Thermo RAW reader's .NET assemblies (builds WITH_THERMO_RAW only)
-#   dotnet/                           Microsoft's .NET 8 runtime for them (Microsoft.NETCore.App; the app sets
+#   dotnet/                           Microsoft's .NET 10 runtime for them (Microsoft.NETCore.App; the app sets
 #                                     DOTNET_ROOT to it, tool.rs), downloaded once into PROSE_DOTNET_CACHE
 #   build.json                        the manifest the app reads (tool.rs): withOnnx, the OpenMS commit
 #
@@ -204,18 +204,19 @@ closure_windows() {
 # hostfxr through DOTNET_ROOT (thermo_bridge.cpp: get_hostfxr_path with dotnet_root, then
 # hostfxr_initialize_for_runtime_config with the same root), which the app sets to this folder when it starts
 # ProSE (tool.rs, bundled_dotnet); without it ProSE falls back to a .NET 8+ of the system.
-# ThermoWrapperManaged.runtimeconfig.json asks for Microsoft.NETCore.App 8.0.0 (rollForward Major).
+# ThermoWrapperManaged.runtimeconfig.json asks for Microsoft.NETCore.App 8.0.0 (rollForward Major), so the
+# bundled .NET 10 (LTS, supported until 2028-11-14; .NET 8 ends 2026-11-10) runs it.
 # The archives come from Microsoft's dotnet builds server and are checked against the SHA-512 Microsoft
-# publishes (release-metadata/8.0/releases.json, the same in checksums/<version>-sha.txt), pinned here. They
+# publishes (release-metadata/10.0/releases.json, the same in checksums/<version>-sha.txt), pinned here. They
 # are kept in PROSE_DOTNET_CACHE (default ~/.cache/prose-gui/dotnet), so a rebundle downloads nothing.
-DOTNET_VERSION=8.0.33
+DOTNET_VERSION=10.0.14
 dotnet_sha512() {
   case $1 in
-    osx-arm64) echo 0be37b64ea1f49651bbaa3dd08e89476919ceb98bd6b39d28883439c16c1d9cbcccf5cf01f67c913095e9f23235dc621125a551a6e736be4ebddbf060eb82758 ;;
-    osx-x64) echo ba177c678fce742f991fc5e985b7e269faa231e44d35622be13800cb8b1c757ffdb83e6e10817cb3c48b64fba73a301c2d41b91ce7f6044e1f679f36a0ea3b4b ;;
-    linux-x64) echo b314039d337a8c5c4be6a6f99712a2618cbeb5e1ab7cac7a5c1cbf1c97bd355f5d116b9932a8cfc604ac7849f74638896eba0534892c6518311908aba29b4f7b ;;
-    linux-arm64) echo a9ba25eae72f98e25233ae202d6e4fb6663b2c8da23bcd9d797c89e8b1d01f51de90f1994dc7101a5fef56db401c05af184c5e251a9bce570adf044c4e3ae5a9 ;;
-    win-x64) echo ceb56fa91c15aa7c465db8cd42ee4e978589c58885cd1f164f8fcde7231ea15c3cfc0bcddb2e6b452238b3687a3e2bcb3683349b8b92a7172e03154ed280be67 ;;
+    osx-arm64) echo 19c5781dc2f87600865886b8774a4c5851caf1f5cf3f591185b922b0e51dea6b8c0ed0bf80ae4d3be2e083db662124258743e779fab6885322d641eff52b0382 ;;
+    osx-x64) echo b13d453e60f3d718743ada5710d0174524cbf16dead74aa62af6cc258bc5f7310e8ec991fa9365f84bf78bb198417ddceb1381acf557ed52ab0300a21b671596 ;;
+    linux-x64) echo 634326028645f38731c8c4e71a68356e4ca0d6b6607139a234ab760687f742063edaf33a1f20dda615742d2dc8300ca2ff857619d51fbb38090383b71334af89 ;;
+    linux-arm64) echo 99e1d6eb5d3de935853404fd378c77cbf813bd3ae094837b5a589000a492c289bf0d01d8a6bff99b4470572d9f85dc0b41239b5b7801e031197b83d527cdfeb2 ;;
+    win-x64) echo a176095f1db69b42c81acc60940744078d6bf2d2ac643e418342aa9c81889f4bd13e42f4621b131f9e77e4bc781ad46e375956219df9a4f979031d2a5a8d93cd ;;
     *) return 1 ;;
   esac
 }
@@ -304,7 +305,7 @@ fi
 # The Thermo RAW reader's managed half (WITH_THERMO_RAW): ThermoWrapperManaged.dll, its runtimeconfig and Thermo's
 # CommonCore assemblies, in bin/managed, where the bridge looks when OpenMS' share directory has no copy
 # (ThermoRawScanReader.cpp resolveManagedDirectory; on the build machine that directory is the source tree's, so
-# share/OpenMS of the bundle would not be asked). It runs on .NET 8 or later: the one bundled below.
+# share/OpenMS of the bundle would not be asked). It runs on .NET 8 or later: the .NET 10 bundled below.
 dotnet_version=
 if [ -f "$BUILD/lib/managed/ThermoWrapperManaged.dll" ]; then
   cp -R "$BUILD/lib/managed" "$OUT/bin/managed"

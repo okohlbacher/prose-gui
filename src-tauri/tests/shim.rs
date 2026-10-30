@@ -1570,7 +1570,7 @@ fn the_tool_runs_on_its_bundled_dotnet_if_it_has_one() {
     // a folder without host/fxr is no runtime
     fs::create_dir_all(dir.path().join("prose/dotnet/shared")).unwrap();
     assert_eq!(tool::bundled_dotnet(&tool_path), None);
-    fs::create_dir_all(dir.path().join("prose/dotnet/host/fxr/8.0.33")).unwrap();
+    fs::create_dir_all(dir.path().join("prose/dotnet/host/fxr/10.0.14")).unwrap();
     let root = dir.path().join("prose/dotnet");
     assert_eq!(tool::bundled_dotnet(&tool_path), Some(root.clone()));
     assert_eq!(dotnet_root(&tool::command_with(&tool_path, None)), Some(Some(root)));
