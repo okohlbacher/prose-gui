@@ -435,7 +435,7 @@ export const FAQ: FaqEntry[] = [
       'When all q-values of a file are 0, check before you trust its FDR. Without Percolator a short list can give this legitimately (ProSE’s q-values are then decoys ÷ targets, 0 above the best decoy). Otherwise look at the decoy count of the database summary; if the decoys were not recognised, use a target-only FASTA and let ProSE generate the decoys, then search again.',
       'Never report the results of a search without decoys, or of a file marked “no FDR”, as FDR-controlled.',
     ],
-    checks: ['decoys-twice', 'no-decoys', 'all-q-zero', 'psm-fdr-not-applied'],
+    checks: ['decoys-twice', 'no-decoys', 'all-q-zero'],
   },
   {
     id: 'faq-fdr-levels',

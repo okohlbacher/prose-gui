@@ -17,7 +17,7 @@ const ACTIONABLE = [
   'tolerance-offset', 'tolerance-edge', 'tolerance-too-wide',
   'runs-missing', 'spectra-mismatch', 'no-decoys', 'all-q-zero', 'isotope-share', 'rt-unit', 'parameter-echo',
   'profile', 'chemistry-cysteine', 'chemistry-missed-cleavages', 'chemistry-non-specific', 'chemistry-label',
-  'fractions-no-replicates', 'psm-fdr-not-applied',
+  'fractions-no-replicates',
 ]
 
 describe('FAQ', () => {

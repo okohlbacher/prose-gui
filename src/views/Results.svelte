@@ -178,7 +178,7 @@
       <h1 class="sr-only">Results</h1>
       <SaveNotice id={view.result.id} />
       {#if fdrNotice}
-        <p class="text-xs text-amber-700" data-testid="psm-fdr-notice">{fdrNotice}<FaqLink check="psm-fdr-not-applied" /></p>
+        <p class="text-xs text-amber-700" data-testid="psm-fdr-notice">{fdrNotice}<FaqLink faq="faq-decoys-fdr" /></p>
       {/if}
       {#if spectraNotices.length > 0}
         <ul class="flex flex-col gap-0.5 text-xs text-amber-700 dark:text-amber-400" data-testid="input-notices">
