@@ -7,8 +7,8 @@
 // proteome that is no longer on disk).
 
 import { toast } from 'svelte-sonner'
-import { loadDesign, sdrfSession } from '../design/sdrf-session.svelte'
-import { errorText, forgetProjectSetup, openProjectSetup, readDesignFile, saveProjectSetup } from '../desktop'
+import { CREATED_SDRF, loadDesign, sdrfSession } from '../design/sdrf-session.svelte'
+import { errorText, forgetProjectSetup, openProjectSetup, readDesignFile, saveProjectSdrf, saveProjectSetup } from '../desktop'
 import { APP_VERSION } from '../history/history'
 import { history, openFromHistory, refreshHistory } from '../history/history.svelte'
 import { resultName } from '../results/display'
@@ -44,13 +44,46 @@ function sizes(was: number, now: number): string {
 }
 
 /** The project of the window: its name (null: none saved or opened yet) and the search it ran as. */
-export const project = $state<{ name: string | null; searchId: string | null; busy: boolean; confirmNew: boolean }>({
+export const project = $state<{ name: string | null; searchId: string | null; busy: boolean; confirmNew: boolean; confirmSdrf: string | null }>({
   name: null,
   searchId: null,
   busy: false,
   /** New Search asks first: the opened project has changes that are not saved (NewProjectDialog.svelte). */
   confirmNew: false,
+  /** Save asks first: the SDRF file beside the project that a created SDRF would replace (SdrfReplaceDialog.svelte). */
+  confirmSdrf: null,
 })
+
+/** The answer to `project.confirmSdrf` (replace the file, or not), for the save waiting on it. */
+let answerSdrf: ((replace: boolean) => void) | null = null
+
+/** SdrfReplaceDialog.svelte: replace the SDRF file beside the project (`replace`), or save the project without it. */
+export function answerSdrfReplace(replace: boolean): void {
+  project.confirmSdrf = null
+  answerSdrf?.(replace)
+  answerSdrf = null
+}
+
+/**
+ * A created SDRF (no file yet) written beside the saved project as `<name>.sdrf.tsv`, asking first if that file is
+ * there already. -> whether it was written (the SDRF then has that path).
+ */
+async function keepCreatedSdrf(): Promise<boolean> {
+  const text = sdrfSession.text()
+  let written = await saveProjectSdrf(text, false)
+  if (written?.exists) {
+    const path = written.path
+    const replace = await new Promise<boolean>((resolve) => {
+      answerSdrf = resolve
+      project.confirmSdrf = path
+    })
+    if (!replace) return false
+    written = await saveProjectSdrf(text, true)
+  }
+  if (!written || written.exists) return false
+  sdrfSession.savedAs(written.path)
+  return true
+}
 
 /** The setup as it was when the project was opened or saved last (its search and views aside); null: no project. */
 let savedFingerprint: string | null = null
@@ -146,7 +179,7 @@ export function captureSetup(name: string): ProjectSetup {
     rescore: form.rescore,
     peptdeep: form.peptdeep,
     threads: form.threads,
-    sdrf: sdrfSession.path && sdrfSession.path !== 'experiment.sdrf.tsv' ? { path: sdrfSession.path } : null,
+    sdrf: sdrfSession.path && sdrfSession.path !== CREATED_SDRF ? { path: sdrfSession.path } : null,
     search: searchId ? { id: searchId, name: entry?.name ?? open?.stored?.name ?? searchId } : null,
     ui: {
       view: route.view,
@@ -170,9 +203,14 @@ function suggestedName(): string {
  */
 export async function saveProject(ask: boolean): Promise<string | null> {
   const name = suggestedName()
-  const saved = await saveProjectSetup(`${name}${SETUP_EXTENSION}`, serializeSetup(captureSetup(name)), ask || project.name === null)
+  let saved = await saveProjectSetup(`${name}${SETUP_EXTENSION}`, serializeSetup(captureSetup(name)), ask || project.name === null)
   if (!saved) return null
   project.name = setupName(saved.name)
+  // an SDRF made with "Create SDRF…" has no file: it goes beside the project, whose setup then names it (saved again)
+  if (sdrfSession.unsaved) {
+    if (await keepCreatedSdrf()) saved = (await saveProjectSetup(saved.name, serializeSetup(captureSetup(project.name)), false)) ?? saved
+    else toast.warning('The SDRF is not saved with the project', { description: 'Save it with “Save SDRF…” to keep it.' })
+  }
   savedFingerprint = fingerprint()
   toast.success('Project saved', { description: saved.path })
   return saved.path

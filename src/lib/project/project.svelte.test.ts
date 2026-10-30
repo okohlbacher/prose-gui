@@ -35,6 +35,13 @@ vi.mock('../desktop', () => ({
   }),
   openProjectSetup: vi.fn(async () => toOpen),
   forgetProjectSetup: vi.fn(async () => {}),
+  // (beside the project saved last; a file already there is replaced only if asked)
+  saveProjectSdrf: vi.fn(async (contents: string, overwrite: boolean) => {
+    const path = `/projects/${saved.at(-1)!.name.replace('.prose-setup.json', '')}.sdrf.tsv`
+    if (disk.has(path) && !overwrite) return { path, exists: true }
+    disk.set(path, contents.length)
+    return { path, exists: false }
+  }),
   // (UniProt: the proteome lands in the app's databases folder, or fails when `uniprotDown`)
   downloadProteome: vi.fn(async (id: string, reviewed: boolean) => {
     if (uniprotDown) throw new Error('UniProt cannot be reached')
@@ -51,13 +58,25 @@ const historyState = { ready: true, entries: [] as { id: string; name: string; e
 const openFromHistory = vi.fn(async (_id: string) => {})
 vi.mock('../history/history.svelte', () => ({ history: historyState, openFromHistory: (id: string) => openFromHistory(id), refreshHistory: vi.fn() }))
 const loadDesign = vi.fn(async () => {})
-vi.mock('../design/sdrf-session.svelte', () => ({ sdrfSession: { path: null, clear: vi.fn() }, loadDesign: (...a: unknown[]) => loadDesign(...(a as [])) }))
+// (an SDRF made with "Create SDRF…" has the path `experiment.sdrf.tsv` and no file)
+const sdrf = {
+  path: null as string | null,
+  get unsaved() {
+    return this.path === 'experiment.sdrf.tsv'
+  },
+  text: () => 'source name\tcomment[data file]\nS1\ta.mzML\n',
+  savedAs(path: string) {
+    this.path = path
+  },
+  clear: vi.fn(),
+}
+vi.mock('../design/sdrf-session.svelte', () => ({ CREATED_SDRF: 'experiment.sdrf.tsv', sdrfSession: sdrf, loadDesign: (...a: unknown[]) => loadDesign(...(a as [])) }))
 vi.mock('../search/session.svelte', () => ({ onSearchEnded: vi.fn(), openResult: { current: null }, searchRun: { status: 'idle' }, runSearch: vi.fn() }))
 vi.mock('../results/view.svelte', () => ({ currentResultsView: () => null, resultsViewFor: vi.fn() }))
 
 const { searchForm: form } = await import('../search/form.svelte')
 const { toolState } = await import('../search/tool.svelte')
-const { captureSetup, hasUnsavedChanges, newSetup, openProject, project, restoreSetup, saveProject } = await import('./project.svelte')
+const { answerSdrfReplace, captureSetup, hasUnsavedChanges, newSetup, openProject, project, restoreSetup, saveProject } = await import('./project.svelte')
 const desktop = await import('../desktop')
 const { parseSetup, serializeSetup } = await import('./setup')
 
@@ -77,7 +96,8 @@ describe('projects in New search', () => {
     form.notices = []
     form.removed = null
     form.choosePreset('orbitrap-hcd-tryptic')
-    Object.assign(project, { name: null, searchId: null, busy: false, confirmNew: false })
+    Object.assign(project, { name: null, searchId: null, busy: false, confirmNew: false, confirmSdrf: null })
+    sdrf.path = null
     Object.assign(toolState, { status: 'ready', info: { version: '3.7.0', path: '/x/ProSE', onnx: true }, error: null })
     await form.addFiles(['/data/a.mzML', '/data/b.mzML', '/db/human.fasta'])
     await settle()
@@ -197,6 +217,40 @@ describe('projects in New search', () => {
     expect(notes).toContain('UP000005640_reviewed.fasta is UniProt proteome UP000005640: download it again under Protein database.')
     const { proteomeDownload } = await import('../search/proteome-download.svelte')
     expect(proteomeDownload).toEqual({ id: null, error: 'UniProt cannot be reached' })
+  })
+
+  test('a created SDRF is written beside the project and its path saved; a file there already is replaced only if the user says so', async () => {
+    sdrf.path = 'experiment.sdrf.tsv'
+    await saveProject(false)
+    expect(desktop.saveProjectSdrf).toHaveBeenLastCalledWith('source name\tcomment[data file]\nS1\ta.mzML\n', false)
+    expect(sdrf.path).toBe('/projects/prose-results.sdrf.tsv')
+    // (the project is saved again, now naming its SDRF; nothing is left unsaved)
+    expect(saved).toHaveLength(2)
+    expect(saved[1].ask).toBe(false)
+    expect(parseSetup(saved[1].contents).sdrf).toEqual({ path: '/projects/prose-results.sdrf.tsv' })
+    expect(hasUnsavedChanges()).toBe(false)
+    // opened again: the SDRF is read from beside it
+    toOpen = { path: '/projects/prose-results.prose-setup.json', text: saved[1].contents }
+    await openProject()
+    expect(loadDesign).toHaveBeenCalledWith('/projects/prose-results.sdrf.tsv', expect.any(String))
+
+    // another created SDRF, its file there already: asked; "Keep the file" saves the project without it
+    sdrf.path = 'experiment.sdrf.tsv'
+    const kept = saveProject(false)
+    await vi.waitFor(() => expect(project.confirmSdrf).toBe('/projects/prose-results.sdrf.tsv'))
+    answerSdrfReplace(false)
+    await kept
+    expect(sdrf.path).toBe('experiment.sdrf.tsv')
+    expect(parseSetup(saved.at(-1)!.contents).sdrf).toBeNull()
+    // "Replace": written over it, and the project names it
+    const replaced = saveProject(false)
+    await vi.waitFor(() => expect(project.confirmSdrf).not.toBeNull())
+    answerSdrfReplace(true)
+    await replaced
+    expect(desktop.saveProjectSdrf).toHaveBeenLastCalledWith(expect.any(String), true)
+    expect(sdrf.path).toBe('/projects/prose-results.sdrf.tsv')
+    expect(parseSetup(saved.at(-1)!.contents).sdrf).toEqual({ path: '/projects/prose-results.sdrf.tsv' })
+    expect(project.confirmSdrf).toBeNull()
   })
 
   test('New Search: a new, unsaved setup, cleared as Start over clears it; it asks first about unsaved changes', async () => {

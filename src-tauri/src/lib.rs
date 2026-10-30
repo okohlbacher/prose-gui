@@ -38,7 +38,8 @@
 //!   project was opened or saved before: then that file again) -> `{ path, name }` or null;
 //!   `open_project_setup(recent?)` (the open dialog, or the `recent`-th entry of File › Open Recent) -> `{ path,
 //!   text }` or null; both refuse other files than `.prose-setup.json` and more than 4 MB, and put the file first in
-//!   the recent projects; `forget_project_setup()` detaches the current one (New Search). `menu_state({ result, table, theme })`: which menu items apply (`menu`); a click on one
+//!   the recent projects; `save_project_sdrf(contents, overwrite)` writes the project's SDRF beside its file (`<name>.sdrf.tsv`;
+//!   one already there only if `overwrite`) -> `{ path, exists }`; `forget_project_setup()` detaches the current one (New Search). `menu_state({ result, table, theme })`: which menu items apply (`menu`); a click on one
 //!   of the page's items is the event `menu://action` with its id.
 //! - closing the window while a search runs: the window stays and `app://close-requested` asks the page,
 //!   which answers with `answer_close(close)` ([`close_requested`])
@@ -867,6 +868,22 @@ async fn save_project_setup(
     Ok(Some(serde_json::json!({ "path": path, "name": name })))
 }
 
+/// Writes the SDRF of the project (`contents`: one made with "Create SDRF…", which has no file yet) beside the
+/// current project file as `<name>.sdrf.tsv` (`setup_file::write_sdrf_beside`); a file already there is replaced
+/// only if `overwrite`. -> `{ path, exists }` (`exists`: not written, the page asks first).
+#[tauri::command]
+async fn save_project_sdrf(app: AppHandle, contents: String, overwrite: bool) -> Result<serde_json::Value, String> {
+    let setup = app.state::<AppState>().setup_path.lock().unwrap().clone();
+    let Some(setup) = setup else { return Err("Save the project first: its SDRF is written beside it.".into()) };
+    let written = tauri::async_runtime::spawn_blocking(move || setup_file::write_sdrf_beside(&setup, &contents, overwrite))
+        .await
+        .map_err(|e| e.to_string())??;
+    Ok(match written {
+        Ok(path) => serde_json::json!({ "path": path, "exists": false }),
+        Err(path) => serde_json::json!({ "path": path, "exists": true }),
+    })
+}
+
 /// Opens a project file: the open dialog, or with `recent` the `recent`-th entry of File › Open Recent (the page
 /// never names a path). -> `{ path, text }`, or null if cancelled.
 #[tauri::command]
@@ -1076,6 +1093,7 @@ pub fn run() {
             history_import_qpx,
             save_project_file,
             save_project_setup,
+            save_project_sdrf,
             open_project_setup,
             forget_project_setup,
             menu_state,

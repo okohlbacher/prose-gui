@@ -110,7 +110,8 @@
   <ul>
     <li>the spectrum files by their full paths, with their names and sizes, and the design table's fields;</li>
     <li>the database (its path, or the UniProt proteome a downloaded one is), contaminants and decoys;</li>
-    <li>the preset and every setting, the Percolator and PeptDeep switches, the threads, and the SDRF's path;</li>
+    <li>the preset and every setting, the Percolator and PeptDeep switches, the threads, and the SDRF's path (an SDRF made
+      with “Create SDRF…” is saved beside the project as <code>&lt;name&gt;.sdrf.tsv</code>; the app asks before it replaces a file of that name);</li>
     <li>the views: the view shown, the Results tab, the filters, sort and columns of each table, the open protein and PSM, the Help page;</li>
     <li>the ProSE and app versions, and the History search it ran as, if it has run.</li>
   </ul>

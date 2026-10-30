@@ -523,6 +523,16 @@ export function saveProjectSetup(name: string, contents: string, ask: boolean): 
 }
 
 /**
+ * Writes the project's SDRF (one made with "Create SDRF…", which has no file yet) beside the current project file as
+ * `<name>.sdrf.tsv`; a file already there only if `overwrite`. -> `{ path, exists }` (`exists`: nothing written,
+ * the page asks first); null in the page's browser mode, which has no folder to write into.
+ */
+export function saveProjectSdrf(contents: string, overwrite: boolean): Promise<{ path: string; exists: boolean } | null> {
+  if (!isDesktop()) return Promise.resolve(null)
+  return invoke<{ path: string; exists: boolean }>('save_project_sdrf', { contents, overwrite })
+}
+
+/**
  * Opens a project file: the open dialog, or with `recent` the n-th of File › Open Recent (the shim keeps the list:
  * the page never names a path). The page's browser mode asks with the browser's file picker. -> `{ path, text }`
  * (in the browser `path` is the file's name), or null if cancelled.

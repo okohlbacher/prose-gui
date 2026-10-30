@@ -100,6 +100,9 @@ function rememberFolder(sdrf: string, folder: string) {
   }
 }
 
+/** The name of an SDRF made with "Create SDRF…" until it is saved with a project (it has no file). */
+export const CREATED_SDRF = 'experiment.sdrf.tsv'
+
 class SdrfSession {
   /** The SDRF's path; null: none loaded. */
   path = $state<string | null>(null)
@@ -189,7 +192,7 @@ class SdrfSession {
     const text = exportSdrf(null, form.design, { values: $state.snapshot(form.values) as Record<string, unknown>, appVersion: APP_VERSION, instruments })
     const table = parseSdrfTable(text)
     this.#generation++
-    this.path = 'experiment.sdrf.tsv'
+    this.path = CREATED_SDRF
     this.table = table
     this.issues = validateSdrf(table)
     this.skipMissing = false
@@ -198,6 +201,16 @@ class SdrfSession {
     this.#loaded = new Map(parseSdrf(text).inputs.map((i) => [i.fileName!, i]))
     this.files = form.files.map((r) => ({ name: r.file.name, status: 'found', path: r.file.path, uri: '' }))
     this.#seeded = new Set(form.files.map((r) => r.file.path))
+  }
+
+  /** The SDRF was made with "Create SDRF…" and has no file yet (a project saves it beside its own file). */
+  get unsaved(): boolean {
+    return this.path === CREATED_SDRF && this.table !== null
+  }
+
+  /** The SDRF, written to `path` (beside a project): read from there when the project opens again. */
+  savedAs(path: string) {
+    this.path = path
   }
 
   /** Changes the SDRF (the metadata editor): `change` edits a copy, which is then checked again. */

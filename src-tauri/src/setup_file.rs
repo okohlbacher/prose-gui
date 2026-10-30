@@ -76,6 +76,45 @@ pub fn write_setup(path: &Path, contents: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// The extension of a project's own SDRF, written beside its project file (`<name>.sdrf.tsv`).
+pub const SDRF_EXTENSION: &str = ".sdrf.tsv";
+
+/// The largest SDRF written beside a project (a few thousand rows of metadata are a few megabytes).
+pub const MAX_SDRF_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Where the SDRF of the project file `setup` goes: beside it, `<name>.sdrf.tsv` (`exp.prose-setup.json` ->
+/// `exp.sdrf.tsv`).
+pub fn sdrf_beside(setup: &Path) -> PathBuf {
+    let name = setup.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let stem = if is_setup_name(setup) { &name[..name.len() - SETUP_EXTENSION.len()] } else { name.as_str() };
+    let stem = if stem.is_empty() { "project" } else { stem };
+    setup.with_file_name(format!("{stem}{SDRF_EXTENSION}"))
+}
+
+/// Writes `contents` as the SDRF beside the project file `setup` ([`sdrf_beside`]), through a temporary file. A
+/// file already there is replaced only if `overwrite`: else `Ok(Err(path))`, nothing written (the page asks).
+/// -> `Ok(Ok(path))` written.
+pub fn write_sdrf_beside(setup: &Path, contents: &str, overwrite: bool) -> Result<Result<PathBuf, PathBuf>, String> {
+    if contents.len() as u64 > MAX_SDRF_BYTES {
+        return Err(format!("The SDRF is too large to save beside the project ({} bytes; at most {MAX_SDRF_BYTES}).", contents.len()));
+    }
+    let path = sdrf_beside(setup);
+    if path.exists() && !overwrite {
+        return Ok(Err(path));
+    }
+    let shown = path.display();
+    let partial = path.with_file_name(format!(
+        ".{}.partial",
+        path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+    ));
+    std::fs::write(&partial, contents).map_err(|e| format!("{shown} cannot be written ({e})."))?;
+    if let Err(e) = std::fs::rename(&partial, &path) {
+        let _ = std::fs::remove_file(&partial);
+        return Err(format!("{shown} cannot be written ({e})."));
+    }
+    Ok(Ok(path))
+}
+
 /// The recent projects listed in `dir` (the app's data folder), the latest first; none if the list is missing or
 /// broken (it is a convenience).
 pub fn recent(dir: &Path) -> Vec<PathBuf> {
@@ -164,6 +203,22 @@ mod tests {
         let too_much = " ".repeat(MAX_SETUP_BYTES as usize + 1);
         assert!(write_setup(&dir.join("big"), &too_much).unwrap_err().contains("too large"));
         assert!(!dir.join("big.prose-setup.json").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_sdrf_of_a_project_is_written_beside_it_and_replaced_only_when_asked() {
+        let dir = scratch("sdrf");
+        let setup = dir.join("exp.prose-setup.json");
+        assert_eq!(sdrf_beside(&setup), dir.join("exp.sdrf.tsv"));
+        assert_eq!(write_sdrf_beside(&setup, "source name\n", false).unwrap(), Ok(dir.join("exp.sdrf.tsv")));
+        assert_eq!(std::fs::read_to_string(dir.join("exp.sdrf.tsv")).unwrap(), "source name\n");
+        // already there: left as it is unless replaced
+        assert_eq!(write_sdrf_beside(&setup, "other\n", false).unwrap(), Err(dir.join("exp.sdrf.tsv")));
+        assert_eq!(std::fs::read_to_string(dir.join("exp.sdrf.tsv")).unwrap(), "source name\n");
+        assert_eq!(write_sdrf_beside(&setup, "other\n", true).unwrap(), Ok(dir.join("exp.sdrf.tsv")));
+        assert_eq!(std::fs::read_to_string(dir.join("exp.sdrf.tsv")).unwrap(), "other\n");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

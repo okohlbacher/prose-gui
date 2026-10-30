@@ -94,7 +94,8 @@ holds:
 - `database` (`path`, `name`, `size`, `proteome`: the UniProt proteome id of a downloaded FASTA), `contaminants`,
   `decoys`
 - `presetId` and `parameters` (every ProSE `Search:` parameter the form sets), `rescore`, `peptdeep`, `threads`
-- `sdrf` (`path`), and `search` (`id`, `name`: the History search it ran as, once it has run)
+- `sdrf` (`path`; an SDRF made with Create SDRF…, which has no file, is written beside the project as
+  `<name>.sdrf.tsv` when it is saved, asking first if that file is there already), and `search` (`id`, `name`: the History search it ran as, once it has run)
 - `ui`: the view, the Help page, the settings' toggles, and for Results the tab and per table (proteins, peptides,
   PSMs) the filters, sort, hidden columns and selected row, the open protein and PSM
 
