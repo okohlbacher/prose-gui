@@ -34,6 +34,7 @@ vi.mock('../desktop', () => ({
     return { path: `/projects/${name}`, name }
   }),
   openProjectSetup: vi.fn(async () => toOpen),
+  forgetProjectSetup: vi.fn(async () => {}),
 }))
 const navigate = vi.fn()
 vi.mock('../route.svelte', () => ({ navigate: (r: unknown) => navigate(r), router: { route: { view: 'search' }, resultId: null } }))
@@ -48,7 +49,8 @@ vi.mock('../results/view.svelte', () => ({ currentResultsView: () => null, resul
 
 const { searchForm: form } = await import('../search/form.svelte')
 const { toolState } = await import('../search/tool.svelte')
-const { captureSetup, openProject, project, restoreSetup, saveProject } = await import('./project.svelte')
+const { captureSetup, hasUnsavedChanges, newSetup, openProject, project, restoreSetup, saveProject } = await import('./project.svelte')
+const desktop = await import('../desktop')
 const { parseSetup, serializeSetup } = await import('./setup')
 
 const settle = () => new Promise((r) => setTimeout(r, 0))
@@ -67,7 +69,7 @@ describe('projects in New search', () => {
     form.notices = []
     form.removed = null
     form.choosePreset('orbitrap-hcd-tryptic')
-    Object.assign(project, { name: null, searchId: null, busy: false })
+    Object.assign(project, { name: null, searchId: null, busy: false, confirmNew: false })
     Object.assign(toolState, { status: 'ready', info: { version: '3.7.0', path: '/x/ProSE', onnx: true }, error: null })
     await form.addFiles(['/data/a.mzML', '/data/b.mzML', '/db/human.fasta'])
     await settle()
@@ -151,5 +153,41 @@ describe('projects in New search', () => {
     expect(openFromHistory).toHaveBeenCalledWith('42-1')
     expect(notes).toEqual([])
     expect(project.searchId).toBe('42-1')
+  })
+
+  test('New Search: a new, unsaved setup, cleared as Start over clears it; it asks first about unsaved changes', async () => {
+    // an opened project, unchanged: no question
+    await saveProject(false)
+    toOpen = { path: '/projects/exp.prose-setup.json', text: saved[0].contents }
+    await openProject()
+    await settle()
+    expect(project.name).toBe('exp')
+    expect(hasUnsavedChanges()).toBe(false)
+    vi.mocked(desktop.forgetProjectSetup).mockClear()
+    expect(newSetup()).toBe(true)
+    expect(form.files).toEqual([])
+    expect(form.database).toBeNull()
+    expect(form.removed?.files.map((r) => r.file.name)).toEqual(['a.mzML', 'b.mzML'])
+    expect(project).toMatchObject({ name: null, searchId: null, confirmNew: false })
+    expect(desktop.forgetProjectSetup).toHaveBeenCalledTimes(1)
+    // Undo of Start over brings the files back; the next Save asks where (no project any more)
+    form.undoRemove()
+    expect(form.files).toHaveLength(2)
+    await saveProject(false)
+    expect(saved.at(-1)!.ask).toBe(true)
+
+    // opened again, then changed: New Search asks and changes nothing until answered
+    await openProject()
+    await settle()
+    form.setParam('precursor:mass_tolerance', 15)
+    expect(hasUnsavedChanges()).toBe(true)
+    expect(newSetup()).toBe(false)
+    expect(project.confirmNew).toBe(true)
+    expect(project.name).toBe('exp')
+    expect(form.files).toHaveLength(2)
+    // "Discard changes"
+    expect(newSetup(true)).toBe(true)
+    expect(form.files).toEqual([])
+    expect(project).toMatchObject({ name: null, confirmNew: false })
   })
 })

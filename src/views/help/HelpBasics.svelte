@@ -65,7 +65,7 @@
     Ctrl in place of ⌘; About is under Help, Exit under File there).
   </p>
   <ul>
-    <li><b>File</b>: New Search (⌘N); Open Project (⌘O), Open Recent, Save Project (⌘S), Save Project As (⇧⌘S); Open QPX Folder; Import Results Archive (.prose); Export (CSV, Excel, idXML, Results archive) with a result open; Close Window (⌘W).</li>
+    <li><b>File</b>: New Search (⌘N: an empty setup, not part of the project you had open; Undo under the file list brings the files back, and unsaved changes to the project are asked about first); Open Project (⌘O), Open Recent, Save Project (⌘S), Save Project As (⇧⌘S); Open QPX Folder; Import Results Archive (.prose); Export (CSV, Excel, idXML, Results archive) with a result open; Close Window (⌘W).</li>
     <li><b>Edit</b>: Undo, Redo, Cut, Copy, Paste and Select All, for the text fields.</li>
     <li><b>View</b>: New Search, Results, History and Help (⇧⌘1 to ⇧⌘4); Theme (System, Light, Dark); full screen.</li>
     <li><b>Window</b>: Minimize and Zoom. <b>Help</b>: this Help, Troubleshooting, Keyboard Shortcuts (⌘/), the ProSE web app, and Report an Issue (GitHub, in your browser).</li>

@@ -68,7 +68,9 @@ libglvnd-gles` (Fedora).
 
 The desktop app has native menus (Tauri's menu API, `src-tauri/src/menu.rs`): on macOS the menu bar with the app menu
 (About ProSE, Services, Hide, Hide Others, Show All, Quit); on Windows and Linux the same menus on the window, with Ctrl
-for ⌘, About under Help and Exit under File. **File**: New Search ⌘N, Open Project… ⌘O, Open Recent (the last ten
+for ⌘, About under Help and Exit under File. **File**: New Search ⌘N (a new, unsaved setup: the project is detached,
+so the next Save asks for a file, and the form is cleared as Start over clears it, with its Undo; unsaved changes to an
+opened project are asked about first), Open Project… ⌘O, Open Recent (the last ten
 projects, kept in `recent-projects.json` of the app's data folder), Save Project ⌘S, Save Project As… ⇧⌘S, Open QPX
 Folder…, Import Results Archive (.prose)…, Export ▸ (CSV, Excel, idXML, Results archive; only with a result open,
 CSV and Excel only on a table), Close Window ⌘W. **Edit**: the system's Undo, Redo, Cut, Copy, Paste, Select All.

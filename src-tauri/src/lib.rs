@@ -38,7 +38,7 @@
 //!   project was opened or saved before: then that file again) -> `{ path, name }` or null;
 //!   `open_project_setup(recent?)` (the open dialog, or the `recent`-th entry of File › Open Recent) -> `{ path,
 //!   text }` or null; both refuse other files than `.prose-setup.json` and more than 4 MB, and put the file first in
-//!   the recent projects. `menu_state({ result, table, theme })`: which menu items apply (`menu`); a click on one
+//!   the recent projects; `forget_project_setup()` detaches the current one (New Search). `menu_state({ result, table, theme })`: which menu items apply (`menu`); a click on one
 //!   of the page's items is the event `menu://action` with its id.
 //! - closing the window while a search runs: the window stays and `app://close-requested` asks the page,
 //!   which answers with `answer_close(close)` ([`close_requested`])
@@ -906,6 +906,15 @@ async fn open_project_setup(app: AppHandle, recent: Option<usize>) -> Result<Opt
     Ok(Some(serde_json::json!({ "path": path, "text": text })))
 }
 
+/// File › New Search: no current project any more (the next Save asks where), and the window's title is the app's.
+#[tauri::command]
+fn forget_project_setup(app: AppHandle, state: State<'_, AppState>) {
+    *state.setup_path.lock().unwrap() = None;
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_title("ProSE");
+    }
+}
+
 /// Which menu items apply (`menu`): Export with an open result, its CSV and Excel with a table, the theme's mark.
 #[tauri::command]
 fn menu_state(app: AppHandle, state: menu::MenuState) -> Result<(), String> {
@@ -1068,6 +1077,7 @@ pub fn run() {
             save_project_file,
             save_project_setup,
             open_project_setup,
+            forget_project_setup,
             menu_state,
             answer_close
         ])

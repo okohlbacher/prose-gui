@@ -5,7 +5,7 @@
 // Commands (src-tauri/src/lib.rs): tool_info, start_search, cancel_search, read_search_file,
 // inspect_files, cpu_count, example_files, save_text, save_search_file, history_list, history_save_record,
 // history_save_proteins, history_rename, history_delete, history_files, history_import, open_project_file,
-// save_project_file, open_design_file, locate_data_files, answer_close, save_project_setup, open_project_setup, menu_state. Events:
+// save_project_file, open_design_file, locate_data_files, answer_close, save_project_setup, open_project_setup, forget_project_setup, menu_state. Events:
 // search://progress, search://done, search://failed, project://progress, app://close-requested, menu://action. The system's dialogs open one at a time (`oneDialog`). The window's
 // theme (`windowTheme`, `onWindowThemeChanged`, `setWindowTheme`).
 
@@ -553,6 +553,12 @@ function pickTextFile(accept: string): Promise<{ path: string; text: string } | 
     document.body.append(input)
     input.click()
   })
+}
+
+/** No current project (File › New Search): the next Save asks where, the window's title is the app's again. */
+export function forgetProjectSetup(): Promise<void> {
+  if (!isDesktop()) return Promise.resolve()
+  return invoke<void>('forget_project_setup').catch(() => undefined)
 }
 
 /** A click on a menu item of the page's (`menu://action`, src-tauri/src/menu.rs): its id. Returns the way to stop listening. */

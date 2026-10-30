@@ -7,7 +7,7 @@
 
 import { toast } from 'svelte-sonner'
 import { loadDesign, sdrfSession } from '../design/sdrf-session.svelte'
-import { errorText, openProjectSetup, readDesignFile, saveProjectSetup } from '../desktop'
+import { errorText, forgetProjectSetup, openProjectSetup, readDesignFile, saveProjectSetup } from '../desktop'
 import { APP_VERSION } from '../history/history'
 import { history, openFromHistory, refreshHistory } from '../history/history.svelte'
 import { resultName } from '../results/display'
@@ -41,7 +41,47 @@ function sizes(was: number, now: number): string {
 }
 
 /** The project of the window: its name (null: none saved or opened yet) and the search it ran as. */
-export const project = $state<{ name: string | null; searchId: string | null; busy: boolean }>({ name: null, searchId: null, busy: false })
+export const project = $state<{ name: string | null; searchId: string | null; busy: boolean; confirmNew: boolean }>({
+  name: null,
+  searchId: null,
+  busy: false,
+  /** New Search asks first: the opened project has changes that are not saved (NewProjectDialog.svelte). */
+  confirmNew: false,
+})
+
+/** The setup as it was when the project was opened or saved last (its search and views aside); null: no project. */
+let savedFingerprint: string | null = null
+
+/** What of a setup counts as a change to the project: everything but when it was saved, its name, search and views. */
+function fingerprint(): string {
+  const { savedAt: _t, name: _n, search: _s, ui: _u, ...rest } = captureSetup('')
+  return JSON.stringify(rest)
+}
+
+/** The opened (or saved) project has changes in New search that are not saved. */
+export function hasUnsavedChanges(): boolean {
+  return project.name !== null && savedFingerprint !== null && fingerprint() !== savedFingerprint
+}
+
+/**
+ * File › New Search: a new, unsaved setup. The project is detached (the next Save asks where; the window's title loses
+ * its name) and the form is cleared as Start over clears it (with its Undo). With unsaved changes to an opened
+ * project it asks first (`project.confirmNew`) unless `confirmed`. -> whether the new setup was made.
+ */
+export function newSetup(confirmed = false): boolean {
+  if (!confirmed && hasUnsavedChanges()) {
+    project.confirmNew = true
+    return false
+  }
+  project.confirmNew = false
+  project.name = null
+  project.searchId = null
+  savedFingerprint = null
+  void forgetProjectSetup()
+  searchForm.startOver()
+  navigate({ view: 'search' })
+  return true
+}
 
 let started = false
 
@@ -130,6 +170,7 @@ export async function saveProject(ask: boolean): Promise<string | null> {
   const saved = await saveProjectSetup(`${name}${SETUP_EXTENSION}`, serializeSetup(captureSetup(name)), ask || project.name === null)
   if (!saved) return null
   project.name = setupName(saved.name)
+  savedFingerprint = fingerprint()
   toast.success('Project saved', { description: saved.path })
   return saved.path
 }
@@ -213,6 +254,8 @@ export async function restoreSetup(setup: ProjectSetup, name = setup.name): Prom
     const allNotes = [...form.notices.slice(before)]
     project.name = name
     project.searchId = setup.search?.id ?? null
+    // (what could not be brought back is no change of the user's)
+    savedFingerprint = fingerprint()
 
     // the search it ran as, with the Results view as it was
     let shownResult = false

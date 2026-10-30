@@ -1,5 +1,6 @@
 <script lang="ts">
   import CloseGuard from '$lib/components/CloseGuard.svelte'
+  import NewProjectDialog from '$lib/components/NewProjectDialog.svelte'
   import Shortcuts from '$lib/components/Shortcuts.svelte'
   import TopBar from '$lib/components/TopBar.svelte'
   import { Toaster } from '$lib/components/ui/sonner'
@@ -55,5 +56,7 @@
 </Tooltip.Provider>
 
 <CloseGuard />
+<!-- File › New Search with unsaved changes to the opened project -->
+<NewProjectDialog />
 <!-- notifications: a search that finished while the user was elsewhere (search/finished.ts) -->
 <Toaster position="bottom-right" closeButton />

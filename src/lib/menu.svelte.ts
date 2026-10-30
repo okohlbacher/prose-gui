@@ -8,7 +8,7 @@ import { toast } from 'svelte-sonner'
 import { isDesktop, onMenuAction, openUrl, setMenuState, errorText } from './desktop'
 import { openHelp } from './help-link.svelte'
 import { openProjectFile, openQpxFolderFile, saveProjectFile } from './history/history.svelte'
-import { openProject, saveProject } from './project/project.svelte'
+import { newSetup, openProject, saveProject } from './project/project.svelte'
 import { exportCsv, exportIdXML, exportXlsx } from './results/exports'
 import { resultsViewFor } from './results/view.svelte'
 import { navigate, router } from './route.svelte'
@@ -43,6 +43,9 @@ export async function menuAction(id: string): Promise<void> {
   if (recent) return attempt('Open Project', () => openProject(Number(recent[1])))
   switch (id) {
     case 'new-search':
+      // a new, unsaved setup (asks first if the opened project has unsaved changes)
+      newSetup()
+      return
     case 'view-search':
       return navigate({ view: 'search' })
     case 'view-results':
