@@ -38,6 +38,8 @@ export type KeyFigures = {
   proteinGroups: number
   /** The target proteins behind them: the rows of the Proteins tab (before the user's filters). */
   proteins: number
+  /** Of `proteins`, the contaminants (the Proteins tab hides them by default). */
+  contaminantProteins: number
   /** Target peptides (peptidoforms) whose best PSM is within the PSM FDR. */
   peptides: number
   /** Target PSMs within the PSM FDR. */
@@ -70,7 +72,9 @@ export function keyFigures(m: ResultModel, summary: ProSEMultiSummary): KeyFigur
   // a protein without a group (-1) is its own group: counting the -1 as one group would merge them
   const grouped = new Set<number>()
   let ungrouped = 0
+  let contaminantProteins = 0
   for (const p of proteins) {
+    if (m.protein.contaminant[p]) contaminantProteins++
     const group = m.tables.proteins.group[p]
     if (group < 0) ungrouped++
     else grouped.add(group)
@@ -94,6 +98,7 @@ export function keyFigures(m: ResultModel, summary: ProSEMultiSummary): KeyFigur
   return {
     proteinGroups: grouped.size + ungrouped,
     proteins: proteins.length,
+    contaminantProteins,
     peptides: levelTotal(m, 'peptides', false),
     psms: psms.length,
     psmsWithoutFdr: withoutFdr,

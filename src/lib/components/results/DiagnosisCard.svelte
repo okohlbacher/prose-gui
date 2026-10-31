@@ -4,7 +4,7 @@
   import FaqLink from '$lib/components/help/FaqLink.svelte'
   import Notice from '$lib/components/search/Notice.svelte'
   import { rerunWith } from '$lib/history/history.svelte'
-  import { contaminantShare, diagnose, EXPECTED_ID_RATE, idRates, setupKind } from '$lib/results/diagnosis'
+  import { CONTAMINANT_SHARE, contaminantMessage, contaminantShare, diagnose, EXPECTED_ID_RATE, idRates, setupKind } from '$lib/results/diagnosis'
   import { precursorSample, searchedWindows, toleranceFindings } from '$lib/results/tolerance'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { EXAMPLE } from '$lib/search/form.svelte'
@@ -17,11 +17,12 @@
   const kind = $derived(setupKind(parameters, summary.openSearch))
   const rows = $derived(idRates(summary, result.design, kind))
   const unusual = $derived(rows.filter((r) => r.low || r.outlier))
+  const contaminants = $derived(contaminantShare(view.model))
   const causes = $derived.by(() => {
     // (no preset hides them: the bound of the setup kind already allows for ion-trap and non-specific searches)
     if (unusual.length === 0) return []
     const tolerance = toleranceFindings(summary, parameters, precursorSample(view.model, searchedWindows(parameters).precursor, summary.openSearch))
-    return diagnose(summary, tolerance, contaminantShare(view.model), result.settings.database === EXAMPLE.fasta)
+    return diagnose(summary, tolerance, contaminants, result.settings.database === EXAMPLE.fasta)
   })
   const pct = (x: number | null) => (x === null ? 'no MS2' : `${(x * 100).toFixed(1)} %`)
   const names = $derived(unusual.length <= 3 ? unusual.map((r) => `${r.file} (${pct(r.rate)})`).join(', ') : `${unusual.length} files`)
@@ -53,5 +54,10 @@
         database against your protocol, and compare with a good run of the same instrument.<FaqLink check="low-id-rate" />
       </p>
     {/if}
+  </section>
+{:else if contaminants > CONTAMINANT_SHARE}
+  <!-- a normal ID rate made of contaminants is still worth a word -->
+  <section data-testid="diagnosis-contaminants">
+    <Notice>{contaminantMessage(contaminants)}<FaqLink check="contaminants" /></Notice>
   </section>
 {/if}

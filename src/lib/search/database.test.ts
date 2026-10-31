@@ -55,4 +55,12 @@ describe('the database', () => {
     const [c] = databaseChecks(summary(), 'auto', ['Escherichia coli'], () => {})
     expect(c.message).toBe("The SDRF names Escherichia coli as the organism, but the database's entries are mostly Homo sapiens. Check that it is the right database.")
   })
+  test('a database of many organisms, or of TrEMBL size: information, not a warning', () => {
+    const db = (proteins: number) => ({ path: '/db/x.fasta', proteins })
+    const mixed = summary({ organisms: [['A a', 3000], ['B b', 3000], ['C c', 2000], ['D d', 1000], ['E e', 100]], organismCount: 5 })
+    expect(databaseChecks(mixed, 'generate', [], () => {}, db(9100)).map((c) => [c.id, c.level])).toEqual([['many-organisms', 'info']])
+    // three organisms (a xenograft and a spike-in) are no mix
+    expect(databaseChecks(summary({ organisms: [['A a', 3000], ['B b', 3000], ['C c', 2000]] }), 'generate', [], () => {}, db(8000))).toEqual([])
+    expect(databaseChecks(summary(), 'generate', [], () => {}, db(250_000)).map((c) => c.id)).toEqual(['large-database'])
+  })
 })

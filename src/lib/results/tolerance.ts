@@ -10,7 +10,7 @@ import { defaultsOf } from '../settings/parameters'
 import { PROSE_PARAMETERS } from '../settings/prose'
 import { UNMODIFIED_SHIFT_DA } from '../format/peptide'
 import { levelRows } from './figures'
-import type { ResultModel } from './model'
+import { baseName, type ResultModel } from './model'
 import type { ProSEMultiSummary } from './types'
 
 /**
@@ -58,36 +58,41 @@ export function searchedWindows(parameters: Record<string, unknown>): { precurso
 
 /** What the tolerance feedback found; the re-run's changes are ProSE parameters. */
 export type ToleranceFinding = {
-  id: 'tolerance-offset' | 'tolerance-edge' | 'tolerance-too-wide'
+  id: 'tolerance-offset' | 'tolerance-edge' | 'tolerance-too-wide' | 'tolerance-file-offset' | 'tolerance-too-few'
   target: 'precursor' | 'fragment'
   message: string
   reruns: { label: string; changes: Record<string, unknown> }[]
 }
 
-/** The precursor errors of the target PSMs at the search FDR, as a share of the window on their side (-1 to 1). */
-export type PrecursorSample = { ppm: number[]; position: number[] }
+/**
+ * The precursor errors of the target PSMs at the search FDR, as a share of the window on their side (-1 to 1); per
+ * PSM also its file (an index into `names`) and precursor mass (Da), for the per-file offset and the Da windows.
+ */
+export type PrecursorSample = { ppm: number[]; position: number[]; file?: number[]; mass?: number[]; names?: string[] }
 
 /**
  * The precursor errors (ppm) of the passing target PSMs and their position in the window `w` (error / tolerance
  * on that side; a Da window is converted per PSM at its precursor mass). Open searches and PSMs with a mass shift
  * are left out: the shift is no error.
  */
-export function precursorSample(m: ResultModel, w: Window, openSearch: boolean): PrecursorSample {
+export function precursorSample(m: ResultModel, w: Window, openSearch: boolean): Required<PrecursorSample> {
   const ps = m.tables.psms
-  const out: PrecursorSample = { ppm: [], position: [] }
+  const out = { ppm: [] as number[], position: [] as number[], file: [] as number[], mass: [] as number[], names: m.tables.files.map(baseName) }
   if (openSearch) return out
   for (const i of levelRows(m, 'psms', false)) {
     const e = ps.precursorErrorPpm[i]
     if (!Number.isFinite(e) || ps.isotopeError[i] !== 0 || Math.abs(ps.deltaMass[i]) > UNMODIFIED_SHIFT_DA) continue
     let side = e < 0 ? w.lower : w.upper
+    const mass = ps.mz[i] * ps.charge[i]
     if (w.unit === 'Da') {
-      const mass = ps.mz[i] * ps.charge[i]
       if (!(mass > 0)) continue
       side = (side / mass) * 1e6
     }
     if (!(side > 0)) continue
     out.ppm.push(e)
     out.position.push(e / side)
+    out.file.push(ps.file[i])
+    out.mass.push(mass)
   }
   return out
 }
@@ -127,7 +132,16 @@ export function toleranceFindings(summary: ProSEMultiSummary, parameters: Record
 
   // the precursor: from the passing PSMs themselves
   let precursorClean = false
-  if (sample.ppm.length >= MIN_PSMS) {
+  if (sample.ppm.length < MIN_PSMS) {
+    out.push({
+      id: 'tolerance-too-few',
+      target: 'precursor',
+      message:
+        `Only ${sample.ppm.length} passing PSMs without a mass shift: too few to judge the precursor window. If the search should have found ` +
+        'many more, the window may be off: search again with a wider one.',
+      reruns: wider,
+    })
+  } else {
     const mid = median(sample.ppm)
     const position = median(sample.position)
     const offset = Math.abs(position) > OFFSET_SHARE && Math.abs(mid) >= MIN_OFFSET_PPM
@@ -156,7 +170,20 @@ export function toleranceFindings(summary: ProSEMultiSummary, parameters: Record
         reruns: wider,
       })
     }
-    precursorClean = !offset && edge <= EDGE_SHARE
+    // one file off the others: pooled, the batch hides it (a file measured before a calibration, or on another day)
+    const off = fileOffsets(sample, mid, w.precursor)
+    if (off.length > 0) {
+      out.push({
+        id: 'tolerance-file-offset',
+        target: 'precursor',
+        message:
+          `${off.length === 1 ? off[0].name : `${off.length} files`} ${off.length === 1 ? 'is' : 'are'} off the rest of the batch: ` +
+          `median precursor error ${off.map((f) => `${f.median > 0 ? '+' : ''}${ppmLabel(f.median)}`).join(', ')}, against ${mid > 0 ? '+' : ''}${ppmLabel(mid)} for all files. ` +
+          'Calibration centres the window per file; otherwise PSMs of that file fall outside it.',
+        reruns: calibrated ? wider : [CALIBRATE, ...wider],
+      })
+    }
+    precursorClean = !offset && edge <= EDGE_SHARE && off.length === 0
   }
   const recommended = (pick: 'precursorError' | 'fragmentError') => {
     const values = summary.files.map((f) => f[pick]?.recommended).filter((x): x is number => typeof x === 'number' && x > 0)
@@ -223,10 +250,39 @@ export function toleranceFindings(summary: ProSEMultiSummary, parameters: Record
   return out
 }
 
-/** The windows to draw on the precursor error histogram (ppm, relative to 0); null for Da windows. */
-export function precursorRanges(summary: ProSEMultiSummary, parameters: Record<string, unknown>): { from: number; to: number; label: string; kind: 'searched' | 'recommended' }[] {
+/**
+ * The files whose median precursor error is off the batch median `mid` by more than a third of the window `w` (and at
+ * least `MIN_OFFSET_PPM`), each with at least `MIN_PSMS` PSMs. Only for a batch: one file is the batch.
+ */
+function fileOffsets(sample: PrecursorSample, mid: number, w: Window): { name: string; median: number }[] {
+  if (!sample.file || !sample.names || sample.names.length < 2) return []
+  const per = new Map<number, number[]>()
+  sample.file.forEach((f, i) => (per.get(f) ?? per.set(f, []).get(f)!).push(sample.ppm[i]))
+  const widest = Math.max(w.lower, w.upper)
+  // (a Da window: its width at the median mass, in ppm)
+  const side = w.unit === 'Da' ? (widest / median(sample.mass ?? [])) * 1e6 : widest
+  return [...per]
+    .filter(([, e]) => e.length >= MIN_PSMS)
+    .map(([f, e]) => ({ name: sample.names![f], median: median(e) }))
+    .filter((f) => Math.abs(f.median - mid) > OFFSET_SHARE * side && Math.abs(f.median - mid) >= MIN_OFFSET_PPM)
+}
+
+/**
+ * The windows to draw on the precursor error histogram (ppm, relative to 0). A Da window is drawn at `mass`, the median
+ * precursor mass (Da) of the PSMs, since its width in ppm depends on the mass; without it, none.
+ */
+export function precursorRanges(
+  summary: ProSEMultiSummary,
+  parameters: Record<string, unknown>,
+  mass?: number,
+): { from: number; to: number; label: string; kind: 'searched' | 'recommended' }[] {
   const w = searchedWindows(parameters).precursor
-  if (summary.openSearch || w.unit !== 'ppm') return []
+  if (summary.openSearch) return []
+  if (w.unit === 'Da') {
+    if (!(mass && mass > 0)) return []
+    const ppm = (da: number) => (da / mass) * 1e6
+    return [{ from: -ppm(w.lower), to: ppm(w.upper), label: `searched (at ${Math.round(mass)} Da)`, kind: 'searched' }]
+  }
   const out: { from: number; to: number; label: string; kind: 'searched' | 'recommended' }[] = [
     { from: -w.lower, to: w.upper, label: 'searched', kind: 'searched' },
   ]

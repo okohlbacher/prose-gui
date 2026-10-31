@@ -1,7 +1,8 @@
 // What New search says about the chosen FASTA (guidance G6): a one-line summary of its entries for the database
 // card (organisms, header style, isoforms, contaminants, decoys), and the checks on it: decoys in the database
-// while the setting generates more, and an SDRF organism that is not the database's main one. A FASTA of several
-// organisms is not warned about by itself: xenografts, host-pathogen and spike-in samples need one.
+// while the setting generates more, an SDRF organism that is not the database's main one, and (info only) a database
+// of many organisms or of TrEMBL size. Several organisms are no warning by themselves: xenografts, host-pathogen and
+// spike-in samples need them.
 
 import type { FastaSummary } from '../desktop'
 import type { SdrfTable } from '../design/sdrf-table'
@@ -42,6 +43,11 @@ export function sdrfOrganisms(table: SdrfTable | null): string[] {
  * (a few stray decoys, or decoys added twice) the FDR is not what it says.
  */
 export const DECOY_RATIO = { min: 0.5, max: 2 }
+
+/** More organisms than this, each with at least `MANY_ORGANISMS.share` of the entries, make a mixed database. */
+export const MANY_ORGANISMS = { count: 3, share: 0.05 }
+/** Entries from this many on: TrEMBL or a multi-proteome database, slower and with a stricter FDR. */
+export const LARGE_DATABASE = 200_000
 
 /**
  * The checks of the database: its decoys against the setting and against its targets, the SDRF's organism against its
@@ -94,6 +100,26 @@ export function databaseChecks(
         level: 'warn',
         source: 'database',
         message: `The SDRF names ${missing.join(', ')} as the organism, but the database's entries are mostly ${main}. Check that it is the right database.`,
+      })
+    }
+  }
+  const proteins = database?.proteins
+  if (proteins) {
+    const major = s.organisms.filter(([, c]) => c / proteins >= MANY_ORGANISMS.share)
+    if (major.length > MANY_ORGANISMS.count) {
+      out.push({
+        id: 'many-organisms',
+        level: 'info',
+        source: 'database',
+        message: `The database mixes ${major.length} organisms with at least ${MANY_ORGANISMS.share * 100} % of the entries each (${major.map(([o]) => o).join(', ')}). Right for a mixed sample; otherwise a database of your organism alone identifies more at the same FDR.`,
+      })
+    }
+    if (proteins >= LARGE_DATABASE) {
+      out.push({
+        id: 'large-database',
+        level: 'info',
+        source: 'database',
+        message: `The database has ${proteins.toLocaleString('en-US')} entries: the search takes longer and needs more memory, and with more random candidates per spectrum fewer pass the FDR. A reviewed proteome (Swiss-Prot, one isoform per gene) is usually enough.`,
       })
     }
   }

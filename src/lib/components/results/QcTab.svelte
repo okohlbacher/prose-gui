@@ -31,13 +31,15 @@
 
   const score = $derived(scoreDistribution(m))
   // the searched and recommended precursor windows over the errors, and what they say (guidance G3)
-  const ranges = $derived(precursorRanges(view.result.outcome.summary, view.result.settings.parameters))
+  const sample = $derived(precursorSample(m, searchedWindows(view.result.settings.parameters).precursor, openSearch))
+  const medianMass = $derived(sample.mass.length ? [...sample.mass].sort((a, b) => a - b)[sample.mass.length >> 1] : undefined)
+  const ranges = $derived(precursorRanges(view.result.outcome.summary, view.result.settings.parameters, medianMass))
   const errors = $derived(precursorErrors(m, openSearch, Math.max(0, ...ranges.flatMap((r) => [-r.from, r.to]))))
   const findings = $derived(
     toleranceFindings(
       view.result.outcome.summary,
       view.result.settings.parameters,
-      precursorSample(m, searchedWindows(view.result.settings.parameters).precursor, openSearch),
+      sample,
     ).filter((f) => f.target === 'precursor'),
   )
   const files = $derived(psmsPerFile(m))

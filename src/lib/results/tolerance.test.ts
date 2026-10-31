@@ -51,10 +51,10 @@ describe('tolerance feedback', () => {
     expect(f[0].reruns[0]).toEqual({ label: 'Re-run with ±4 ppm', changes: { 'precursor:mass_tolerance_lower': 4, 'precursor:mass_tolerance_upper': 4, 'precursor:mass_tolerance_unit': 'ppm' } })
   })
 
-  test('offsets under 1 ppm are noise; few PSMs and open searches give nothing', () => {
+  test('offsets under 1 ppm are noise; few PSMs give only "too few to judge"; open searches give nothing', () => {
     // 0.9 ppm median in a ±2 ppm window is over a third, but under 1 ppm
     expect(toleranceFindings(summary([file(1.9)]), { 'precursor:mass_tolerance_lower': 2, 'precursor:mass_tolerance_upper': 2 }, { ppm: Array(100).fill(0.9), position: Array(100).fill(0.45) })).toEqual([])
-    expect(toleranceFindings(summary([file(3)]), {}, sample(5, 3, 10))).toEqual([])
+    expect(ids(toleranceFindings(summary([file(3)]), {}, sample(5, 3, 10)))).toEqual(['precursor:tolerance-too-few'])
     expect(toleranceFindings(summary([file(3)], true), {}, sample(5, 3))).toEqual([])
   })
 
@@ -76,5 +76,31 @@ describe('tolerance feedback', () => {
       { from: -4, to: 4, label: 'recommended', kind: 'recommended' },
     ])
     expect(precursorRanges(summary([file(3)]), { 'precursor:mass_tolerance_unit': 'Da' })).toEqual([])
+    // a Da window, drawn at the median precursor mass: ±0.02 Da at 2,000 Da is ±10 ppm
+    expect(precursorRanges(summary([file(3)]), { 'precursor:mass_tolerance_lower': 0.02, 'precursor:mass_tolerance_upper': 0.02, 'precursor:mass_tolerance_unit': 'Da' }, 2000)).toEqual([
+      { from: -10, to: 10, label: 'searched (at 2000 Da)', kind: 'searched' },
+    ])
+  })
+
+  test('one file off the batch: named, with calibration offered; a batch in line gives nothing', () => {
+    // two files centred at 0, one at +5 ppm in a ±10 ppm window (pooled, the batch looks fine)
+    const parts = [sample(0, 2), sample(0, 2), sample(5, 1)]
+    const all: PrecursorSample = {
+      ppm: parts.flatMap((p) => p.ppm),
+      position: parts.flatMap((p) => p.position),
+      file: parts.flatMap((p, f) => p.ppm.map(() => f)),
+      names: ['a.mzML', 'b.mzML', 'c.mzML'],
+    }
+    const f = toleranceFindings(summary([file(9), file(9), file(9)]), {}, all)
+    expect(ids(f)).toEqual(['precursor:tolerance-file-offset'])
+    expect(f[0].message).toMatch(/^c\.mzML is off the rest of the batch: median precursor error \+5 ppm/)
+    expect(f[0].reruns[0].label).toBe('Re-run with calibration')
+    expect(toleranceFindings(summary([file(9), file(9)]), {}, { ...all, file: all.file!.map((x) => x % 2) }).map((x) => x.id)).not.toContain('tolerance-file-offset')
+  })
+
+  test('too few PSMs to judge the window: said, with a wider window offered', () => {
+    const f = toleranceFindings(summary([file(9)]), {}, sample(0, 2, 12))
+    expect(ids(f)).toEqual(['precursor:tolerance-too-few'])
+    expect(f[0].reruns.map((r) => r.label)).toEqual([`Re-run with ±${WIDE_PROBE_PPM} ppm`])
   })
 })

@@ -46,6 +46,8 @@
       note: [
         'protein groups',
         figures.proteins !== figures.proteinGroups ? `${formatCount(figures.proteins)} proteins` : null,
+        // (the Proteins tab hides contaminants by default: say why its count is smaller)
+        figures.contaminantProteins > 0 ? `incl. ${formatCount(figures.contaminantProteins)} contaminants` : null,
         proteinFdrApplied ? `${formatPercent(proteinFdr)} FDR` : 'no protein FDR',
       ]
         .filter(Boolean)

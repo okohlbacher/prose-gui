@@ -111,6 +111,10 @@ export function contaminantShare(m: ResultModel): number {
   return all > 0 ? con / all : 0
 }
 
+/** What the contaminant cause says: in the diagnosis, and on its own when the ID rate is not unusual. */
+export const contaminantMessage = (share: number) =>
+  `${percent(share)} of the passing PSMs are contaminants (keratins, albumin and the like; trypsin not counted): the sample may hold little of the organism searched, or the wrong database was chosen.`
+
 /** The likely causes of few identifications, strongest first, at most `MAX_CAUSES`. */
 export function diagnose(
   summary: ProSEMultiSummary,
@@ -149,7 +153,7 @@ export function diagnose(
       reruns: Number.isFinite(c.min) && Number.isFinite(c.max) ? [{ label: 'Re-run with charges 1–6', changes: { 'precursor:min_charge': 1, 'precursor:max_charge': Math.max(6, c.max) } }] : [],
     })
   }
-  const window = tolerance.find((t) => t.id === 'tolerance-offset' || t.id === 'tolerance-edge')
+  const window = tolerance.find((t) => t.id === 'tolerance-offset' || t.id === 'tolerance-edge' || t.id === 'tolerance-file-offset')
   if (window) out.push({ id: window.id, weight: 0.7, message: window.message, reruns: window.reruns })
   // skipped, or rescored with the best single feature (Percolator's sanity check rejected its model); a file rescored
   // with the model shared by the files of the search (its warning says so) was rescored, not a fallback
@@ -163,14 +167,7 @@ export function diagnose(
       help: { label: 'Percolator and small searches', id: 'faq-percolator-small-run' },
     })
   }
-  if (contaminants > CONTAMINANT_SHARE) {
-    out.push({
-      id: 'contaminants',
-      weight: 0.6,
-      message: `${percent(contaminants)} of the passing PSMs are contaminants (keratins, albumin and the like; trypsin not counted): the sample may hold little of the organism searched, or the wrong database was chosen.`,
-      reruns: [],
-    })
-  }
+  if (contaminants > CONTAMINANT_SHARE) out.push({ id: 'contaminants', weight: 0.6, message: contaminantMessage(contaminants), reruns: [] })
   const psms = files.reduce((n, f) => n + f.targetPSMs, 0)
   if (!isExample && psms < SMALL_RUN_PSMS) {
     out.push({
