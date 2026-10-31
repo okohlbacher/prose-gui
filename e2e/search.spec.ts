@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { zstdDecompressSync } from 'node:zlib'
 import { parquetReadObjects } from 'hyparquet'
-import { clearSearches, freshForm, openFirstPsm, runExample, searchesDir, waitForResults } from './lib.ts'
+import { clearSearches, freshForm, openAdvanced, openFirstPsm, runExample, searchesDir, waitForResults } from './lib.ts'
 
 const enabled = Boolean(process.env.PROSE_BIN)
 
@@ -82,6 +82,7 @@ describe('the example search', () => {
     // the two files in the design table, the database counted
     await expect($('[data-testid="design-summary"]')).toHaveText('2 files → 2 samples · 1 condition')
     await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
+    await openAdvanced()
     // the example's fragment tolerance for its ion-trap spectra, its PSM FDR of 2 % and its protein FDR off (the run is
     // too small for 1 % and for a protein FDR)
     await expect($('#fragment-tolerance')).toHaveValue('0.5')
@@ -136,6 +137,7 @@ describe('the example search', () => {
     await freshForm()
     await $('button=Try the example').click()
     await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
+    await openAdvanced()
     await expect($('#fragment-tolerance')).toHaveValue('0.5')
     await expect($('#protein-fdr')).toHaveValue('off')
     await expect($('button=Start over')).toHaveAttribute(

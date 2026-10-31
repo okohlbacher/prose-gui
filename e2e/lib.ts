@@ -192,6 +192,7 @@ export async function runExample(options: { peptdeep?: boolean } = {}): Promise<
  */
 export async function exampleSettings() {
   await freshForm()
+  await openAdvanced()
   await $('button[aria-label^="Fragment tolerance unit: ppm"]').click()
   await $('#fragment-tolerance').setValue('0.5')
   await expect($('button[aria-label^="Fragment tolerance unit: Da"]')).toBeExisting()
@@ -261,4 +262,15 @@ export async function startReady(timeout = 30000) {
     timeout,
     timeoutMsg: 'Start search stays unavailable',
   })
+}
+
+/**
+ * Opens "Advanced settings" of New search if it is closed: the tolerances, enzyme, charges and the rest are there,
+ * and a fresh form shows only their summary.
+ */
+export async function openAdvanced() {
+  const toggle = $('[data-testid="show-settings"]')
+  await toggle.waitForDisplayed({ timeout: 20000 })
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+  await $('#fragment-tolerance').waitForDisplayed({ timeout: 10000 })
 }
