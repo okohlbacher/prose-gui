@@ -98,6 +98,18 @@ export function noFdrNotice(preset: Preset): string | null {
   )
 }
 
+/** A setup of New search, as `snapshot` keeps it. */
+export type FormSnapshot = {
+  files: FileRow[]
+  database: DatabaseChoice | null
+  notices: string[]
+  presetId: string
+  overrides: Record<string, unknown>
+  rescore: boolean
+  peptdeep: boolean
+  contaminants: boolean
+}
+
 /** What "Remove all" or "Start over" removed: the rows, the database (Start over), the notices, the example's settings. */
 export type Removed = {
   files: FileRow[]
@@ -150,10 +162,35 @@ class SearchForm {
   #pending = new Set<string>()
   /** The cells of the design table whose text is not valid, by row and column. */
   invalidCells = $state<Record<string, InvalidCell>>({})
+  /** The number fields of the settings whose text is not valid (`NumberField`): their name, text and what is allowed. */
+  invalidFields = $state<Record<string, { label: string; text: string; hint: string }>>({})
   /** Files are being added or the example is loading: Remove all and Start over wait. */
   busy = $derived(this.adding > 0 || this.exampleLoading)
   /** What the last "Remove all" or "Start over" removed, for its Undo (until files or a database are chosen again). */
   removed = $state<Removed | null>(null)
+  /**
+   * The setup that opening a search from History (Re-run, Settings, a guidance re-run) replaced, for its Undo; `sdrf` is
+   * the SDRF session's (`SdrfSession.snapshot`). Until a search starts or another is opened.
+   */
+  replaced = $state.raw<{ by: string; form: FormSnapshot; sdrf: unknown } | null>(null)
+
+  /** Files, database, notices and settings as they are (`replaced`). */
+  snapshot(): FormSnapshot {
+    return {
+      files: $state.snapshot(this.files) as FileRow[], database: $state.snapshot(this.database) as DatabaseChoice | null,
+      notices: [...this.notices], presetId: this.presetId, overrides: $state.snapshot(this.overrides),
+      rescore: this.rescore, peptdeep: this.peptdeep, contaminants: this.contaminants,
+    }
+  }
+
+  /** The setup of `snapshot` back (the Undo of `replaced`). */
+  restoreSnapshot(s: FormSnapshot) {
+    this.#restoring++ // (a restore still inspecting its files changes nothing more)
+    this.guided = null
+    this.removed = null
+    Object.assign(this, { files: s.files, database: s.database, notices: s.notices, presetId: s.presetId, overrides: s.overrides, rescore: s.rescore, peptdeep: s.peptdeep, contaminants: s.contaminants })
+    for (const f of this.files) if (f.spectraFacts === undefined) this.#queueInspect(f.file.path)
+  }
   /** The example's settings (EXAMPLE.settings) are in force: set by loadExample (or an Undo), the example's files still there. */
   #exampleSettings = $state(false)
   /**
@@ -248,13 +285,19 @@ class SearchForm {
     this.#exampleSettings = false
     this.presetId = id
     this.overrides = copyValues(preset.parameters)
-    // a preset of an organism brings its database
+    // (the values a guidance re-run marked are replaced: no banner about them)
+    this.guided = null
+    // a preset of an organism brings its database, said so when it replaces the one chosen
     if (preset.database) {
+      const before = this.database?.file.path
+      if (before && before !== preset.database) {
+        this.notices.push(`The preset “${preset.name}” brought its database ${fileName(preset.database)} in place of ${fileName(before)}. Choose yours again under Protein database to keep it.`)
+      }
       void this.setDatabase(preset.database)
       if (preset.contaminants !== undefined) this.contaminants = preset.contaminants
     }
     const notice = noFdrNotice(preset)
-    if (notice) this.notices.push(notice)
+    if (notice && !this.notices.includes(notice)) this.notices.push(notice)
   }
 
   /** Saves the settings that differ from ProSE's defaults as a user preset and selects it. */

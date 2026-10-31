@@ -28,6 +28,13 @@ describe('the diagnosis', () => {
     expect(rerun(1, 6)).toEqual({ label: 'Re-run with charges 1–8', changes: { 'precursor:min_charge': 1, 'precursor:max_charge': 8 } })
   })
 
+  test('the rate counts identified spectra where they are known: co-isolated PSMs do not lift a low file', () => {
+    // 400 target PSMs on 1,000 MS2, but only 100 distinct spectra (several PSMs per spectrum)
+    const s = summary([file('a', 1000, 400)])
+    expect(idRates(s, design(1), 'tryptic')[0]).toMatchObject({ rate: 0.4, low: false })
+    expect(idRates(s, design(1), 'tryptic', [100])[0]).toMatchObject({ rate: 0.1, low: true })
+  })
+
   test('a file without MS2 spectra is unusual (it has no rate), also next to normal files', () => {
     const rows = idRates(summary([file('a', 1000, 400), file('ms1only', 0, 0), file('c', 1000, 420)]), design(3), 'iontrap')
     expect(rows.map((r) => r.low)).toEqual([false, true, false])

@@ -1,6 +1,7 @@
 <script lang="ts">
   // Rescoring: Percolator (ProSE's `rescore`, through the search request) and PeptDeep's features
   // (`peptdeep:enable` with the models), which are Percolator features and so need Percolator.
+  import Help from './Help.svelte'
   import StepNumber from './StepNumber.svelte'
   import * as Card from '$lib/components/ui/card'
   import { Label } from '$lib/components/ui/label'
@@ -32,7 +33,7 @@
     <div class="flex items-start gap-3 py-2.5">
       <Switch id="percolator" class="mt-0.5" bind:checked={form.rescore} aria-describedby="percolator-hint" />
       <div class="min-w-0">
-        <Label for="percolator" class="text-[13px] font-semibold">Percolator</Label>
+        <Label for="percolator" class="text-[13px] font-semibold">Percolator <Help topic="percolator" /></Label>
         <p id="percolator-hint" class="mt-0.5 text-xs text-muted-foreground">
           Learns which PSM features separate targets from decoys. This typically gives 10–20 % more PSMs at the same FDR.
         </p>
@@ -47,7 +48,7 @@
         onCheckedChange={(c) => (form.peptdeep = c)}
         aria-describedby="peptdeep-hint" />
       <div class="min-w-0 flex-1">
-        <Label for="peptdeep" class="text-[13px] font-semibold">PeptDeep predictions</Label>
+        <Label for="peptdeep" class="text-[13px] font-semibold">PeptDeep predictions <Help topic="peptdeep" /></Label>
         <p id="peptdeep-hint" class="mt-0.5 text-xs text-muted-foreground">
           Percolator also uses how well the fragment intensities and retention times match PeptDeep's predictions.
           {#if peptdeepBlocked === 'percolator'}

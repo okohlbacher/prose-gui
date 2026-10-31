@@ -56,9 +56,14 @@ const median = (xs: number[]) => {
 
 export type RateRow = { file: string; rate: number | null; low: boolean; outlier: boolean }
 
-/** The identification rate of each file, whether it is low for the setup, and whether it is far below the batch. */
-export function idRates(summary: ProSEMultiSummary, design: DesignResolution, kind: SetupKind): RateRow[] {
-  const rates = summary.files.map((f) => (f.ms2Spectra > 0 ? f.targetPSMs / f.ms2Spectra : null))
+/**
+ * The identification rate of each file (identified spectra / MS2 spectra), whether it is low for the setup, and whether
+ * it is far below the batch. `identified`: the identified spectra of each file (`identifiedPerFile`, in the order of
+ * `summary.files`); without it, its target PSMs, which co-isolated precursors make more than its spectra.
+ */
+export function idRates(summary: ProSEMultiSummary, design: DesignResolution, kind: SetupKind, identified?: number[]): RateRow[] {
+  const count = identified?.length === summary.files.length ? identified : summary.files.map((f) => f.targetPSMs)
+  const rates = summary.files.map((f, i) => (f.ms2Spectra > 0 ? Math.min(1, count[i] / f.ms2Spectra) : null))
   // the first and last fraction of each fractionated sample stay out of the batch median
   const edge = new Set<number>()
   const bySample = new Map<number, { i: number; fraction: number }[]>()

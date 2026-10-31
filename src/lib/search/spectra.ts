@@ -3,6 +3,7 @@
 // red flags it raises (`checks.ts`). By the flags only: "centroid" means "flagged centroid, not verified".
 
 import type { SpectraFacts } from '../desktop'
+import { SPECTRA_SHARE } from '../results/diagnosis'
 import type { Check } from './checks'
 
 /**
@@ -96,6 +97,19 @@ export function spectraChecks(rows: { path: string; name: string; facts: Spectra
       message:
         `${named(profile)}: the MS2 spectra are flagged as profile. ProSE expects centroided spectra and would search them as they are, ` +
         'which identifies few peptides: centroid them first (msconvert --filter "peakPicking vendor msLevel=1-", or OpenMS PeakPickerHiRes).',
+    })
+  }
+  // a smaller share is no red flag, but the diagnosis names it after the search from the same share on: said before too
+  const some = pick((f) => ms2Of(f) > 0 && f.ms2Profile > SPECTRA_SHARE * ms2Of(f) && f.ms2Profile <= ms2Of(f) / 2)
+  if (some.length > 0) {
+    out.push({
+      id: 'profile-ms2-share',
+      level: 'warn',
+      source: 'spectra',
+      files: some.map((r) => r.path),
+      message:
+        `${named(some)}: ${some.length === 1 ? `${Math.round((100 * some[0].facts!.ms2Profile) / ms2Of(some[0].facts!))} % of the MS2 spectra read are` : 'some of the MS2 spectra read are'} flagged as profile. ` +
+        'ProSE identifies few peptides from profile spectra: centroid the file (msconvert --filter "peakPicking vendor msLevel=1-") if it is not meant to be mixed.',
     })
   }
   const none = pick((f) => f.complete && ms2Of(f) === 0)

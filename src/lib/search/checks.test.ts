@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { accept, acceptedKeys, acceptedOf, firstBlock, ionTrapPpm, isAccepted, loadAccepted, startChecks, warnedOf, withoutExpected, type Check, type StartState } from './checks'
+import { accept, unaccept, acceptedKeys, acceptedOf, firstBlock, ionTrapPpm, isAccepted, loadAccepted, startChecks, warnedOf, withoutExpected, type Check, type StartState } from './checks'
 
 // The check registry of New search: the start checks in their order, red flags that can be searched anyway (once
 // per file, kept on this computer), and checks a preset expects.
@@ -48,6 +48,12 @@ describe('the start checks', () => {
     expect(startChecks({ ...ready, invalidCell: { label: 'Replicate of a.mzML', text: 'x', more: 2 } })[0].message).toBe(
       'Replicate of a.mzML (and 2 more): “x” is not a whole number of at least 1. Correct it, or empty the cell.',
     )
+    // a settings field that shows a value the search would not use holds Start
+    expect(startChecks({ ...ready, invalidField: { label: 'Missed cleavages', text: '2.5', hint: 'A whole number, at least 0' } })[0]).toMatchObject({
+      id: 'setting-invalid',
+      level: 'block',
+      message: 'Missed cleavages: “2.5” is not valid (a whole number, at least 0). Correct it to start.',
+    })
   })
 
   test('a red flag blocks until it is accepted for every file it names; other blocks cannot be accepted', () => {
@@ -59,6 +65,10 @@ describe('the start checks', () => {
     expect(firstBlock([profile], accepted)).toBeNull()
     // kept on this computer: a new session knows it
     expect(isAccepted(profile, loadAccepted(storage))).toBe(true)
+    // "Ask again" forgets it, on this computer too
+    expect(isAccepted(profile, unaccept(profile, accepted, storage))).toBe(false)
+    expect(isAccepted(profile, loadAccepted(storage))).toBe(false)
+    accepted = accept(profile, loadAccepted(storage), storage)
     // a third file is not accepted yet
     expect(isAccepted({ ...profile, files: [...profile.files!, '/r/c.mzML'] }, accepted)).toBe(false)
     // a plain block stays a block

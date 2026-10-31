@@ -2,6 +2,7 @@
   // The Spectra card: the spectrum files and, from two files on, the experimental design (File ·
   // Condition · Replicate · Fraction; Advanced: Tech. replicate, Fraction group, Sample). Assumed values
   // are greyed; notices go below the table, the summary above it.
+  import FaqLink from '$lib/components/help/FaqLink.svelte'
   import StepNumber from './StepNumber.svelte'
   import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert'
   import XIcon from '@lucide/svelte/icons/x'
@@ -178,7 +179,7 @@
     {#if status || inspecting || unchecked > 0}
       <p class="text-xs text-muted-foreground" data-testid="spectra-status">
         {#if status}MS2 spectra by their flags (not verified): <span class="text-foreground">{status.line}</span>{#if status.differ.size > 0}; {status.differ.size}
-            {status.differ.size === 1 ? 'file differs' : 'files differ'} (marked){/if}{#if unchecked > 0}; {unchecked} {unchecked === 1 ? 'file' : 'files'} not checked{/if}{:else if inspecting}Reading the spectra's flags…{:else}{unchecked} {unchecked === 1 ? 'file' : 'files'} not checked (New search looks into mzML only){/if}
+            {status.differ.size === 1 ? 'file differs' : 'files differ'} (marked){/if}{#if unchecked > 0}; {unchecked} {unchecked === 1 ? 'file' : 'files'} not checked{/if}{:else if inspecting}Reading the spectra's flags…{:else}{unchecked} {unchecked === 1 ? 'file' : 'files'} not checked (New search looks into mzML only){/if}{#if unchecked > 0}<FaqLink faq="faq-conversion" label="Why ›" />{/if}
       </p>
     {/if}
     <SdrfPanel />
@@ -298,7 +299,7 @@
       </p>
     {/if}
 
-    <p class="text-xs text-muted-foreground" data-testid="fdr-scope">{scopeLine(form.files.length, form.values, searchPlan.fdrBlocked, form.rescore)}</p>
+    <p class="text-xs text-muted-foreground"><span data-testid="fdr-scope">{scopeLine(form.files.length, form.values, searchPlan.fdrBlocked, form.rescore)}</span><FaqLink faq="fdr-scope" label="Help ›" /></p>
     {#if problems.length > 0}
       <!-- what ProSE cannot search: the search does not start until these files are removed -->
       <ul class="flex flex-col gap-1 text-[12.5px] text-destructive" data-testid="file-problems">

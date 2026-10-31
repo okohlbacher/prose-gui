@@ -1,6 +1,7 @@
 <script lang="ts">
   // The loaded SDRF in the Spectra card: how many of its data files were found, "Locate folder…", "Save SDRF…",
   // what its rules check reports, and the data files that are not found, each with "Locate…".
+  import FaqLink from '$lib/components/help/FaqLink.svelte'
   import CircleXIcon from '@lucide/svelte/icons/circle-x'
   import CloudDownloadIcon from '@lucide/svelte/icons/cloud-download'
   import FileCogIcon from '@lucide/svelte/icons/file-cog'
@@ -34,7 +35,7 @@
 {#if sdrf.path}
   <div class="flex flex-col gap-1.5 rounded-md border bg-muted/30 px-3 py-2 text-xs" data-testid="sdrf-panel">
     <div class="flex flex-wrap items-center gap-2">
-      <span class="font-medium" title={sdrf.path}>SDRF {sdrf.name}</span>
+      <span class="font-medium" title={sdrf.path}>SDRF {sdrf.name}</span><FaqLink faq="help-sdrf" label="Help ›" />
       <span class="text-muted-foreground">
         {sdrf.busy ? 'looking for its data files…' : `${found} of ${sdrf.files.length} data files found`}{sdrf.folder ? ` (also below ${sdrf.folder})` : ''}
       </span>

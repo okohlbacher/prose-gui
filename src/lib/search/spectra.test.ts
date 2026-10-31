@@ -55,6 +55,13 @@ describe('the spectra status', () => {
     // the start of a file without MS2 there is no proof of a file without MS2
     expect(spectraChecks([row('e', facts({ levels: { '1': 100 }, complete: false }))])).toEqual([])
   })
+  test('a smaller share of profile MS2 (over 10 %, at most half) is advice, as the diagnosis after the search would name it', () => {
+    const ids = (profile: number) => spectraChecks([row('a', facts({ ms2Profile: profile, ms2Centroid: 200 - profile }))]).map((c) => [c.id, c.level])
+    expect(ids(60)).toEqual([['profile-ms2-share', 'warn']])
+    expect(ids(10)).toEqual([])
+    expect(ids(150)).toEqual([['profile-ms2', 'block']])
+    expect(spectraChecks([row('a', facts({ ms2Profile: 60, ms2Centroid: 140 }))])[0].message).toMatch(/^a: 30 % of the MS2 spectra read are flagged as profile/)
+  })
   test('DIA by recurring isolation targets, however many windows, or by wide windows without charges; DDA passes', () => {
     const dia = (f: SpectraFacts) => spectraChecks([row('x', f)]).some((c) => c.id === 'dia-suspected')
     // 300 narrow Astral windows, read over three cycles: many distinct centres, but each recurs

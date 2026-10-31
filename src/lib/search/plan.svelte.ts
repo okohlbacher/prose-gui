@@ -18,7 +18,7 @@ import { toolState } from './tool.svelte'
 import { ms2Analyzer, spectraChecks } from './spectra'
 import { databaseChecks, sdrfOrganisms } from './database'
 import { sdrfChemistryChecks } from './chemistry'
-import { accept, acceptedOf, firstBlock, ION_TRAP_FRAGMENT_DA, ionTrapPpm, loadAccepted, startChecks, warnedOf, withoutExpected, type Check, type Stamp } from './checks'
+import { accept, acceptedOf, firstBlock, isAccepted, unaccept, ION_TRAP_FRAGMENT_DA, ionTrapPpm, loadAccepted, startChecks, warnedOf, withoutExpected, type Check, type Stamp } from './checks'
 import { plausibilityChecks } from './plausibility'
 
 /** The FDR parameters, which a search without decoys does not send (src-tauri/src/args.rs `FDR_PARAMETERS`). */
@@ -127,6 +127,7 @@ class SearchPlan {
       files: form.files.map((r) => ({ path: r.file.path, name: r.file.name, problem: r.problem })),
       adding: form.adding > 0,
       inspecting: form.files.some((r) => r.spectraFacts === undefined),
+      invalidField: Object.values(form.invalidFields)[0] ?? null,
       sdrfProblem: sdrfSession.problem,
       invalidCell: (() => {
         const cells = form.invalidCellList
@@ -177,6 +178,14 @@ class SearchPlan {
     if (this.blocking?.overridable) this.accepted = accept(this.blocking, this.accepted, undefined, this.stamp)
   }
 
+  /** The red flags of these files that the user accepted ("Search anyway"), listed with "Ask again". */
+  acceptedFlags = $derived(this.checks.filter((c) => isAccepted(c, this.accepted, this.stamp)))
+
+  /** "Ask again" of an accepted red flag: it stops Start again for its files. */
+  askAgain(check: Check) {
+    this.accepted = unaccept(check, this.accepted, undefined, this.stamp)
+  }
+
   /** The problem is shown in the footer (with files; without, the plan line says "No spectra yet"). */
   problemShown = $derived(this.problem !== null && form.files.length > 0)
 
@@ -212,6 +221,7 @@ export function searchRequest(): SearchRequest | null {
 
 /** Starts the search of the form; on success, opens its result (or says it finished: `showFinished`). */
 export async function startSearch(): Promise<void> {
+  const unique = (r: { file: { name: string } }) => form.files.filter((x) => x.file.name === r.file.name).length === 1
   const request = searchRequest()
   if (!searchPlan.canStart || !request || !form.database) return
   const values = $state.snapshot(form.values) as Record<string, unknown>
@@ -220,8 +230,10 @@ export async function startSearch(): Promise<void> {
     ...(sdrfSession.table ? { sdrf: { name: sdrfSession.name, text: sdrfSession.text() } } : {}),
     ...(searchPlan.acceptedChecks.length > 0 ? { accepted: $state.snapshot(searchPlan.acceptedChecks) } : {}),
     ...(searchPlan.warnedChecks.length > 0 ? { warned: $state.snapshot(searchPlan.warnedChecks) } : {}),
-    spectra: Object.fromEntries(form.files.filter((r) => r.spectra !== null).map((r) => [r.file.name, r.spectra!])),
-    instruments: Object.fromEntries(form.files.filter((r) => r.instrument).map((r) => [r.file.name, r.instrument!])),
+    // by file name, as the results name the runs: a name two files share (in different folders) is left out, since it
+    // could not tell them apart (ponytail: keyed by name, not by design row; key by row if such batches matter)
+    spectra: Object.fromEntries(form.files.filter((r) => r.spectra !== null && unique(r)).map((r) => [r.file.name, r.spectra!])),
+    instruments: Object.fromEntries(form.files.filter((r) => r.instrument && unique(r)).map((r) => [r.file.name, r.instrument!])),
     // no FDR (a search without decoys; the protein FDR off, 0): no cutoff, every PSM or protein counts (the results'
     // cutoffs are q-values above 0)
     psmFdr: searchPlan.fdrBlocked ? 1 : Number(values['FDR:PSM']),

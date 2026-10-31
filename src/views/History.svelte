@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FaqLink from '$lib/components/help/FaqLink.svelte'
   import CommandLine from '$lib/components/results/CommandLine.svelte'
   // History: the searches kept on this computer, each a folder of the app's data (the tool's outputs and a
   // record of the settings and the design; the mzML files stay where they are). Open, rename and delete;
@@ -191,7 +192,7 @@
       <p class="text-sm font-medium">No saved searches yet</p>
       <p class="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
         Finished searches are saved here with their spectra, so you can reopen them later. To open a results archive
-        (saved with Export › Results archive, here or on another computer), use Import results archive above.
+        (saved with Export › Results archive, here or on another computer), use Import results archive above.<FaqLink faq="formats-results" label="What a search keeps ›" />
       </p>
     </div>
   {:else}

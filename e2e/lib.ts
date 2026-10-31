@@ -178,6 +178,7 @@ export async function runExample(options: { peptdeep?: boolean } = {}): Promise<
     await $('#peptdeep').click()
     await expect($('#peptdeep')).toHaveAttribute('aria-checked', 'true')
   }
+  await startReady()
   await $('button*=Start search').click()
   const id = await waitForResults()
   await $('[data-testid="psm-count"]').waitForDisplayed({ timeout: 30000 })
@@ -219,6 +220,7 @@ export async function startLongSearch() {
   await dropFiles([...files, EXAMPLE_FASTA])
   await expect($('[data-testid="design-summary"]')).toHaveText(expect.stringContaining(`${LONG_SEARCH_FILES} files`))
   await expect($('[data-testid="fasta-proteins"]')).toHaveText('4,136 proteins')
+  await startReady()
   await $('button*=Start search').click()
   await $('[data-testid="search-progress"]').waitForDisplayed({ timeout: 20000 })
 }
@@ -251,4 +253,12 @@ export function windowCloseToolsMissing(): string | null {
     }
   })
   return missing.length === 0 ? null : `needs ${missing.map(([t]) => (t === 'python3' ? 'python3 with libX11' : t)).join(', ')} on the host`
+}
+
+/** Start search can start: it is aria-disabled, not disabled, while it cannot (it stays focusable to say why). */
+export async function startReady(timeout = 30000) {
+  await browser.waitUntil(async () => (await $('[data-testid="start-search"]').getAttribute('aria-disabled')) !== 'true', {
+    timeout,
+    timeoutMsg: 'Start search stays unavailable',
+  })
 }

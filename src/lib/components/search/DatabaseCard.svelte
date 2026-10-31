@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FaqLink from '$lib/components/help/FaqLink.svelte'
   import StepNumber from './StepNumber.svelte'
   import { fastaLine } from '$lib/search/database'
   // The protein database: the FASTA file, decoys (ProSE's `decoys`) and the cRAP contaminants. Under it, why
@@ -140,9 +141,12 @@
         onChange={(v) => (form.contaminants = v === 'crap')} />
     </div>
     {#if form.database?.summary && form.database.proteins}
-      <p class="truncate text-xs text-muted-foreground md:col-span-3" data-testid="fasta-summary" title={fastaLine(form.database.summary, form.database.proteins)}>
-        {fastaLine(form.database.summary, form.database.proteins)}
-      </p>
+      <div class="flex min-w-0 items-baseline text-xs text-muted-foreground md:col-span-3">
+        <p class="truncate" data-testid="fasta-summary" title={fastaLine(form.database.summary, form.database.proteins)}>
+          {fastaLine(form.database.summary, form.database.proteins)}
+        </p>
+        <span class="shrink-0"><FaqLink faq="help-database-summary" label="What this says ›" /></span>
+      </div>
     {/if}
     <div class="flex flex-wrap items-center gap-2 text-xs md:col-span-3" data-testid="proteome-download">
       <span class="text-muted-foreground">{form.database ? 'Or download' : 'No FASTA? Download'} the reference proteome from UniProt:</span>

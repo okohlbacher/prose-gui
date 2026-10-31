@@ -302,6 +302,22 @@ class SdrfSession {
     await this.#addFound()
   }
 
+  /** The SDRF as it is, for `restore` (the Undo of a Re-run that replaced it). */
+  snapshot() {
+    return {
+      path: this.path, table: this.table, issues: this.issues, files: $state.snapshot(this.files), folder: this.folder,
+      skipMissing: this.skipMissing, pxd: this.pxd, toFill: [...this.toFill], loaded: this.#loaded, seeded: this.#seeded,
+    }
+  }
+
+  /** The SDRF of `snapshot` back, as it was (no look-up of its files again). */
+  restore(s: ReturnType<SdrfSession['snapshot']>) {
+    this.#generation++
+    ;({ path: this.path, table: this.table, issues: this.issues, files: this.files, folder: this.folder, skipMissing: this.skipMissing, pxd: this.pxd, toFill: this.toFill } = s)
+    this.#loaded = s.loaded
+    this.#seeded = s.seeded
+  }
+
   /** Forgets the SDRF (its rows stay in the table as files added by hand). */
   clear() {
     this.path = null

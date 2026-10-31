@@ -2,6 +2,7 @@
   // The Overview tab: what was searched and how (the settings that matter for reading the numbers, and
   // the engine: the ProSE tool's version), a table of the searched files with what the search reports
   // of each, and, for an open search, the mass shifts the PSMs carry. The key figures stand above the tabs.
+  import FaqLink from '$lib/components/help/FaqLink.svelte'
   import * as Table from '$lib/components/ui/table'
   import { formatPercent, formatQ } from '$lib/format/fdr'
   import { formatCount } from '$lib/results/display'
@@ -198,7 +199,7 @@
 
   {#if accuracy.length > 0}
     <section aria-labelledby="overview-accuracy" data-testid="mass-accuracy">
-      <h2 id="overview-accuracy" class="mb-1 text-[13px] font-semibold">Mass accuracy</h2>
+      <h2 id="overview-accuracy" class="mb-1 text-[13px] font-semibold">Mass accuracy<span class="text-xs font-normal text-muted-foreground"><FaqLink faq="faq-mass-errors" label="Help ›" /></span></h2>
       <p class="mb-2 text-xs text-muted-foreground">
         Measured by ProSE on the PSMs that passed the FDR (median ± MAD, ppm). The recommended tolerances are advisory: they rest on
         passing PSMs only.

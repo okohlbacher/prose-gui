@@ -5,6 +5,7 @@
   import Notice from '$lib/components/search/Notice.svelte'
   import { rerunWith } from '$lib/history/history.svelte'
   import { contaminantShare, diagnose, EXPECTED_ID_RATE, idRates, setupKind } from '$lib/results/diagnosis'
+  import { identifiedPerFile } from '$lib/results/figures'
   import { precursorSample, searchedWindows, toleranceFindings } from '$lib/results/tolerance'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { EXAMPLE } from '$lib/search/form.svelte'
@@ -15,7 +16,7 @@
   const summary = $derived(result.outcome.summary)
   const parameters = $derived(result.settings.parameters)
   const kind = $derived(setupKind(parameters, summary.openSearch))
-  const rows = $derived(idRates(summary, result.design, kind))
+  const rows = $derived(idRates(summary, result.design, kind, identifiedPerFile(view.model)))
   const unusual = $derived(rows.filter((r) => r.low || r.outlier))
   const causes = $derived.by(() => {
     // (no preset hides them: the bound of the setup kind already allows for ion-trap and non-specific searches)

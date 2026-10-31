@@ -20,6 +20,11 @@
     'calibration',
     'charges',
     'length',
+    'threads',
+    'chunkSize',
+    'chimeric',
+    'percolator',
+    'peptdeep',
   ]
 
   /** When to use each built-in preset (`presets.ts`); the windows are read from the preset itself. */

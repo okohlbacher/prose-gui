@@ -43,8 +43,12 @@
     {:else}
       <PlanLine />
       <Button variant="outline" onclick={() => (presetOpen = true)}>Save as preset</Button>
+      <!-- aria-disabled, not disabled: the button stays focusable, so that a keyboard or screen-reader user hears why
+           it cannot start (aria-describedby: the problem line); start() does nothing until it can -->
       <Button
-        disabled={!plan.canStart}
+        aria-disabled={!plan.canStart}
+        class={plan.canStart ? undefined : 'cursor-not-allowed opacity-50'}
+        data-testid="start-search"
         aria-describedby={plan.problemShown ? 'start-problem' : undefined}
         aria-keyshortcuts={mac ? 'Meta+Enter' : 'Control+Enter'}
         onclick={start}>

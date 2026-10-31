@@ -192,7 +192,7 @@ export const FAQ: FaqEntry[] = [
     causes: [
       'A fragment tolerance above 1 Da matches almost any peak; one below 1 ppm is narrower than any instrument measures fragments.',
       'A fragment tolerance in Da while the MS2 spectra are high resolution (Orbitrap, Astral, TOF): wrong peaks match too.',
-      'A precursor tolerance of 2 to 20 Da on high-resolution MS1: most likely ppm was meant, and the unit button was clicked (it keeps the number).',
+      'A precursor tolerance of 2 to 20 Da on high-resolution MS1: most likely ppm was meant (typed into a Da field; the unit button itself converts the value, 10 ppm to 0.01 Da).',
       'A precursor tolerance of 0.1 to under 2 Da on high-resolution MS1: wider than needed.',
     ],
     fixes: [
@@ -257,7 +257,7 @@ export const FAQ: FaqEntry[] = [
       'Set the PSM FDR to 1 %, the usual choice. Switching the decoys off to get past this leaves the search without any FDR.',
       'Choose the modification from the list, with the right site: “N-term” is the peptide N-terminus, “Protein N-term” the protein’s.',
     ],
-    checks: ['range-inverted', 'range-outside', 'psm-fdr', 'unknown-modification'],
+    checks: ['range-inverted', 'range-outside', 'psm-fdr', 'unknown-modification', 'setting-invalid'],
     outside: 'A modification that is not in the list (a custom chemical) cannot be set in prose-gui; it needs ProSE or OpenMS from the command line with a custom modification definition. Crosslinks join two peptides and need a crosslink search engine (e.g. OpenPepXL); a modification cannot describe them.',
   },
   {
@@ -305,7 +305,7 @@ export const FAQ: FaqEntry[] = [
     group: 'inputs',
     question: 'What does “MS2 spectra flagged as profile” mean, and how do I fix it?',
     symptoms:
-      'Start is blocked because the MS2 spectra of a file are flagged as profile, with “Search anyway”; or after the search Overview says a share of the MS2 spectra were in profile mode.',
+      'Start is blocked because most MS2 spectra of a file are flagged as profile, with “Search anyway”; a notice says that more than 10 % of them are; or after the search Overview says a share of the MS2 spectra were in profile mode.',
     causes: [
       'The spectra were not centroided (peak-picked) when converted. A profile spectrum stores each peak as many points of a curve; ProSE expects one point per peak and identifies few peptides from profile data.',
       'Peak picking was applied to MS1 only, or was not the first filter in msconvert (a filter before it makes vendor peak picking fail).',
@@ -315,9 +315,9 @@ export const FAQ: FaqEntry[] = [
       'Convert again from the vendor file with peak picking as the first filter for all MS levels: msconvert input.raw --mzML --filter "peakPicking vendor msLevel=1-"',
       'For an mzML that is already converted, vendor peak picking is no longer possible: convert again from the raw file with vendor peak picking where you can. For high-resolution (Orbitrap, TOF) profile mzML, OpenMS PeakPickerHiRes is an option; low-resolution or ion-mobility data need a workflow made for them.',
       'If the original Thermo .raw or Bruker timsTOF .d is at hand, add it instead and compare.',
-      'Add the new file and check that New search no longer flags it. “Search anyway” does not centroid anything: it searches the profile spectra as they are, and is remembered on this computer for this version of the file (its size and modification time): a file that changes is checked again.',
+      'Add the new file and check that New search no longer flags it. “Search anyway” does not centroid anything: it searches the profile spectra as they are, and is remembered on this computer for this version of the file (its size and modification time): a file that changes is checked again. “Ask again” in the notice “Searched anyway: …” takes it back.',
     ],
-    checks: ['profile-ms2', 'profile'],
+    checks: ['profile-ms2', 'profile-ms2-share', 'profile'],
     outside: 'Filter chains and vendor-specific options of msconvert are documented by ProteoWizard (proteowizard.sourceforge.io).',
   },
   {
@@ -622,7 +622,7 @@ export const FAQ: FaqEntry[] = [
       'A genuine change of behaviour between versions.',
     ],
     fixes: [
-      'Start from the search itself: History › Settings opens its files, design, database and settings in New search, History › Re-run starts it again. A preset holds only settings (and a database), not the Percolator and PeptDeep switches.',
+      'Start from the search itself: History › Settings opens its files, design, database and settings in New search, History › Re-run starts it again. Either replaces what New search held; “Undo” there brings it back. A preset holds only settings (and a database), not the Percolator and PeptDeep switches.',
       'Keep with the results: the version and the methods text (Overview), the command line (“Copy command line” in Overview, “Command line” in History), the FASTA, and the input files.',
       'Compare two searches only at the same version, settings, database and FDR; if they differ when everything matches, report both records.',
       'Save a project (File › Save Project, or Save project… in New search): a .prose-setup.json with the files’ paths and sizes, the design, the database, every setting, the SDRF’s path and the state of the views. Open Project sets the same search up again and names any file that moved or changed since; it opens the search in Results if History has it.',

@@ -76,6 +76,31 @@ export const HELP = {
     text: 'Off by default (calibration:enabled in “All … parameters”, or “Re-run with calibration” in Overview). ProSE first searches the most intense tenth of the spectra, then sets the windows of the main search from the errors of its confident matches: the precursor window can become asymmetric when the errors are off-centre, the fragment window stays symmetric about zero. The windows can only become narrower than the ones you set, never wider, and the masses in the file are not changed. With fewer than 50 confident matches (calibration:min_psms) the pass is skipped and your windows are used.',
     tip: 'When Overview says the errors are off-centre or cut off by the window, search with a wider window first; calibration can then narrow it around the errors.',
   },
+  threads: {
+    title: 'Threads',
+    text: 'How many processor cores ProSE uses for the search. Empty uses all of them, which is the fastest.',
+    tip: 'Use fewer while you need the computer for other work: the search then takes longer.',
+  },
+  chunkSize: {
+    title: 'Database chunk size',
+    text: 'ProSE builds an index of the fragments of every peptide in the database. With a chunk size above 0 it builds it for that many proteins at a time and merges the results, so the index never holds the whole database at once.',
+    tip: 'Leave it at 0 unless a search runs out of memory with a very large database (TrEMBL, many proteomes, variants for immunopeptidomics). It bounds the memory of the index only, not of the spectra (all files are held during the search), and it cannot be combined with Co-isolated precursors.',
+  },
+  chimeric: {
+    title: 'Co-isolated precursors',
+    text: 'An MS2 spectrum often holds the fragments of more than the one precursor that was selected. With this on, ProSE looks in the survey (MS1) scan for other isotope envelopes in the isolation window, and after the best match removes the peaks it explains and searches the rest for each of them.',
+    tip: 'Gives more PSMs from the same spectra, so the PSM count can exceed the identified spectra (the key figures say so). It needs centroided MS1 spectra with isolation windows, and a database chunk size of 0.',
+  },
+  percolator: {
+    title: 'Percolator',
+    text: 'After the search, Percolator learns from the features of each PSM (score, mass error, length, charge, …) which ones separate targets from decoys, and scores every PSM again with what it learned. The FDR is then estimated on these scores.',
+    tip: 'Keep it on: it typically gives 10–20 % more PSMs at the same FDR. With too few confident PSMs Percolator falls back to a simpler score or is skipped; Overview › Files says so.',
+  },
+  peptdeep: {
+    title: 'PeptDeep predictions',
+    text: 'PeptDeep predicts each candidate’s fragment intensities and retention time. Percolator then also uses how well the spectrum and its retention time match the prediction, which separates true from wrong matches better.',
+    tip: 'Choose the Instrument closest to yours: the prediction depends on it. It needs Percolator and makes the search slower.',
+  },
 } as const satisfies Record<string, { title: string; text: string; tip?: string }>
 
 export type HelpKey = keyof typeof HELP

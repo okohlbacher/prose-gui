@@ -55,6 +55,12 @@
   const lower = $derived(form.value<number>('precursor:mass_tolerance_lower'))
   const upper = $derived(form.value<number>('precursor:mass_tolerance_upper'))
 
+  /**
+   * A tolerance in the other unit, converted at m/z 1,000 (20 ppm ⇄ 0.02 Da), two significant digits: the unit button
+   * keeps what the window means, not its number (20 ppm turned into 20 Da was an open search by accident).
+   */
+  const converted = (v: number, to: string) => Number((to === 'Da' ? v / 1000 : v * 1000).toPrecision(2))
+
   function setPrecursor(v: number) {
     form.setParam('precursor:mass_tolerance_lower', v)
     form.setParam('precursor:mass_tolerance_upper', v)
@@ -179,7 +185,11 @@
         value={upper}
         unit={String(form.value('precursor:mass_tolerance_unit'))}
         onValue={setPrecursor}
-        onUnit={(u) => form.setParam('precursor:mass_tolerance_unit', u)} />
+        onUnit={(u) => {
+          form.setParam('precursor:mass_tolerance_lower', converted(lower, u))
+          form.setParam('precursor:mass_tolerance_upper', converted(upper, u))
+          form.setParam('precursor:mass_tolerance_unit', u)
+        }} />
       {#if lower !== upper}
         <p class="text-xs text-muted-foreground">The tolerance is asymmetric (−{lower} / +{upper}). Typing a value sets both sides.</p>
       {/if}
@@ -192,7 +202,10 @@
         value={form.value<number>('fragment:mass_tolerance')}
         unit={String(form.value('fragment:mass_tolerance_unit'))}
         onValue={(v) => form.setParam('fragment:mass_tolerance', v)}
-        onUnit={(u) => form.setParam('fragment:mass_tolerance_unit', u)} />
+        onUnit={(u) => {
+          form.setParam('fragment:mass_tolerance', converted(form.value<number>('fragment:mass_tolerance'), u))
+          form.setParam('fragment:mass_tolerance_unit', u)
+        }} />
     </div>
 
     <div class="col-span-2 grid min-w-0 gap-1">
@@ -242,7 +255,7 @@
 
       <div class="col-span-2 grid grid-cols-2 gap-x-4 gap-y-3.5 border-t pt-3.5 md:col-span-4 md:grid-cols-4" data-testid="advanced-settings">
         <div class="grid min-w-0 content-start gap-1">
-          <Label for="threads" class="text-xs">Threads</Label>
+          <Label for="threads" class="text-xs">Threads <Help topic="threads" /></Label>
           <NumberField
             id="threads"
             kind="int"
@@ -255,7 +268,7 @@
           <p class="text-xs text-muted-foreground">Leave empty to use all cores.</p>
         </div>
         <div class="grid min-w-0 content-start gap-1">
-          <Label for="chunk-size" class="text-xs">Database chunk size</Label>
+          <Label for="chunk-size" class="text-xs">Database chunk size <Help topic="chunkSize" /></Label>
           <NumberField
             id="chunk-size"
             kind="int"
@@ -273,7 +286,7 @@
             onCheckedChange={(c) => form.setParam('chimeric:enabled', c)}
             aria-describedby="chimeric-hint" />
           <div class="min-w-0">
-            <Label for="chimeric" class="text-xs">Co-isolated precursors</Label>
+            <Label for="chimeric" class="text-xs">Co-isolated precursors <Help topic="chimeric" /></Label>
             <p id="chimeric-hint" class="mt-0.5 text-xs text-muted-foreground">
               Also identifies the other precursors in each MS2 spectrum's isolation window, found in its survey scan.
               {#if searchPlan.chimericBlocked}

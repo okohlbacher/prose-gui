@@ -50,7 +50,8 @@ test('the search of the questions', async ({ page }) => {
 test('"What to do ›" beside a finding opens its entry in Troubleshooting', async ({ page }) => {
   await openFixture(page)
   await page.getByRole('tab', { name: 'Overview' }).click()
-  const link = page.getByTestId('faq-link').first()
+  // (the section headings have "Help ›" links of their own: the finding's is "What to do ›")
+  const link = page.getByTestId('faq-link').filter({ hasText: 'What to do ›' }).first()
   await expect(link).toHaveText('What to do ›')
   await link.click()
   await expect(page).toHaveURL(/#\/help\/troubleshooting$/)

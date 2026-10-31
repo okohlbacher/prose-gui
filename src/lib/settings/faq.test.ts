@@ -10,8 +10,8 @@ import { FAQ, FAQ_GROUPS, faqFor } from './faq'
  */
 const ACTIONABLE = [
   'no-files', 'sdrf', 'file-problem', 'design-cell', 'no-database', 'database-error', 'database-problem',
-  'range-inverted', 'range-outside', 'psm-fdr', 'unknown-modification', 'tool',
-  'profile-ms2', 'no-ms2', 'dia-suspected', 'no-charge', 'iontrap-ppm', 'spectra-not-checked', 'spectra-not-read',
+  'range-inverted', 'range-outside', 'setting-invalid', 'psm-fdr', 'unknown-modification', 'tool',
+  'profile-ms2', 'no-ms2', 'dia-suspected', 'no-charge', 'iontrap-ppm', 'spectra-not-checked', 'spectra-not-read', 'profile-ms2-share',
   'decoys-twice', 'decoy-ratio', 'organism-mismatch',
   'many-variable-mods', 'fragment-tolerance-wide', 'fragment-tolerance-narrow', 'fragment-da-highres',
   'precursor-da-typo', 'precursor-da-wide', 'iontrap-precursor-ppm', 'sdrf-modifications', 'sdrf-label',

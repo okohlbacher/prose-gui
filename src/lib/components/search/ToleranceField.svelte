@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A mass tolerance with its unit (ppm or Da), switched by the button at its end.
+  // A mass tolerance with its unit (ppm or Da), switched by the button at its end (the caller converts the value).
   import * as InputGroup from '$lib/components/ui/input-group'
   import NumberField from './NumberField.svelte'
 
@@ -28,8 +28,8 @@
     <InputGroup.Button
       size="xs"
       class="text-xs font-normal text-muted-foreground"
-      aria-label="{label} unit: {unit}. Switch to {other}"
-      title="Switch to {other}"
+      aria-label="{label} unit: {unit}. Switch to {other}, converting the value at m/z 1,000"
+      title="Switch to {other}: the value is converted at m/z 1,000 (20 ppm ⇄ 0.02 Da)"
       onclick={() => onUnit(other)}>{unit}</InputGroup.Button>
   </InputGroup.Addon>
 </InputGroup.Root>

@@ -10,7 +10,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { appReady, clearSearches, dropFiles, freshForm, peakMemoryKb, proseProcesses, resultsId, textOf } from './lib.ts'
+import { appReady, clearSearches, dropFiles, freshForm, peakMemoryKb, proseProcesses, resultsId, startReady, textOf } from './lib.ts'
 
 const data = process.env.PROSE_BIG_DIR ?? '/scratch/sachsenb/prose-bench/data'
 const spectra = join(data, 'erwinia_tmt.mzML')
@@ -66,7 +66,7 @@ describe('a large search', () => {
     await $(`[role="option"]=${PRESET.name}`).click()
     await browser.waitUntil(async () => (await textOf('#preset')).trim() === PRESET.name, { timeoutMsg: 'the preset was not chosen' })
     await expect($('[data-testid="search-plan"]')).toBeDisplayed()
-    await $('button*=Start search').waitForEnabled({ timeout: 20000 }).catch(async (e) => {
+    await startReady(20000).catch(async (e) => {
       throw new Error(`Start search stays disabled: ${await textOf('#start-problem').catch(() => 'no reason shown')} (${e.message})`)
     })
     await $('button*=Start search').click()

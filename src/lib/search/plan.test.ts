@@ -311,6 +311,21 @@ describe('the footer', () => {
     form.peptdeep = false
   })
 
+  test('a setup kept by snapshot comes back as it was (the Undo of a search opened from History over it)', async () => {
+    await form.addFiles(['/runs/a.mzML', '/runs/b.mzML'])
+    await settle()
+    form.setParam('peptide:missed_cleavages', 3)
+    const kept = form.snapshot()
+    form.startOver()
+    form.setParam('peptide:missed_cleavages', 1)
+    form.restoreSnapshot(kept)
+    await settle()
+    expect(form.files.map((r) => r.file.name)).toEqual(['a.mzML', 'b.mzML'])
+    expect(form.value('peptide:missed_cleavages')).toBe(3)
+    expect(form.removed).toBeNull()
+    form.startOver()
+  })
+
   test("the example's fragment tolerance, PSM FDR and protein FDR go back to the preset's when its files go", async () => {
     const own = () => [form.value('fragment:mass_tolerance'), form.value('fragment:mass_tolerance_unit'), form.value('FDR:protein')]
     const psmFdr = () => form.value('FDR:PSM')

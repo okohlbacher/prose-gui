@@ -313,6 +313,9 @@ export async function reopenInNewSearch(id: string, start: boolean, changes: Rec
   // the design rows are in input order (two files of one name in different folders stay apart)
   const ordered = [...inputs].sort((a, b) => a.index - b.index)
   navigate({ view: 'search' })
+  // what New search held is replaced: kept for Undo (`undoReplace`)
+  const held = searchForm.files.length > 0 || searchForm.database !== null || sdrfSession.table !== null
+  searchForm.replaced = held ? { by: record.name, form: searchForm.snapshot(), sdrf: sdrfSession.table ? sdrfSession.snapshot() : null } : null
   // the SDRF of another experiment must not travel with this search; this one's is loaded again by hand
   sdrfSession.clear()
   const complete = await searchForm.restoreSearch({
@@ -350,6 +353,16 @@ export async function reopenInNewSearch(id: string, start: boolean, changes: Rec
   }
   await startSearch()
   return true
+}
+
+/** Undo of `searchForm.replaced`: the files, database, settings and SDRF New search held before a search was opened. */
+export function undoReplace(): void {
+  const r = searchForm.replaced
+  if (!r) return
+  searchForm.replaced = null
+  searchForm.restoreSnapshot(r.form)
+  if (r.sdrf) sdrfSession.restore(r.sdrf as ReturnType<typeof sdrfSession.snapshot>)
+  else sdrfSession.clear()
 }
 
 /**

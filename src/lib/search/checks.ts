@@ -48,6 +48,8 @@ export type StartState = {
   /** The spectra of some file are still being inspected (their red flags are not known yet). */
   inspecting: boolean
   sdrfProblem: string | null
+  /** The first settings field whose text is not valid (`SearchForm.invalidFields`). */
+  invalidField?: { label: string; text: string; hint: string } | null
   /** The first design cell that is not valid, and how many more there are. */
   invalidCell: { label: string; text: string; more: number } | null
   database: { name: string; error: string | null; counted: boolean; problem: string | null } | null
@@ -86,6 +88,10 @@ export function startChecks(s: StartState): Check[] {
     const c = s.invalidCell
     const more = c.more > 0 ? ` (and ${c.more} more)` : ''
     block('design-cell', 'design', `${c.label}${more}: “${c.text}” is not a whole number of at least 1. Correct it, or empty the cell.`)
+  }
+  if (s.invalidField) {
+    const f = s.invalidField
+    block('setting-invalid', 'settings', `${f.label}: “${f.text}” is not valid${f.hint ? ` (${f.hint.charAt(0).toLowerCase()}${f.hint.slice(1)})` : ''}. Correct it to start.`)
   }
   const db = s.database
   if (!db) block('no-database', 'database', 'Choose a FASTA database to start.')
@@ -168,9 +174,18 @@ export function loadAccepted(storage: AcceptedStorage | null = appStorage()): Se
 
 /** `accepted` with the red flag `check` accepted for its files, kept in `storage`. */
 export function accept(check: Check, accepted: ReadonlySet<string>, storage: AcceptedStorage | null = appStorage(), stamp: Stamp = noStamp): Set<string> {
+  return keep(check, accepted, storage, stamp, true)
+}
+
+/** `accepted` without the red flag `check` for its files ("Ask again"), kept in `storage`. */
+export function unaccept(check: Check, accepted: ReadonlySet<string>, storage: AcceptedStorage | null = appStorage(), stamp: Stamp = noStamp): Set<string> {
+  return keep(check, accepted, storage, stamp, false)
+}
+
+function keep(check: Check, accepted: ReadonlySet<string>, storage: AcceptedStorage | null, stamp: Stamp, add: boolean): Set<string> {
   const next = new Set(accepted)
   const files = check.files ?? []
-  for (const p of files.length > 0 ? files : ['']) next.add(keyOf(check.id, p, stamp))
+  for (const p of files.length > 0 ? files : ['']) next[add ? 'add' : 'delete'](keyOf(check.id, p, stamp))
   try {
     storage?.setItem(ACCEPTED_KEY, JSON.stringify([...next]))
   } catch {

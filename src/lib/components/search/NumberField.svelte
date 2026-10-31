@@ -1,10 +1,16 @@
+<script lang="ts" module>
+  let nextField = 0
+</script>
+
 <script lang="ts">
   // A number of the search settings. What the user types stays until the field loses focus; only
   // valid numbers (whole for `int`, within min and max) reach `onChange`. An invalid entry is marked and gives
   // back the value from before the user started typing, never the valid prefix typed on the way ("1.5" is no 1, "150"
-  // with at most 100 no 15); the field shows that value again when it loses focus.
+  // with at most 100 no 15); the field shows that value again when it loses focus. While it is marked it holds Start
+  // (`invalidFields`): Ctrl+Enter in the field must not start the search with the value from before while it shows another.
   import { Input } from '$lib/components/ui/input'
   import * as InputGroup from '$lib/components/ui/input-group'
+  import { searchForm } from '$lib/search/form.svelte'
   import { cn } from '$lib/utils'
 
   let {
@@ -79,6 +85,15 @@
     draft = null
     before = undefined
   }
+
+  // (keyed per field; its name for the message: the aria label, or the label of the field)
+  const key = `field-${nextField++}`
+  $effect(() => {
+    if (!invalid) return
+    const name = ariaLabel ?? (id ? document.querySelector(`label[for="${id}"]`)?.textContent?.trim() : undefined) ?? 'A setting'
+    searchForm.invalidFields[key] = { label: name, text: draft ?? '', hint: title ?? '' }
+    return () => delete searchForm.invalidFields[key]
+  })
 </script>
 
 {#if inGroup}

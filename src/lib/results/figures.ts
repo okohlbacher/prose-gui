@@ -109,21 +109,27 @@ export function keyFigures(m: ResultModel, summary: ProSEMultiSummary): KeyFigur
 
 /** The distinct spectra (file and native ID) of the PSM rows `psms`; a PSM without a native ID counts as one. */
 function identifiedSpectra(m: ResultModel, psms: Uint32Array): number {
+  return identifiedPerFile(m, psms).reduce((a, b) => a + b, 0)
+}
+
+/**
+ * `identifiedSpectra` per file (by its index in `tables.files`): what the identification rate of a file counts, since
+ * with co-isolated precursors a spectrum can have several PSMs. `psms`: the target PSMs at the search FDR by default.
+ */
+export function identifiedPerFile(m: ResultModel, psms: Uint32Array = levelRows(m, 'psms', false)): number[] {
   const { file, nativeId } = m.tables.psms
+  const out = new Array<number>(m.tables.files.length).fill(0)
   const seen = new Map<number, Set<string>>()
-  let spectra = 0
   for (const i of psms) {
-    if (nativeId[i] === '') {
-      spectra++
-      continue
+    if (nativeId[i] !== '') {
+      let ids = seen.get(file[i])
+      if (!ids) seen.set(file[i], (ids = new Set()))
+      if (ids.has(nativeId[i])) continue
+      ids.add(nativeId[i])
     }
-    let ids = seen.get(file[i])
-    if (!ids) seen.set(file[i], (ids = new Set()))
-    if (ids.has(nativeId[i])) continue
-    ids.add(nativeId[i])
-    spectra++
+    out[file[i]] = (out[file[i]] ?? 0) + 1
   }
-  return spectra
+  return out
 }
 
 /**

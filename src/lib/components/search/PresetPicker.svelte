@@ -101,8 +101,10 @@
     <Dialog.Header>
       <Dialog.Title>Discard your changes?</Dialog.Title>
       <Dialog.Description>
-        You changed settings of “{form.preset?.name ?? 'the preset'}”. “{switchTo?.name}” replaces them with its own. To keep
-        them, save them as a preset first.
+        You changed settings of “{form.preset?.name ?? 'the preset'}”. “{switchTo?.name}” replaces them with its own{switchTo?.database &&
+        form.database && switchTo.database !== form.database.file.path
+          ? ', and your database with its own'
+          : ''}. To keep them, save them as a preset first.
       </Dialog.Description>
     </Dialog.Header>
     <Dialog.Footer>

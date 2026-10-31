@@ -3,6 +3,7 @@
   // delta-mass peaks (known modifications named, in the colour of modified residues), the peaks as a
   // table (the chart's table view) and the shifts the engine mapped to known modifications. All of it
   // is the engine's modification analysis of the search.
+  import FaqLink from '$lib/components/help/FaqLink.svelte'
   import ShiftChart from '$lib/components/charts/ShiftChart.svelte'
   import * as Table from '$lib/components/ui/table'
   import type { ModificationAnalysis } from '$lib/results/types'
@@ -37,7 +38,7 @@
 
 <section class="flex flex-col gap-3" data-testid="delta-mass-panel" aria-labelledby="delta-mass-heading">
   <div>
-    <h2 id="delta-mass-heading" class="text-[13px] font-semibold">Mass shifts (open search)</h2>
+    <h2 id="delta-mass-heading" class="text-[13px] font-semibold">Mass shifts (open search)<span class="text-xs font-normal text-muted-foreground"><FaqLink faq="faq-open-search" label="Help ›" /></span></h2>
     <p class="mt-0.5 text-xs text-muted-foreground" data-testid="shift-summary">
       {formatCount(summary.shifted)} of {formatCount(summary.total)}
       {summary.targetsOnly ? 'target PSMs at the PSM FDR' : 'PSMs'} ({(summary.shareShifted * 100).toFixed(1)} %) carry a mass shift above 0.05 Da{summary.targetsOnly || engineTargets
