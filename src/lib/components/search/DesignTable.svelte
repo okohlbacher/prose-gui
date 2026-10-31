@@ -21,7 +21,7 @@
   import { cn } from '$lib/utils'
   import { formatBytes } from '$lib/format/bytes'
   import { searchForm as form } from '$lib/search/form.svelte'
-  import { batchStatus } from '$lib/search/spectra'
+  import { batchStatus, inspectable } from '$lib/search/spectra'
   import { FRACTIONS_NOTE_ID, fractionsWithoutReplicates, scopeLine } from '$lib/search/scope'
   import { searchPlan } from '$lib/search/plan.svelte'
   import DesignCell from './DesignCell.svelte'
@@ -101,7 +101,8 @@
 
   // what the files' first MS2 spectra say by their flags (G1): one line for the batch, a mark where a file differs
   const status = $derived(batchStatus(form.files.map((r) => ({ path: r.file.path, facts: r.spectraFacts }))))
-  const inspecting = $derived(form.files.some((r) => r.spectraFacts === undefined && /\.mzml(\.gz)?$/i.test(r.file.name)))
+  const inspecting = $derived(form.files.some((r) => r.spectraFacts === undefined && inspectable(r.file.name)))
+  const unchecked = $derived(form.files.filter((r) => r.spectraFacts === null).length)
 
   /** The files ProSE cannot search (`FileRow.problem`), as the Spectra card lists them. */
   const problems = $derived(form.files.filter((r) => r.problem).map((r) => `${r.problem} Remove it to start the search.`))
@@ -175,10 +176,10 @@
       </div>
     {/if}
 
-    {#if status || inspecting}
+    {#if status || inspecting || unchecked > 0}
       <p class="text-xs text-muted-foreground" data-testid="spectra-status">
         {#if status}MS2 spectra by their flags (not verified): <span class="text-foreground">{status.line}</span>{#if status.differ.size > 0}; {status.differ.size}
-            {status.differ.size === 1 ? 'file differs' : 'files differ'} (marked){/if}{:else}Reading the spectra's flags…{/if}
+            {status.differ.size === 1 ? 'file differs' : 'files differ'} (marked){/if}{#if unchecked > 0}; {unchecked} {unchecked === 1 ? 'file' : 'files'} not checked{/if}{:else if inspecting}Reading the spectra's flags…{:else}{unchecked} {unchecked === 1 ? 'file' : 'files'} not checked (New search looks into mzML only){/if}
       </p>
     {/if}
     <SdrfPanel />

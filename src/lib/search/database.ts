@@ -37,10 +37,44 @@ export function sdrfOrganisms(table: SdrfTable | null): string[] {
   return [...new Set(values)]
 }
 
-/** The checks of the database: its decoys against the setting, the SDRF's organism against its main one. */
-export function databaseChecks(s: FastaSummary | undefined, decoySetting: string, sdrfOrganism: string[], setDecoys: (v: string) => void): Check[] {
+/**
+ * The decoys of a database, per target, that a target-decoy FDR can rest on: about one each. Outside this range
+ * (a few stray decoys, or decoys added twice) the FDR is not what it says.
+ */
+export const DECOY_RATIO = { min: 0.5, max: 2 }
+
+/**
+ * The checks of the database: its decoys against the setting and against its targets, the SDRF's organism against its
+ * main one. `database`: its path (what an accepted red flag is kept for) and its entries (null while counting).
+ */
+export function databaseChecks(
+  s: FastaSummary | undefined,
+  decoySetting: string,
+  sdrfOrganism: string[],
+  setDecoys: (v: string) => void,
+  database?: { path: string; proteins: number | null },
+): Check[] {
   if (!s) return []
   const out: Check[] = []
+  // ponytail: the decoys are counted with the marker DECOY_ (and the common affixes), not a changed decoy_prefix
+  const targets = database?.proteins != null ? database.proteins - s.decoys : null
+  if (s.decoyMarker && decoySetting === 'auto' && targets !== null) {
+    const ratio = targets > 0 ? s.decoys / targets : Infinity
+    if (ratio < DECOY_RATIO.min || ratio > DECOY_RATIO.max) {
+      const n = (x: number) => x.toLocaleString('en-US')
+      out.push({
+        id: 'decoy-ratio',
+        level: 'block',
+        overridable: true,
+        source: 'database',
+        files: [database!.path],
+        message:
+          `The database has ${n(s.decoys)} ${s.decoys === 1 ? 'decoy' : 'decoys'} (marked ${s.decoyMarker}) for ${n(targets)} targets, and the setting uses them as they are. ` +
+          'A target-decoy FDR needs about one decoy per target, so this one would not be what it says. Let ProSE generate the decoys, or choose a database with one decoy per target.',
+        action: { label: 'Generate decoys', run: () => setDecoys('generate') },
+      })
+    }
+  }
   if (s.decoyMarker && decoySetting === 'generate') {
     out.push({
       id: 'decoys-twice',

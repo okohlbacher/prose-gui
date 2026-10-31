@@ -20,6 +20,9 @@ export const CHARGE_SHARE = 0.5
 
 const ms2Of = (f: SpectraFacts) => f.levels['2'] ?? 0
 
+/** The files New search looks into: mzML (also gzipped); ProSE reads mzPeak, .raw and .d itself. */
+export const inspectable = (name: string) => /\.mzml(\.gz)?$/i.test(name)
+
 /** The most frequent key of a count map, or null. */
 function top(counts: Record<string, number>): string | null {
   let best: string | null = null
@@ -118,6 +121,29 @@ export function spectraChecks(rows: { path: string; name: string; facts: Spectra
       source: 'spectra',
       files: charge.map((r) => r.path),
       message: `${named(charge)}: most MS2 spectra have no precursor charge, so ProSE tries every charge of the range. A timsTOF file converted without its PASEF precursors looks like this.`,
+    })
+  }
+  // (null: not inspected; undefined: still being inspected, which holds Start in `startChecks`)
+  const unchecked = rows.filter((r) => r.facts === null)
+  const vendor = unchecked.filter((r) => !inspectable(r.name))
+  const failed = unchecked.filter((r) => inspectable(r.name))
+  const notChecked = 'profile spectra, missing MS2 spectra, DIA and missing charges are not checked before the search: look at the Overview of the result.'
+  if (vendor.length > 0) {
+    out.push({
+      id: 'spectra-not-checked',
+      level: 'info',
+      source: 'spectra',
+      files: vendor.map((r) => r.path),
+      message: `${named(vendor)}: ProSE reads ${vendor.length === 1 ? 'this format' : 'these formats'} (mzPeak, Thermo .raw, Bruker .d) itself, but New search does not look into ${vendor.length === 1 ? 'it' : 'them'}, so ${notChecked}`,
+    })
+  }
+  if (failed.length > 0) {
+    out.push({
+      id: 'spectra-not-read',
+      level: 'warn',
+      source: 'spectra',
+      files: failed.map((r) => r.path),
+      message: `${named(failed)}: the spectra could not be read for the checks, so ${notChecked}`,
     })
   }
   return out

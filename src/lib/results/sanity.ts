@@ -9,6 +9,7 @@ import { levelRows } from './figures'
 import { baseName, type ResultModel } from './model'
 import { qpxParameters } from './summary'
 import type { ProSEMultiSummary } from './types'
+import { DECOY_RATIO } from '../search/database'
 
 /**
  * All q-values 0 in a file with at least this many PSMs: decoys were probably not told from targets (a decoy marker
@@ -71,6 +72,15 @@ export function sanityFindings(s: SanityInput): SanityFinding[] {
   // decoys: none in the database, or q-values that never rise above 0
   if (summary.psmFdr > 0 && summary.search.decoyProteins === 0 && summary.search.targetProteins > 0) {
     out.push({ id: 'no-decoys', message: 'The search reports no decoy proteins, so its FDR rests on no decoys. Check the decoy setting and the decoy marker of the database.' })
+  } else if (summary.psmFdr > 0 && summary.search.decoyProteins > 0 && summary.search.targetProteins > 0) {
+    const ratio = summary.search.decoyProteins / summary.search.targetProteins
+    if (ratio < DECOY_RATIO.min || ratio > DECOY_RATIO.max) {
+      const n = (x: number) => x.toLocaleString('en-US')
+      out.push({
+        id: 'decoy-ratio',
+        message: `The search had ${n(summary.search.decoyProteins)} decoy proteins for ${n(summary.search.targetProteins)} targets. A target-decoy FDR needs about one decoy per target, so this one is not what it says: search again with the decoys set to Generate.`,
+      })
+    }
   }
   const ps = m.tables.psms
   const qs = new Map<number, { n: number; nonzero: number }>()

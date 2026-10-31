@@ -333,8 +333,8 @@ export async function reopenInNewSearch(id: string, start: boolean, changes: Rec
     searchForm.notices.push('Re-run did not start: check the files and the database above, then start the search.')
     return false
   }
-  // (the database's proteins are counted in the background: start once the form allows it)
-  for (let tries = 0; tries < 100 && !searchPlan.canStart; tries++) await new Promise((r) => setTimeout(r, 100))
+  // (the proteins of the database are counted and the spectra checked in the background: start once the form allows it)
+  for (let tries = 0; tries < 600 && !searchPlan.canStart; tries++) await new Promise((r) => setTimeout(r, 100))
   if (!searchPlan.canStart) {
     searchForm.notices.push('Re-run did not start: the form is not ready; see above.')
     return false

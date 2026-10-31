@@ -54,4 +54,11 @@ describe('the spectra status', () => {
     // the start of a file without MS2 there is no proof of a file without MS2
     expect(spectraChecks([row('e', facts({ levels: { '1': 100 }, complete: false }))])).toEqual([])
   })
+  test('files New search does not look into, or could not read, are said to be not checked', () => {
+    const checks = spectraChecks([row('a.raw', null), row('b.d', null), row('c.mzML', null), row('d.mzML', undefined), row('e.mzML', facts())])
+    const by = (id: string) => checks.find((c) => c.id === id)
+    expect(by('spectra-not-checked')).toMatchObject({ level: 'info', files: ['/r/a.raw', '/r/b.d'] })
+    expect(by('spectra-not-checked')?.message).toMatch(/^2 files: ProSE reads these formats/)
+    expect(by('spectra-not-read')).toMatchObject({ level: 'warn', files: ['/r/c.mzML'] })
+  })
 })

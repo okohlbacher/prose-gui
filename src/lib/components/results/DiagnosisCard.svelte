@@ -8,7 +8,6 @@
   import { precursorSample, searchedWindows, toleranceFindings } from '$lib/results/tolerance'
   import type { ResultsView } from '$lib/results/view.svelte'
   import { EXAMPLE } from '$lib/search/form.svelte'
-  import { loadPresets } from '$lib/settings/presets'
 
   let { view }: { view: ResultsView } = $props()
 
@@ -16,19 +15,19 @@
   const summary = $derived(result.outcome.summary)
   const parameters = $derived(result.settings.parameters)
   const kind = $derived(setupKind(parameters, summary.openSearch))
-  const expected = $derived(loadPresets().find((p) => p.id === result.settings.presetId)?.expected ?? [])
   const rows = $derived(idRates(summary, result.design, kind))
   const unusual = $derived(rows.filter((r) => r.low || r.outlier))
   const causes = $derived.by(() => {
-    if (unusual.length === 0 || expected.includes('low-id-rate')) return []
+    // (no preset hides them: the bound of the setup kind already allows for ion-trap and non-specific searches)
+    if (unusual.length === 0) return []
     const tolerance = toleranceFindings(summary, parameters, precursorSample(view.model, searchedWindows(parameters).precursor, summary.openSearch))
     return diagnose(summary, tolerance, contaminantShare(view.model), result.settings.database === EXAMPLE.fasta)
   })
-  const pct = (x: number | null) => (x === null ? '–' : `${(x * 100).toFixed(1)} %`)
+  const pct = (x: number | null) => (x === null ? 'no MS2' : `${(x * 100).toFixed(1)} %`)
   const names = $derived(unusual.length <= 3 ? unusual.map((r) => `${r.file} (${pct(r.rate)})`).join(', ') : `${unusual.length} files`)
 </script>
 
-{#if unusual.length > 0 && !expected.includes('low-id-rate')}
+{#if unusual.length > 0}
   <section aria-labelledby="overview-diagnosis" data-testid="diagnosis">
     <h2 id="overview-diagnosis" class="mb-1 text-[13px] font-semibold">Why so few identifications?</h2>
     <p class="mb-2 text-xs text-muted-foreground">

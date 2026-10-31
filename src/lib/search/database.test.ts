@@ -34,6 +34,19 @@ describe('the database', () => {
     expect(databaseChecks(summary({ decoys: 20000, decoyMarker: 'DECOY_…' }), 'auto', [], () => {})).toEqual([])
   })
 
+  test('a few decoys for many targets under auto: a red flag with Generate as the fix; one per target passes', () => {
+    let set = ''
+    const db = (proteins: number) => ({ path: '/db/x.fasta', proteins })
+    const [c] = databaseChecks(summary({ decoys: 3, decoyMarker: 'DECOY_…' }), 'auto', [], (v) => (set = v), db(20003))
+    expect(c).toMatchObject({ id: 'decoy-ratio', level: 'block', overridable: true, files: ['/db/x.fasta'] })
+    expect(c.message).toMatch(/^The database has 3 decoys \(marked DECOY_…\) for 20,000 targets/)
+    c.action!.run()
+    expect(set).toBe('generate')
+    expect(databaseChecks(summary({ decoys: 20000, decoyMarker: 'DECOY_…' }), 'auto', [], () => {}, db(40000))).toEqual([])
+    // while the proteins are counted, nothing yet
+    expect(databaseChecks(summary({ decoys: 3, decoyMarker: 'DECOY_…' }), 'auto', [], () => {}, { path: '/db/x.fasta', proteins: null })).toEqual([])
+  })
+
   test("the SDRF's organism against the database's: by genus and species; any organism of the database will do", () => {
     const sdrf = parseSdrfTable('source name\tcharacteristics[organism]\ns1\tHomo sapiens (human)\ns2\tnot available\n')
     expect(sdrfOrganisms(sdrf)).toEqual(['Homo sapiens (human)'])

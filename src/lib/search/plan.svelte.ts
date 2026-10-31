@@ -37,7 +37,7 @@ function unknownMessage(names: string[]): string {
 function adviceChecks(): Check[] {
   const out: (Check | null)[] = [
     ...sdrfChemistryChecks(sdrfSession.table, form.value<string[]>('modifications:fixed') ?? [], form.value<string[]>('modifications:variable') ?? []),
-    ...databaseChecks(form.database?.summary, String(form.value('decoys')), sdrfOrganisms(sdrfSession.table), (v) => form.setParam('decoys', v)),
+    ...databaseChecks(form.database?.summary, String(form.value('decoys')), sdrfOrganisms(sdrfSession.table), (v) => form.setParam('decoys', v), form.database ? { path: form.database.file.path, proteins: form.database.proteins } : undefined),
     ...spectraChecks(form.files.map((r) => ({ path: r.file.path, name: r.file.name, facts: r.spectraFacts }))),
     ionTrapPpm(
       form.files.map((r) => ({
@@ -121,6 +121,7 @@ class SearchPlan {
     startChecks({
       files: form.files.map((r) => ({ path: r.file.path, name: r.file.name, problem: r.problem })),
       adding: form.adding > 0,
+      inspecting: form.files.some((r) => r.spectraFacts === undefined),
       sdrfProblem: sdrfSession.problem,
       invalidCell: (() => {
         const cells = form.invalidCellList

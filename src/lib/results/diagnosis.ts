@@ -77,7 +77,8 @@ export function idRates(summary: ProSEMultiSummary, design: DesignResolution, ki
     return {
       file: baseName(f.path),
       rate,
-      low: rate !== null && rate < EXPECTED_ID_RATE[kind],
+      // (a file without MS2 spectra has no rate, and is the plainest case of a file that identifies nothing)
+      low: rate === null || rate < EXPECTED_ID_RATE[kind],
       outlier: rate !== null && !edge.has(i) && rate < BATCH_SHARE * batch,
     }
   })

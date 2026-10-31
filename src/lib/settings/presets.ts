@@ -78,8 +78,6 @@ export const BUILTIN_PRESETS: Preset[] = [
     id: 'iontrap-cid-tryptic',
     name: 'Ion trap CID · tryptic',
     builtin: true,
-    // low-resolution fragments identify fewer spectra than an Orbitrap run (guidance G4)
-    expected: ['low-id-rate'],
     parameters: {
       ...tryptic,
       'precursor:mass_tolerance_lower': 10,

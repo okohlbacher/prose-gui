@@ -21,6 +21,12 @@ describe('the diagnosis', () => {
     expect(idRates(s, design(1), 'nonspecific')[0].low).toBe(false)
   })
 
+  test('a file without MS2 spectra is unusual (it has no rate), also next to normal files', () => {
+    const rows = idRates(summary([file('a', 1000, 400), file('ms1only', 0, 0), file('c', 1000, 420)]), design(3), 'iontrap')
+    expect(rows.map((r) => r.low)).toEqual([false, true, false])
+    expect(rows[1].rate).toBeNull()
+  })
+
   test('a batch outlier is far below the median; the first and last fraction are neither counted nor flagged', () => {
     const s = summary([file('0', 1000, 30), file('1', 1000, 400), file('2', 1000, 100), file('3', 1000, 420), file('4', 1000, 410), file('5', 1000, 20)])
     const rows = idRates(s, design(6, true), 'nonspecific')

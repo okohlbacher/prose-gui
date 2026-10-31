@@ -34,6 +34,8 @@ describe('checks of a finished search', () => {
 
   test('decoys: none in the database; all q-values 0 in a file with enough PSMs', () => {
     expect(ids(input({ summary: summary([{ path: '/r/ctrl_a.mzML', ms2Spectra: 1 }, { path: '/r/egf_a.mzML', ms2Spectra: 1 }], 0) }))).toEqual(['no-decoys'])
+    // a few decoys for many targets (stray DECOY_ entries in the FASTA) is not a target-decoy FDR either
+    expect(ids(input({ summary: summary([{ path: '/r/ctrl_a.mzML', ms2Spectra: 1 }, { path: '/r/egf_a.mzML', ms2Spectra: 1 }], 1) }))).toEqual(['decoy-ratio'])
     // the sample has 9 PSMs: too few to call all-zero q-values a fault
     expect(ids(input({ model: model((t) => { t.psms.qValue.fill(0); t.psms.rt.fill(1800) }) }))).toEqual([])
   })

@@ -7,6 +7,7 @@ import { accept, acceptedKeys, acceptedOf, firstBlock, ionTrapPpm, isAccepted, l
 const ready: StartState = {
   files: [{ path: '/r/a.mzML', name: 'a.mzML', problem: null }],
   adding: false,
+  inspecting: false,
   sdrfProblem: null,
   invalidCell: null,
   database: { name: 'db.fasta', error: null, counted: true, problem: null },
@@ -25,6 +26,10 @@ function memory() {
 const profile: Check = { id: 'profile-ms2', level: 'block', overridable: true, source: 'spectra', message: 'Profile.', files: ['/r/a.mzML', '/r/b.mzML'] }
 
 describe('the start checks', () => {
+  test('Start waits while the spectra are checked (their red flags are not known yet)', () => {
+    expect(startChecks({ ...ready, inspecting: true }).map((c) => c.id)).toEqual(['inspecting'])
+    expect(startChecks({ ...ready, adding: true, inspecting: true }).map((c) => c.id)).toEqual(['adding'])
+  })
   test('a ready form has none; the order and wording of the plan line are kept', () => {
     expect(startChecks(ready)).toEqual([])
     const all = startChecks({

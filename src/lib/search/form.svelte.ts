@@ -423,6 +423,7 @@ class SearchForm {
     if (!r || this.busy) return
     this.removed = null
     this.files = [...r.files, ...this.files]
+    for (const f of r.files) if (f.spectraFacts === undefined) this.#queueInspect(f.file.path)
     this.notices = r.notices
     if (r.database) {
       this.database = r.database

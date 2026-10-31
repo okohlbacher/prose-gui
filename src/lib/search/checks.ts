@@ -39,6 +39,8 @@ export type AcceptedCheck = { id: string; files: string[]; message: string }
 export type StartState = {
   files: { path: string; name: string; problem: string | null }[]
   adding: boolean
+  /** The spectra of some file are still being inspected (their red flags are not known yet). */
+  inspecting: boolean
   sdrfProblem: string | null
   /** The first design cell that is not valid, and how many more there are. */
   invalidCell: { label: string; text: string; more: number } | null
@@ -62,6 +64,7 @@ export function startChecks(s: StartState): Check[] {
     out.push({ id, level: 'block', source, message, ...(files ? { files } : {}) })
   if (s.files.length === 0) block('no-files', 'files', 'Add spectrum files (mzML, mzPeak, Thermo .raw, Bruker .d) to start.')
   if (s.adding) block('adding', 'files', 'Adding files…')
+  else if (s.inspecting) block('inspecting', 'spectra', 'Checking the spectra of the files…')
   if (s.sdrfProblem) block('sdrf', 'sdrf', s.sdrfProblem)
   const unsearchable = s.files.filter((f) => f.problem)
   if (unsearchable.length === 1) block('file-problem', 'files', `${unsearchable[0].problem} Remove it to start the search.`, [unsearchable[0].path])
