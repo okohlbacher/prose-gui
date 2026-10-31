@@ -13,7 +13,7 @@
   import { Button, buttonVariants } from '$lib/components/ui/button'
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu'
   import Marker from '$lib/components/results/Marker.svelte'
-  import { download } from '$lib/download'
+  import { saveText } from '$lib/desktop'
   import { massShift, peptideView, psmProforma, type PeptideView } from '$lib/format/peptide'
   import { annotatePeaks, type ModificationMass } from '$lib/psm/annotate'
   import {
@@ -315,7 +315,7 @@
   function exportSvg() {
     const svg = mirror?.svgElement()
     if (!svg) return
-    void download(svgFileName(proforma, ps.nativeId[row]), exportSpectrumSvg(svg), 'image/svg+xml')
+    void saveText(svgFileName(proforma, ps.nativeId[row]), exportSpectrumSvg(svg))
   }
 
   // the Export menu's "Spectrum (SVG)" does what the button does

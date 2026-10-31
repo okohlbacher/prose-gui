@@ -78,10 +78,17 @@
 
   const methods = $derived(methodsText({ summary, settings, version, accepted: result.accepted }))
   let copied = $state(false)
+  // ('Copied', or why not: a clipboard the system refused)
+  let copyFailed = $state(false)
   async function copyMethods() {
-    await navigator.clipboard.writeText(methods)
-    copied = true
-    setTimeout(() => (copied = false), 1500)
+    try {
+      await navigator.clipboard.writeText(methods)
+      copied = true
+      copyFailed = false
+    } catch {
+      copyFailed = true
+    }
+    setTimeout(() => ((copied = false), (copyFailed = false)), 1500)
   }
 
   const head = 'h-auto border-b px-2.5 py-1.5 font-medium text-muted-foreground'
@@ -230,7 +237,7 @@
   <section aria-labelledby="overview-methods" data-testid="methods">
     <div class="mb-1 flex items-center gap-2">
       <h2 id="overview-methods" class="text-[13px] font-semibold">Methods text</h2>
-      <button type="button" class="rounded border px-2 py-0.5 text-xs hover:bg-muted" onclick={copyMethods}>{copied ? 'Copied' : 'Copy'}</button>
+      <button type="button" class="rounded border px-2 py-0.5 text-xs hover:bg-muted" onclick={copyMethods}>{copied ? 'Copied' : copyFailed ? 'Copy failed: select the text' : 'Copy'}</button>
       <CommandLine id={result.id} />
     </div>
     <p class="max-w-[60rem] rounded-lg border bg-background px-3 py-2 text-xs leading-relaxed select-text">{methods}</p>

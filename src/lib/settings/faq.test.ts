@@ -5,14 +5,16 @@ import { FAQ, FAQ_GROUPS, faqFor } from './faq'
  * The ids the app's checks report that a user can act on: start checks (`search/checks.ts`, `spectra.ts`,
  * `database.ts`, `chemistry.ts`), diagnosis causes and the card's own id (`results/diagnosis.ts`, presets'
  * `expected`), tolerance findings (`results/tolerance.ts`), checks of a finished search (`results/sanity.ts`)
- * and the input warnings of Overview (`results/overview.ts`). Left out: `adding` and `database-counting`
- * (Start waits; nothing to fix).
+ * and the input warnings of Overview (`results/overview.ts`), the plausibility of the settings
+ * (`search/plausibility.ts`). Left out: `adding`, `database-counting` and `inspecting` (Start waits; nothing to fix).
  */
 const ACTIONABLE = [
   'no-files', 'sdrf', 'file-problem', 'design-cell', 'no-database', 'database-error', 'database-problem',
   'range-inverted', 'range-outside', 'psm-fdr', 'unknown-modification', 'tool',
-  'profile-ms2', 'no-ms2', 'dia-suspected', 'no-charge', 'iontrap-ppm',
-  'decoys-twice', 'organism-mismatch', 'sdrf-modifications', 'sdrf-label',
+  'profile-ms2', 'no-ms2', 'dia-suspected', 'no-charge', 'iontrap-ppm', 'spectra-not-checked', 'spectra-not-read',
+  'decoys-twice', 'decoy-ratio', 'organism-mismatch',
+  'many-variable-mods', 'fragment-tolerance-wide', 'fragment-tolerance-narrow', 'fragment-da-highres',
+  'precursor-da-typo', 'precursor-da-wide', 'iontrap-precursor-ppm', 'sdrf-modifications', 'sdrf-label',
   'low-id-rate', 'charge', 'percolator', 'contaminants', 'small-run',
   'tolerance-offset', 'tolerance-edge', 'tolerance-too-wide',
   'runs-missing', 'spectra-mismatch', 'no-decoys', 'all-q-zero', 'isotope-share', 'rt-unit', 'parameter-echo',

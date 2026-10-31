@@ -42,7 +42,7 @@
     Start with the <b>preset</b> of your instrument and the <b>database</b> of your organism. Then match the <b>fixed
     modifications</b> (alkylation, labels) and the <b>enzyme</b> to your protocol: the built-in presets assume a tryptic digest and
     cysteines alkylated with iodoacetamide. Add only the <b>variable modifications</b> your sample needs. The instrument-dependent
-    rest comes from the preset and is under “Advanced settings”; every parameter of ProSE is in the “All parameters” dialog. The
+    rest comes from the preset and is under “Advanced settings”; every parameter of ProSE is in the “All … parameters” dialog. The
     same explanations are behind the <span aria-hidden="true">?</span> beside each setting.
   </p>
 

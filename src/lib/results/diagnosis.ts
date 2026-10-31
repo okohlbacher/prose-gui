@@ -111,6 +111,8 @@ export function contaminantShare(m: ResultModel): number {
   return all > 0 ? con / all : 0
 }
 
+const chargeRerun = (max: number) => ({ label: `Re-run with charges 1–${max}`, changes: { 'precursor:min_charge': 1, 'precursor:max_charge': max } })
+
 /** The likely causes of few identifications, strongest first, at most `MAX_CAUSES`. */
 export function diagnose(
   summary: ProSEMultiSummary,
@@ -146,7 +148,8 @@ export function diagnose(
       id: 'charge',
       weight: 0.8 * Math.min(1, charge / ms2 + 0.5),
       message: `${percent(charge / ms2)} of the MS2 spectra were not searched: their precursor charge is outside ${c.min}–${c.max}.`,
-      reruns: Number.isFinite(c.min) && Number.isFinite(c.max) ? [{ label: 'Re-run with charges 1–6', changes: { 'precursor:min_charge': 1, 'precursor:max_charge': Math.max(6, c.max) } }] : [],
+      // (1–6, or two more than a range that already reaches 6; the label says what is set)
+      reruns: Number.isFinite(c.min) && Number.isFinite(c.max) ? [chargeRerun(c.max >= 6 ? c.max + 2 : 6)] : [],
     })
   }
   const window = tolerance.find((t) => t.id === 'tolerance-offset' || t.id === 'tolerance-edge')

@@ -36,6 +36,8 @@
   const view = $derived(result ? resultsViewFor(result) : null)
 
   // An address of a search that is not open (after a restart): History may have it
+  /** Why the last CSV export failed (the button's own export; the Export menu shows its errors itself). */
+  let csvError = $state<string | null>(null)
   let restoring = $state<string | null>(null)
   let restoreFailed = $state<{ id: string; reason: string | null } | null>(null)
   $effect(() => {
@@ -209,7 +211,7 @@
           {#if level}
             <div class="flex items-center gap-2">
               <ColumnsMenu {view} {level} />
-              <Button size="sm" class="h-7 px-2.5 text-xs" disabled={view.exporting} onclick={() => exportCsv(view)}>
+              <Button size="sm" class="h-7 px-2.5 text-xs" disabled={view.exporting} onclick={() => exportCsv(view).then(() => (csvError = null), (e) => (csvError = String((e as Error)?.message ?? e)))}>
                 {#if view.exporting}
                   Exporting…
                 {:else if panelOpen}
@@ -220,6 +222,7 @@
                   {level.rows.length === 1 ? 'row' : 'rows'}
                 {/if}
               </Button>
+              {#if csvError}<span class="text-xs text-destructive" role="alert" data-testid="csv-error">Export failed: {csvError}</span>{/if}
             </div>
           {/if}
         </div>

@@ -73,7 +73,7 @@ export const HELP = {
   },
   calibration: {
     title: 'Calibration',
-    text: 'Off by default (calibration:enabled in “All parameters”, or “Re-run with calibration” in Overview). ProSE first searches the most intense tenth of the spectra, then sets the windows of the main search from the errors of its confident matches: the precursor window can become asymmetric when the errors are off-centre, the fragment window stays symmetric about zero. The windows can only become narrower than the ones you set, never wider, and the masses in the file are not changed. With fewer than 50 confident matches (calibration:min_psms) the pass is skipped and your windows are used.',
+    text: 'Off by default (calibration:enabled in “All … parameters”, or “Re-run with calibration” in Overview). ProSE first searches the most intense tenth of the spectra, then sets the windows of the main search from the errors of its confident matches: the precursor window can become asymmetric when the errors are off-centre, the fragment window stays symmetric about zero. The windows can only become narrower than the ones you set, never wider, and the masses in the file are not changed. With fewer than 50 confident matches (calibration:min_psms) the pass is skipped and your windows are used.',
     tip: 'When Overview says the errors are off-centre or cut off by the window, search with a wider window first; calibration can then narrow it around the errors.',
   },
 } as const satisfies Record<string, { title: string; text: string; tip?: string }>

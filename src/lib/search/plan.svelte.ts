@@ -36,17 +36,14 @@ function unknownMessage(names: string[]): string {
 
 /** The red flags and advice of the form (warn and info checks, and red flags that block): `checks.ts`. */
 function adviceChecks(): Check[] {
+  // (each file once: its path, name, instrument model and spectra facts)
+  const files = form.files.map((r) => ({ path: r.file.path, name: r.file.name, instrument: /NT=([^;]*)/.exec(r.instrument ?? '')?.[1] ?? null, facts: r.spectraFacts }))
   const out: (Check | null)[] = [
     ...sdrfChemistryChecks(sdrfSession.table, form.value<string[]>('modifications:fixed') ?? [], form.value<string[]>('modifications:variable') ?? []),
     ...databaseChecks(form.database?.summary, String(form.value('decoys')), sdrfOrganisms(sdrfSession.table), (v) => form.setParam('decoys', v), form.database ? { path: form.database.file.path, proteins: form.database.proteins } : undefined),
-    ...spectraChecks(form.files.map((r) => ({ path: r.file.path, name: r.file.name, facts: r.spectraFacts }))),
+    ...spectraChecks(files),
     ionTrapPpm(
-      form.files.map((r) => ({
-        path: r.file.path,
-        name: r.file.name,
-        instrument: /NT=([^;]*)/.exec(r.instrument ?? '')?.[1] ?? null,
-        ms2Analyzer: r.spectraFacts ? ms2Analyzer(r.spectraFacts) : null,
-      })),
+      files.map((f) => ({ ...f, ms2Analyzer: f.facts ? ms2Analyzer(f.facts) : null })),
       String(form.value('fragment:mass_tolerance_unit')),
       () => {
         form.setParam('fragment:mass_tolerance', ION_TRAP_FRAGMENT_DA)
@@ -55,7 +52,7 @@ function adviceChecks(): Check[] {
     ),
     ...plausibilityChecks({
       values: form.values,
-      files: form.files.map((r) => ({ path: r.file.path, name: r.file.name, instrument: /NT=([^;]*)/.exec(r.instrument ?? '')?.[1] ?? null, facts: r.spectraFacts })),
+      files,
       set: (name, value) => form.setParam(name, value),
     }),
   ]
@@ -83,8 +80,10 @@ class SearchPlan {
     const samples = form.design.samples.length
     const parts = [`${n} ${n === 1 ? 'file' : 'files'}${n > 1 ? ` in ${samples} ${samples === 1 ? 'sample' : 'samples'}` : ''}`]
     if (form.database) {
-      const proteins = form.database.proteins
-      const decoys = form.value('decoys') === 'ignore' ? '' : ' + decoys'
+      // (a FASTA's own decoys are not proteins of the search: they are its decoys, or replaced by generated ones)
+      const own = form.database.summary?.decoys ?? 0
+      const proteins = form.database.proteins === null ? null : form.database.proteins - own
+      const decoys = form.value('decoys') === 'ignore' ? '' : own > 0 && form.value('decoys') === 'auto' ? ' + its decoys' : ' + decoys'
       const crap = form.contaminants ? ` + ${CRAP_PROTEINS} cRAP` : ''
       if (form.database.error) parts.push('the database cannot be read')
       else parts.push(proteins === null ? 'counting proteins…' : `${proteins.toLocaleString('en-US')} proteins${crap}${decoys}`)
@@ -155,13 +154,13 @@ class SearchPlan {
   /** Every check of the form: the start checks, then the advice. */
   checks = $derived([...this.startChecks, ...this.advice])
 
-  /** The first check that stops Start; a red flag (`overridable`) can be searched anyway. */
   /** The version of an input file or the database (size and modification time) an accepted red flag holds for. */
   stamp: Stamp = (path) => {
     const f = form.files.find((r) => r.file.path === path) ?? (form.database?.file.path === path ? form.database : null)
     return f ? `${f.file.size}:${f.modified ?? ''}` : ''
   }
 
+  /** The first check that stops Start; a red flag (`overridable`) can be searched anyway. */
   blocking = $derived(firstBlock(this.checks, this.accepted, this.stamp))
 
   /** Why the search cannot start yet. */

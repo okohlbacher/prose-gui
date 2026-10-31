@@ -42,14 +42,17 @@
   </p>
   <h3 id="troubleshooting-checks">What the checks mean, and what they cannot see</h3>
   <ul class="prose-list">
-    <li><b>Red</b> (in the line beside Start): the search cannot start until it is fixed.</li>
+    <li><b>Blocking</b> (named in the line beside Start, which stays unavailable): the search cannot start until it is fixed. Start
+      also waits while files are added, the database is counted and the spectra of mzML files are read.</li>
     <li>
-      Some red flags (profile spectra, no MS2 spectra, DIA data, a database with far more or fewer decoys than targets) offer
-      <b>Search anyway</b>: it searches the files as they are, changes nothing in them, is remembered for those files on this computer
-      until a file changes, and is recorded with the search and in its methods text.
+      Some red flags (profile spectra, no MS2 spectra, DIA data) offer <b>Search anyway</b>: it searches the files as they are, changes
+      nothing in them, and is remembered on this computer for this version of each file (its size and modification time): a file that
+      changes is checked again. It is recorded with the search, so Re-run does not ask again for unchanged files, and the methods text
+      names profile spectra and missing MS2 spectra when ProSE confirmed them. A database with far more or fewer decoys than targets is
+      no red flag: ProSE refuses it, so Start stays blocked until you click <b>Generate decoys</b>.
     </li>
-    <li><b>Amber</b> notices are advice: the search can start, and they are kept with it: the Overview of the result lists them under
-      Checks of the search, beside what the cards found after it.</li>
+    <li><b>Notices</b> (advice in amber, and information) do not stop the search, and they are kept with it: the Overview of the
+      result lists them under Checks of the search, beside what the cards found after it.</li>
     <li>
       Before Start, the app reads the flags of up to the first 1,000 MS2 spectra (within the first 64 MiB) of mzML files: whether
       they are flagged centroid or profile, their charges, activation and isolation windows. It does not look at the peaks, so a

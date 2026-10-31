@@ -8,7 +8,7 @@
   import { Button } from '$lib/components/ui/button'
   import { sdrfSession as sdrf, STATUS_TEXT } from '$lib/design/sdrf-session.svelte'
   import { convertCommand } from '$lib/design/sdrf-download'
-  import { download } from '$lib/download'
+  import { saveText } from '$lib/desktop'
   import { formatBytes } from '$lib/format/bytes'
   import SdrfEditor from './SdrfEditor.svelte'
   import SdrfMetadata from './SdrfMetadata.svelte'
@@ -24,7 +24,7 @@
   async function save() {
     saveError = null
     try {
-      await download(sdrf.name || 'sdrf.tsv', sdrf.text(), 'text/tab-separated-values')
+      await saveText(sdrf.name || 'sdrf.tsv', sdrf.text())
     } catch (e) {
       saveError = String((e as Error)?.message ?? e)
     }

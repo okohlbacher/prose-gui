@@ -21,6 +21,13 @@ describe('the diagnosis', () => {
     expect(idRates(s, design(1), 'nonspecific')[0].low).toBe(false)
   })
 
+  test('charges outside the range: the re-run says what it sets, and reaches past a range that already goes to 6', () => {
+    const rerun = (min: number, max: number) =>
+      diagnose(summary([file('a', 1000, 400, { chargeOutOfRange: { min, max, spectra: 300 } } as Partial<ProSEFileSummary>)]), [], 0, true).find((c) => c.id === 'charge')!.reruns[0]
+    expect(rerun(2, 4)).toEqual({ label: 'Re-run with charges 1–6', changes: { 'precursor:min_charge': 1, 'precursor:max_charge': 6 } })
+    expect(rerun(1, 6)).toEqual({ label: 'Re-run with charges 1–8', changes: { 'precursor:min_charge': 1, 'precursor:max_charge': 8 } })
+  })
+
   test('a file without MS2 spectra is unusual (it has no rate), also next to normal files', () => {
     const rows = idRates(summary([file('a', 1000, 400), file('ms1only', 0, 0), file('c', 1000, 420)]), design(3), 'iontrap')
     expect(rows.map((r) => r.low)).toEqual([false, true, false])

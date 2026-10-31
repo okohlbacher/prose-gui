@@ -13,14 +13,14 @@
     <p class="line-clamp-2 text-xs leading-tight text-muted-foreground" data-testid="search-note">{plan.note}</p>
   {/if}
   {#if plan.problemShown}
-    <p class="flex min-w-0 items-baseline gap-2 text-xs text-foreground">
+    <p class="flex min-w-0 items-baseline gap-2 text-xs text-foreground" role="status">
       <span class="truncate" id="start-problem" title={plan.problem}>{plan.problem}</span>
       {#if plan.blocking?.overridable}
         <button
           type="button"
           class="shrink-0 underline underline-offset-2 hover:no-underline"
           data-testid="search-anyway"
-          title="Start is allowed for these files from now on; the search records that you chose to search them anyway."
+          title="Start is allowed for these files, as they are now, on this computer (a file that changes is checked again); the search records that you chose to search them anyway."
           onclick={() => plan.searchAnyway()}>Search anyway</button>
       {/if}
       <span class="shrink-0"><FaqLink check={plan.blocking?.id} /></span>

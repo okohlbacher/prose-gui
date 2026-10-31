@@ -13,6 +13,9 @@ import { formatBytes } from '../format/bytes'
 import { formatPercent } from '../format/fdr'
 import { brukerFolder, isFasta, isSpectrum } from './files'
 
+/** How long the spectra of the files added together may take to inspect before Start goes ahead without their checks. */
+export const INSPECT_TIMEOUT_MS = 60_000
+
 export type FileRow = DesignFields & {
   id: string
   file: InputFile
@@ -50,9 +53,8 @@ export type DatabaseChoice = {
 /** A cell of the design table whose text is not valid (`DesignCell`): the search cannot start until it is corrected. */
 export type InvalidCell = { row: string; label: string; text: string }
 
-/** The entries of the bundled cRAP FASTA (`src-tauri/resources/fasta/crap.fasta`), and their residues. */
+/** The entries of the bundled cRAP FASTA (`src-tauri/resources/fasta/crap.fasta`). */
 export const CRAP_PROTEINS = 116
-export const CRAP_RESIDUES = 38459
 
 /**
  * The example: OpenMS' small E. coli run (Ecoli_MS2_small.mzML: LTQ Orbitrap XL, CID, 139 MS2 spectra) searched
@@ -370,7 +372,8 @@ class SearchForm {
     const paths = this.#inspectQueue.splice(0)
     let facts: (SpectraFacts | null)[]
     try {
-      facts = await inspectSpectra(paths)
+      // (a read that hangs, say on a network share, must not hold Start for good: after a minute the facts are unknown)
+      facts = await Promise.race([inspectSpectra(paths), new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), INSPECT_TIMEOUT_MS))])
     } catch {
       facts = paths.map(() => null) // (no shim, or it failed: the status stays unknown)
     }

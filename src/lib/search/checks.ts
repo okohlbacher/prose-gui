@@ -33,7 +33,13 @@ export type Check = {
 }
 
 /** A red flag the user searched anyway, as the search's record keeps it (search.json `accepted`). */
-export type AcceptedCheck = { id: string; files: string[]; message: string }
+export type AcceptedCheck = {
+  id: string
+  files: string[]
+  message: string
+  /** The version of each file (`Stamp`) the red flag was accepted for: a file that changed since is asked about again. */
+  stamps?: Record<string, string>
+}
 
 /** What the start checks look at: the form, its database, the SDRF, the settings and the tool, as plain values. */
 export type StartState = {
@@ -125,7 +131,9 @@ export function firstBlock(checks: Check[], accepted: ReadonlySet<string>, stamp
 
 /** The red flags of `checks` the user accepted, as the search's record keeps them. */
 export function acceptedOf(checks: Check[], accepted: ReadonlySet<string>, stamp: Stamp = noStamp): AcceptedCheck[] {
-  return checks.filter((c) => isAccepted(c, accepted, stamp)).map(recorded)
+  return checks
+    .filter((c) => isAccepted(c, accepted, stamp))
+    .map((c) => ({ ...recorded(c), stamps: Object.fromEntries((c.files ?? ['']).map((p) => [p, stamp(p)])) }))
 }
 
 /** A check as a search's record keeps it (its id, files and sentence; no action). */
@@ -171,9 +179,12 @@ export function accept(check: Check, accepted: ReadonlySet<string>, storage: Acc
   return next
 }
 
-/** The accepted red flags of a saved search (its record), for New search when the search is opened there again. */
-export function acceptedKeys(list: AcceptedCheck[], stamp: Stamp = noStamp): string[] {
-  return list.flatMap((a) => (a.files.length > 0 ? a.files : ['']).map((p) => keyOf(a.id, p, stamp)))
+/**
+ * The accepted red flags of a saved search (its record), for New search when the search is opened there again: for the
+ * versions of the files then (a record without `stamps`, from before they were kept, accepts none).
+ */
+export function acceptedKeys(list: AcceptedCheck[]): string[] {
+  return list.flatMap((a) => (a.files.length > 0 ? a.files : ['']).map((p) => keyOf(a.id, p, () => a.stamps?.[p] ?? '\u0001')))
 }
 
 /**

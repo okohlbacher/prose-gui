@@ -16,8 +16,7 @@
   import { applyDesign } from '$lib/design/paste'
   import { parseSdrf } from '$lib/design/sdrf'
   import { sdrfSession, addAnyFiles } from '$lib/design/sdrf-session.svelte'
-  import { chooseFiles, isDesktop } from '$lib/desktop'
-  import { download } from '$lib/download'
+  import { chooseFiles, isDesktop, saveText } from '$lib/desktop'
   import { cn } from '$lib/utils'
   import { formatBytes } from '$lib/format/bytes'
   import { searchForm as form } from '$lib/search/form.svelte'
@@ -70,7 +69,7 @@
   async function saveDesign() {
     saveError = null
     try {
-      await download('design.tsv', writeDesignTsv(design), 'text/tab-separated-values')
+      await saveText('design.tsv', writeDesignTsv(design))
     } catch (e) {
       saveError = String((e as Error)?.message ?? e)
     }

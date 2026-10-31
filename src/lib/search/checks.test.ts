@@ -65,7 +65,7 @@ describe('the start checks', () => {
     const block: Check = { id: 'no-database', level: 'block', source: 'database', message: 'x' }
     expect(isAccepted(block, accept(block, accepted, storage))).toBe(false)
     // the record of the search, and back into New search
-    expect(acceptedOf([profile], accepted)).toEqual([{ id: 'profile-ms2', files: profile.files, message: 'Profile.' }])
+    expect(acceptedOf([profile], accepted)).toEqual([{ id: 'profile-ms2', files: profile.files, message: 'Profile.', stamps: Object.fromEntries(profile.files!.map((p) => [p, ''])) }])
     expect(isAccepted(profile, new Set(acceptedKeys(acceptedOf([profile], accepted))))).toBe(true)
   })
 
@@ -78,6 +78,13 @@ describe('the start checks', () => {
     version = '1200:2' // rewritten (converted again, say)
     expect(isAccepted(profile, accepted, stamp)).toBe(false)
     expect(firstBlock([profile], accepted, stamp)).toBe(profile)
+    // Re-run: the record keeps the version accepted then, so a file changed since is asked about again
+    version = '1000:1'
+    const record = acceptedOf([profile], accepted, stamp)
+    version = '1200:2'
+    expect(isAccepted(profile, new Set(acceptedKeys(record)), stamp)).toBe(false)
+    version = '1000:1'
+    expect(isAccepted(profile, new Set(acceptedKeys(record)), stamp)).toBe(true)
   })
 
   test('the advice shown (warn and info) is recorded with the search; blocks are not', () => {

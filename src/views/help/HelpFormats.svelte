@@ -25,22 +25,24 @@
       <tr>
         <td>Thermo raw</td><td><code>.raw</code></td>
         <td>Read directly (Orbitrap, Astral, ion trap), no conversion needed. Waters files, also called <code>.raw</code>, are
-          folders and are not read: convert them to mzML. Raw files are checked only after the search.</td>
+          folders and are not read: convert them to mzML. Raw files are not checked before the search (the design table says “not
+          checked”); ProSE's counts in the Overview tell about them after it.</td>
       </tr>
       <tr>
         <td>Bruker timsTOF</td><td><code>.d</code> folder</td>
         <td>timsTOF data (<code>analysis.tdf</code> inside). Drop the folder, or choose its <code>analysis.tdf</code> in the
-          Add files dialog. Other Bruker <code>.d</code> folders (without <code>analysis.tdf</code>) and Agilent <code>.d</code>
-          folders are not read: convert them to mzML.</td>
+          Add files dialog. The app adds any <code>.d</code> folder, but ProSE reads only timsTOF ones: other Bruker folders (without
+          <code>analysis.tdf</code>) and Agilent ones fail in the search. Convert them to mzML.</td>
       </tr>
       <tr>
         <td>mzPeak</td><td><code>.mzpeak</code></td>
-        <td>The Parquet-based successor of mzML (HUPO-PSI, in development): compact and fast to read.</td>
+        <td>The Parquet-based successor of mzML (HUPO-PSI, in development): compact and fast to read. Not checked before the search.</td>
       </tr>
       <tr>
         <td>Not read</td><td><code>.wiff</code>, <code>.mgf</code>, <code>.mzXML</code>, …</td>
-        <td>SCIEX, MGF peak lists and older formats: convert them to mzML with msconvert. DIA data can be read but is not
-          what ProSE searches: it is a DDA search engine.</td>
+        <td>SCIEX, MGF peak lists and older formats: convert them to mzML with msconvert. DIA data (SWATH, diaPASEF, MSe)
+          is not what ProSE searches, a DDA search engine: New search stops a DIA-looking mzML with a red flag. Search DIA with a DIA
+          tool such as DIA-NN or OpenSWATH.</td>
       </tr>
     </tbody>
   </table>

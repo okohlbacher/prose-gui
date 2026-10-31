@@ -12,8 +12,9 @@
 // stable id (`search/checks.ts`, `search/spectra.ts`, `search/database.ts`, `search/chemistry.ts`,
 // `results/diagnosis.ts`, `results/tolerance.ts`, `results/sanity.ts`, the input warnings of
 // `results/overview.ts`, the notes of `results/chemistry.ts` and the fractions note of `search/scope.ts`). `checks` lists the ids that should open an entry, and `faqFor(id)` finds it; an entry's
-// `id` is the element id of its section on the Help page (`openHelp`). The transient states `adding` and
-// `database-counting` (Start waits while files are added or the database is counted) have no entry.
+// `id` is the element id of its section on the Help page (`openHelp`). The transient states `adding`,
+// `database-counting` and `inspecting` (Start waits while files are added, the database is counted or the spectra of
+// mzML files are read) have no entry.
 //
 // What the entries must not claim (the reviews found these overclaims in drafts):
 // - The checks before Start read mzML (.mzML, .mzML.gz) files only, by their flags, from up to the first 1,000 MS2
@@ -180,7 +181,26 @@ export const FAQ: FaqEntry[] = [
       'Do not use the open-search preset on ion-trap MS2: its fragment tolerance is a high-resolution one.',
       'The check reads the analyzer from mzML files; for .raw and .d inputs check the method yourself.',
     ],
-    checks: ['iontrap-ppm'],
+    checks: ['iontrap-ppm', 'iontrap-precursor-ppm'],
+  },
+  {
+    id: 'faq-tolerance-implausible',
+    group: 'few-ids',
+    question: 'Why does New search question my mass tolerances?',
+    symptoms:
+      'An amber notice before Start about the precursor or fragment tolerance: wider or narrower than any instrument needs, in Da on high-resolution spectra (“did you mean ppm?”), with a button such as “Use 20 ppm” or “Use 10 ppm”.',
+    causes: [
+      'A fragment tolerance above 1 Da matches almost any peak; one below 1 ppm is narrower than any instrument measures fragments.',
+      'A fragment tolerance in Da while the MS2 spectra are high resolution (Orbitrap, Astral, TOF): wrong peaks match too.',
+      'A precursor tolerance of 2 to 20 Da on high-resolution MS1: most likely ppm was meant, and the unit button was clicked (it keeps the number).',
+      'A precursor tolerance of 0.1 to under 2 Da on high-resolution MS1: wider than needed.',
+    ],
+    fixes: [
+      'Use the notice’s button, or set the tolerances of the instrument: about 10–20 ppm for high-resolution MS1, 20 ppm for high-resolution MS2, 0.5 Da for ion-trap MS2, 1–2 Da for the precursor of a stand-alone ion trap.',
+      'An open search uses a precursor window of hundreds of Da on purpose: choose the open-search preset, which New search does not question.',
+      'The checks read the analyzers of mzML files. For .raw, .d and mzPeak inputs only the plain range checks (above 1 Da, below 1 ppm) apply: check the units yourself.',
+    ],
+    checks: ['fragment-tolerance-wide', 'fragment-tolerance-narrow', 'fragment-da-highres', 'precursor-da-typo', 'precursor-da-wide'],
   },
   {
     id: 'faq-charge-states',
@@ -233,7 +253,7 @@ export const FAQ: FaqEntry[] = [
       'A modification name that ProSE does not know: a typo, an old name, or a modification that is not in its list (UniMod names, with the site in brackets).',
     ],
     fixes: [
-      'Correct the value the message names, in Search settings or in the “All parameters” dialog.',
+      'Correct the value the message names, in Search settings or in the “All … parameters” dialog.',
       'Set the PSM FDR to 1 %, the usual choice. Switching the decoys off to get past this leaves the search without any FDR.',
       'Choose the modification from the list, with the right site: “N-term” is the peptide N-terminus, “Protein N-term” the protein’s.',
     ],
@@ -295,7 +315,7 @@ export const FAQ: FaqEntry[] = [
       'Convert again from the vendor file with peak picking as the first filter for all MS levels: msconvert input.raw --mzML --filter "peakPicking vendor msLevel=1-"',
       'For an mzML that is already converted, vendor peak picking is no longer possible: convert again from the raw file with vendor peak picking where you can. For high-resolution (Orbitrap, TOF) profile mzML, OpenMS PeakPickerHiRes is an option; low-resolution or ion-mobility data need a workflow made for them.',
       'If the original Thermo .raw or Bruker timsTOF .d is at hand, add it instead and compare.',
-      'Add the new file and check that New search no longer flags it. “Search anyway” does not centroid anything: it searches the profile spectra as they are, and is remembered for that file on this computer.',
+      'Add the new file and check that New search no longer flags it. “Search anyway” does not centroid anything: it searches the profile spectra as they are, and is remembered on this computer for this version of the file (its size and modification time): a file that changes is checked again.',
     ],
     checks: ['profile-ms2', 'profile'],
     outside: 'Filter chains and vendor-specific options of msconvert are documented by ProteoWizard (proteowizard.sourceforge.io).',
@@ -330,7 +350,8 @@ export const FAQ: FaqEntry[] = [
     fixes: [
       'Check the acquisition method. ProSE searches DDA spectra, one precursor at a time.',
       'For DIA data use a DIA tool; do not report a ProSE result of DIA data as a DIA analysis.',
-      'For PRM, continue: the warning does not stop the search.',
+      'For PRM, click “Search anyway”: the red flag then lets this version of the file through on this computer.',
+      'The check reads the first 1,000 MS2 spectra of an mzML file (from at least 50): DIA is suspected when they have few distinct isolation centres, when half of them or more share an isolation target with at least two others, or when the windows are 4 m/z or wider and most spectra have no precursor charge. .raw, .d and mzPeak files are not checked.',
       'For timsTOF data, ddaPASEF is DDA and searchable; diaPASEF is DIA.',
     ],
     checks: ['dia-suspected'],
@@ -351,9 +372,10 @@ export const FAQ: FaqEntry[] = [
       'Prefer the original Thermo .raw or Bruker timsTOF .d where you have it: that avoids what an extra conversion step can lose. Do not convert timsTOF .d files to mzML for a DDA search.',
       'For other vendors convert with a current msconvert, peakPicking first: msconvert input --mzML --filter "peakPicking vendor msLevel=1-". Keep 64-bit m/z precision.',
       'Compare the line “MS2 spectra by their flags” of the Spectra card (centroid or profile, activation, analyzer; a file that differs from the others is marked in its Spectra column) with the acquisition method.',
-      'For verified ETD-type data without activation information, set ions:add_c_ions and ions:add_zp1_ions in the “All parameters” dialog.',
+      'For verified ETD-type data without activation information, set ions:add_c_ions and ions:add_zp1_ions in the “All … parameters” dialog.',
+      'New search checks mzML files only, from their first 1,000 MS2 spectra (within the first 64 MiB). The design table says “not checked” for .raw, .d and mzPeak files, and for an mzML it could not read; their profile spectra, missing MS2 and charges show only in Overview after the search. To check a vendor file before a long search, convert one run to mzML and add it.',
     ],
-    checks: [],
+    checks: ['spectra-not-checked', 'spectra-not-read'],
     outside: 'Vendor reader installation, Waters lockmass and SCIEX .wiff/.wiff2 options are covered by ProteoWizard and the vendors; prose-gui only checks the result.',
   },
 
@@ -426,7 +448,7 @@ export const FAQ: FaqEntry[] = [
     causes: [
       'Decoys switched off (“None (no FDR)”): the search then has no FDR at all.',
       'The database’s decoys carry a marker the search did not recognise, so they were treated as targets.',
-      'A database with far fewer or far more decoys than targets: “Use the database’s, else generate” reuses a database’s decoys only at 0.5 to 2 per target and refuses others.',
+      'A database with far fewer or far more decoys than targets: “Use the database’s, else generate” reuses a database’s decoys only at 0.5 to 2 per target. ProSE refuses others, so New search stops Start for them; click “Generate decoys” there.',
       'A file marked “no FDR” in Overview › Files: its PSM FDR was not applied, so its PSMs have no q-value. The current ProSE applies a conservative estimate (1 / T for T target PSMs) even when no PSM of a file matched a decoy; a result of an earlier ProSE can show “no FDR” for such a file.',
     ],
     fixes: [
@@ -435,7 +457,7 @@ export const FAQ: FaqEntry[] = [
       'When all q-values of a file are 0, check before you trust its FDR. Without Percolator a short list can give this legitimately (ProSE’s q-values are then decoys ÷ targets, 0 above the best decoy). Otherwise look at the decoy count of the database summary; if the decoys were not recognised, use a target-only FASTA and let ProSE generate the decoys, then search again.',
       'Never report the results of a search without decoys, or of a file marked “no FDR”, as FDR-controlled.',
     ],
-    checks: ['decoys-twice', 'no-decoys', 'all-q-zero'],
+    checks: ['decoys-twice', 'decoy-ratio', 'no-decoys', 'all-q-zero'],
   },
   {
     id: 'faq-fdr-levels',
@@ -576,7 +598,7 @@ export const FAQ: FaqEntry[] = [
     symptoms: 'New search says ProSE cannot be run; or a search takes very long, fails with a memory error, or the computer becomes unresponsive.',
     causes: [
       'The ProSE tool of the app is missing or replaced (PROSE_BIN set to a file that does not exist).',
-      'A search space that is too large: many variable modifications (each is tried on and off; beyond about four, a search gets much slower and often less sensitive), an unspecific enzyme, wide peptide length and charge ranges.',
+      'A search space that is too large: many variable modifications (each is tried on and off; from four on, a search gets much slower and often less sensitive, and New search says so), an unspecific enzyme, wide peptide length and charge ranges.',
       'A very large or redundant database.',
       'Many large files at once, or other programs using the memory.',
     ],
@@ -587,7 +609,7 @@ export const FAQ: FaqEntry[] = [
       'Lower Threads when other work needs the computer; test one complete file before the whole experiment.',
       'Do not shrink the database or relax the FDR to make an infeasible search fit.',
     ],
-    checks: ['tool'],
+    checks: ['tool', 'many-variable-mods'],
   },
   {
     id: 'faq-reproduce',

@@ -8,7 +8,7 @@ import type { Check } from './checks'
 /**
  * DIA is suspected when the MS2 spectra read have at most this many distinct isolation centres per spectrum: DDA
  * picks a new precursor almost every time, DIA cycles through a fixed set of windows. PRM repeats too and is fine
- * to search, so this only warns (paper review: centres per MS2, not the window width, which misreads wide-window
+ * to search, so this is a red flag the user can override (paper review: centres per MS2, not the window width, which misreads wide-window
  * DDA and misses narrow-window DIA).
  */
 export const DIA_CENTRES_PER_MS2 = 0.25
@@ -143,7 +143,7 @@ export function spectraChecks(rows: { path: string; name: string; facts: Spectra
   const unchecked = rows.filter((r) => r.facts === null)
   const vendor = unchecked.filter((r) => !inspectable(r.name))
   const failed = unchecked.filter((r) => inspectable(r.name))
-  const notChecked = 'profile spectra, missing MS2 spectra, DIA and missing charges are not checked before the search: look at the Overview of the result.'
+  const notChecked = 'profile spectra, missing MS2 spectra and DIA are not checked before the search; the Overview of the result reports profile spectra, missing MS2 spectra and charges outside the range, but not DIA.'
   if (vendor.length > 0) {
     out.push({
       id: 'spectra-not-checked',

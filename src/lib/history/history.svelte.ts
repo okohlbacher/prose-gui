@@ -21,6 +21,7 @@ import {
   openFinished,
   openResult,
   openStoredResult,
+  searchRun,
   type EndedSearch,
   type OpenResult,
 } from '../search/session.svelte'
@@ -325,16 +326,24 @@ export async function reopenInNewSearch(id: string, start: boolean, changes: Rec
     settings: { ...record.settings, parameters: { ...parametersToSearchAgain(record.settings.parameters, record.psmFdr), ...changes } },
   })
   // the red flags searched anyway then are not asked again (they are recorded per file: `checks.ts`)
-  if (record.accepted) searchPlan.accepted = new Set([...searchPlan.accepted, ...acceptedKeys(record.accepted, searchPlan.stamp)])
+  if (record.accepted) searchPlan.accepted = new Set([...searchPlan.accepted, ...acceptedKeys(record.accepted)])
   if (record.sdrf) searchForm.notices.push(`“${record.name}” was searched with the SDRF ${record.sdrf.name}. Add it again (Add files…) to search with its metadata.`)
   if (!start) return false
   // Re-run starts only the same search: every file and the database found, no SDRF to load again
   if (!complete || record.sdrf) {
-    searchForm.notices.push('Re-run did not start: check the files and the database above, then start the search.')
+    searchForm.notices.push(
+      !complete ? 'Re-run did not start: check the files and the database above, then start the search.' : 'Re-run did not start: add the SDRF again, then start the search.',
+    )
     return false
   }
-  // (the proteins of the database are counted and the spectra checked in the background: start once the form allows it)
-  for (let tries = 0; tries < 600 && !searchPlan.canStart; tries++) await new Promise((r) => setTimeout(r, 100))
+  // (the proteins of the database are counted and the spectra checked in the background: start once the form allows
+  // it, and only the search restored: an edit meanwhile, or a search started by hand, ends the wait)
+  const restored = () => JSON.stringify([searchForm.files.map((r) => r.file.path), searchForm.database?.file.path, searchForm.values])
+  const asRestored = restored()
+  for (let tries = 0; tries < 600 && !searchPlan.canStart; tries++) {
+    await new Promise((r) => setTimeout(r, 100))
+    if (searchRun.status === 'running' || restored() !== asRestored) return false
+  }
   if (!searchPlan.canStart) {
     searchForm.notices.push('Re-run did not start: the form is not ready; see above.')
     return false
@@ -349,8 +358,15 @@ export async function reopenInNewSearch(id: string, start: boolean, changes: Rec
  * holds them; else the search is opened there from History. The user starts it.
  */
 export async function rerunWith(result: OpenResult, changes: Record<string, unknown>): Promise<void> {
-  if (canSearchAgain(result)) searchAgain(result, changes)
-  else await reopenInNewSearch(result.id, false, changes)
+  try {
+    if (canSearchAgain(result)) searchAgain(result, changes)
+    else await reopenInNewSearch(result.id, false, changes)
+  } catch (e) {
+    // (the search's record cannot be read: say so in New search rather than doing nothing)
+    navigate({ view: 'search' })
+    searchForm.notices.push(`“${nameOf(result)}” could not be opened in New search (${errorText(e)}). Add its files again to re-run it.`)
+    return
+  }
   searchForm.markGuided(nameOf(result), result.settings.parameters, changes)
 }
 

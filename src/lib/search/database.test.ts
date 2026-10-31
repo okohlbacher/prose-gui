@@ -34,11 +34,12 @@ describe('the database', () => {
     expect(databaseChecks(summary({ decoys: 20000, decoyMarker: 'DECOY_…' }), 'auto', [], () => {})).toEqual([])
   })
 
-  test('a few decoys for many targets under auto: a red flag with Generate as the fix; one per target passes', () => {
+  test('a few decoys for many targets under auto: a block (ProSE refuses it) with Generate as the fix; one per target passes', () => {
     let set = ''
     const db = (proteins: number) => ({ path: '/db/x.fasta', proteins })
     const [c] = databaseChecks(summary({ decoys: 3, decoyMarker: 'DECOY_…' }), 'auto', [], (v) => (set = v), db(20003))
-    expect(c).toMatchObject({ id: 'decoy-ratio', level: 'block', overridable: true, files: ['/db/x.fasta'] })
+    expect(c).toMatchObject({ id: 'decoy-ratio', level: 'block', files: ['/db/x.fasta'] })
+    expect(c.overridable).toBeUndefined()
     expect(c.message).toMatch(/^The database has 3 decoys \(marked DECOY_…\) for 20,000 targets/)
     c.action!.run()
     expect(set).toBe('generate')

@@ -63,14 +63,14 @@ export function databaseChecks(
     if (ratio < DECOY_RATIO.min || ratio > DECOY_RATIO.max) {
       const n = (x: number) => x.toLocaleString('en-US')
       out.push({
+        // (no red flag: ProSE refuses such a database under 'auto', so searching it anyway would only fail)
         id: 'decoy-ratio',
         level: 'block',
-        overridable: true,
         source: 'database',
         files: [database!.path],
         message:
-          `The database has ${n(s.decoys)} ${s.decoys === 1 ? 'decoy' : 'decoys'} (marked ${s.decoyMarker}) for ${n(targets)} targets, and the setting uses them as they are. ` +
-          'A target-decoy FDR needs about one decoy per target, so this one would not be what it says. Let ProSE generate the decoys, or choose a database with one decoy per target.',
+          `The database has ${n(s.decoys)} ${s.decoys === 1 ? 'decoy' : 'decoys'} (marked ${s.decoyMarker}) for ${n(targets)} targets. ` +
+          'A target-decoy FDR needs about one decoy per target, so ProSE does not use these. Let ProSE generate the decoys, or choose a database with one decoy per target.',
         action: { label: 'Generate decoys', run: () => setDecoys('generate') },
       })
     }
