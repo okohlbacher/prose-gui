@@ -6,6 +6,13 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /** The example's run and FASTA, as the app bundles them (src-tauri/resources/example). */
+/**
+ * The PSMs ProSE finds in one copy of the example's run at its settings (2 % PSM FDR), and in the example (two copies):
+ * a property of the engine at native/OPENMS_COMMIT (598017b1; the develop pin before it, 31e6d9da, found 77), to
+ * update with the pin.
+ */
+export const EXAMPLE_RUN_PSMS = 66
+export const EXAMPLE_PSMS = String(2 * EXAMPLE_RUN_PSMS)
 export const EXAMPLE_DIR = resolve(fileURLToPath(new URL('../src-tauri/resources/example', import.meta.url)))
 export const EXAMPLE_MZML = join(EXAMPLE_DIR, 'Ecoli_MS2_small.mzML')
 export const EXAMPLE_FASTA = join(EXAMPLE_DIR, 'Ecoli_K12_proteome.fasta')

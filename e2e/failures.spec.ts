@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 import {
   appReady,
   clearSearches,
+  EXAMPLE_RUN_PSMS,
   goTo,
   LONG_SEARCH_FILES,
   proseProcesses,
@@ -45,8 +46,8 @@ async function nextSearchRuns() {
   await startReady(20000)
   await $('button*=Start search').click()
   await waitForResults()
-  // each copy of the example's run has the example's 77 PSMs
-  await expect($('[data-testid="psm-count"]')).toHaveText(expect.stringContaining((77 * LONG_SEARCH_FILES).toLocaleString('en-US')))
+  // each copy of the example's run has its PSMs (EXAMPLE_RUN_PSMS)
+  await expect($('[data-testid="psm-count"]')).toHaveText(expect.stringContaining((EXAMPLE_RUN_PSMS * LONG_SEARCH_FILES).toLocaleString('en-US')))
   expect(searchFolders().finished).toHaveLength(1)
   expect(searchFolders().partial).toEqual([])
 }

@@ -14,6 +14,7 @@ import {
   dropFiles,
   EXAMPLE_FASTA as FASTA,
   EXAMPLE_MZML as MZML,
+  EXAMPLE_PSMS,
   exampleSettings,
   goTo,
   searchFolders,
@@ -134,7 +135,7 @@ describe('inputs by path', () => {
     const count = $('[data-testid="psm-count"]')
     await count.waitForDisplayed({ timeout: 20000 })
     // two copies of the run give what the example's two names give
-    await expect(count).toHaveText(expect.stringContaining('154'))
+    await expect(count).toHaveText(expect.stringContaining(EXAMPLE_PSMS))
     expect(await textOf('[data-testid="result-chip"]')).toContain('2 files')
   })
 })
