@@ -460,7 +460,7 @@ describe('the footer', () => {
     await settle()
     form.files[0].spectraFacts = {
       peakPicking: false, analyzers: [], levels: { '2': 10 }, complete: true, ms2Centroid: 0, ms2Profile: 10,
-      ms2WithCharge: 10, ms2WithPrecursor: 10, activation: {}, isolationCentres: 10, isolationWidth: 2, ms2Analyzer: {}, filter: null,
+      ms2WithCharge: 10, ms2WithPrecursor: 10, activation: {}, isolationCentres: 10, isolationWidth: 2, ms2RepeatedTarget: 0, ms2Analyzer: {}, filter: null,
     }
     expect(searchPlan.blocking).toMatchObject({ id: 'profile-ms2', overridable: true })
     expect(searchPlan.problem).toMatch(/^p\.mzML: the MS2 spectra are flagged as profile/)

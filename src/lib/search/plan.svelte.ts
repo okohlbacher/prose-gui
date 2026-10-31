@@ -18,7 +18,8 @@ import { toolState } from './tool.svelte'
 import { ms2Analyzer, spectraChecks } from './spectra'
 import { databaseChecks, sdrfOrganisms } from './database'
 import { sdrfChemistryChecks } from './chemistry'
-import { accept, acceptedOf, firstBlock, ION_TRAP_FRAGMENT_DA, ionTrapPpm, loadAccepted, startChecks, withoutExpected, type Check } from './checks'
+import { accept, acceptedOf, firstBlock, ION_TRAP_FRAGMENT_DA, ionTrapPpm, loadAccepted, startChecks, warnedOf, withoutExpected, type Check, type Stamp } from './checks'
+import { plausibilityChecks } from './plausibility'
 
 /** The FDR parameters, which a search without decoys does not send (src-tauri/src/args.rs `FDR_PARAMETERS`). */
 export const FDR_PARAMETERS = ['FDR:PSM', 'FDR:protein', 'FDR:protein_inference_PSM'] as const
@@ -52,6 +53,11 @@ function adviceChecks(): Check[] {
         form.setParam('fragment:mass_tolerance_unit', 'Da')
       },
     ),
+    ...plausibilityChecks({
+      values: form.values,
+      files: form.files.map((r) => ({ path: r.file.path, name: r.file.name, instrument: /NT=([^;]*)/.exec(r.instrument ?? '')?.[1] ?? null, facts: r.spectraFacts })),
+      set: (name, value) => form.setParam(name, value),
+    }),
   ]
   return out.filter((c): c is Check => c !== null)
 }
@@ -150,17 +156,26 @@ class SearchPlan {
   checks = $derived([...this.startChecks, ...this.advice])
 
   /** The first check that stops Start; a red flag (`overridable`) can be searched anyway. */
-  blocking = $derived(firstBlock(this.checks, this.accepted))
+  /** The version of an input file or the database (size and modification time) an accepted red flag holds for. */
+  stamp: Stamp = (path) => {
+    const f = form.files.find((r) => r.file.path === path) ?? (form.database?.file.path === path ? form.database : null)
+    return f ? `${f.file.size}:${f.modified ?? ''}` : ''
+  }
+
+  blocking = $derived(firstBlock(this.checks, this.accepted, this.stamp))
 
   /** Why the search cannot start yet. */
   problem = $derived(this.blocking?.message ?? null)
 
   /** The red flags the user accepted for this search's files (recorded with the search). */
-  acceptedChecks = $derived(acceptedOf(this.checks, this.accepted))
+  acceptedChecks = $derived(acceptedOf(this.checks, this.accepted, this.stamp))
+
+  /** The advice shown (warn and info), recorded with the search and listed in its Overview. */
+  warnedChecks = $derived(warnedOf(this.advice))
 
   /** "Search anyway" of the red flag that stops Start: accepted for its files, on this computer. */
   searchAnyway() {
-    if (this.blocking?.overridable) this.accepted = accept(this.blocking, this.accepted)
+    if (this.blocking?.overridable) this.accepted = accept(this.blocking, this.accepted, undefined, this.stamp)
   }
 
   /** The problem is shown in the footer (with files; without, the plan line says "No spectra yet"). */
@@ -205,6 +220,7 @@ export async function startSearch(): Promise<void> {
     design: $state.snapshot(form.design),
     ...(sdrfSession.table ? { sdrf: { name: sdrfSession.name, text: sdrfSession.text() } } : {}),
     ...(searchPlan.acceptedChecks.length > 0 ? { accepted: $state.snapshot(searchPlan.acceptedChecks) } : {}),
+    ...(searchPlan.warnedChecks.length > 0 ? { warned: $state.snapshot(searchPlan.warnedChecks) } : {}),
     spectra: Object.fromEntries(form.files.filter((r) => r.spectra !== null).map((r) => [r.file.name, r.spectra!])),
     instruments: Object.fromEntries(form.files.filter((r) => r.instrument).map((r) => [r.file.name, r.instrument!])),
     // no FDR (a search without decoys; the protein FDR off, 0): no cutoff, every PSM or protein counts (the results'

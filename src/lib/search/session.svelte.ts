@@ -43,6 +43,8 @@ export type OpenResult = {
   spectra?: Record<string, number>
   /** The red flags of New search the user searched anyway (profile spectra, ...): `checks.ts`. */
   accepted?: AcceptedCheck[]
+  /** The advice New search showed (warn and info: DIA, ion trap in ppm, SDRF modifications, ...), kept with the search. */
+  warned?: AcceptedCheck[]
   /** Set for a result opened from History or a project file: its name there and who made it. */
   stored?: { name: string; appVersion: string; moduleVersion: string }
   settings: {

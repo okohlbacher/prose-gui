@@ -90,6 +90,8 @@ export type SearchRecord = {
   spectra?: Record<string, number>
   /** The red flags of New search the user searched anyway (schema 2 on); absent: none. */
   accepted?: AcceptedCheck[]
+  /** The advice New search showed before the search (warn and info); absent: none, or an older record. */
+  warned?: AcceptedCheck[]
 }
 
 /**
@@ -215,6 +217,7 @@ export function endedRecordOf(search: EndedSearch, name: string, toolVersion: st
     ...(search.sdrf ? { sdrf: { name: search.sdrf.name, text: withoutLocalPaths(search.sdrf.text) } } : {}),
     ...(search.instruments ? { instruments: search.instruments } : {}),
     ...(search.accepted ? { accepted: search.accepted } : {}),
+    ...(search.warned ? { warned: search.warned } : {}),
     ...(search.spectra ? { spectra: search.spectra } : {}),
   }
 }
@@ -265,9 +268,9 @@ export function parseRecord(text: string, kind: 'project' | 'search' = 'search')
   const sdrf = value.sdrf
   if (sdrf !== undefined && (!isObject(sdrf) || typeof sdrf.name !== 'string' || typeof sdrf.text !== 'string')) throw bad('sdrf is broken')
   const accepted = value.accepted
-  if (accepted !== undefined && !(Array.isArray(accepted) && accepted.every((a) => isObject(a) && typeof a.id === 'string' && Array.isArray(a.files)))) {
-    throw bad('accepted is broken')
-  }
+  const checkList = (v: unknown) => v === undefined || (Array.isArray(v) && v.every((a) => isObject(a) && typeof a.id === 'string' && Array.isArray(a.files)))
+  if (!checkList(accepted)) throw bad('accepted is broken')
+  if (!checkList(value.warned)) throw bad('warned is broken')
   return value as unknown as SearchRecord
 }
 
@@ -281,6 +284,7 @@ export function resultFromRecord(record: SearchRecord, outcome: OpenResult['outc
     ...(record.sdrf ? { sdrf: record.sdrf } : {}),
     ...(record.instruments ? { instruments: record.instruments } : {}),
     ...(record.accepted ? { accepted: record.accepted } : {}),
+    ...(record.warned ? { warned: record.warned } : {}),
     ...(record.spectra ? { spectra: record.spectra } : {}),
     psmFdr: record.psmFdr,
     proteinFdr: record.proteinFdr,

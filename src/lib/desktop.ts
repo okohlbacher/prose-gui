@@ -43,6 +43,8 @@ export type SpectraFacts = {
   activation: Record<string, number>
   isolationCentres: number
   isolationWidth: number | null
+  /** MS2 spectra read whose isolation target occurs at least 3 times (DIA cycles through the same windows). */
+  ms2RepeatedTarget: number
   ms2Analyzer: Record<string, number>
   filter: string | null
 }
@@ -59,6 +61,8 @@ export type FileFacts = InputFile & {
   residues: number | null
   /** Why the file cannot be used (missing, unreadable). */
   error: string | null
+  /** The last modification (ms since 1970; null: not known): with the size, what an accepted red flag holds for. */
+  modified?: number | null
   /**
    * Why ProSE cannot search the file, which is there (src-tauri/src/content.rs): an mzML that is not one, is cut off
    * or has no spectra; a FASTA without entries, with an accession twice, a protein too long. Sentences, the file named.

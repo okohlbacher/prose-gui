@@ -100,6 +100,14 @@ describe('the record', () => {
     expect(() => parseRecord(JSON.stringify({ ...v2, accepted: [{ id: 3 }] }))).toThrow(/accepted is broken/)
   })
 
+  test('the advice New search gave is kept with the search and comes back with its result', () => {
+    const warned = [{ id: 'iontrap-ppm', files: ['/r/a.mzML'], message: 'Ion trap.' }]
+    const record = recordOf({ ...result, warned }, 'x', '1')
+    expect(resultFromRecord(parseRecord(JSON.stringify(record)), result.outcome).warned).toEqual(warned)
+    expect(recordOf(result, 'x', '1')).not.toHaveProperty('warned')
+    expect(() => parseRecord(JSON.stringify({ ...record, warned: 'x' }))).toThrow(/warned is broken/)
+  })
+
   test('a newer schema is refused with a message', () => {
     const newer = JSON.stringify({ ...recordOf(result, 'x', '1'), schema: 3 })
     expect(() => parseRecord(newer)).toThrow(ProjectVersionError)

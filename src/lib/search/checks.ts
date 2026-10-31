@@ -4,10 +4,10 @@
 // diagnosis of a result read them from here, so that one problem is worded once.
 //
 // Levels: `block` stops Start (a file ProSE cannot read, no database, a setting ProSE refuses); a red flag is
-// a block the user may override ("Search anyway": profile MS2 spectra, no MS2 spectra), remembered per file on
-// this computer and recorded with the search; `warn` and `info` never stop it. A preset can mark checks as
-// expected (`Preset.expected`): an ion-trap preset expects low identification rates, an immunopeptidomics one
-// a non-specific digest; those checks are then left out.
+// a block the user may override ("Search anyway": profile MS2 spectra, no MS2 spectra, DIA), remembered per file
+// and version of it (size and modification time) on this computer and recorded with the search; `warn` and `info`
+// never stop it and are recorded with the search too. A preset can mark checks as expected (`Preset.expected`): an
+// open search expects a wide precursor window; those checks are then left out.
 
 /** How much a check holds the search up. */
 export type CheckLevel = 'block' | 'warn' | 'info'
@@ -94,14 +94,21 @@ export function startChecks(s: StartState): Check[] {
   return out
 }
 
-/** The key of an accepted red flag for one file. */
-const keyOf = (id: string, path: string) => `${id}\u0000${path}`
+/**
+ * What identifies the version of a file an accepted red flag holds for: its size and modification time
+ * (`FileRow.modified`), so that a file that changed is checked again. '' where not known.
+ */
+export type Stamp = (path: string) => string
+const noStamp: Stamp = () => ''
+
+/** The key of an accepted red flag for one file (in this version). */
+const keyOf = (id: string, path: string, stamp: Stamp) => `${id}\u0000${path}\u0000${stamp(path)}`
 
 /** A red flag the user accepted for every file it is about. */
-export function isAccepted(check: Check, accepted: ReadonlySet<string>): boolean {
+export function isAccepted(check: Check, accepted: ReadonlySet<string>, stamp: Stamp = noStamp): boolean {
   if (!check.overridable) return false
   const files = check.files ?? []
-  return files.length > 0 ? files.every((p) => accepted.has(keyOf(check.id, p))) : accepted.has(keyOf(check.id, ''))
+  return files.length > 0 ? files.every((p) => accepted.has(keyOf(check.id, p, stamp))) : accepted.has(keyOf(check.id, '', stamp))
 }
 
 /** The checks without those the preset expects (`Preset.expected`); a block that is not a red flag always stays. */
@@ -112,14 +119,20 @@ export function withoutExpected(checks: Check[], expected: readonly string[] = [
 }
 
 /** The first check that stops Start (a red flag the user accepted does not). */
-export function firstBlock(checks: Check[], accepted: ReadonlySet<string>): Check | null {
-  return checks.find((c) => c.level === 'block' && !isAccepted(c, accepted)) ?? null
+export function firstBlock(checks: Check[], accepted: ReadonlySet<string>, stamp: Stamp = noStamp): Check | null {
+  return checks.find((c) => c.level === 'block' && !isAccepted(c, accepted, stamp)) ?? null
 }
 
 /** The red flags of `checks` the user accepted, as the search's record keeps them. */
-export function acceptedOf(checks: Check[], accepted: ReadonlySet<string>): AcceptedCheck[] {
-  return checks.filter((c) => isAccepted(c, accepted)).map((c) => ({ id: c.id, files: c.files ?? [], message: c.message }))
+export function acceptedOf(checks: Check[], accepted: ReadonlySet<string>, stamp: Stamp = noStamp): AcceptedCheck[] {
+  return checks.filter((c) => isAccepted(c, accepted, stamp)).map(recorded)
 }
+
+/** A check as a search's record keeps it (its id, files and sentence; no action). */
+export const recorded = (c: Check): AcceptedCheck => ({ id: c.id, files: c.files ?? [], message: c.message })
+
+/** The advice New search showed (warn and info), as the search's record keeps it (search.json `warned`). */
+export const warnedOf = (checks: Check[]): AcceptedCheck[] => checks.filter((c) => c.level !== 'block').map(recorded)
 
 /** What the accepted red flags need of localStorage (an in-memory one in the tests). */
 export type AcceptedStorage = Pick<Storage, 'getItem' | 'setItem'>
@@ -146,10 +159,10 @@ export function loadAccepted(storage: AcceptedStorage | null = appStorage()): Se
 }
 
 /** `accepted` with the red flag `check` accepted for its files, kept in `storage`. */
-export function accept(check: Check, accepted: ReadonlySet<string>, storage: AcceptedStorage | null = appStorage()): Set<string> {
+export function accept(check: Check, accepted: ReadonlySet<string>, storage: AcceptedStorage | null = appStorage(), stamp: Stamp = noStamp): Set<string> {
   const next = new Set(accepted)
   const files = check.files ?? []
-  for (const p of files.length > 0 ? files : ['']) next.add(keyOf(check.id, p))
+  for (const p of files.length > 0 ? files : ['']) next.add(keyOf(check.id, p, stamp))
   try {
     storage?.setItem(ACCEPTED_KEY, JSON.stringify([...next]))
   } catch {
@@ -159,8 +172,8 @@ export function accept(check: Check, accepted: ReadonlySet<string>, storage: Acc
 }
 
 /** The accepted red flags of a saved search (its record), for New search when the search is opened there again. */
-export function acceptedKeys(list: AcceptedCheck[]): string[] {
-  return list.flatMap((a) => (a.files.length > 0 ? a.files : ['']).map((p) => keyOf(a.id, p)))
+export function acceptedKeys(list: AcceptedCheck[], stamp: Stamp = noStamp): string[] {
+  return list.flatMap((a) => (a.files.length > 0 ? a.files : ['']).map((p) => keyOf(a.id, p, stamp)))
 }
 
 /**

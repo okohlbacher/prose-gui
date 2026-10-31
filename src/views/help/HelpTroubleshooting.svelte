@@ -44,12 +44,14 @@
   <ul class="prose-list">
     <li><b>Red</b> (in the line beside Start): the search cannot start until it is fixed.</li>
     <li>
-      Some red flags (profile spectra, no MS2 spectra) offer <b>Search anyway</b>: it searches the files as they are, changes nothing
-      in them, is remembered for those files on this computer, and is recorded with the search and in its methods text.
+      Some red flags (profile spectra, no MS2 spectra, DIA data, a database with far more or fewer decoys than targets) offer
+      <b>Search anyway</b>: it searches the files as they are, changes nothing in them, is remembered for those files on this computer
+      until a file changes, and is recorded with the search and in its methods text.
     </li>
-    <li><b>Amber</b> notices are advice: the search can start, and after it the Overview cards say what may have gone wrong.</li>
+    <li><b>Amber</b> notices are advice: the search can start, and they are kept with it: the Overview of the result lists them under
+      Checks of the search, beside what the cards found after it.</li>
     <li>
-      Before Start, the app reads the flags of up to the first 200 MS2 spectra (within the first 64 MiB) of mzML files: whether
+      Before Start, the app reads the flags of up to the first 1,000 MS2 spectra (within the first 64 MiB) of mzML files: whether
       they are flagged centroid or profile, their charges, activation and isolation windows. It does not look at the peaks, so a
       mislabelled file passes. Thermo .raw, Bruker .d and mzPeak files are not inspected before Start; after the search ProSE
       reports for them only no MS2 spectra, profile spectra and charges outside the range, not the DIA, missing-charge or

@@ -14,12 +14,14 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::time::SystemTime;
 
-/// The MS2 spectra looked at: ProSE itself reads the first 8 MiB for activation terms; 200 spectra cover several
-/// duty cycles of a DDA or DIA method.
-pub const MAX_MS2: u64 = 200;
+/// The MS2 spectra looked at: ProSE itself reads the first 8 MiB for activation terms; 1,000 spectra cover two or
+/// more cycles of a DIA method with up to 300 windows (Astral narrow-window DIA), and many duty cycles of DDA.
+pub const MAX_MS2: u64 = 1000;
 /// The most bytes read (decompressed): a profile MS1 spectrum takes up to a MiB, so the first MS2 can sit several
 /// MiB into a file (the code review found 1 MiB too small).
 pub const MAX_BYTES: u64 = 64 << 20;
+/// An isolation target read this often counts as repeated.
+pub const REPEATED_TARGET: u64 = 3;
 
 /// What the inspector found in an mzML.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -45,6 +47,9 @@ pub struct SpectraFacts {
     /// Distinct isolation-window targets (m/z, to 0.01) among the MS2 spectra read, and the widest window (m/z).
     pub isolation_centres: u64,
     pub isolation_width: Option<f64>,
+    /// Of the MS2 spectra read: those whose isolation target occurs at least [`REPEATED_TARGET`] times (DIA cycles
+    /// through the same windows; DDA rarely picks the very same target m/z again).
+    pub ms2_repeated_target: u64,
     /// The MS2 analyzer from the filter strings ("ion trap" for ITMS, "orbitrap" for FTMS, "astral" for ASTMS),
     /// counted; empty without filter strings.
     pub ms2_analyzer: BTreeMap<String, u64>,
@@ -98,7 +103,7 @@ fn filter_analyzer(filter: &str) -> Option<&'static str> {
 }
 
 /// Adds one `<spectrum>` (its text without the binary data) to the facts.
-fn spectrum(text: &str, facts: &mut SpectraFacts, centres: &mut std::collections::HashSet<i64>) {
+fn spectrum(text: &str, facts: &mut SpectraFacts, centres: &mut HashMap<i64, u64>) {
     let mut level = 0u32;
     let (mut centroid, mut profile, mut charge, mut precursor) = (false, false, false, false);
     let mut target: Option<f64> = None;
@@ -127,7 +132,7 @@ fn spectrum(text: &str, facts: &mut SpectraFacts, centres: &mut std::collections
     facts.ms2_with_charge += u64::from(charge);
     facts.ms2_with_precursor += u64::from(precursor || target.is_some());
     if let Some(t) = target {
-        centres.insert((t * 100.0).round() as i64);
+        *centres.entry((t * 100.0).round() as i64).or_default() += 1;
         let width = lower + upper;
         if width > 0.0 && facts.isolation_width.is_none_or(|w| width > w) {
             facts.isolation_width = Some(width);
@@ -158,7 +163,7 @@ fn spectrum(text: &str, facts: &mut SpectraFacts, centres: &mut std::collections
 /// The facts of an mzML read from `reader` (decompressed), at most [`MAX_BYTES`] and [`MAX_MS2`] MS2 spectra.
 pub fn inspect_reader(reader: impl Read) -> io::Result<SpectraFacts> {
     let mut facts = SpectraFacts::default();
-    let mut centres = std::collections::HashSet::new();
+    let mut centres = HashMap::new();
     let mut reader = reader.take(MAX_BYTES);
     let mut buf: Vec<u8> = Vec::new();
     let mut chunk = vec![0u8; 1 << 20];
@@ -194,7 +199,7 @@ pub fn inspect_reader(reader: impl Read) -> io::Result<SpectraFacts> {
                 spectrum(body, &mut facts, &mut centres);
                 consumed += start + end + "</spectrum>".len();
                 if facts.levels.get(&2).copied().unwrap_or(0) >= MAX_MS2 {
-                    facts.isolation_centres = centres.len() as u64;
+                    count_centres(&mut facts, &centres);
                     return Ok(facts);
                 }
             }
@@ -206,8 +211,14 @@ pub fn inspect_reader(reader: impl Read) -> io::Result<SpectraFacts> {
             break;
         }
     }
-    facts.isolation_centres = centres.len() as u64;
+    count_centres(&mut facts, &centres);
     Ok(facts)
+}
+
+/// The distinct isolation targets, and the MS2 spectra of the repeated ones.
+fn count_centres(facts: &mut SpectraFacts, centres: &HashMap<i64, u64>) {
+    facts.isolation_centres = centres.len() as u64;
+    facts.ms2_repeated_target = centres.values().filter(|&&n| n >= REPEATED_TARGET).sum();
 }
 
 /// The facts of the mzML at `path` (`.mzML` or `.mzML.gz`); None for other files.
@@ -295,10 +306,10 @@ mod tests {
                  <binaryDataArrayList><binary>AAAA</binary></binaryDataArrayList></spectrum>"
             )
         };
-        let body: String = (0..300).map(|i| spectrum(i, 400.0 + 25.0 * (i % 24) as f64)).collect();
+        let body: String = (0..1200).map(|i| spectrum(i, 400.0 + 25.0 * (i % 24) as f64)).collect();
         let text = format!(
             "<mzML><dataProcessingList><cvParam accession=\"MS:1000035\" name=\"peak picking\"/></dataProcessingList>\
-             <spectrumList count=\"300\">{body}</spectrumList></mzML>"
+             <spectrumList count=\"1200\">{body}</spectrumList></mzML>"
         );
         let f = inspect_reader(text.as_bytes()).unwrap();
         assert!(f.peak_picking);
@@ -308,6 +319,7 @@ mod tests {
         assert_eq!(f.ms2_profile, MAX_MS2);
         assert_eq!(f.ms2_with_charge, 0);
         assert_eq!(f.isolation_centres, 24);
+        assert_eq!(f.ms2_repeated_target, MAX_MS2);
         assert_eq!(f.isolation_width, Some(25.0));
     }
 }

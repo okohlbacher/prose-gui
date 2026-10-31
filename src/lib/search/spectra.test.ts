@@ -16,6 +16,7 @@ const facts = (over: Partial<SpectraFacts> = {}): SpectraFacts => ({
   activation: { 'beam-type collision-induced dissociation': 200 },
   isolationCentres: 190,
   isolationWidth: 1.6,
+  ms2RepeatedTarget: 6,
   ms2Analyzer: { orbitrap: 200 },
   filter: 'FTMS + c NSI d Full ms2 500.00@hcd30.00',
   ...over,
@@ -38,7 +39,7 @@ describe('the spectra status', () => {
     expect(batchStatus([row('d', null)])).toBeNull()
   })
 
-  test('profile and no MS2 are red flags; repeated windows and missing charges only advice', () => {
+  test('profile, no MS2 and DIA are red flags; missing charges only advice', () => {
     const checks = spectraChecks([
       row('a', facts({ ms2Profile: 200, ms2Centroid: 0 })),
       row('b', facts({ levels: { '1': 100 }, complete: true })),
@@ -48,12 +49,24 @@ describe('the spectra status', () => {
     expect(checks.map((c) => [c.id, c.level, c.overridable ?? false, c.files])).toEqual([
       ['profile-ms2', 'block', true, ['/r/a']],
       ['no-ms2', 'block', true, ['/r/b']],
-      ['dia-suspected', 'warn', false, ['/r/c']],
+      ['dia-suspected', 'block', true, ['/r/c']],
       ['no-charge', 'info', false, ['/r/c']],
     ])
     // the start of a file without MS2 there is no proof of a file without MS2
     expect(spectraChecks([row('e', facts({ levels: { '1': 100 }, complete: false }))])).toEqual([])
   })
+  test('DIA by recurring isolation targets, however many windows, or by wide windows without charges; DDA passes', () => {
+    const dia = (f: SpectraFacts) => spectraChecks([row('x', f)]).some((c) => c.id === 'dia-suspected')
+    // 300 narrow Astral windows, read over three cycles: many distinct centres, but each recurs
+    expect(dia(facts({ levels: { '2': 1000 }, isolationCentres: 300, isolationWidth: 2, ms2RepeatedTarget: 900, ms2WithCharge: 1000, ms2WithPrecursor: 1000 }))).toBe(true)
+    // wide windows without precursor charges, before a full cycle is read
+    expect(dia(facts({ isolationCentres: 180, isolationWidth: 8, ms2WithCharge: 0 }))).toBe(true)
+    // DDA: new targets almost every time, a few picked again
+    expect(dia(facts())).toBe(false)
+    // wide-window DDA with charges is not DIA
+    expect(dia(facts({ isolationWidth: 8 }))).toBe(false)
+  })
+
   test('files New search does not look into, or could not read, are said to be not checked', () => {
     const checks = spectraChecks([row('a.raw', null), row('b.d', null), row('c.mzML', null), row('d.mzML', undefined), row('e.mzML', facts())])
     const by = (id: string) => checks.find((c) => c.id === id)

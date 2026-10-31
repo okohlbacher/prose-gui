@@ -25,6 +25,8 @@ export type FileRow = DesignFields & {
   /** What its first MS2 spectra say by their flags (`inspectSpectra`, read after the row joins); null: not an
    * mzML or not readable; undefined: not read yet. */
   spectraFacts?: SpectraFacts | null
+  /** The file's last modification (ms; null: not known): an accepted red flag holds for this version of it. */
+  modified?: number | null
 }
 
 /**
@@ -41,6 +43,8 @@ export type DatabaseChoice = {
   warnings: string[]
   /** Its entries in numbers (organisms, decoys, ...), once counted. */
   summary?: FastaSummary
+  /** Its last modification (ms; null: not known), as `FileRow.modified`. */
+  modified?: number | null
 }
 
 /** A cell of the design table whose text is not valid (`DesignCell`): the search cannot start until it is corrected. */
@@ -349,7 +353,7 @@ class SearchForm {
     const id = `f${++nextId}`
     const file: InputFile = { path: facts.path, name: facts.name, size: facts.size }
     const instrument = facts.instrument ? `NT=${facts.instrument.name};AC=${facts.instrument.accession}` : undefined
-    this.files.push({ id, file, spectra: facts.spectra, problem: facts.problem ?? null, instrument, ...fields })
+    this.files.push({ id, file, spectra: facts.spectra, problem: facts.problem ?? null, instrument, modified: facts.modified ?? null, ...fields })
     this.#queueInspect(facts.path)
   }
 
@@ -510,6 +514,7 @@ class SearchForm {
         error: null,
         problem: facts.problem ?? null,
         warnings: facts.warnings ?? [],
+        modified: facts.modified ?? null,
         ...(facts.fasta ? { summary: facts.fasta } : {}),
       }
   }

@@ -14,6 +14,14 @@ import type { Check } from './checks'
 export const DIA_CENTRES_PER_MS2 = 0.25
 /** At least this many MS2 spectra are needed to judge the isolation pattern. */
 export const DIA_MIN_MS2 = 50
+/**
+ * DIA is suspected as well when at least this share of the MS2 spectra read have an isolation target that recurs
+ * (3 times or more among up to 1,000 spectra): DIA cycles through its windows, however many (60 variable windows,
+ * 300 narrow Astral windows), while DDA rarely isolates the very same m/z again.
+ */
+export const DIA_REPEATED_SHARE = 0.5
+/** Or when the isolation windows are this wide (m/z) and most spectra have no precursor charge: wide-window DIA. */
+export const DIA_WIDE_WINDOW = 4
 /** MS2 spectra with a precursor charge below this share: charges were not recorded (timsTOF mzML converted the
  * wrong way, older ion-trap data); ProSE then tries every charge of the range, which costs time and FDR. */
 export const CHARGE_SHARE = 0.5
@@ -101,16 +109,24 @@ export function spectraChecks(rows: { path: string; name: string; facts: Spectra
       message: `${named(none)} ${none.length === 1 ? 'has' : 'have'} no MS2 spectra (MS1 only?): nothing in ${none.length === 1 ? 'it' : 'them'} can be searched.`,
     })
   }
-  const dia = pick((f) => ms2Of(f) >= DIA_MIN_MS2 && (f.isolationCentres <= DIA_CENTRES_PER_MS2 * ms2Of(f) || f.ms2WithPrecursor === 0))
+  const dia = pick((f) => {
+    const n = ms2Of(f)
+    if (n < DIA_MIN_MS2) return false
+    const fewCentres = f.isolationCentres <= DIA_CENTRES_PER_MS2 * n || f.ms2WithPrecursor === 0
+    const repeated = (f.ms2RepeatedTarget ?? 0) >= DIA_REPEATED_SHARE * n
+    const wide = (f.isolationWidth ?? 0) >= DIA_WIDE_WINDOW && f.ms2WithCharge < CHARGE_SHARE * n
+    return fewCentres || repeated || wide
+  })
   if (dia.length > 0) {
     out.push({
       id: 'dia-suspected',
-      level: 'warn',
+      level: 'block',
+      overridable: true,
       source: 'spectra',
       files: dia.map((r) => r.path),
       message:
-        `${named(dia)}: the MS2 spectra repeat a few isolation windows, as DIA does (or PRM). ProSE searches DDA spectra one precursor at a time; ` +
-        'DIA data need a DIA search engine.',
+        `${named(dia)}: the MS2 spectra cycle through the same isolation windows, as DIA does. ProSE searches DDA spectra one precursor at a time, ` +
+        'so DIA data identify few peptides here: search them with a DIA search engine. Targeted data (PRM) repeat their windows too and can be searched anyway.',
     })
   }
   const charge = pick((f) => ms2Of(f) > 0 && f.ms2WithCharge < CHARGE_SHARE * ms2Of(f))

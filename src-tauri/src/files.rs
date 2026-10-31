@@ -273,6 +273,9 @@ pub struct FileFacts {
     pub name: String,
     /// Bytes (0 with an error).
     pub size: u64,
+    /// The last modification, in milliseconds since 1970 (None: not known): with the size, what an accepted red
+    /// flag is kept for, so that a changed file is checked again.
+    pub modified: Option<u64>,
     /// The `count` of an mzML's `<spectrumList>` (all spectra; of a `.mzML.gz` decompressed); None if the
     /// header does not say.
     pub spectra: Option<u64>,
@@ -319,6 +322,7 @@ pub fn inspect(path: &str) -> FileFacts {
         path: path.to_string(),
         name: name.clone(),
         size: 0,
+        modified: None,
         spectra: None,
         proteins: None,
         residues: None,
@@ -353,6 +357,7 @@ pub fn inspect(path: &str) -> FileFacts {
     };
     // (a .d folder: the sum of its files, not the folder's own entry)
     facts.size = if meta.is_dir() { folder_bytes(Path::new(path)) } else { meta.len() };
+    facts.modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
     let file = Path::new(path);
     let counted = if is_fasta_file(&name) {
         content::fasta(file, &name).map(|f| {

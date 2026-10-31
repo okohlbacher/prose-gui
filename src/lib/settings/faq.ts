@@ -16,7 +16,7 @@
 // `database-counting` (Start waits while files are added or the database is counted) have no entry.
 //
 // What the entries must not claim (the reviews found these overclaims in drafts):
-// - The checks before Start read mzML (.mzML, .mzML.gz) files only, by their flags, from up to the first 200 MS2
+// - The checks before Start read mzML (.mzML, .mzML.gz) files only, by their flags, from up to the first 1,000 MS2
 //   spectra (within the first 64 MiB): a file flagged centroid is "flagged", not verified. For Thermo .raw, Bruker
 //   .d and mzPeak inputs, only no MS2, profile spectra and charges outside the range are reported, after the search.
 // - Calibration (`calibration:enabled`) never widens a window: a first pass on the most intense spectra sets an
@@ -322,7 +322,7 @@ export const FAQ: FaqEntry[] = [
     id: 'faq-dia-input',
     group: 'inputs',
     question: 'Can I search DIA, SWATH, MSe or diaPASEF data here?',
-    symptoms: 'New search warns that the MS2 spectra repeat a few isolation windows, as DIA does (or PRM). A DIA file searched anyway gives odd q-values and few, unreliable identifications.',
+    symptoms: 'New search stops with a red flag: the MS2 spectra cycle through the same isolation windows, as DIA does (PRM data can be searched anyway). A DIA file searched anyway gives odd q-values and few, unreliable identifications.',
     causes: [
       'The data are DIA (data-independent acquisition: SWATH, diaPASEF, wide-window DIA, MSe): each MS2 spectrum holds the fragments of many peptides, which a DDA (data-dependent acquisition) search scores as if they came from one.',
       'A targeted PRM (parallel reaction monitoring) run: it repeats its isolation windows too, and is fine to search.',

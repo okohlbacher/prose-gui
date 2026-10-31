@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { accept, acceptedKeys, acceptedOf, firstBlock, ionTrapPpm, isAccepted, loadAccepted, startChecks, withoutExpected, type Check, type StartState } from './checks'
+import { accept, acceptedKeys, acceptedOf, firstBlock, ionTrapPpm, isAccepted, loadAccepted, startChecks, warnedOf, withoutExpected, type Check, type StartState } from './checks'
 
 // The check registry of New search: the start checks in their order, red flags that can be searched anyway (once
 // per file, kept on this computer), and checks a preset expects.
@@ -67,6 +67,26 @@ describe('the start checks', () => {
     // the record of the search, and back into New search
     expect(acceptedOf([profile], accepted)).toEqual([{ id: 'profile-ms2', files: profile.files, message: 'Profile.' }])
     expect(isAccepted(profile, new Set(acceptedKeys(acceptedOf([profile], accepted))))).toBe(true)
+  })
+
+  test('an accepted red flag holds for the version of the file it was accepted for: a changed file is asked again', () => {
+    const storage = memory()
+    let version = '1000:1'
+    const stamp = () => version
+    const accepted = accept(profile, loadAccepted(storage), storage, stamp)
+    expect(isAccepted(profile, accepted, stamp)).toBe(true)
+    version = '1200:2' // rewritten (converted again, say)
+    expect(isAccepted(profile, accepted, stamp)).toBe(false)
+    expect(firstBlock([profile], accepted, stamp)).toBe(profile)
+  })
+
+  test('the advice shown (warn and info) is recorded with the search; blocks are not', () => {
+    const warn: Check = { id: 'iontrap-ppm', level: 'warn', source: 'settings', message: 'Ion trap.', files: ['/r/a.mzML'], action: { label: 'x', run: () => {} } }
+    const info: Check = { id: 'no-charge', level: 'info', source: 'spectra', message: 'No charge.' }
+    expect(warnedOf([profile, warn, info])).toEqual([
+      { id: 'iontrap-ppm', files: ['/r/a.mzML'], message: 'Ion trap.' },
+      { id: 'no-charge', files: [], message: 'No charge.' },
+    ])
   })
 
   test('a broken storage accepts nothing and does not fail', () => {
