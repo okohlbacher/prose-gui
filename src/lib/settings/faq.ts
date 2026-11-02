@@ -298,7 +298,7 @@ export const FAQ: FaqEntry[] = [
       'Remove a file that cannot be searched to start with the others, and note that the experiment then has one fewer file.',
     ],
     checks: ['no-files', 'file-problem'],
-    outside: 'Other vendor formats (SCIEX .wiff, Waters .raw, Agilent .d) need conversion to mzML first, e.g. with ProteoWizard msconvert, whose vendor readers run on Windows.',
+    outside: 'Other vendor formats (SCIEX .wiff, Waters .raw, Agilent .d) need conversion to mzML first, mostly on Windows, where the vendor readers run. Use the vendor’s converter or msconvert: SCIEX MS Data Converter for .wiff and .wiff2, Waters DATA Convert (waters_connect) for MassLynx .raw, TIMSCONVERT for Bruker timsTOF data in other workflows, and ProteoWizard msconvert for all of these and Agilent.',
   },
   {
     id: 'faq-profile-spectra',
@@ -307,18 +307,19 @@ export const FAQ: FaqEntry[] = [
     symptoms:
       'Start is blocked because most MS2 spectra of a file are flagged as profile, with “Search anyway”; a notice says that more than 10 % of them are; or after the search Overview says a share of the MS2 spectra were in profile mode.',
     causes: [
-      'The spectra were not centroided (peak-picked) when converted. A profile spectrum stores each peak as many points of a curve; ProSE expects one point per peak and identifies few peptides from profile data.',
+      'The spectra were not centroided (peak-picked) when converted. mzML and mzPeak files can both hold profile spectra. A profile spectrum stores each peak as many points of a curve; ProSE expects one point per peak and identifies few peptides from profile data.',
       'Peak picking was applied to MS1 only, or was not the first filter in msconvert (a filter before it makes vendor peak picking fail).',
+      'The file is mzPeak: New search does not look into mzPeak files, so their profile spectra show only in Overview after the search.',
       'The flag is wrong: a file can be flagged centroid while its peaks are profile, or the other way round. The check before Start reads the flags only.',
     ],
     fixes: [
-      'Convert again from the vendor file with peak picking as the first filter for all MS levels: msconvert input.raw --mzML --filter "peakPicking vendor msLevel=1-"',
-      'For an mzML that is already converted, vendor peak picking is no longer possible: convert again from the raw file with vendor peak picking where you can. For high-resolution (Orbitrap, TOF) profile mzML, OpenMS PeakPickerHiRes is an option; low-resolution or ion-mobility data need a workflow made for them.',
+      'Convert again from the vendor file with the vendor\'s peak picking for all MS levels: in msconvert as the first filter (msconvert input.raw --mzML --filter "peakPicking vendor msLevel=1-"), in SCIEX MS Data Converter its centroid option.',
+      'Centroiding needs the raw file to be done well: an mzML or mzPeak that is already converted can no longer use the vendor\'s peak picking. Without the raw file, OpenMS PeakPickerHiRes is a fallback for high-resolution (Orbitrap, TOF) profile data, but it is not as good as the vendor\'s; low-resolution or ion-mobility data need a workflow made for them.',
       'If the original Thermo .raw or Bruker timsTOF .d is at hand, add it instead and compare.',
       'Add the new file and check that New search no longer flags it. “Search anyway” does not centroid anything: it searches the profile spectra as they are, and is remembered on this computer for this version of the file (its size and modification time): a file that changes is checked again. “Ask again” in the notice “Searched anyway: …” takes it back.',
     ],
     checks: ['profile-ms2', 'profile-ms2-share', 'profile'],
-    outside: 'Filter chains and vendor-specific options of msconvert are documented by ProteoWizard (proteowizard.sourceforge.io).',
+    outside: 'Filter chains and vendor-specific options are documented with the converters: ProteoWizard msconvert (proteowizard.sourceforge.io), SCIEX MS Data Converter, Waters DATA Convert, TIMSCONVERT.',
   },
   {
     id: 'faq-no-ms2',
@@ -370,13 +371,13 @@ export const FAQ: FaqEntry[] = [
     ],
     fixes: [
       'Prefer the original Thermo .raw or Bruker timsTOF .d where you have it: that avoids what an extra conversion step can lose. Do not convert timsTOF .d files to mzML for a DDA search.',
-      'For other vendors convert with a current msconvert, peakPicking first: msconvert input --mzML --filter "peakPicking vendor msLevel=1-". Keep 64-bit m/z precision.',
+      'For other vendors convert with vendor peak picking. Use the vendor’s converter or msconvert: SCIEX MS Data Converter for .wiff and .wiff2, Waters DATA Convert (waters_connect) for MassLynx .raw, TIMSCONVERT for Bruker timsTOF data in other workflows, and ProteoWizard msconvert for all of these and Agilent. With msconvert, peakPicking comes first: msconvert input --mzML --filter "peakPicking vendor msLevel=1-". Keep 64-bit m/z precision.',
       'Compare the line “MS2 spectra by their flags” of the Spectra card (centroid or profile, activation, analyzer; a file that differs from the others is marked in its Spectra column) with the acquisition method.',
       'For verified ETD-type data without activation information, set ions:add_c_ions and ions:add_zp1_ions in the “All … parameters” dialog.',
       'New search checks mzML files only, from their first 1,000 MS2 spectra (within the first 64 MiB). The design table says “not checked” for .raw, .d and mzPeak files, and for an mzML it could not read; their profile spectra, missing MS2 and charges show only in Overview after the search. To check a vendor file before a long search, convert one run to mzML and add it.',
     ],
     checks: ['spectra-not-checked', 'spectra-not-read'],
-    outside: 'Vendor reader installation, Waters lockmass and SCIEX .wiff/.wiff2 options are covered by ProteoWizard and the vendors; prose-gui only checks the result.',
+    outside: 'Vendor reader installation, Waters lockmass and SCIEX .wiff/.wiff2 options are covered by the converters\' documentation (ProteoWizard, SCIEX, Waters, TIMSCONVERT); prose-gui only checks the result.',
   },
 
   // ---- The protein database ----

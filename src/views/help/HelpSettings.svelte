@@ -78,11 +78,12 @@
   <h2 id="help-database-summary-h">The database summary</h2>
   <p>
     When you choose a FASTA, the database card says in one line what it holds, for example “Homo sapiens (20,401 of 20,420
-    entries) · UniProt headers · 1,532 isoforms · 116 contaminants · no decoys”: the main organism (from the OS= of the headers)
+    entries) · UniProt headers · 1,532 isoforms · 116 contaminants · no decoys”: the main organism (from the OS= of UniProt headers, or the name in brackets at the end of NCBI ones)
     and how many entries are of it, how many organisms there are in all, whether the headers are in UniProt style (accession,
     gene and organism can then be read), isoforms, contaminants, and decoys with their marker (e.g. rev_). Use it to check that
-    the database is the one you meant: the right organism, complete, with or without decoys. A FASTA without OS= in its headers
-    shows “no organism in the headers”, and the app cannot then compare it with the SDRF’s organism.
+    the database is the one you meant: the right organism, complete, with or without decoys. Any FASTA can be searched: one whose
+    headers name no organism (Ensembl, custom databases) shows “organism not named in the headers”, which is no problem, only
+    the app cannot then compare it with the SDRF’s organism, and the tables show the accession without gene and organism.
   </p>
 </section>
 
@@ -97,5 +98,11 @@
     one. The app then compares it with the search: the
     modifications and labels it lists against the chosen ones, and its organism against the database. It does not set the
     search chemistry for you; when it warns, either add what it lists or correct the SDRF.
+  </p>
+  <p>
+    Without an SDRF, the design can come from the file names. When none is entered and the names suggest one (for example
+    <code>HeLa_EGF_R2_F03.raw</code>), a notice above the table offers “Use the file names”: parts like F3 or Fr03 become the
+    fraction, R2 or Rep2 the replicate, and the words the condition. A bare number is taken as the replicate only when each
+    condition has the same numbers; otherwise it reads as a run number. Check the table afterwards and correct what is wrong.
   </p>
 </section>

@@ -18,9 +18,10 @@
     <tbody>
       <tr>
         <td>mzML</td><td><code>.mzML</code>, <code>.mzML.gz</code></td>
-        <td>The open standard; from any vendor through ProteoWizard msconvert. Centroid the MS2 spectra when you convert
-          (msconvert's <code>peakPicking</code> filter, vendor algorithm, MS levels 1-); profile spectra find far fewer
-          peptides. New search checks mzML files before the search (peak picking, charges, activation, isolation windows).</td>
+        <td>The open standard; from any vendor through ProteoWizard msconvert or the vendor's converter (SCIEX MS Data Converter,
+          Waters DATA Convert, TIMSCONVERT for timsTOF). Centroid the spectra when you convert, with the vendor's peak picking
+          (in msconvert the first filter: <code>peakPicking vendor msLevel=1-</code>): profile spectra find far fewer peptides, and
+          centroiding a converted file later (OpenMS PeakPickerHiRes) is not as good. New search checks mzML files before the search (peak picking, charges, activation, isolation windows).</td>
       </tr>
       <tr>
         <td>Thermo raw</td><td><code>.raw</code></td>
@@ -36,11 +37,13 @@
       </tr>
       <tr>
         <td>mzPeak</td><td><code>.mzpeak</code></td>
-        <td>The Parquet-based successor of mzML (HUPO-PSI, in development): compact and fast to read. Not checked before the search.</td>
+        <td>The Parquet-based successor of mzML (HUPO-PSI, in development): compact and fast to read. Like mzML it can hold profile spectra, which need centroiding when converting. Not checked
+          before the search: profile spectra show in the Overview after it.</td>
       </tr>
       <tr>
         <td>Not read</td><td><code>.wiff</code>, <code>.mgf</code>, <code>.mzXML</code>, …</td>
-        <td>SCIEX, MGF peak lists and older formats: convert them to mzML with msconvert. DIA data (SWATH, diaPASEF, MSe)
+        <td>SCIEX (MS Data Converter or msconvert), Waters (DATA Convert or msconvert), Agilent, MGF peak lists and older
+          formats: convert them to mzML. DIA data (SWATH, diaPASEF, MSe)
           is not what ProSE searches, a DDA search engine: New search stops a DIA-looking mzML with a red flag. Search DIA with a DIA
           tool such as DIA-NN or OpenSWATH.</td>
       </tr>

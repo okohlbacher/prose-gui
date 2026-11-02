@@ -21,7 +21,7 @@ describe('the database', () => {
   test('one line of its entries', () => {
     expect(fastaLine(summary(), 20005)).toBe('Homo sapiens (20,000 of 20,005 entries) · 2 organisms · UniProt headers · 1,500 isoforms · no decoys')
     expect(fastaLine(summary({ organisms: [], organismCount: 0, uniprot: 0, isoforms: 0, decoys: 10, decoyMarker: 'rev_…' }), 20)).toBe(
-      'no organism in the headers · 10 decoys (rev_…)',
+      'organism not named in the headers · 10 decoys (rev_…)',
     )
   })
 

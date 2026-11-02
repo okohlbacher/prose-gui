@@ -14,7 +14,7 @@
   import * as Tooltip from '$lib/components/ui/tooltip'
   import { parseDesignTsv, writeDesignTsv } from '$lib/design/design-tsv'
   import type { Notice as DesignNotice } from '$lib/design/model'
-  import { applyDesign } from '$lib/design/paste'
+  import { applyDesign, designFromNames } from '$lib/design/paste'
   import { parseSdrf } from '$lib/design/sdrf'
   import { sdrfSession, addAnyFiles } from '$lib/design/sdrf-session.svelte'
   import { chooseFiles, isDesktop, saveText } from '$lib/desktop'
@@ -86,8 +86,28 @@
     input?.select()
   }
 
+  // a design the file names suggest, offered while none is entered (SDRFs are rare, telling file names are not)
+  let namesDismissed = $state(false)
+  const fromNames = $derived(
+    multi && !namesDismissed && form.files.every((r) => !r.condition && r.replicate === undefined && r.fraction === undefined)
+      ? designFromNames(form.files.map((r) => r.file.name))
+      : null,
+  )
+  const namesLine = (updates: NonNullable<typeof fromNames>) => {
+    const conditions = new Set(updates.map((u) => u.fields.condition).filter(Boolean)).size
+    const what = [
+      conditions > 1 ? `${conditions} conditions` : '',
+      updates.some((u) => u.fields.replicate !== undefined) ? 'replicates' : '',
+      updates.some((u) => u.fields.fraction !== undefined) ? 'fractions' : '',
+    ].filter(Boolean)
+    return `The file names suggest a design (${what.join(', ')}). Check it in the table after using it.`
+  }
+
   // the design's notices (from two files on), then what adding, pasting, loading or saving could not use
   const notices = $derived([
+    ...(fromNames
+      ? [{ message: namesLine(fromNames), info: true, action: { label: 'Use the file names', run: () => form.applyUpdates(fromNames) }, onDismiss: () => (namesDismissed = true) }]
+      : []),
     ...(multi
       ? design.notices.map((n) => ({
           message: n.message,

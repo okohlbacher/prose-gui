@@ -96,7 +96,7 @@ export function spectraChecks(rows: { path: string; name: string; facts: Spectra
       files: profile.map((r) => r.path),
       message:
         `${named(profile)}: the MS2 spectra are flagged as profile. ProSE expects centroided spectra and would search them as they are, ` +
-        'which identifies few peptides: centroid them first (msconvert --filter "peakPicking vendor msLevel=1-", or OpenMS PeakPickerHiRes).',
+        'which identifies few peptides: convert them again from the vendor file with the converter’s vendor peak picking (centroiding). If only the mzML or mzPeak is at hand, OpenMS PeakPickerHiRes is a fallback, but not as good as the vendor’s.',
     })
   }
   // a smaller share is no red flag, but the diagnosis names it after the search from the same share on: said before too
@@ -109,7 +109,7 @@ export function spectraChecks(rows: { path: string; name: string; facts: Spectra
       files: some.map((r) => r.path),
       message:
         `${named(some)}: ${some.length === 1 ? `${Math.round((100 * some[0].facts!.ms2Profile) / ms2Of(some[0].facts!))} % of the MS2 spectra read are` : 'some of the MS2 spectra read are'} flagged as profile. ` +
-        'ProSE identifies few peptides from profile spectra: centroid the file (msconvert --filter "peakPicking vendor msLevel=1-") if it is not meant to be mixed.',
+        'ProSE identifies few peptides from profile spectra: if the file is not meant to be mixed, convert it again from the vendor file with vendor peak picking.',
     })
   }
   const none = pick((f) => f.complete && ms2Of(f) === 0)
@@ -150,7 +150,7 @@ export function spectraChecks(rows: { path: string; name: string; facts: Spectra
       level: 'info',
       source: 'spectra',
       files: charge.map((r) => r.path),
-      message: `${named(charge)}: most MS2 spectra have no precursor charge, so ProSE tries every charge of the range. A timsTOF file converted without its PASEF precursors looks like this.`,
+      message: `${named(charge)}: most MS2 spectra have no precursor charge, so ProSE tries every charge of the range. That is common for SCIEX data (TripleTOF, QTRAP) and needs no fix; a timsTOF file converted without its PASEF precursors looks like this too.`,
     })
   }
   // (null: not inspected; undefined: still being inspected, which holds Start in `startChecks`)

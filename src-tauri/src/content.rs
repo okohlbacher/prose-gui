@@ -424,11 +424,17 @@ impl FastaScan {
         let header = String::from_utf8_lossy(&std::mem::take(&mut self.header)).into_owned();
         let accession = header.split_whitespace().next().unwrap_or("");
         let s = &mut self.summary;
-        if let Some(at) = header.find(" OS=") {
+        // UniProt names the organism in OS=, NCBI (RefSeq, GenBank) in brackets at the end: "... [Homo sapiens]"
+        let organism = if let Some(at) = header.find(" OS=") {
             let rest = &header[at + 4..];
             // (the organism ends at the next field: " OX=", " GN=", " PE=", " SV=")
             let end = [" OX=", " GN=", " PE=", " SV="].iter().filter_map(|f| rest.find(f)).min().unwrap_or(rest.len());
-            *self.organisms.entry(rest[..end].trim().to_string()).or_default() += 1;
+            Some(rest[..end].trim())
+        } else {
+            header.trim_end().strip_suffix(']').and_then(|h| h.rsplit_once('[')).map(|(_, o)| o.trim())
+        };
+        if let Some(o) = organism.filter(|o| !o.is_empty()) {
+            *self.organisms.entry(o.to_string()).or_default() += 1;
             s.with_organism += 1;
         }
         if accession.starts_with("sp|") || accession.starts_with("tr|") {
@@ -667,6 +673,10 @@ mod tests {
         // one decoy of five is no decoy database by OpenMS' rule, but ProSE's literal check finds DECOY_
         assert_eq!(s.decoy_marker.as_deref(), Some("DECOY_…"));
         assert_eq!(fasta_of(b">a\nPEPTIDE\n", "x").summary.decoy_marker, None);
+        // NCBI headers name the organism in brackets; other headers name none, and nothing is wrong with them
+        let ncbi = fasta_of(b">XP_011520.1 tumor protein p53 [Homo sapiens]\nMEEP\n>ENSP0001 x\nMKV\n", "x").summary;
+        assert_eq!(ncbi.organisms, vec![("Homo sapiens".to_string(), 1)]);
+        assert_eq!((ncbi.uniprot, ncbi.with_organism), (0, 1));
     }
 
     #[test]

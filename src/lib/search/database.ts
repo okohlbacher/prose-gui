@@ -16,7 +16,7 @@ export function fastaLine(s: FastaSummary, proteins: number): string {
     parts.push(`${name} (${n(count)} of ${n(proteins)} entries)`)
     if (s.organismCount > 1) parts.push(`${n(s.organismCount)} organisms`)
   } else {
-    parts.push('no organism in the headers')
+    parts.push('organism not named in the headers')
   }
   if (s.uniprot > 0) parts.push(s.uniprot === proteins ? 'UniProt headers' : `${n(s.uniprot)} UniProt headers`)
   if (s.isoforms > 0) parts.push(`${n(s.isoforms)} ${s.isoforms === 1 ? 'isoform' : 'isoforms'}`)

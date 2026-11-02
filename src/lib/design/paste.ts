@@ -159,3 +159,44 @@ export function applyDesign(
   if (left.length > 0) notices.push(`Not in the design (left as they were): ${left.join(', ')}.`)
   return { rows, notices }
 }
+
+/**
+ * Conditions, replicates and fractions read from the file names (an SDRF is rare, names like "HeLa_EGF_R2_F03.raw"
+ * are not). The stems are split at _ - . and spaces, and the parts every name has are dropped. Of the rest, F3, Fr03
+ * or Frac3 is the fraction, R2, Rep2 or BR2 the replicate, and the words the condition. A bare number is the replicate
+ * only when every condition has the same ones (1, 2, 3 each); otherwise it is a run number and left out. null: the
+ * names tell no design (one condition and nothing else, or every file a condition of its own).
+ */
+export function designFromNames(fileNames: string[]): DesignUpdate[] | null {
+  const tokens = fileNames.map((n) => fileStem(n).split(/[_\-.\s]+/).filter(Boolean))
+  const shared = new Set(tokens[0]?.filter((t) => tokens.every((ts) => ts.includes(t))))
+  const parsed = tokens.map((ts) => {
+    const out: { words: string[]; fraction?: number; replicate?: number; bare?: number } = { words: [] }
+    for (const t of ts) {
+      if (shared.has(t)) continue
+      const fraction = /^(?:f|fr|frac|fraction)0*(\d+)$/i.exec(t)
+      const replicate = /^(?:r|rep|br|bio|replicate)0*(\d+)$/i.exec(t)
+      if (fraction) out.fraction = Number(fraction[1])
+      else if (replicate) out.replicate = Number(replicate[1])
+      else if (/^\d+$/.test(t)) out.bare = Number(t)
+      else out.words.push(t)
+    }
+    return { ...out, condition: out.words.join(' ') || undefined }
+  })
+  const conditions = new Set(parsed.map((p) => p.condition))
+  // a bare number as the replicate: the same numbers in every condition (else a run number)
+  if (conditions.size >= 2 && parsed.every((p) => p.replicate === undefined && p.bare !== undefined)) {
+    const numbers = (c: string | undefined) => parsed.filter((p) => p.condition === c).map((p) => p.bare).sort().join()
+    const first = numbers(parsed[0].condition)
+    if ([...conditions].every((c) => numbers(c) === first)) parsed.forEach((p) => (p.replicate = p.bare))
+  }
+  const more = parsed.some((p) => p.replicate !== undefined || p.fraction !== undefined)
+  if (!more && (conditions.size < 2 || conditions.size === parsed.length)) return null
+  return parsed.map((p, index) => {
+    const fields: DesignFields = {}
+    if (conditions.size >= 2 && p.condition) fields.condition = p.condition
+    if (p.replicate !== undefined) fields.replicate = p.replicate
+    if (p.fraction !== undefined) fields.fraction = p.fraction
+    return { index, fields }
+  })
+}

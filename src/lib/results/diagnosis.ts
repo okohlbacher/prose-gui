@@ -142,7 +142,7 @@ export function diagnose(
     out.push({
       id: 'profile-ms2',
       weight: 0.9 * Math.min(1, profile / ms2 + 0.5),
-      message: `${percent(profile / ms2)} of the MS2 spectra are in profile mode: centroid them (msconvert's peakPicking filter, or OpenMS' PeakPickerHiRes) and search again.`,
+      message: `${percent(profile / ms2)} of the MS2 spectra are in profile mode: convert the files again from the vendor files with vendor peak picking (OpenMS PeakPickerHiRes on the mzML or mzPeak is a weaker fallback) and search again.`,
       reruns: [],
     })
   }

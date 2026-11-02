@@ -27,6 +27,9 @@
     { url: 'https://www.uniprot.org/proteomes', title: 'UniProt proteomes', note: 'reference proteomes (FASTA) for any organism' },
     { url: 'https://www.thegpm.org/crap/', title: 'cRAP', note: 'the common contaminants ProSE can add' },
     { url: 'https://proteowizard.sourceforge.io/', title: 'ProteoWizard', note: 'msconvert, for converting vendor files to mzML' },
+    { url: 'https://sciex.com/software-downloads', title: 'SCIEX MS Data Converter', note: 'SCIEX .wiff and .wiff2 to mzML (Converters section)' },
+    { url: 'https://support.waters.com/KB_Inst/Mass_Spectrometry/WKB12874_What_program_converts_MassLynx_data_to_mzML_format', title: 'Waters MassLynx to mzML', note: 'Waters DATA Convert and other options' },
+    { url: 'https://github.com/gtluu/timsconvert', title: 'TIMSCONVERT', note: 'Bruker timsTOF data to mzML with ion mobility' },
   ]
 </script>
 
@@ -52,7 +55,7 @@
   <p>
     ProSE identifies peptides and proteins from DDA (data-dependent acquisition) spectra. Other kinds of data go directly to
     their own tools: DIA (data-independent) data to a DIA search engine such as DIA-NN or OpenSWATH, targeted (SRM, PRM) data to
-    Skyline, vendor files that the app cannot read to ProteoWizard msconvert first. After the identification come other tools:
+    Skyline, vendor files that the app cannot read to a converter first (ProteoWizard msconvert, SCIEX MS Data Converter, Waters DATA Convert). After the identification come other tools:
     for label-free quantification OpenMS ProteomicsLFQ or quantms, for TMT and iTRAQ reporter ions OpenMS IsobaricAnalyzer, for
     the statistics of a comparison MSstats. Results › Export saves what they need from prose-gui: the identifications (idXML),
     the design (design.tsv) and an SDRF with the search’s settings. Check the sample and label assignments in the tool you use.
